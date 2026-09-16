@@ -1,0 +1,53 @@
+rules_version = '2';
+
+// Deployed by hand via the Firebase console (Firestore Database > Rules) --
+// this project has no Firebase CLI/service-account wired up, so this file is
+// the version-controlled source of truth, not something `firebase deploy`
+// pushes automatically. Keep it in sync by hand whenever the rules change.
+//
+// Schema validated below matches the exact object lb/index.html's
+// writeScore()/openConfirm() build (game, initials, score, weight, rolls,
+// source, submittedAt) -- see index.html's own confirm-submit handler.
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /scores/{scoreId} {
+      // Public leaderboard -- anyone can read, no auth in Phase 1.
+      allow read: if true;
+
+      // A submission must be a well-formed score for a real, supported
+      // game, written by this page's own submit flow -- not edited or
+      // deleted afterward (no edit UI exists, and moderation is Phase 3).
+      allow create: if request.resource.data.keys().hasOnly(
+                        ['game', 'initials', 'score', 'weight', 'rolls', 'source', 'submittedAt']
+                      )
+                    && request.resource.data.game is string
+                    && request.resource.data.game.matches('^[A-Z]{2}$')
+                    && request.resource.data.initials is string
+                    && request.resource.data.initials.matches('^[A-Z]{3}$')
+                    && request.resource.data.score is int
+                    && request.resource.data.score >= 0
+                    && request.resource.data.score <= 300
+                    && request.resource.data.weight is int
+                    && request.resource.data.weight >= 1
+                    && request.resource.data.weight <= 99
+                    && request.resource.data.rolls is list
+                    && request.resource.data.rolls.size() >= 12
+                    && request.resource.data.rolls.size() <= 21
+                    && request.resource.data.source is string
+                    && request.resource.data.source == 'qr'
+                    && request.resource.data.submittedAt is int
+                    && request.resource.data.submittedAt <= request.time.toMillis() + 300000
+                    && request.resource.data.submittedAt >= request.time.toMillis() - 300000;
+
+      allow update: if false;
+      allow delete: if false;
+    }
+
+    // Default-deny for every other collection -- Firestore denies unmatched
+    // paths by default anyway, but this makes the intent explicit as the
+    // schema grows (Phase 2 users/, Phase 3 comments/).
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
