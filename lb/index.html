@@ -388,6 +388,18 @@
     return html + '</div>';
   }
 
+  /* The on-device QR now encodes a full URL (e.g. https://www.ngpc-dev.com/lb/BWBOB...), not just
+     the bare payload -- a link tap lands on payloadFromPath() below, which only ever sees
+     location.pathname and so is naturally already just the payload. But this page's own in-page
+     decoders (zbar-wasm/BarcodeDetector/jsQR) read the QR's raw content, prefix and all, so that
+     text needs the same "last non-empty '/'-segment" treatment before parsePayload() ever sees it,
+     or a URL's "https:" pair gets misread as a 2-char game code. Works unchanged for a bare
+     payload with no slashes at all (single segment = the whole string). */
+  function lastPathSegment(text){
+    const parts = String(text||'').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length-1] : '';
+  }
+
   /* ---------- QR payload parser -- <2-char game code><3-char initials><2-digit weight lbs>
      <2-digit roll count><one char per roll: 0-9 pins, A=strike/10>, matching ngpc_qr.c exactly. ---------- */
   function parsePayload(text){
@@ -530,7 +542,7 @@
 
   function handleScanResult(text){
     formMsg.innerHTML = '';
-    const result = parsePayload(text);
+    const result = parsePayload(lastPathSegment(text));
     if(result.error){
       formMsg.innerHTML = '<div class="msg err">'+escapeHtml(result.error)+'</div>';
       return;
@@ -544,16 +556,15 @@
     openConfirm(result.initials, result.weight, result.rolls, total);
   }
 
-  // If the QR itself encodes a URL (e.g. https://www.ngpc-dev.com/lb/<payload>), the phone's own
-  // camera app opens it directly and nothing here needs to scan anything -- just read the payload
-  // back out of the path. Case-insensitive on purpose: QR alphanumeric mode is uppercase-only, so
-  // a URL-encoding QR necessarily arrives here as an ALL-CAPS path, which parsePayload already
-  // upper-cases internally anyway. Still fully optional -- this page works standalone via its own
-  // camera/photo scan (below) for any QR that only carries raw data, no URL involved.
+  // The on-device QR now encodes a full URL (e.g. https://www.ngpc-dev.com/lb/<payload>), so a
+  // phone's own camera app opens it directly and nothing here needs to scan anything -- just read
+  // the payload back out of the path via lastPathSegment(). Case-insensitive on purpose: QR
+  // alphanumeric mode is uppercase-only, so this necessarily arrives here as an ALL-CAPS path,
+  // which parsePayload already upper-cases internally anyway. Still works standalone via this
+  // page's own camera/photo scan (below, which runs the same decoded text through
+  // lastPathSegment() too) for any older/bare-payload QR with no URL involved.
   function payloadFromPath(){
-    const parts = location.pathname.split('/').filter(Boolean);
-    if(!parts.length) return null;
-    const last = decodeURIComponent(parts[parts.length-1]);
+    const last = decodeURIComponent(lastPathSegment(location.pathname));
     if(last.length < 9) return null;
     const result = parsePayload(last);
     return result.error ? null : result;
