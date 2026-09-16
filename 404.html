@@ -1,3 +1,8 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Neo Bowling Hiscores</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -170,6 +175,8 @@
 
   footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
 </style>
+</head>
+<body>
 
 <div id="shell">
 
@@ -481,7 +488,7 @@
     boardStatusEl.textContent = '';
     const q = db.collection('scores').where('game','==',QR_GAME_CODE).orderBy('score','desc').limit(25);
     q.onSnapshot(
-      (snap)=>{ renderBoard(snap.docs); },
+      (snap)=>{ boardStatusEl.textContent = ''; renderBoard(snap.docs); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
     );
   }
@@ -821,3 +828,5 @@
   boot();
 })();
 </script>
+</body>
+</html>
