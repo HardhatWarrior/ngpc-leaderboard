@@ -389,8 +389,8 @@
   }
 
   /* The on-device QR now encodes a full URL (e.g. https://www.ngpc-dev.com/lb/BWBOB...), not just
-     the bare payload -- a link tap lands on payloadFromPath() below, which only ever sees
-     location.pathname and so is naturally already just the payload. But this page's own in-page
+     the bare payload -- a link tap lands on payloadFromEntry() below, which reads the payload
+     back out of location.hash (see its own comment for why). But this page's own in-page
      decoders (zbar-wasm/BarcodeDetector/jsQR) read the QR's raw content, prefix and all, so that
      text needs the same "last non-empty '/'-segment" treatment before parsePayload() ever sees it,
      or a URL's "https:" pair gets misread as a 2-char game code. Works unchanged for a bare
@@ -556,15 +556,21 @@
     openConfirm(result.initials, result.weight, result.rolls, total);
   }
 
-  // The on-device QR now encodes a full URL (e.g. https://www.ngpc-dev.com/lb/<payload>), so a
-  // phone's own camera app opens it directly and nothing here needs to scan anything -- just read
-  // the payload back out of the path via lastPathSegment(). Case-insensitive on purpose: QR
-  // alphanumeric mode is uppercase-only, so this necessarily arrives here as an ALL-CAPS path,
-  // which parsePayload already upper-cases internally anyway. Still works standalone via this
-  // page's own camera/photo scan (below, which runs the same decoded text through
-  // lastPathSegment() too) for any older/bare-payload QR with no URL involved.
-  function payloadFromPath(){
-    const last = decodeURIComponent(lastPathSegment(location.pathname));
+  // The on-device QR encodes a full URL (e.g. https://www.ngpc-dev.com/lb/<payload>), so a
+  // phone's own camera app opens it directly and nothing here needs to scan anything. That URL
+  // always 404s first (no real file matches a payload-bearing path), so 404.html's own dispatcher
+  // does the actual routing -- see its comment for why -- and lands here with the payload in the
+  // URL HASH (/lb/#<payload>), not a path segment, so a page landed on this way is always a
+  // normal 200 straight to this file with no extra 404 round-trip. location.pathname is still
+  // checked as a fallback for anyone hand-typing/bookmarking a payload-bearing path directly.
+  // Case-insensitive on purpose either way: QR alphanumeric mode is uppercase-only, so this
+  // necessarily arrives here as ALL-CAPS text, which parsePayload already upper-cases internally
+  // anyway. Still works standalone via this page's own camera/photo scan (below, which runs the
+  // same decoded text through lastPathSegment() too) for any older/bare-payload QR with no URL
+  // involved.
+  function payloadFromEntry(){
+    const raw = location.hash ? location.hash.slice(1) : lastPathSegment(location.pathname);
+    const last = decodeURIComponent(lastPathSegment(raw));
     if(last.length < 9) return null;
     const result = parsePayload(last);
     return result.error ? null : result;
@@ -825,13 +831,13 @@
   function boot(){
     renderBoard([]); // real empty state as the floor -- never leave the board blank while db connects
     connectDb();
-    const fromPath = payloadFromPath();
-    if(fromPath){
-      const total = totalFromRolls(fromPath.rolls);
+    const fromEntry = payloadFromEntry();
+    if(fromEntry){
+      const total = totalFromRolls(fromEntry.rolls);
       if(total!=null && validScore(total)){
-        openConfirm(fromPath.initials, fromPath.weight, fromPath.rolls, total);
-        // Strip back to the clean /lb/ URL so a refresh or a re-shared link can't replay the
-        // same scan as a fresh submission.
+        openConfirm(fromEntry.initials, fromEntry.weight, fromEntry.rolls, total);
+        // Strip back to the clean /lb/ URL (hash included) so a refresh or a re-shared link
+        // can't replay the same scan as a fresh submission.
         history.replaceState(null, '', '/lb/');
       }
     }

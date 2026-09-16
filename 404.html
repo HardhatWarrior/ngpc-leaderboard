@@ -15,21 +15,28 @@
   // Every game's QR encodes a full URL whose first path segment is that game's folder name in
   // QR alphanumeric mode's UPPERCASE-only charset (e.g. https://www.ngpc-dev.com/LB/<payload>),
   // so it always 404s against the real lowercase folder (/lb/) GitHub Pages actually serves.
-  // Fix: lowercase just the first segment and redirect there, leaving everything after it (the
-  // payload, further slashes) untouched. This is intentionally generic across every game -- a
-  // new game's QR "just works" through here with no changes to this file, as long as its folder
-  // name is the lowercase of whatever uppercase segment its own QR encodes.
+  //
+  // Fixing just the casing and redirecting to /lb/<payload> was the first attempt here, but that
+  // 404s AGAIN -- /lb/<payload> isn't a real file either, only /lb/ (the folder's index.html) is
+  // -- which bounces back through this exact script a second time, and by then the segment is
+  // already lowercase so it gives up to the homepage instead of ever reaching the app. Putting
+  // the remainder in the URL HASH instead fixes this in one hop: /lb/#<payload> is a literal
+  // match against the real /lb/ file (a hash never reaches the server at all), so it's a normal
+  // 200 straight to that game's own index.html, which reads the payload back out of
+  // location.hash. Generic across every future game -- a new game's QR "just works" through here
+  // with no changes to this file, as long as its folder name is the lowercase of whatever
+  // uppercase segment its own QR encodes.
   (function(){
     var path = location.pathname;
     var slashIdx = path.indexOf('/', 1);
     var first = slashIdx === -1 ? path.slice(1) : path.slice(1, slashIdx);
-    var rest = slashIdx === -1 ? '' : path.slice(slashIdx);
+    var rest = slashIdx === -1 ? '' : path.slice(slashIdx + 1); // no leading slash
     if(!first){ location.replace('/'); return; }
     var lower = first.toLowerCase();
     // Already lowercase and still not found -- a genuinely unknown path, not a casing mismatch.
     // Send home instead of redirecting to the exact same URL (which would just 404 again).
     if(lower === first){ location.replace('/'); return; }
-    location.replace('/' + lower + rest);
+    location.replace('/' + lower + '/' + (rest ? '#' + rest : ''));
   })();
 </script>
 </body>

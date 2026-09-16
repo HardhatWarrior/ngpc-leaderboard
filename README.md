@@ -14,10 +14,13 @@ games, fed by QR codes generated on-device after a completed game.
   natural slug, e.g. `/tetris/`.)
 - `404.html` — GitHub Pages' catch-all for any unmatched path. QR alphanumeric-mode encoding is
   uppercase-only, so a QR-embedded URL like `https://www.ngpc-dev.com/LB/<payload>` always 404s
-  against the real lowercase `/lb/` folder GitHub actually serves. This file lowercases just the
-  first path segment and redirects there, leaving the rest of the path untouched — generic across
-  every game, so a new game's QR works through here with zero changes to this file as long as its
-  folder name is the lowercase of whatever uppercase segment its own QR encodes.
+  against the real lowercase `/lb/` folder GitHub actually serves. This file lowercases the first
+  path segment and redirects to it with the remainder moved into the URL **hash**
+  (`/lb/#<payload>`) rather than kept as a path segment — a hash never reaches the server, so that
+  redirect is a literal, real file match (one hop, no risk of 404ing again), and each game's own
+  page reads its payload back out of `location.hash`. Generic across every game, so a new game's
+  QR works through here with zero changes to this file as long as its folder name is the lowercase
+  of whatever uppercase segment its own QR encodes.
 - `assets/` — shared static images (currently just each game's title-screen capture for its
   landing-page tile, taken from the real emulator via `ngpc_emu_screenshot`, not mocked up).
 - `firestore.rules` — the Firestore security rules, version-controlled here since this project has
@@ -31,7 +34,7 @@ games, fed by QR codes generated on-device after a completed game.
 1. Give the on-device QR encoder a full-URL payload: `https://www.ngpc-dev.com/<slug>/<payload>`,
    same raw payload format as today (routing 2-char game code first).
 2. Create `<slug>/index.html` for that game's leaderboard page (Bowling's `lb/index.html` is the
-   reference implementation — Firebase wiring, QR scan/decode stack, `payloadFromPath()`/`boot()`
+   reference implementation — Firebase wiring, QR scan/decode stack, `payloadFromEntry()`/`boot()`
    for direct link-taps, and `lastPathSegment()` so the in-page photo/camera scan strips a URL
    prefix the same way).
 3. Add that game's score-schema validator function to `firestore.rules` and re-publish via the
