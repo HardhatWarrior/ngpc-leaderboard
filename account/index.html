@@ -143,12 +143,13 @@
 
     <section class="panel">
       <h2>Avatar</h2>
-      <p class="hint">A 16&times;16 icon, same RGB444 color model as the NGPC Tile Editor (4096 colors) &mdash; every pixel picks independently, no shared per-tile palette limit.</p>
+      <p class="hint">A 32&times;32 icon, same RGB444 color model as the NGPC Tile Editor (4096 colors) &mdash; every pixel picks independently, no shared per-tile palette limit.</p>
       <div id="tool-row">
         <button type="button" class="tool-btn active" id="tool-pencil" data-tool="pencil" title="Pencil (B)">&#9998;</button>
         <button type="button" class="tool-btn" id="tool-eraser" data-tool="eraser" title="Eraser (transparent) (E)">&#9633;</button>
         <button type="button" class="tool-btn" id="tool-fill" data-tool="fill" title="Flood fill (F)">&#129696;</button>
-        <button type="button" class="tool-btn" id="tool-eyedrop" data-tool="eyedrop" title="Eyedropper (I)">&#128167;</button>
+        <button type="button" class="tool-btn" id="tool-fill-transparent" data-tool="fill-transparent" title="Flood fill transparent (T)">&#128167;</button>
+        <button type="button" class="tool-btn" id="tool-eyedrop" data-tool="eyedrop" title="Eyedropper (I)">&#128269;</button>
         <button type="button" class="tool-btn" id="tool-line" data-tool="line" title="Line (L)">&#9585;</button>
         <button type="button" class="tool-btn" id="tool-rect" data-tool="rect" title="Rectangle (R)">&#9633;</button>
         <button type="button" class="tool-btn" id="tool-ellipse" data-tool="ellipse" title="Ellipse (O)">&#9711;</button>
@@ -195,7 +196,7 @@
 <div id="import-overlay" hidden>
   <div id="import-modal">
     <h2 style="margin:0 0 4px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent2)">Import from Tile Editor</h2>
-    <p class="hint">Load a <code>.ngptile.json</code> project exported from the NGPC Tile Editor, then drag the 16&times;16 crop box over the region you want. Index-0 pixels (a tile's transparent slot) come in transparent here too.</p>
+    <p class="hint">Load a <code>.ngptile.json</code> project exported from the NGPC Tile Editor, then drag the 32&times;32 crop box over the region you want. Index-0 pixels (a tile's transparent slot) come in transparent here too.</p>
     <input type="file" id="import-file" accept=".json,.ngptile.json">
     <div id="import-preview-wrap" hidden>
       <div id="import-preview">
@@ -434,6 +435,9 @@
       render();
     } else if(currentTool==='fill'){
       floodFill(cell.x, cell.y, grid[cell.y*SIZE+cell.x], currentWord());
+      render();
+    } else if(currentTool==='fill-transparent'){
+      floodFill(cell.x, cell.y, grid[cell.y*SIZE+cell.x], A.TRANSPARENT);
       render();
     } else if(currentTool==='eyedrop'){
       const word = grid[cell.y*SIZE+cell.x];

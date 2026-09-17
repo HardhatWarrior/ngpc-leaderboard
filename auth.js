@@ -134,7 +134,7 @@ window.NGPC_AUTH = (function(){
     await db.collection('users').doc(user.uid).update({recoveryEmail: value});
   }
 
-  const AVATAR_SIZE = 16;
+  const AVATAR_SIZE = 32;
   const AVATAR_CELLS = AVATAR_SIZE * AVATAR_SIZE;
 
   // -1 is a sentinel for "transparent" -- outside the 0..4095 range a real packed RGB444 word

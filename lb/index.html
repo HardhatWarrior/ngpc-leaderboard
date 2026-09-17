@@ -250,9 +250,9 @@
   const QR_GAME_CODE = "BW";
   const MAX_SCORE = 300;
   const SCORE_MAX_FRAMES = 10;
-  // Deliberately blocky at 16 source pixels across rather than smoothed away.
+  // Deliberately blocky at source resolution rather than smoothed away.
   const ROW_AVATAR_PX = 48;
-  const ROW_AVATAR_CELL_PX = ROW_AVATAR_PX / (window.NGPC_AUTH ? NGPC_AUTH.AVATAR_SIZE : 16);
+  const ROW_AVATAR_CELL_PX = ROW_AVATAR_PX / (window.NGPC_AUTH ? NGPC_AUTH.AVATAR_SIZE : 32);
 
   // Firebase init + auth (sign-in state, username lookup) is shared across every page -- see
   // auth.js, loaded just before this script tag. NGPC_AUTH is null if firebase-app-compat.js
