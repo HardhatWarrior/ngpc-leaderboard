@@ -166,7 +166,12 @@ service cloud.firestore {
       allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data);
 
       allow update: if false;
-      allow delete: if false;
+      // A signed-in user can delete their own score (account page's "Your Submissions" list) --
+      // anonymous QR submissions have no uid at all, so resource.data.uid == request.auth.uid is
+      // false for them (never true against a signed-in caller's uid), and they stay undeletable
+      // by anyone.
+      allow delete: if request.auth != null
+        && ('uid' in resource.data) && resource.data.uid == request.auth.uid;
     }
 
     // Default-deny for every other collection -- Firestore denies unmatched

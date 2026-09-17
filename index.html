@@ -75,6 +75,8 @@
     image-rendering:pixelated; flex:none; background:var(--navy);
   }
   .ticker-who{ font-size:12.5px; font-weight:600; color:var(--cream); white-space:nowrap; }
+  .ticker-who a{ color:var(--cream); text-decoration:underline; text-underline-offset:2px; }
+  .ticker-who a:hover{ color:var(--accent2); }
   .ticker-game{ font-size:10.5px; color:var(--accent2); text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }
   .ticker-score{
     font-family:"Press Start 2P",monospace; font-size:12px; color:var(--good); white-space:nowrap;
@@ -506,7 +508,9 @@
     const itemHtml = docs.map((d,i)=>{
       const data = d.data();
       const gameName = GAME_NAMES[data.game] || data.game || '?';
-      const who = data.username ? ('@'+escapeHtml(data.username.toUpperCase())) : escapeHtml(data.initials||'???');
+      const who = data.username
+        ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>')
+        : escapeHtml(data.initials||'???');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar
         ? '<canvas class="ticker-avatar" data-ticker-avatar="'+i+'"></canvas>'

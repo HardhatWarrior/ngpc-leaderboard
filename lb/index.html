@@ -119,6 +119,8 @@
     font-family:"Press Start 2P",monospace; font-size:15px; color:var(--good);
   }
   .row-meta{ font-size:10.5px; color:var(--dim); margin-top:2px; white-space:nowrap; }
+  .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
+  .row-meta a:hover{ color:var(--accent2); }
   .pin-icon{ width:14px; height:20px; flex:none; }
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
   .row.has-detail{ cursor:pointer; }
@@ -462,7 +464,7 @@
       const data = d.data();
       const rank = i+1;
       const hasDetail = Array.isArray(data.rolls) && data.rolls.length>0;
-      const usernameLine = data.username ? ('@'+escapeHtml(data.username.toUpperCase())) : '';
+      const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
       const scoreMeta = [fmtWhen(data.submittedAt), data.weight?(data.weight+' lb ball'):null].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';

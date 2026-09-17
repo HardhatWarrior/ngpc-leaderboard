@@ -51,6 +51,8 @@
   .row-avatar{ width:48px; height:48px; border-radius:4px; border:1px solid var(--border); image-rendering:pixelated; flex:none; }
   .score-val{ font-family:"Press Start 2P",monospace; font-size:15px; color:var(--good); }
   .row-meta{ font-size:10.5px; color:var(--dim); grid-column:2; margin-top:2px; }
+  .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
+  .row-meta a:hover{ color:var(--accent2); }
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
   .row.has-detail{ cursor:pointer; } .row.has-detail:hover{ background:rgba(122,107,186,.08); }
   .row-detail{ padding:2px 8px 14px; }
@@ -262,7 +264,7 @@
       const data = d.data();
       const rank = i+1;
       const hasDetail = data.resultDisplay !== undefined && data.rounds !== undefined;
-      const usernameLine = data.username ? ('@'+escapeHtml(data.username.toUpperCase())) : '';
+      const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
       const meta = [fmtWhen(data.submittedAt), usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
