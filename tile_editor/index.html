@@ -1,0 +1,3148 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NGPC Tile Editor</title>
+<style>
+:root{
+  --bg:#1e1f26; --panel:#262832; --panel2:#2d3040; --border:#3a3d4d;
+  --text:#e6e6ec; --dim:#9294a6; --accent:#5fb3ff; --accent2:#ff9f5f;
+  --danger:#ff6b6b; --good:#5fe0a0;
+  --code-bg:#16171d; --code-text:#b7e6b0;
+  --canvas-bg:#202127; --checker:#2a2c36;
+}
+/* Light theme -- e-ink displays (this tool's own hosted use case) ghost badly on a dark UI and
+   waste the panel's grayscale/color range on near-black backgrounds; a light theme with strong,
+   saturated accents reads far better there. Toggled via #chkLightMode, same body-class + saved-
+   preference pattern as the hint toggle below. */
+body.light{
+  --bg:#f2f2ee; --panel:#ffffff; --panel2:#e7e7e1; --border:#c6c6bd;
+  --text:#1a1a17; --dim:#63635c; --accent:#0063c6; --accent2:#c1520a;
+  --danger:#c92a2a; --good:#1a8f4c;
+  --code-bg:#ffffff; --code-text:#1a1a17;
+  --canvas-bg:#dedecf; --checker:#cfcfc2;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+  font:13px/1.4 "Segoe UI",system-ui,sans-serif;height:100%;}
+button,input,select{font:inherit;color:inherit;}
+button{
+  background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  padding:5px 10px;border-radius:4px;cursor:pointer;
+}
+button:hover{border-color:var(--accent);}
+button.active{background:var(--accent);color:#0b0d12;border-color:var(--accent);font-weight:600;}
+button:disabled{opacity:.4;cursor:default;}
+button.danger:hover{border-color:var(--danger);}
+input[type=text],input[type=number]{
+  background:var(--panel);border:1px solid var(--border);color:var(--text);
+  padding:4px 6px;border-radius:4px;width:60px;
+}
+select{background:var(--panel);border:1px solid var(--border);color:var(--text);padding:4px 6px;border-radius:4px;}
+input[type=range]{width:100%;accent-color:var(--accent);}
+h1{font-size:14px;margin:0;font-weight:600;letter-spacing:.02em;}
+h2{font-size:11px;margin:0 0 6px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);}
+.hint{color:var(--dim);font-size:11px;}
+.row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.col{display:flex;flex-direction:column;gap:6px;}
+.sep{width:1px;align-self:stretch;background:var(--border);margin:0 4px;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px;}
+#app{display:grid;grid-template-columns:230px 1fr 310px;grid-template-rows:auto 1fr auto;
+  height:100vh;gap:8px;padding:8px;}
+#topbar{grid-column:1/4;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 12px;flex-wrap:wrap;}
+#left{grid-row:2;overflow:auto;display:flex;flex-direction:column;gap:8px;position:relative;}
+#right{grid-row:2;overflow:auto;display:flex;flex-direction:column;gap:8px;position:relative;}
+#left.collapsed .panel,#right.collapsed .panel{display:none;}
+.sidebarToggle{align-self:flex-start;width:24px;flex:0 0 auto;padding:4px 0;font-size:11px;}
+#center{grid-row:2;display:flex;flex-direction:column;overflow:hidden;gap:0;}
+#topStatusBar{flex:0 0 auto;display:flex;justify-content:space-between;gap:10px;
+  background:var(--panel);border:1px solid var(--border);border-radius:6px;
+  padding:6px 12px;margin-bottom:8px;color:var(--dim);font-size:11px;flex-wrap:wrap;}
+#canvasScroll{flex:1 1 auto;overflow:auto;display:flex;align-items:flex-start;justify-content:flex-start;padding:6px;}
+.panelHeadRow{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;}
+.panelHeadRow .panelLabel{flex:1;}
+.panelHeadRow .caret{font-size:9px;color:var(--dim);transition:transform .1s;flex:0 0 auto;}
+.panel.collapsed .panelBody{display:none;}
+.panel.collapsed .panelHeadRow .caret{transform:rotate(-90deg);}
+.dragHandle{cursor:grab;color:var(--dim);flex:0 0 auto;padding:0 2px;}
+.dragHandle:active{cursor:grabbing;}
+.panel.dragging{opacity:.4;}
+body.hideHints .hint:not(.statusText){display:none;}
+.projTab{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:4px;
+  border:1px solid var(--border);background:var(--panel2);cursor:pointer;font-size:12px;}
+.projTab.active{border-color:var(--accent);background:var(--accent);color:#0b0d12;font-weight:600;}
+.projTab .closeTab{opacity:.65;cursor:pointer;padding:0 2px;border-radius:2px;}
+.projTab .closeTab:hover{opacity:1;background:rgba(255,107,107,0.25);}
+#bottom{grid-column:1/4;grid-row:3;}
+#canvasWrap{background:
+  linear-gradient(45deg,var(--checker) 25%,transparent 25%),
+  linear-gradient(-45deg,var(--checker) 25%,transparent 25%),
+  linear-gradient(45deg,transparent 75%,var(--checker) 75%),
+  linear-gradient(-45deg,transparent 75%,var(--checker) 75%);
+  background-size:16px 16px;background-position:0 0,0 8px,8px -8px,-8px 0px;
+  background-color:var(--canvas-bg);
+  border:1px solid var(--border);display:inline-block;line-height:0;border-radius:4px;
+  cursor:crosshair;touch-action:none;
+}
+#mainCanvas{image-rendering:pixelated;display:block;touch-action:none;}
+#refWrap{flex-shrink:0;margin-left:10px;}
+#refCanvas{image-rendering:pixelated;display:block;border:1px solid var(--border);border-radius:4px;background:var(--canvas-bg);}
+.toolgrid{display:grid;grid-template-columns:1fr 1fr;gap:4px;}
+.swatchRow{display:flex;gap:6px;}
+.swatch{width:34px;height:34px;border-radius:4px;border:2px solid var(--border);cursor:pointer;
+  position:relative;flex-shrink:0;
+  background-image:
+  linear-gradient(45deg,#444 25%,transparent 25%),
+  linear-gradient(-45deg,#444 25%,transparent 25%),
+  linear-gradient(45deg,transparent 75%,#444 75%),
+  linear-gradient(-45deg,transparent 75%,#444 75%);
+  background-size:8px 8px;background-position:0 0,0 4px,4px -4px,-4px 0px;
+}
+.swatch>.fill{position:absolute;inset:0;border-radius:2px;}
+.swatch.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent);}
+.swatch.selected2{border-color:var(--accent2);box-shadow:0 0 0 1px var(--accent2);}
+.swatch.selected.selected2{box-shadow:0 0 0 1px var(--accent),0 0 0 3px var(--accent2);}
+.swatch .idx{position:absolute;bottom:1px;right:2px;font-size:9px;color:#fff;text-shadow:0 0 2px #000,0 0 2px #000;}
+.swatchLabel{font-size:10px;color:var(--dim);width:34px;text-align:center;}
+.slider-row{display:grid;grid-template-columns:16px 1fr 26px;align-items:center;gap:6px;}
+textarea{width:100%;background:var(--code-bg);color:var(--code-text);border:1px solid var(--border);
+  border-radius:4px;padding:8px;font:12px/1.4 Consolas,"Courier New",monospace;resize:vertical;}
+#codeOut{height:180px;}
+details>summary{cursor:pointer;user-select:none;color:var(--dim);font-size:11px;
+  text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;}
+.statusbar{display:flex;justify-content:space-between;color:var(--dim);font-size:11px;
+  padding:4px 4px 0;gap:10px;}
+.paletteList{display:flex;flex-direction:column;gap:4px;max-height:140px;overflow:auto;}
+.paletteRow{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;
+  border:1px solid transparent;cursor:pointer;}
+.paletteRow:hover{border-color:var(--border);}
+.paletteRow.active{background:var(--panel2);border-color:var(--accent);}
+.miniSwatches{display:flex;gap:2px;flex-shrink:0;}
+.miniSwatches div{width:12px;height:12px;border-radius:2px;}
+.paletteRow input[type=text]{width:74px;background:transparent;border:none;padding:2px;}
+.paletteRow select{width:78px;padding:2px 4px;font-size:11px;}
+.paletteRow .tag{font-size:10px;color:var(--dim);margin-left:auto;flex-shrink:0;}
+a.filelike{color:var(--accent);text-decoration:underline;cursor:pointer;}
+a.btnlike{background:var(--accent);color:#0b0d12;border:1px solid var(--accent);font-weight:600;
+  padding:5px 10px;border-radius:4px;cursor:pointer;text-decoration:none;display:inline-block;}
+a.btnlike:hover{opacity:.9;}
+#pngPreviewWrap{text-align:center;}
+#pngPreview{image-rendering:pixelated;border:1px solid var(--border);max-width:100%;background:
+  repeating-conic-gradient(#333 0% 25%, #222 0% 50%) 50%/16px 16px;}
+label.chk{display:flex;align-items:center;gap:6px;cursor:pointer;}
+.anchorGrid{display:grid;grid-template-columns:repeat(3,20px);grid-template-rows:repeat(3,20px);gap:3px;flex-shrink:0;}
+.anchorBtn{width:20px;height:20px;border:1px solid var(--border);border-radius:2px;background:var(--panel2);
+  cursor:pointer;padding:0;display:flex;align-items:center;justify-content:center;}
+.anchorBtn:hover{border-color:var(--accent);}
+.anchorBtn::after{content:'';width:6px;height:6px;border-radius:50%;background:var(--dim);}
+.anchorBtn.active{border-color:var(--accent);background:var(--accent);}
+.anchorBtn.active::after{background:#0b0d12;}
+.dpad{display:grid;grid-template-columns:repeat(3,32px);grid-template-rows:repeat(3,32px);gap:3px;}
+.dpad button{padding:0;font-size:14px;line-height:1;}
+.modalOverlay{position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;
+  align-items:center;justify-content:center;z-index:1000;}
+.modalOverlay[hidden]{display:none;}
+.modalBox{background:var(--panel);border:1px solid var(--border);border-radius:8px;
+  padding:18px 20px;max-width:420px;box-shadow:0 8px 30px rgba(0,0,0,0.5);}
+.modalMessage{white-space:pre-line;margin-bottom:14px;font-size:13px;line-height:1.5;}
+.modalButtons{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;}
+.modalButtons button.primary{background:var(--accent);color:#0b0d12;border-color:var(--accent);font-weight:600;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="topbar">
+    <div class="row">
+      <h1>NGPC Tile Editor</h1>
+      <span class="sep"></span>
+      <input id="projName" type="text" value="my_tiles" style="width:120px" title="Array/project name">
+      <button id="btnNew">New</button>
+      <button id="btnSaveProj">Save Project</button>
+      <button id="btnLoadProj">Load Project</button>
+      <input id="fileLoadProj" type="file" accept=".json,.ngptile" style="display:none">
+      <a class="filelike" href="tilemap/" target="_blank" title="Arrange tiles from a saved project into a larger map (Save Project here, then Import Tileset there)" style="margin-left:6px">Tilemap Editor &rarr;</a>
+    </div>
+    <div class="row">
+      <button id="btnImportPng">Import PNG</button>
+      <input id="fileImportPng" type="file" accept="image/png" style="display:none">
+      <button id="btnPasteImage" title="Paste an image from the clipboard (copied from anywhere) straight into the same import flow as Import PNG. Ctrl+V on the canvas also works when there's an image on the clipboard.">Paste Image</button>
+      <label class="chk" title="Only used by the 'Auto Palette Per Tile' import choice (and by Generate Palettes Per Tile below): caps how many new palettes it may create. If more distinct tile color-sets than this exist, the most similar ones are merged and affected tiles use the nearest surviving palette instead of their exact colors. Leave blank for no cap. Applies per-layer when Split into 2 Layers was also checked at import time.">
+        Max palettes <input id="importMaxPalettes" type="number" min="1" max="256" step="1" style="width:52px" placeholder="&#8734;">
+      </label>
+      <button id="btnGeneratePerTile" title="Converts the active layer's full-color reference (loaded via the 'Full Color (No Palette)' import choice) into real indexed art -- runs the same per-tile auto-palette logic as importing, using the Max Palettes cap above. If you have a tile-aligned Select-tool selection active, only those tiles are (re)generated -- everything else is left alone. The reference stays visible in a side panel afterward for comparison; re-run any time (e.g. after selecting a region to touch up) to regenerate just that area.">Generate Palettes Per Tile</button>
+      <button id="btnExportPng">Export PNG</button>
+      <span class="sep"></span>
+      <label class="chk" title="Hides every explanatory hint paragraph app-wide, keeping controls and live status text (selection info, zoom, tile counts, autosave) visible">
+        <input type="checkbox" id="chkShowHints"> Show hints
+      </label>
+      <label class="chk" title="Light background + dark text, for e-ink displays (heavy full-page dark backgrounds ghost and refresh poorly there). Saved per-browser, same as Show Hints.">
+        <input type="checkbox" id="chkLightMode"> Light mode
+      </label>
+      <span class="sep"></span>
+      <span class="hint statusText" id="autosaveHint">autosaved</span>
+    </div>
+    <div class="row" style="width:100%">
+      <div id="projectTabs" class="row" style="flex:1;flex-wrap:wrap;gap:6px"
+        title="Click a tab to switch projects. Copy/Cut/Paste (including the Magic Wand's clipboard) carries over between tabs, so you can copy art from one project and paste it into another."></div>
+      <button id="btnNewProjectTab" title="Open a new blank project in its own tab">+ New Project</button>
+    </div>
+  </div>
+
+  <div id="left">
+    <button id="btnCollapseLeft" class="sidebarToggle" title="Collapse this panel">◀</button>
+    <div class="panel">
+      <h2>Grid Size (tiles)</h2>
+      <div class="row">
+        <input id="gridW" type="number" min="1" max="256" value="2" title="tiles wide">
+        <span>x</span>
+        <input id="gridH" type="number" min="1" max="256" value="2" title="tiles tall">
+        <button id="btnResize" title="Resize canvas using the anchor below">Resize</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button data-preset="1x1">8x8</button>
+        <button data-preset="2x2">16x16</button>
+        <button data-preset="4x4">32x32</button>
+        <button data-preset="8x8">64x64</button>
+      </div>
+      <div class="row" style="margin-top:8px;align-items:flex-start">
+        <div class="anchorGrid" id="anchorGrid"></div>
+        <div class="hint" style="flex:1;min-width:110px">Resize anchor — existing content stays pinned to the highlighted point; growth or cropping happens on the opposite side(s).</div>
+      </div>
+      <div class="hint" style="margin-top:4px">Pixels = 8 &times; tiles, up to 256x256 tiles. Type a custom size and press Enter or click Resize.</div>
+      <div class="row" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+        <button id="btnCropSel" title="Trim the whole canvas (every layer) down to the current selection">Crop to Selection</button>
+      </div>
+      <div class="hint" style="margin-top:4px">Exact, no resampling — just trims everything outside the selected tiles.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Scale (Resample)</h2>
+      <div class="hint">Resamples the pixel art itself to a new tile size (nearest-neighbor — an approximation, since palette-index art can't blend like real color can). Works on the selection if you have one, else the whole canvas. Clears per-tile palette overrides in the affected area, since tile positions no longer line up with the original art.</div>
+      <div class="row" style="margin-top:6px">
+        <input id="scaleW" type="number" min="1" max="256" value="2" style="width:56px" title="target tiles wide">
+        <span>x</span>
+        <input id="scaleH" type="number" min="1" max="256" value="2" style="width:56px" title="target tiles tall">
+        <button id="btnScaleApply">Apply</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button data-scalepct="25">25%</button>
+        <button data-scalepct="50">50%</button>
+        <button data-scalepct="150">150%</button>
+        <button data-scalepct="200">200%</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <input id="scalePct" type="number" min="1" max="1000" value="10" style="width:56px" title="any percent, e.g. 10">
+        <span>%</span>
+        <button id="btnScalePctApply">Apply %</button>
+      </div>
+      <div class="hint" style="margin-top:4px">Percent is of the selection's (or whole canvas's) current size, rounded to whole tiles.</div>
+      <div class="row" style="margin-top:10px;border-top:1px solid var(--border);padding-top:10px">
+        <input id="scaleInPlacePct" type="number" min="1" max="1000" value="50" style="width:56px" title="any percent, e.g. 50">
+        <span>%</span>
+        <button id="btnScaleInPlaceApply">Scale In Place</button>
+      </div>
+      <div class="hint" style="margin-top:4px">Shrinks/grows the artwork itself while the grid (or selection) size stays exactly the same — positioned using the same resize-anchor picker Resize uses (in the Grid Size panel), clipped to fit if grown past the original bounds. Good for resizing a shape without disturbing the canvas dimensions.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Tools</h2>
+      <div class="toolgrid">
+        <button id="toolPencil" class="active" title="Pencil (B)">✏ Pencil</button>
+        <button id="toolFill" title="Flood fill (F)">🪣 Fill</button>
+        <button id="toolEyedrop" title="Eyedropper (I)">💧 Pick</button>
+        <button id="toolSelect" title="Tile-aligned rectangle select (S)">▭ Select</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnCopy" title="Copy selection (Ctrl+C)">Copy</button>
+        <button id="btnCut" title="Cut selection">Cut</button>
+        <button id="btnPasteTool" title="Paste tool — click canvas to place (Ctrl+V)">Paste</button>
+        <button id="btnClearSel" title="Clear selection contents to color 0 (Delete key)" class="danger">Clear</button>
+      </div>
+      <div class="hint statusText" id="selInfo" style="margin-top:6px">No selection — actions apply to whole canvas.</div>
+      <div class="hint" style="margin-top:4px">Left click/drag = primary color. Right click/drag = secondary. Right-click while Select is active clears the selection. Click-drag <b>inside</b> an existing selection to move it (snaps to whole tiles) instead of redrawing it.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Shapes</h2>
+      <div class="row">
+        <button id="toolLine" title="Line — drag between two points (L)">／ Line</button>
+        <button id="toolRect" title="Rectangle — drag a corner to corner">▭ Rect</button>
+        <button id="toolEllipse" title="Ellipse — drag a bounding box">◯ Ellipse</button>
+      </div>
+      <label class="chk" style="margin-top:6px"><input type="checkbox" id="chkShapeFilled"> Filled (Rect/Ellipse)</label>
+      <div class="hint" style="margin-top:4px">Drag on the canvas to draw. Left = primary color, right = secondary. Hold Shift while dragging Rect/Ellipse for a square/circle.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Magic Wand</h2>
+      <div class="row">
+        <button id="toolWand" title="Magic Wand — click a pixel to select its contiguous same-index region">🪄 Wand</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button id="btnWandCopy">Copy</button>
+        <button id="btnWandPasteTool">Paste</button>
+      </div>
+      <div class="hint" style="margin-top:6px">Click with the Wand to select a same-color blob on the active layer. Ctrl+click adds another blob to the selection. Click-drag <b>inside</b> the selected pixels to move them freely (no tile snapping). Copy it, then Paste stamps just those pixels elsewhere — everything else at the destination stays untouched (right-click cancels a pending paste or clears the wand selection).</div>
+    </div>
+
+    <div class="panel">
+      <h2>Transform</h2>
+      <div class="row">
+        <button id="btnRotCW" title="Rotate 90° CW (R)">⟳ CW</button>
+        <button id="btnRotCCW" title="Rotate 90° CCW (Shift+R)">⟲ CCW</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="btnFlipH" title="Mirror horizontal (H)">⇋ Flip H</button>
+        <button id="btnFlipV" title="Mirror vertical (V)">⇅ Flip V</button>
+      </div>
+      <div class="hint" style="margin-top:4px">With a selection: rotates/flips just that region on the active layer. With no selection: rotates/flips <b>every layer</b> together (whole tileset geometry).</div>
+      <div class="row" style="margin-top:8px;border-top:1px solid var(--border);padding-top:8px">
+        <button id="btnFlipHCopy" title="Mirror the selection and load the result into the Paste tool">⇋ Flip H (Copy)</button>
+        <button id="btnFlipVCopy" title="Mirror the selection and load the result into the Paste tool">⇅ Flip V (Copy)</button>
+      </div>
+      <div class="hint" style="margin-top:4px">Requires a selection. Leaves the original alone and loads a mirrored copy into the Paste tool — click the canvas to place it wherever you like.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Slide (wrap)</h2>
+      <div class="dpad" id="slideDpad">
+        <span></span><button id="slideUp" title="Slide up 1px (wraps to bottom)">▲</button><span></span>
+        <button id="slideLeft" title="Slide left 1px (wraps to right)">◀</button><span></span><button id="slideRight" title="Slide right 1px (wraps to left)">▶</button>
+        <span></span><button id="slideDown" title="Slide down 1px (wraps to top)">▼</button><span></span>
+      </div>
+      <div class="hint" style="margin-top:4px">Shifts pixels on the active layer by 1px per click (Alt+Arrow keys work too); pixels that fall off one edge reappear on the opposite edge. Works within the selection, or the whole canvas if none.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Perspective Guide</h2>
+      <label class="chk"><input type="checkbox" id="chkVpEnable"> Show guide lines</label>
+      <div class="row" style="margin-top:6px">
+        <span>X</span><input id="vpX" type="number" value="8" style="width:52px">
+        <span>Y</span><input id="vpY" type="number" value="8" style="width:52px">
+        <button id="btnVpPick" title="Click, then click the canvas to place the vanishing point">Pick on Canvas</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <span>Lines</span><input id="vpCount" type="number" min="1" max="72" value="8" style="width:44px">
+        <span>Offset°</span><input id="vpOffset" type="number" value="0" style="width:50px">
+      </div>
+      <div class="hint" style="margin-top:4px">Evenly-spaced lines radiating from the vanishing point, starting at the offset angle. Visual reference only — never drawn into the art or exported.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Tile Usage</h2>
+      <label class="chk"><input type="checkbox" id="chkIgnoreBlank" checked> Ignore fully-blank tiles</label>
+      <label class="chk" style="margin-top:4px"><input type="checkbox" id="chkIgnoreFlips" checked> Treat H/V-flipped tiles as duplicates</label>
+      <button id="btnCountTiles" style="margin-top:6px">Count Unique Tiles</button>
+      <div id="tileCountOut" class="hint statusText" style="margin-top:6px;white-space:pre-line"></div>
+    </div>
+
+    <div class="panel">
+      <h2>History</h2>
+      <div class="row">
+        <button id="btnUndo" title="Undo (Ctrl+Z)">↶ Undo</button>
+        <button id="btnRedo" title="Redo (Ctrl+Y)">↷ Redo</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Zoom</h2>
+      <input id="zoomRange" type="range" min="1" max="40" step="1" value="18">
+      <div class="hint statusText" id="zoomLabel">18 px/pixel</div>
+      <button id="btnZoomFit" style="margin-top:6px">Fit to View</button>
+      <div class="hint" style="margin-top:4px">Ctrl+scroll wheel over the canvas also zooms.</div>
+    </div>
+  </div>
+
+  <div id="center">
+    <div id="topStatusBar">
+      <span id="posInfo">—</span>
+      <span id="dimInfo">2x2 tiles (16x16 px)</span>
+    </div>
+    <div id="canvasScroll">
+      <div id="canvasWrap"><canvas id="mainCanvas" width="144" height="144"></canvas></div>
+      <div id="refWrap" hidden>
+        <div class="row" style="justify-content:space-between;margin-bottom:4px">
+          <span class="hint statusText" style="margin:0">Full-color reference</span>
+          <button id="btnClearRef" title="Discard this reference image -- it's not saved with the project anyway, so this just hides it early if you're done comparing">✕ Clear</button>
+        </div>
+        <canvas id="refCanvas"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div id="right">
+    <button id="btnCollapseRight" class="sidebarToggle" title="Collapse this panel" style="align-self:flex-end">▶</button>
+    <div class="panel">
+      <h2>Layers <span style="text-transform:none;font-weight:400">(one per screen plane)</span></h2>
+      <div class="paletteList" id="layerList"></div>
+      <div class="row" style="margin-top:6px">
+        <button id="btnLayerAdd">+ New</button>
+        <button id="btnLayerDup">Duplicate</button>
+        <button id="btnLayerDel" class="danger">Delete</button>
+      </div>
+      <div class="row" style="margin-top:4px">
+        <button id="btnLayerUp">↑ Move Up</button>
+        <button id="btnLayerDown">↓ Move Down</button>
+      </div>
+      <div class="row" style="margin-top:4px">
+        <button id="btnMergeDown" title="Merge the active layer down into the one below it">Merge Down</button>
+        <button id="btnMergeVisible" title="Merge every visible layer into the bottom-most visible one">Merge Visible</button>
+      </div>
+      <div class="hint" style="margin-top:4px">Merge is handy before/after copying or drawing a new feature on its own layer, so you can see the full combined screen plane — then flatten once you're happy. If two layers painted the same tile with different palettes, the front layer's palette wins there (only one palette fits per tile on real hardware).</div>
+      <div class="hint" style="margin-top:4px">Top of list = front plane. Only the highlighted (active) layer is edited — others preview dimmed. Each layer exports as its own tile array, matching NGPC's real one-tile-per-plane limit (e.g. sprite back/front, SCR1/SCR2).</div>
+    </div>
+
+    <div class="panel">
+      <h2>Draw Color</h2>
+      <div class="row" style="align-items:flex-start">
+        <div class="col">
+          <div class="swatchLabel">Primary<br>(LMB)</div>
+          <div class="swatchRow" id="drawSwatchesPrimary"></div>
+        </div>
+        <div class="col">
+          <div class="swatchLabel">Secondary<br>(RMB)</div>
+          <div class="swatchRow" id="drawSwatchesSecondary"></div>
+        </div>
+      </div>
+      <div class="hint" style="margin-top:4px">Keys 1-4 set primary, Shift+1-4 set secondary.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Active Palette (RGB444, 0-15 per channel — 4096 colors)</h2>
+      <div id="paletteEditor"></div>
+      <label class="chk" style="margin-top:6px">
+        <input type="checkbox" id="chkTransparentPreview" checked>
+        Preview index 0 as transparent (checkerboard)
+      </label>
+    </div>
+
+    <div class="panel">
+      <h2>Palette Bank</h2>
+      <div class="paletteList" id="paletteBankList"></div>
+      <div class="row" style="margin-top:6px">
+        <button id="btnPalAdd">+ New</button>
+        <button id="btnPalDup">Duplicate</button>
+        <button id="btnPalDel" class="danger">Delete</button>
+        <button id="btnPalRemoveUnused" class="danger">Remove Unused</button>
+      </div>
+      <div class="hint" style="margin-top:4px">All banked palettes export together as one shared project palette table. Each layer picks a default palette (dropdown in Layers); individual tiles can override it below. "Remove Unused" drops every bank palette that no layer's default or per-tile override currently references.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Tile Palette Override</h2>
+      <div class="hint">Select tile(s) with the Select tool, then assign a bank palette to just those tiles — the pixel art (index data) stays shared with the rest of the layer, only the palette attribute changes. This matches how NGPC tilemaps really work (palette is a per-cell attribute, not baked into the bitmap).</div>
+      <div class="row" style="margin-top:6px">
+        <select id="tpalSelect" style="flex:1"></select>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="btnTpalApply">Apply to Selection</button>
+        <button id="btnTpalClear">Clear Override</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Tile Groups (Named Sub-Regions)</h2>
+      <div class="hint">Select tile(s) with the Select tool, name them, and Add — the group's tile-index range and a ready-to-use index array get emitted in the C output. Great for marking sprite-sheet animation frames (walk_up, walk_down, idle_left, etc.) without hand-counting tile indices. Groups belong to the active layer and are shown as labeled dashed boxes on the canvas.</div>
+      <div class="row" style="margin-top:6px">
+        <input id="groupNameInput" type="text" placeholder="e.g. walk_up" style="flex:1">
+        <button id="btnGroupAdd">Add / Update</button>
+      </div>
+      <div class="paletteList" id="groupList" style="margin-top:6px"></div>
+      <div class="hint" style="margin-top:4px">Adding a group with a name that already exists on this layer replaces it with the current selection's bounds. Groups are clamped to stay inside the grid automatically if you resize/crop/scale afterward — recheck them if you do.</div>
+    </div>
+
+    <div class="panel" id="pngPreviewWrap" style="display:none">
+      <h2>PNG Export Preview</h2>
+      <img id="pngPreview">
+      <div class="row" style="margin-top:6px;justify-content:center">
+        <select id="pngScale">
+          <option value="1">1x</option>
+          <option value="2">2x</option>
+          <option value="4" selected>4x</option>
+          <option value="8">8x</option>
+        </select>
+        <label class="chk"><input type="checkbox" id="chkPngTransparent" checked> empty = alpha</label>
+        <a id="pngDownload" class="btnlike" download="tiles.png">⬇ Download PNG</a>
+      </div>
+    </div>
+  </div>
+
+  <div id="bottom">
+    <div class="panel">
+      <details open>
+        <summary>NGPCraft C Output</summary>
+        <div class="row" style="margin-bottom:6px">
+          <label class="chk"><input type="checkbox" id="chkFar" checked> NGP_FAR</label>
+          <label class="chk"><input type="checkbox" id="chkComments" checked> per-tile comments</label>
+          <button id="btnRegen">Regenerate</button>
+          <button id="btnCopyCode">Copy to Clipboard</button>
+          <button id="btnDownloadC">Download .c</button>
+        </div>
+        <textarea id="codeOut" readonly spellcheck="false"></textarea>
+        <div class="hint" style="margin-top:4px">
+          Refreshes automatically as you edit. Each layer emits its own row-major (left→right, top→bottom) <code>u16</code> tile
+          array (8 words/tile, 2bpp MSB-first — matches this project's existing <code>art.c</code>/<code>*_mspr.c</code> format)
+          plus a per-tile palette-index array. Palette words are hex literals (<code>R | G&lt;&lt;4 | B&lt;&lt;8</code>) —
+          safe from the raw <code>RGB()</code> macro's blue-channel truncation bug on cc900.
+        </div>
+      </details>
+    </div>
+  </div>
+
+</div>
+
+<div id="modalOverlay" class="modalOverlay" hidden>
+  <div class="modalBox">
+    <div id="modalMessage" class="modalMessage"></div>
+    <div id="modalExtra"></div>
+    <div id="modalButtons" class="modalButtons"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------- constants / state ---------- */
+const TILE=8;
+const MAX_GRID_TILES=256; // editing ceiling, not an NGPC VRAM tile budget -- crop/export only what a given plane actually needs
+function mkPalette(name,colors){ return {name, colors: colors.map(c=>({...c}))}; }
+function allocPixels(w,h){return new Uint8Array(w*h);}
+function allocTilePalette(tw,th){ const a=new Int16Array(tw*th); a.fill(-1); return a; }
+
+let state = {
+  gridW:2, gridH:2,             // in tiles
+  paletteBank:[ mkPalette("pal0",[ {r:0,g:0,b:0},{r:5,g:5,b:5},{r:10,g:10,b:10},{r:15,g:15,b:15} ]) ],
+  activePalette:0,              // which bank palette the Palette Editor panel is viewing/editing
+  drawColor:1,                  // primary index (LMB)
+  drawColor2:2,                 // secondary index (RMB)
+  layers:[],
+  activeLayer:0,
+};
+function makeLayer(name){
+  return {
+    name, visible:true,
+    pixels: allocPixels(pixW(),pixH()),
+    tilePalette: allocTilePalette(state.gridW,state.gridH),
+    defaultPalette: state.activePalette||0,
+    refRGBA: null, // full-color reference from "Full Color (No Palette)" import; in-memory only, never persisted
+    refConverted: false, // true once Generate Palettes Per Tile has run at least once -- main canvas shows indexed art + a side reference panel instead of substituting refRGBA for the whole canvas
+    groups: [], // named tile sub-regions: {name,x0,y0,w,h} in tile units
+  };
+}
+state.layers=[ makeLayer('Layer 1') ];
+
+function pixW(){return state.gridW*TILE;}
+function pixH(){return state.gridH*TILE;}
+function currentLayer(){return state.layers[state.activeLayer];}
+function activePalette(){return state.paletteBank[state.activePalette];}
+function css255(c){return `rgb(${c.r*17},${c.g*17},${c.b*17})`;}
+function clamp(v,a,b){return v<a?a:(v>b?b:v);}
+function sanitizeIdent(s){ return (String(s||'x').toLowerCase().replace(/[^a-z0-9_]+/g,'_').replace(/^_+|_+$/g,''))||'x'; }
+
+/* ---------- in-page modal (replaces window.confirm/alert) ----------
+   Native confirm()/alert() get permanently silenced -- with NO visible dialog and no
+   error -- the instant the user ever checks "Prevent this page from creating additional
+   dialogs" (Chrome shows that checkbox after repeated prompts, and this tool used to fire
+   confirm() from PNG import every time). After that, every future confirm() call just
+   returns false immediately, so e.g. New looks completely dead. This modal can't be
+   silenced that way. */
+function showModal(message,buttons){
+  return new Promise(resolve=>{
+    const overlay=document.getElementById('modalOverlay');
+    document.getElementById('modalMessage').textContent=message;
+    document.getElementById('modalExtra').innerHTML='';
+    const wrap=document.getElementById('modalButtons');
+    wrap.innerHTML='';
+    let escapeValue=false;
+    buttons.forEach(b=>{
+      const el=document.createElement('button');
+      el.textContent=b.label;
+      if(b.primary){ el.className='primary'; escapeValue=b.value; }
+      if(b.danger) el.classList.add('danger');
+      el.onclick=()=>{ overlay.hidden=true; document.removeEventListener('keydown',onKey); resolve(b.value); };
+      wrap.appendChild(el);
+    });
+    function onKey(e){
+      if(e.key==='Escape'){ overlay.hidden=true; document.removeEventListener('keydown',onKey); resolve(escapeValue===undefined?false:escapeValue); }
+    }
+    document.addEventListener('keydown',onKey);
+    overlay.hidden=false;
+  });
+}
+function modalConfirm(message){
+  return showModal(message,[{label:'Cancel',value:false},{label:'OK',value:true,primary:true}]);
+}
+function modalAlert(message){
+  return showModal(message,[{label:'OK',value:true,primary:true}]);
+}
+/* Import-options modal: shown right after a file is picked, so the scale % and 2-layer choice
+   are made with the actual source dimensions on screen instead of blind, ambient toolbar
+   settings decided before you know the image's size. Resolves to null on cancel, else
+   {scalePct, twoLayer}. Reuses the generic modal's overlay/message/buttons DOM but injects a
+   small custom control block into #modalExtra (kept empty by showModal for every other use). */
+function showImportOptionsModal(img){
+  return new Promise(resolve=>{
+    const overlay=document.getElementById('modalOverlay');
+    document.getElementById('modalMessage').textContent=`Source image is ${img.width}x${img.height}px.`;
+    const extra=document.getElementById('modalExtra');
+    extra.innerHTML=`
+      <div class="row" style="margin-bottom:8px">
+        <label class="chk">Import scale <input id="modalScalePct" type="number" min="1" step="1" value="100" style="width:60px">%</label>
+        <button id="modalScaleFit" type="button" title="Sets the scale to whatever maximizes this image within the 256x256-tile limit, preserving its aspect ratio.">Fit to 256x256</button>
+      </div>
+      <div class="hint statusText" id="modalScalePreview" style="margin-bottom:8px"></div>
+      <label class="chk" style="margin-bottom:4px" title="Splits the import across two fresh layers, SCR_1 and SCR_2 (replacing whatever layers currently exist), so together they can show more colors per tile than one plane alone. Only affects the 'Extract New Palette' and 'Auto Palette Per Tile' choices on the next screen.">
+        <input type="checkbox" id="modalTwoLayer"> Split into 2 layers (SCR_1/SCR_2)
+      </label>`;
+    const scaleInput=document.getElementById('modalScalePct');
+    const preview=document.getElementById('modalScalePreview');
+    function updatePreview(){
+      const pct=Math.max(1,parseFloat(scaleInput.value)||100);
+      const w=Math.max(1,Math.round(img.width*pct/100)), h=Math.max(1,Math.round(img.height*pct/100));
+      const tw=Math.ceil(w/TILE), th=Math.ceil(h/TILE);
+      preview.textContent=`→ ${w}x${h}px (${tw}x${th} tiles)`+((tw>MAX_GRID_TILES||th>MAX_GRID_TILES)?` -- over the ${MAX_GRID_TILES}x${MAX_GRID_TILES}-tile limit, you'll get a crop/fit choice next`:'');
+    }
+    scaleInput.oninput=updatePreview;
+    updatePreview();
+    document.getElementById('modalScaleFit').onclick=()=>{
+      const fitPct=Math.max(1,Math.floor(Math.min(MAX_GRID_TILES*TILE/img.width, MAX_GRID_TILES*TILE/img.height)*100));
+      scaleInput.value=fitPct;
+      updatePreview();
+    };
+
+    const wrap=document.getElementById('modalButtons');
+    wrap.innerHTML='';
+    let resolved=false;
+    function finish(val){
+      if(resolved) return; resolved=true;
+      overlay.hidden=true; document.removeEventListener('keydown',onKey);
+      extra.innerHTML='';
+      resolve(val);
+    }
+    const btnCancel=document.createElement('button'); btnCancel.textContent='Cancel Import';
+    btnCancel.onclick=()=>finish(null);
+    const btnGo=document.createElement('button'); btnGo.textContent='Continue'; btnGo.className='primary';
+    btnGo.onclick=()=>finish({scalePct:Math.max(1,parseFloat(scaleInput.value)||100), twoLayer:document.getElementById('modalTwoLayer').checked});
+    wrap.appendChild(btnCancel); wrap.appendChild(btnGo);
+    function onKey(e){
+      if(e.key==='Escape') finish(null);
+      else if(e.key==='Enter'){ e.preventDefault(); btnGo.onclick(); }
+    }
+    document.addEventListener('keydown',onKey);
+    overlay.hidden=false;
+    scaleInput.focus(); scaleInput.select();
+  });
+}
+
+let tool='pencil';
+let drawing=false, drawButton=0;
+let selection=null;   // {x0,y0,x1,y1} in TILE units inclusive
+let dragStartTile=null;
+let clipboard=null;   // {pw,ph,pdata,tw,th,tdata} from the active layer
+let pasteGhost=null;  // {x,y} pixel-units top-left, tile-snapped
+let undoStack=[], redoStack=[];
+const UNDO_LIMIT=60;
+
+// shape tools (line/rect/ellipse)
+let shapeStart=null, shapeEnd=null, shapeButton=0;
+// magic wand (pixel-level, arbitrary-shape selection -- separate from the tile-aligned `selection` above)
+let pixelMask=null;      // {x0,y0,w,h,mask:Uint8Array} pixel units, active-layer scoped
+let wandClipboard=null;  // {w,h,mask,pdata} stencil clipboard
+let wandPasteHover=null; // {x,y} pixel-units top-left, for the paste ghost
+let wandMoving=false, wandMoveStart=null, wandMoveOffset={dx:0,dy:0}; // dragging pixelMask itself (free pixel offset)
+// tile-select move (dragging inside an existing tile-aligned `selection` moves it, tile-snapped)
+let selMoving=false, selMoveStart=null, selMoveOffsetTiles={dx:0,dy:0};
+// perspective guide
+let pickingVp=false;
+// sidebar collapse
+let leftCollapsed=false, rightCollapsedFlag=false;
+// multiple open projects (tabs) -- `clipboard`/`wandClipboard` above are deliberately NOT
+// per-project, so copy/paste works across tabs. Each entry: {name, snapshot, zoom, anchor, undoStack, redoStack}.
+let projects=[];
+let activeProjectIdx=0;
+
+/* ---------- resize anchor ---------- */
+const ANCHORS=['tl','tc','tr','ml','mm','mr','bl','bc','br'];
+let currentAnchor='tl';
+function anchorOffsetTiles(anchor,oldW,oldH,newW,newH){
+  const v=anchor[0], h=anchor[1];
+  const dx = h==='l' ? 0 : (h==='r' ? newW-oldW : Math.floor((newW-oldW)/2));
+  const dy = v==='t' ? 0 : (v==='b' ? newH-oldH : Math.floor((newH-oldH)/2));
+  return {dx,dy};
+}
+function renderAnchorGrid(){
+  const wrap=document.getElementById('anchorGrid');
+  wrap.innerHTML='';
+  ANCHORS.forEach(a=>{
+    const b=document.createElement('button');
+    b.type='button';
+    b.className='anchorBtn'+(a===currentAnchor?' active':'');
+    b.title='Resize anchor: '+a;
+    b.onclick=()=>{ currentAnchor=a; renderAnchorGrid(); };
+    wrap.appendChild(b);
+  });
+}
+
+/* ---------- layer pixel helpers ---------- */
+function getLayerPix(layer,x,y){ if(x<0||y<0||x>=pixW()||y>=pixH())return 0; return layer.pixels[y*pixW()+x]; }
+function setLayerPix(layer,x,y,v){ if(x<0||y<0||x>=pixW()||y>=pixH())return; layer.pixels[y*pixW()+x]=v&3; }
+function tilePaletteAt(layer,tx,ty){ if(tx<0||ty<0||tx>=state.gridW||ty>=state.gridH)return -1; return layer.tilePalette[ty*state.gridW+tx]; }
+function resolvedPalette(layer,tx,ty){
+  const ov=tilePaletteAt(layer,tx,ty);
+  const idx = ov>=0 ? ov : layer.defaultPalette;
+  return state.paletteBank[idx] || state.paletteBank[0];
+}
+
+/* ---------- undo/redo (whole-project snapshots) ---------- */
+function snapshotLayers(){
+  return state.layers.map(l=>({
+    name:l.name, visible:l.visible, defaultPalette:l.defaultPalette,
+    pixels:l.pixels.slice(), tilePalette:l.tilePalette.slice(),
+    refRGBA: l.refRGBA ? l.refRGBA.slice() : null, refConverted: !!l.refConverted,
+    groups:(l.groups||[]).map(g=>({...g})),
+  }));
+}
+function pushUndo(){
+  undoStack.push({gridW:state.gridW,gridH:state.gridH,layers:snapshotLayers(),activeLayer:state.activeLayer});
+  if(undoStack.length>UNDO_LIMIT)undoStack.shift();
+  redoStack.length=0;
+}
+function applySnapshot(s){
+  state.gridW=s.gridW; state.gridH=s.gridH;
+  state.layers=s.layers.map(l=>({name:l.name,visible:l.visible,defaultPalette:l.defaultPalette,
+    pixels:l.pixels.slice(),tilePalette:l.tilePalette.slice(),
+    refRGBA: l.refRGBA ? l.refRGBA.slice() : null, refConverted: !!l.refConverted,
+    groups:(l.groups||[]).map(g=>({...g}))}));
+  state.activeLayer=clamp(s.activeLayer,0,state.layers.length-1);
+  syncGridInputs(); renderAllLayerUI(); render(); scheduleAutosave();
+}
+function undo(){
+  if(!undoStack.length)return;
+  redoStack.push({gridW:state.gridW,gridH:state.gridH,layers:snapshotLayers(),activeLayer:state.activeLayer});
+  applySnapshot(undoStack.pop());
+}
+function redo(){
+  if(!redoStack.length)return;
+  undoStack.push({gridW:state.gridW,gridH:state.gridH,layers:snapshotLayers(),activeLayer:state.activeLayer});
+  applySnapshot(redoStack.pop());
+}
+
+/* ---------- canvas / render ---------- */
+const canvas=document.getElementById('mainCanvas');
+const ctx=canvas.getContext('2d');
+let zoom=18;
+const MARKER_COLORS=['#5fb3ff','#ff9f5f','#5fe0a0','#ff6b6b','#c792ea','#f4d35e','#4dd0e1','#ffd54f'];
+
+function render(){
+  clampGroupsToGrid();
+  const w=pixW(), h=pixH();
+  canvas.width=w*zoom; canvas.height=h*zoom;
+  ctx.imageSmoothingEnabled=false;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  const transPrev=document.getElementById('chkTransparentPreview').checked;
+
+  state.layers.forEach((layer,li)=>{
+    if(!layer.visible) return;
+    ctx.globalAlpha = (li===state.activeLayer) ? 1 : 0.32;
+    if(layer.refRGBA && !layer.refConverted){
+      // Full-color reference, not yet converted at all: blit the raw RGBA as-is, scaled to
+      // zoom, in place of indexed art (there's nothing meaningful to show there yet). Once
+      // Generate Palettes Per Tile has run once, the indexed art becomes the main view and
+      // this reference moves to the side panel instead (see renderReferencePanel below).
+      const off=document.createElement('canvas'); off.width=w; off.height=h;
+      off.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(layer.refRGBA),w,h),0,0);
+      ctx.drawImage(off,0,0,w,h,0,0,w*zoom,h*zoom);
+      return;
+    }
+    for(let y=0;y<h;y++){
+      const ty=y>>3;
+      for(let x=0;x<w;x++){
+        const v=layer.pixels[y*w+x];
+        if(v===0 && transPrev) continue;
+        const tx=x>>3;
+        const pal=resolvedPalette(layer,tx,ty);
+        ctx.fillStyle=css255(pal.colors[v]);
+        ctx.fillRect(x*zoom,y*zoom,zoom,zoom);
+      }
+    }
+  });
+  ctx.globalAlpha=1;
+
+  // tile grid lines
+  ctx.strokeStyle='rgba(255,255,255,0.10)';
+  ctx.lineWidth=1;
+  for(let tx=0;tx<=state.gridW;tx++){
+    ctx.beginPath(); ctx.moveTo(tx*TILE*zoom+0.5,0); ctx.lineTo(tx*TILE*zoom+0.5,h*zoom); ctx.stroke();
+  }
+  for(let ty=0;ty<=state.gridH;ty++){
+    ctx.beginPath(); ctx.moveTo(0,ty*TILE*zoom+0.5); ctx.lineTo(w*zoom,ty*TILE*zoom+0.5); ctx.stroke();
+  }
+  // faint pixel grid at high zoom
+  if(zoom>=14){
+    ctx.strokeStyle='rgba(255,255,255,0.045)';
+    for(let x=0;x<=w;x++){ if(x%TILE===0)continue; ctx.beginPath();ctx.moveTo(x*zoom+0.5,0);ctx.lineTo(x*zoom+0.5,h*zoom);ctx.stroke(); }
+    for(let y=0;y<=h;y++){ if(y%TILE===0)continue; ctx.beginPath();ctx.moveTo(0,y*zoom+0.5);ctx.lineTo(w*zoom,y*zoom+0.5);ctx.stroke(); }
+  }
+
+  // per-tile palette override markers (active layer only)
+  const activeL=currentLayer();
+  const markSize=Math.max(4,Math.round(zoom*0.32));
+  for(let ty=0;ty<state.gridH;ty++)for(let tx=0;tx<state.gridW;tx++){
+    const ov=tilePaletteAt(activeL,tx,ty);
+    if(ov<0) continue;
+    ctx.fillStyle=MARKER_COLORS[ov%MARKER_COLORS.length];
+    ctx.fillRect(tx*TILE*zoom+1, ty*TILE*zoom+1, markSize, markSize);
+  }
+
+  // named tile-group boxes (active layer only)
+  (activeL.groups||[]).forEach((g,gi)=>{
+    const col=MARKER_COLORS[gi%MARKER_COLORS.length];
+    const gx=g.x0*TILE*zoom, gy=g.y0*TILE*zoom, gw=g.w*TILE*zoom, gh=g.h*TILE*zoom;
+    ctx.save();
+    ctx.strokeStyle=col; ctx.lineWidth=1.5; ctx.setLineDash([3,2]);
+    ctx.strokeRect(gx+0.5,gy+0.5,gw-1,gh-1);
+    if(zoom>=8){
+      ctx.setLineDash([]);
+      ctx.font='10px sans-serif';
+      const label=g.name;
+      const tw2=ctx.measureText(label).width;
+      ctx.fillStyle='rgba(0,0,0,0.65)';
+      ctx.fillRect(gx+1,gy+1,tw2+4,11);
+      ctx.fillStyle=col;
+      ctx.fillText(label,gx+3,gy+9.5);
+    }
+    ctx.restore();
+  });
+
+  // magic-wand pixel mask overlay (static -- suppressed mid-move in favor of the move-ghost below)
+  if(pixelMask && !wandMoving){
+    ctx.save();
+    ctx.fillStyle='rgba(95,179,255,0.35)';
+    for(let y=0;y<pixelMask.h;y++)for(let x=0;x<pixelMask.w;x++){
+      if(pixelMask.mask[y*pixelMask.w+x]) ctx.fillRect((pixelMask.x0+x)*zoom,(pixelMask.y0+y)*zoom,zoom,zoom);
+    }
+    ctx.strokeStyle='#5fb3ff'; ctx.lineWidth=1.5; ctx.setLineDash([3,2]);
+    ctx.strokeRect(pixelMask.x0*zoom+1,pixelMask.y0*zoom+1,pixelMask.w*zoom-2,pixelMask.h*zoom-2);
+    ctx.restore();
+  }
+  // magic-wand move ghost: dim the original spot, preview the moved content at the drag offset
+  if(wandMoving && pixelMask){
+    const {x0,y0,w:mw,h:mh,mask}=pixelMask;
+    const {dx,dy}=wandMoveOffset;
+    const layer=currentLayer();
+    ctx.save();
+    ctx.fillStyle='rgba(0,0,0,0.55)';
+    for(let y=0;y<mh;y++)for(let x=0;x<mw;x++) if(mask[y*mw+x]) ctx.fillRect((x0+x)*zoom,(y0+y)*zoom,zoom,zoom);
+    ctx.globalAlpha=0.85;
+    for(let y=0;y<mh;y++)for(let x=0;x<mw;x++){
+      if(!mask[y*mw+x]) continue;
+      const v=getLayerPix(layer,x0+x,y0+y);
+      if(v===0) continue;
+      const pal=resolvedPalette(layer,(x0+x)>>3,(y0+y)>>3);
+      ctx.fillStyle=css255(pal.colors[v]);
+      ctx.fillRect((x0+x+dx)*zoom,(y0+y+dy)*zoom,zoom,zoom);
+    }
+    ctx.restore();
+  }
+
+  // shape tool live ghost preview (line/rect/ellipse, mid-drag)
+  if(drawing && shapeStart && shapeEnd && (tool==='line'||tool==='rect'||tool==='ellipse')){
+    const filled=document.getElementById('chkShapeFilled').checked;
+    let pts;
+    if(tool==='line') pts=linePoints(shapeStart.x,shapeStart.y,shapeEnd.x,shapeEnd.y);
+    else if(tool==='rect') pts=rectPoints(shapeStart.x,shapeStart.y,shapeEnd.x,shapeEnd.y,filled);
+    else pts=ellipsePoints(shapeStart.x,shapeStart.y,shapeEnd.x,shapeEnd.y,filled);
+    const pal=activePalette();
+    ctx.save();
+    ctx.globalAlpha=0.7;
+    ctx.fillStyle=css255(pal.colors[colorForButton(shapeButton)]);
+    pts.forEach(pt=>{ if(pt.x>=0&&pt.y>=0&&pt.x<w&&pt.y<h) ctx.fillRect(pt.x*zoom,pt.y*zoom,zoom,zoom); });
+    ctx.restore();
+  }
+
+  // selection overlay (static -- suppressed mid-move in favor of the move-ghost below)
+  if(selection && !selMoving){
+    const sx=selection.x0*TILE*zoom, sy=selection.y0*TILE*zoom;
+    const sw=(selection.x1-selection.x0+1)*TILE*zoom, sh=(selection.y1-selection.y0+1)*TILE*zoom;
+    ctx.save();
+    ctx.strokeStyle='#5fb3ff'; ctx.lineWidth=2; ctx.setLineDash([6,4]);
+    ctx.strokeRect(sx+1,sy+1,sw-2,sh-2);
+    ctx.restore();
+  }
+  // tile-select move ghost: dim the original tiles, preview the moved content + a target outline
+  if(selMoving && selection){
+    const {dx,dy}=selMoveOffsetTiles;
+    const layer=currentLayer();
+    const px0=selection.x0*TILE, py0=selection.y0*TILE;
+    const pw=(selection.x1-selection.x0+1)*TILE, ph=(selection.y1-selection.y0+1)*TILE;
+    ctx.save();
+    ctx.fillStyle='rgba(0,0,0,0.55)';
+    ctx.fillRect(px0*zoom,py0*zoom,pw*zoom,ph*zoom);
+    ctx.globalAlpha=0.85;
+    for(let y=0;y<ph;y++)for(let x=0;x<pw;x++){
+      const v=getLayerPix(layer,px0+x,py0+y);
+      if(v===0) continue;
+      const pal=resolvedPalette(layer,(px0+x)>>3,(py0+y)>>3);
+      ctx.fillStyle=css255(pal.colors[v]);
+      ctx.fillRect((px0+x+dx*TILE)*zoom,(py0+y+dy*TILE)*zoom,zoom,zoom);
+    }
+    ctx.globalAlpha=1;
+    ctx.strokeStyle='#ff9f5f'; ctx.lineWidth=2; ctx.setLineDash([6,4]);
+    ctx.strokeRect((px0+dx*TILE)*zoom+1,(py0+dy*TILE)*zoom+1,pw*zoom-2,ph*zoom-2);
+    ctx.restore();
+  }
+  // paste ghost
+  if(pasteGhost && clipboard){
+    ctx.save();
+    ctx.globalAlpha=0.55;
+    const pal=activePalette();
+    for(let yy=0;yy<clipboard.ph;yy++)for(let xx=0;xx<clipboard.pw;xx++){
+      const v=clipboard.pdata[yy*clipboard.pw+xx];
+      if(v===0)continue;
+      ctx.fillStyle=css255(pal.colors[v]);
+      ctx.fillRect((pasteGhost.x+xx)*zoom,(pasteGhost.y+yy)*zoom,zoom,zoom);
+    }
+    ctx.strokeStyle='#ff9f5f'; ctx.lineWidth=2; ctx.setLineDash([4,3]);
+    ctx.strokeRect(pasteGhost.x*zoom+1,pasteGhost.y*zoom+1,clipboard.pw*zoom-2,clipboard.ph*zoom-2);
+    ctx.restore();
+  }
+  // magic-wand stencil paste ghost
+  if(wandPasteHover && wandClipboard){
+    ctx.save();
+    ctx.globalAlpha=0.6;
+    const pal=activePalette();
+    for(let yy=0;yy<wandClipboard.h;yy++)for(let xx=0;xx<wandClipboard.w;xx++){
+      if(!wandClipboard.mask[yy*wandClipboard.w+xx]) continue;
+      ctx.fillStyle=css255(pal.colors[wandClipboard.pdata[yy*wandClipboard.w+xx]]);
+      ctx.fillRect((wandPasteHover.x+xx)*zoom,(wandPasteHover.y+yy)*zoom,zoom,zoom);
+    }
+    ctx.restore();
+  }
+
+  renderVpGuides();
+
+  document.getElementById('dimInfo').textContent=
+    `${state.gridW}x${state.gridH} tiles (${w}x${h} px) — ${state.layers.length} layer(s)`;
+  updateSelInfo();
+  renderGroupList();
+  refreshCode();
+  renderReferencePanel(w,h);
+}
+/* Side-by-side full-color reference panel: shown only once the active layer's reference has
+   been converted at least once (before that, the main canvas already IS the raw reference --
+   see the refConverted check in the layer draw loop above, so showing it twice would be
+   redundant). Kept at the same zoom/pixel dimensions as the main canvas so the two line up for
+   easy by-eye comparison while touching up the indexed art. */
+function renderReferencePanel(w,h){
+  const wrap=document.getElementById('refWrap');
+  const layer=currentLayer();
+  if(!layer.refRGBA || !layer.refConverted){ wrap.hidden=true; return; }
+  wrap.hidden=false;
+  const rc=document.getElementById('refCanvas');
+  rc.width=w*zoom; rc.height=h*zoom;
+  const rctx=rc.getContext('2d');
+  rctx.imageSmoothingEnabled=false;
+  const off=document.createElement('canvas'); off.width=w; off.height=h;
+  off.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(layer.refRGBA),w,h),0,0);
+  rctx.clearRect(0,0,rc.width,rc.height);
+  rctx.drawImage(off,0,0,w,h,0,0,rc.width,rc.height);
+}
+
+function canvasToPixelCoord(evt){
+  const r=canvas.getBoundingClientRect();
+  const x=Math.floor((evt.clientX-r.left)/zoom);
+  const y=Math.floor((evt.clientY-r.top)/zoom);
+  return {x:clamp(x,0,pixW()-1), y:clamp(y,0,pixH()-1)};
+}
+function tileOf(px){return Math.floor(px/TILE);}
+
+/* ---------- shape rasterization (pixel points, used by both the live ghost and the commit) ---------- */
+function linePoints(x0,y0,x1,y1){
+  const pts=[];
+  const dx=Math.abs(x1-x0), dy=-Math.abs(y1-y0);
+  const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+  let err=dx+dy, x=x0, y=y0;
+  while(true){
+    pts.push({x,y});
+    if(x===x1 && y===y1) break;
+    const e2=2*err;
+    if(e2>=dy){ err+=dy; x+=sx; }
+    if(e2<=dx){ err+=dx; y+=sy; }
+  }
+  return pts;
+}
+function rectPoints(x0,y0,x1,y1,filled){
+  const xa=Math.min(x0,x1), xb=Math.max(x0,x1), ya=Math.min(y0,y1), yb=Math.max(y0,y1);
+  const pts=[];
+  if(filled){
+    for(let y=ya;y<=yb;y++)for(let x=xa;x<=xb;x++) pts.push({x,y});
+  } else {
+    for(let x=xa;x<=xb;x++){ pts.push({x,y:ya}); pts.push({x,y:yb}); }
+    for(let y=ya;y<=yb;y++){ pts.push({x:xa,y}); pts.push({x:xb,y}); }
+  }
+  return pts;
+}
+function ellipsePoints(x0,y0,x1,y1,filled){
+  const xa=Math.min(x0,x1), xb=Math.max(x0,x1), ya=Math.min(y0,y1), yb=Math.max(y0,y1);
+  const w=xb-xa+1, h=yb-ya+1;
+  const cx=xa+(w-1)/2, cy=ya+(h-1)/2;
+  const rx=w/2, ry=h/2;
+  const pts=[];
+  if(rx<=0||ry<=0){ pts.push({x:xa,y:ya}); return pts; }
+  const inside=(x,y)=>{ const nx=(x-cx)/rx, ny=(y-cy)/ry; return nx*nx+ny*ny<=1; };
+  for(let y=ya;y<=yb;y++){
+    for(let x=xa;x<=xb;x++){
+      if(!inside(x,y)) continue;
+      if(filled){ pts.push({x,y}); continue; }
+      const edge = !inside(x+1,y) || !inside(x-1,y) || !inside(x,y+1) || !inside(x,y-1);
+      if(edge) pts.push({x,y});
+    }
+  }
+  return pts;
+}
+function currentShapePoints(){
+  const filled=document.getElementById('chkShapeFilled').checked;
+  if(tool==='line') return linePoints(shapeStart.x,shapeStart.y,shapeEnd.x,shapeEnd.y);
+  if(tool==='rect') return rectPoints(shapeStart.x,shapeStart.y,shapeEnd.x,shapeEnd.y,filled);
+  return ellipsePoints(shapeStart.x,shapeStart.y,shapeEnd.x,shapeEnd.y,filled);
+}
+
+/* ---------- magic wand (pixel-level flood select, active layer) ---------- */
+function computeWandRegion(px,py){
+  const layer=currentLayer();
+  const w=pixW(), h=pixH();
+  const target=getLayerPix(layer,px,py);
+  const visited=new Uint8Array(w*h);
+  const stack=[[px,py]];
+  const pts=[];
+  let minX=px,maxX=px,minY=py,maxY=py;
+  while(stack.length){
+    const [x,y]=stack.pop();
+    if(x<0||y<0||x>=w||y>=h) continue;
+    const idx=y*w+x;
+    if(visited[idx]) continue;
+    if(getLayerPix(layer,x,y)!==target) continue;
+    visited[idx]=1;
+    pts.push([x,y]);
+    if(x<minX)minX=x; if(x>maxX)maxX=x; if(y<minY)minY=y; if(y>maxY)maxY=y;
+    stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+  }
+  const bw=maxX-minX+1, bh=maxY-minY+1;
+  const mask=new Uint8Array(bw*bh);
+  pts.forEach(([x,y])=>{ mask[(y-minY)*bw+(x-minX)]=1; });
+  return {x0:minX,y0:minY,w:bw,h:bh,mask};
+}
+function unionPixelMask(a,b){
+  if(!a) return b;
+  const x0=Math.min(a.x0,b.x0), y0=Math.min(a.y0,b.y0);
+  const x1=Math.max(a.x0+a.w-1,b.x0+b.w-1), y1=Math.max(a.y0+a.h-1,b.y0+b.h-1);
+  const w=x1-x0+1, h=y1-y0+1;
+  const mask=new Uint8Array(w*h);
+  [a,b].forEach(m=>{
+    for(let y=0;y<m.h;y++)for(let x=0;x<m.w;x++){
+      if(m.mask[y*m.w+x]) mask[(m.y0-y0+y)*w+(m.x0-x0+x)]=1;
+    }
+  });
+  return {x0,y0,w,h,mask};
+}
+function magicWandSelect(px,py,additive){
+  const region=computeWandRegion(px,py);
+  pixelMask = additive ? unionPixelMask(pixelMask,region) : region;
+}
+function pixelMaskContains(px,py){
+  if(!pixelMask) return false;
+  const lx=px-pixelMask.x0, ly=py-pixelMask.y0;
+  if(lx<0||ly<0||lx>=pixelMask.w||ly>=pixelMask.h) return false;
+  return !!pixelMask.mask[ly*pixelMask.w+lx];
+}
+function commitWandPaste(px,py){
+  if(!wandClipboard)return;
+  pushUndo();
+  const layer=currentLayer();
+  const {w,h,mask,pdata}=wandClipboard;
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    if(mask[y*w+x]) setLayerPix(layer,px+x,py+y,pdata[y*w+x]);
+  }
+  render(); scheduleAutosave();
+}
+document.getElementById('toolWand').onclick=()=>setTool('wand');
+document.getElementById('btnWandCopy').onclick=()=>{
+  if(!pixelMask){ modalAlert('Use the Magic Wand to select a region on the canvas first.'); return; }
+  const layer=currentLayer();
+  const {x0,y0,w,h,mask}=pixelMask;
+  const pdata=new Uint8Array(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    if(mask[y*w+x]) pdata[y*w+x]=getLayerPix(layer,x0+x,y0+y);
+  }
+  wandClipboard={w,h,mask:mask.slice(),pdata};
+};
+document.getElementById('btnWandPasteTool').onclick=()=>{
+  if(!wandClipboard){ modalAlert('Nothing copied with the Magic Wand yet.'); return; }
+  setTool('wandpaste');
+};
+
+/* ---------- drawing tools ---------- */
+function floodFill(x0,y0,target,repl){
+  if(target===repl)return;
+  const layer=currentLayer();
+  const w=pixW(),h=pixH();
+  const stack=[[x0,y0]];
+  while(stack.length){
+    const [x,y]=stack.pop();
+    if(x<0||y<0||x>=w||y>=h)continue;
+    if(getLayerPix(layer,x,y)!==target)continue;
+    setLayerPix(layer,x,y,repl);
+    stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+  }
+}
+function colorForButton(btn){ return btn===2 ? state.drawColor2 : state.drawColor; }
+
+function onDown(evt){
+  if(evt.button!==0 && evt.button!==2) return;
+  const p=canvasToPixelCoord(evt);
+  if(pickingVp){
+    document.getElementById('vpX').value=p.x;
+    document.getElementById('vpY').value=p.y;
+    document.getElementById('chkVpEnable').checked=true;
+    pickingVp=false; canvas.style.cursor='crosshair';
+    render();
+    return;
+  }
+  const col=colorForButton(evt.button);
+  if(tool==='pencil'){
+    pushUndo(); drawing=true; drawButton=evt.button;
+    setLayerPix(currentLayer(),p.x,p.y,col); render(); scheduleAutosave();
+  } else if(tool==='fill'){
+    pushUndo(); floodFill(p.x,p.y,getLayerPix(currentLayer(),p.x,p.y),col); render(); scheduleAutosave();
+  } else if(tool==='eyedrop'){
+    const v=getLayerPix(currentLayer(),p.x,p.y);
+    if(evt.button===2) state.drawColor2=v; else state.drawColor=v;
+    syncDrawSwatches(); render();
+  } else if(tool==='select'){
+    if(evt.button===2){ selection=null; render(); return; }
+    const tx=tileOf(p.x), ty=tileOf(p.y);
+    if(selection && tx>=selection.x0 && tx<=selection.x1 && ty>=selection.y0 && ty<=selection.y1){
+      selMoving=true; selMoveStart={x:p.x,y:p.y}; selMoveOffsetTiles={dx:0,dy:0};
+      drawing=true; render(); return;
+    }
+    dragStartTile={x:tx,y:ty};
+    selection={x0:tx,y0:ty,x1:tx,y1:ty};
+    drawing=true; render();
+  } else if(tool==='paste'){
+    if(evt.button===2){ pasteGhost=null; setTool('pencil'); return; }
+    commitPaste(p);
+  } else if(tool==='line'||tool==='rect'||tool==='ellipse'){
+    shapeStart={x:p.x,y:p.y}; shapeEnd={x:p.x,y:p.y}; shapeButton=evt.button;
+    drawing=true; render();
+  } else if(tool==='wand'){
+    if(evt.button===2){ pixelMask=null; render(); return; }
+    if(!evt.ctrlKey && pixelMaskContains(p.x,p.y)){
+      wandMoving=true; wandMoveStart={x:p.x,y:p.y}; wandMoveOffset={dx:0,dy:0};
+      drawing=true; render(); return;
+    }
+    magicWandSelect(p.x,p.y,evt.ctrlKey); render();
+  } else if(tool==='wandpaste'){
+    if(evt.button===2){ setTool('pencil'); return; }
+    commitWandPaste(p.x,p.y);
+  }
+}
+function onMove(evt){
+  const p=canvasToPixelCoord(evt);
+  const layer=currentLayer();
+  const tx=tileOf(p.x), ty=tileOf(p.y);
+  const ov=tilePaletteAt(layer,tx,ty);
+  const resolved = ov>=0 ? ov : layer.defaultPalette;
+  document.getElementById('posInfo').textContent=
+    `px ${p.x},${p.y}  tile ${tx},${ty}  idx=${getLayerPix(layer,p.x,p.y)}  layer="${layer.name}"  pal=${resolved}${ov>=0?' (override)':''}`;
+  if(tool==='paste' && clipboard){
+    pasteGhost={x:tx*TILE,y:ty*TILE};
+    render();
+    return;
+  }
+  if(tool==='wandpaste' && wandClipboard){
+    wandPasteHover={x:p.x,y:p.y};
+    render();
+    return;
+  }
+  if(!drawing){
+    if(tool==='select') canvas.style.cursor = (selection && tx>=selection.x0 && tx<=selection.x1 && ty>=selection.y0 && ty<=selection.y1) ? 'move' : 'crosshair';
+    else if(tool==='wand') canvas.style.cursor = pixelMaskContains(p.x,p.y) ? 'move' : 'crosshair';
+    return;
+  }
+  if(tool==='pencil'){
+    const held = evt.buttons & 2 ? 2 : (evt.buttons & 1 ? 0 : drawButton);
+    setLayerPix(layer,p.x,p.y,colorForButton(held)); render();
+  } else if(tool==='select'){
+    if(selMoving){
+      const dxPix=p.x-selMoveStart.x, dyPix=p.y-selMoveStart.y;
+      selMoveOffsetTiles={dx:Math.round(dxPix/TILE), dy:Math.round(dyPix/TILE)};
+      render();
+    } else {
+      selection={
+        x0:Math.min(dragStartTile.x,tx), y0:Math.min(dragStartTile.y,ty),
+        x1:Math.max(dragStartTile.x,tx), y1:Math.max(dragStartTile.y,ty)
+      };
+      render();
+    }
+  } else if(tool==='wand' && wandMoving){
+    wandMoveOffset={dx:p.x-wandMoveStart.x, dy:p.y-wandMoveStart.y};
+    render();
+  } else if(tool==='line'||tool==='rect'||tool==='ellipse'){
+    let ex=p.x, ey=p.y;
+    if(evt.shiftKey && tool!=='line'){
+      const dx=ex-shapeStart.x, dy=ey-shapeStart.y;
+      const m=Math.max(Math.abs(dx),Math.abs(dy));
+      ex=shapeStart.x+(dx<0?-1:1)*m;
+      ey=shapeStart.y+(dy<0?-1:1)*m;
+    }
+    shapeEnd={x:ex,y:ey};
+    render();
+  }
+}
+function onUp(){
+  // onUp is bound to `window` (needed so a drag that ends outside the canvas still gets
+  // cleaned up), so it fires for EVERY pointer release anywhere on the whole page -- including
+  // clicking a button in a sidebar panel. The unconditional render() at the end used to run
+  // every single time regardless, which rebuilds panels like the Tile Groups list from scratch
+  // (see renderGroupList(), called from render()) and so was destroying/recreating buttons
+  // (e.g. a group's own delete ×) between their pointerdown and the synthesized click event --
+  // the click event target no longer existed by the time it would fire, so the click silently
+  // did nothing. Only re-render when this pointer-up is actually concluding a canvas gesture.
+  const wasDrawing=drawing;
+  if(drawing && tool==='pencil') scheduleAutosave();
+  if(drawing && (tool==='line'||tool==='rect'||tool==='ellipse') && shapeStart && shapeEnd){
+    pushUndo();
+    const layer=currentLayer();
+    const col=colorForButton(shapeButton);
+    currentShapePoints().forEach(pt=>setLayerPix(layer,pt.x,pt.y,col));
+    scheduleAutosave();
+  }
+  if(drawing && selMoving && selection){
+    const {dx,dy}=selMoveOffsetTiles;
+    if(dx!==0||dy!==0){
+      pushUndo();
+      const layer=currentLayer();
+      const block=extractActiveBlock(selection);
+      writePixelBlock(layer, selection.x0*TILE, selection.y0*TILE, block.pw, block.ph, new Uint8Array(block.pw*block.ph));
+      writeTilePaletteBlock(layer, selection.x0, selection.y0, block.tw, block.th, new Int16Array(block.tw*block.th).fill(-1));
+      const newX0=selection.x0+dx, newY0=selection.y0+dy;
+      writePixelBlock(layer, newX0*TILE, newY0*TILE, block.pw, block.ph, block.pdata);
+      writeTilePaletteBlock(layer, newX0, newY0, block.tw, block.th, block.tdata);
+      selection={x0:newX0,y0:newY0,x1:selection.x1+dx,y1:selection.y1+dy};
+      scheduleAutosave();
+    }
+  }
+  if(drawing && wandMoving && pixelMask){
+    const {dx,dy}=wandMoveOffset;
+    if(dx!==0||dy!==0){
+      pushUndo();
+      const layer=currentLayer();
+      const {x0,y0,w,h,mask}=pixelMask;
+      const grabbed=new Uint8Array(w*h);
+      for(let y=0;y<h;y++)for(let x=0;x<w;x++) if(mask[y*w+x]) grabbed[y*w+x]=getLayerPix(layer,x0+x,y0+y);
+      for(let y=0;y<h;y++)for(let x=0;x<w;x++) if(mask[y*w+x]) setLayerPix(layer,x0+x,y0+y,0);
+      for(let y=0;y<h;y++)for(let x=0;x<w;x++) if(mask[y*w+x]) setLayerPix(layer,x0+x+dx,y0+y+dy,grabbed[y*w+x]);
+      pixelMask={x0:x0+dx,y0:y0+dy,w,h,mask};
+      scheduleAutosave();
+    }
+  }
+  shapeStart=null; shapeEnd=null;
+  selMoving=false; selMoveStart=null;
+  wandMoving=false; wandMoveStart=null;
+  drawing=false;
+  if(wasDrawing) render();
+}
+// Pointer Events (not mouse-only) so touch and stylus/pen input on Android/e-ink tablets get
+// continuous drag tracking too -- plain 'mouse*' events there only ever deliver a down+up pair
+// with no move events in between (the browser treats the drag as a page-scroll gesture instead),
+// which is what made drawing look like isolated clicks instead of a continuous stroke. Pointer
+// events unify mouse/touch/pen behind the same MouseEvent-compatible interface (.button/.buttons/
+// .clientX/.clientY all still work), so onDown/onMove/canvasToPixelCoord needed no changes --
+// only the listener names, plus touch-action:none in CSS so the browser doesn't intercept the
+// gesture for scrolling before it ever reaches these handlers.
+canvas.addEventListener('pointerdown',e=>{ e.preventDefault(); onDown(e); });
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+window.addEventListener('pointermove',onMove);
+window.addEventListener('pointerup',onUp);
+canvas.addEventListener('pointerleave',()=>{document.getElementById('posInfo').textContent='—';});
+
+/* ---------- selection / clipboard (active layer) ---------- */
+function selectionTileBounds(){
+  if(!selection) return {x0:0,y0:0,x1:state.gridW-1,y1:state.gridH-1};
+  return selection;
+}
+function extractActiveBlock(sel){
+  const layer=currentLayer();
+  const px0=sel.x0*TILE, py0=sel.y0*TILE;
+  const pw=(sel.x1-sel.x0+1)*TILE, ph=(sel.y1-sel.y0+1)*TILE;
+  const tw=sel.x1-sel.x0+1, th=sel.y1-sel.y0+1;
+  const pdata=new Uint8Array(pw*ph);
+  for(let y=0;y<ph;y++)for(let x=0;x<pw;x++) pdata[y*pw+x]=getLayerPix(layer,px0+x,py0+y);
+  const tdata=new Int16Array(tw*th);
+  for(let ty=0;ty<th;ty++)for(let tx=0;tx<tw;tx++) tdata[ty*tw+tx]=tilePaletteAt(layer,sel.x0+tx,sel.y0+ty);
+  return {pw,ph,tw,th,pdata,tdata};
+}
+function writePixelBlock(layer,px0,py0,w,h,data){
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++) setLayerPix(layer,px0+x,py0+y,data[y*w+x]);
+}
+function writeTilePaletteBlock(layer,tx0,ty0,w,h,data){
+  for(let ty=0;ty<h;ty++)for(let tx=0;tx<w;tx++){
+    const gx=tx0+tx, gy=ty0+ty;
+    if(gx<0||gy<0||gx>=state.gridW||gy>=state.gridH) continue;
+    layer.tilePalette[gy*state.gridW+gx]=data[ty*w+tx];
+  }
+}
+function writeActiveBlock(tx0,ty0,block){
+  const layer=currentLayer();
+  writePixelBlock(layer, tx0*TILE, ty0*TILE, block.pw, block.ph, block.pdata);
+  writeTilePaletteBlock(layer, tx0, ty0, block.tw, block.th, block.tdata);
+}
+
+function updateSelInfo(){
+  const el=document.getElementById('selInfo');
+  if(!selection){ el.textContent='No selection — actions apply to whole canvas.'; return; }
+  const tw=selection.x1-selection.x0+1, th=selection.y1-selection.y0+1;
+  el.textContent=`Selected ${tw}x${th} tile(s) at (${selection.x0},${selection.y0}) on "${currentLayer().name}".`;
+}
+
+document.getElementById('btnCopy').onclick=()=>{
+  clipboard=extractActiveBlock(selectionTileBounds());
+};
+document.getElementById('btnCut').onclick=()=>{
+  const sel=selectionTileBounds();
+  clipboard=extractActiveBlock(sel);
+  pushUndo();
+  const layer=currentLayer();
+  writePixelBlock(layer, sel.x0*TILE, sel.y0*TILE, clipboard.pw, clipboard.ph, new Uint8Array(clipboard.pw*clipboard.ph));
+  const clearedTPal=new Int16Array(clipboard.tw*clipboard.th).fill(-1);
+  writeTilePaletteBlock(layer, sel.x0, sel.y0, clipboard.tw, clipboard.th, clearedTPal);
+  render(); scheduleAutosave();
+};
+document.getElementById('btnClearSel').onclick=()=>{
+  const sel=selectionTileBounds();
+  pushUndo();
+  const layer=currentLayer();
+  const pw=(sel.x1-sel.x0+1)*TILE, ph=(sel.y1-sel.y0+1)*TILE;
+  const tw=sel.x1-sel.x0+1, th=sel.y1-sel.y0+1;
+  writePixelBlock(layer, sel.x0*TILE, sel.y0*TILE, pw, ph, new Uint8Array(pw*ph));
+  writeTilePaletteBlock(layer, sel.x0, sel.y0, tw, th, new Int16Array(tw*th).fill(-1));
+  render(); scheduleAutosave();
+};
+document.getElementById('btnPasteTool').onclick=()=>{
+  if(!clipboard){ modalAlert('Nothing copied yet.'); return; }
+  setTool('paste');
+};
+function commitPaste(p){
+  if(!clipboard)return;
+  pushUndo();
+  writeActiveBlock(tileOf(p.x), tileOf(p.y), clipboard);
+  render(); scheduleAutosave();
+}
+
+/* ---------- generic grid transforms (reused for pixel blocks & tile-palette blocks) ---------- */
+function rotateGridCW(w,h,data,Ctor){
+  const out=new Ctor(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++) out[x*h+(h-1-y)]=data[y*w+x];
+  return {w:h,h:w,data:out};
+}
+function rotateGridCCW(w,h,data,Ctor){
+  let r={w,h,data};
+  r=rotateGridCW(r.w,r.h,r.data,Ctor);
+  r=rotateGridCW(r.w,r.h,r.data,Ctor);
+  r=rotateGridCW(r.w,r.h,r.data,Ctor);
+  return r;
+}
+function flipGridH(w,h,data,Ctor){
+  const out=new Ctor(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++) out[y*w+(w-1-x)]=data[y*w+x];
+  return {w,h,data:out};
+}
+function flipGridV(w,h,data,Ctor){
+  const out=new Ctor(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++) out[(h-1-y)*w+x]=data[y*w+x];
+  return {w,h,data:out};
+}
+function transformGrid(kind,w,h,data,Ctor){
+  if(kind==='cw') return rotateGridCW(w,h,data,Ctor);
+  if(kind==='ccw') return rotateGridCCW(w,h,data,Ctor);
+  if(kind==='fliph') return flipGridH(w,h,data,Ctor);
+  return flipGridV(w,h,data,Ctor);
+}
+
+function applyTransform(kind){
+  pushUndo();
+  if(selection){
+    // region-scoped: active layer's content only
+    const layer=currentLayer();
+    const sel=selection;
+    const block=extractActiveBlock(sel);
+    const pres=transformGrid(kind,block.pw,block.ph,block.pdata,Uint8Array);
+    const tres=transformGrid(kind,block.tw,block.th,block.tdata,Int16Array);
+    const px0=sel.x0*TILE, py0=sel.y0*TILE;
+    // clear old footprint fully first (handles shrink/grow on rotate)
+    writePixelBlock(layer,px0,py0,block.pw,block.ph,new Uint8Array(block.pw*block.ph));
+    writeTilePaletteBlock(layer,sel.x0,sel.y0,block.tw,block.th,new Int16Array(block.tw*block.th).fill(-1));
+    writePixelBlock(layer,px0,py0,pres.w,pres.h,pres.data);
+    writeTilePaletteBlock(layer,sel.x0,sel.y0,tres.w,tres.h,tres.data);
+    if(pres.w!==block.pw || pres.h!==block.ph){
+      const newTW=pres.w/TILE, newTH=pres.h/TILE;
+      selection={x0:sel.x0,y0:sel.y0,x1:sel.x0+newTW-1,y1:sel.y0+newTH-1};
+    }
+  } else {
+    // whole canvas, no selection: transform every layer together (structural)
+    const gw=pixW(), gh=pixH(), tw=state.gridW, th=state.gridH;
+    let newGW=state.gridW, newGH=state.gridH;
+    state.layers.forEach(layer=>{
+      const pres=transformGrid(kind,gw,gh,layer.pixels,Uint8Array);
+      const tres=transformGrid(kind,tw,th,layer.tilePalette,Int16Array);
+      layer.pixels=pres.data;
+      layer.tilePalette=tres.data;
+      newGW=tres.w; newGH=tres.h;
+    });
+    state.gridW=newGW; state.gridH=newGH;
+    syncGridInputs();
+  }
+  render(); scheduleAutosave();
+}
+document.getElementById('btnRotCW').onclick=()=>applyTransform('cw');
+document.getElementById('btnRotCCW').onclick=()=>applyTransform('ccw');
+document.getElementById('btnFlipH').onclick=()=>applyTransform('fliph');
+document.getElementById('btnFlipV').onclick=()=>applyTransform('flipv');
+
+/* ---------- mirror-to-clipboard (flip a copy of the selection, hand it to the Paste tool) ---------- */
+function mirrorCopy(kind){
+  if(!selection){ modalAlert('Select a region first with the Select tool.'); return; }
+  const block=extractActiveBlock(selection);
+  const flipFn = kind==='h' ? flipGridH : flipGridV;
+  const p=flipFn(block.pw,block.ph,block.pdata,Uint8Array);
+  const t=flipFn(block.tw,block.th,block.tdata,Int16Array);
+  clipboard={pw:p.w,ph:p.h,pdata:p.data,tw:t.w,th:t.h,tdata:t.data};
+  setTool('paste');
+}
+document.getElementById('btnFlipHCopy').onclick=()=>mirrorCopy('h');
+document.getElementById('btnFlipVCopy').onclick=()=>mirrorCopy('v');
+
+/* ---------- slide (wrap-around pixel shift, active layer only) ---------- */
+function shiftActive(dx,dy){
+  pushUndo();
+  const layer=currentLayer();
+  const sel=selectionTileBounds();
+  const px0=sel.x0*TILE, py0=sel.y0*TILE;
+  const w=(sel.x1-sel.x0+1)*TILE, h=(sel.y1-sel.y0+1)*TILE;
+  const src=new Uint8Array(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++) src[y*w+x]=getLayerPix(layer,px0+x,py0+y);
+  for(let y=0;y<h;y++){
+    const ny=((y+dy)%h+h)%h;
+    for(let x=0;x<w;x++){
+      const nx=((x+dx)%w+w)%w;
+      setLayerPix(layer,px0+nx,py0+ny,src[y*w+x]);
+    }
+  }
+  render(); scheduleAutosave();
+}
+document.getElementById('slideLeft').onclick=()=>shiftActive(-1,0);
+document.getElementById('slideRight').onclick=()=>shiftActive(1,0);
+document.getElementById('slideUp').onclick=()=>shiftActive(0,-1);
+document.getElementById('slideDown').onclick=()=>shiftActive(0,1);
+
+/* ---------- tools UI ---------- */
+const TOOL_BUTTON_MAP={pencil:'toolPencil',fill:'toolFill',eyedrop:'toolEyedrop',select:'toolSelect',
+  line:'toolLine',rect:'toolRect',ellipse:'toolEllipse',wand:'toolWand'};
+function setTool(t){
+  tool=t;
+  if(t!=='paste') pasteGhost=null;
+  if(t!=='wandpaste') wandPasteHover=null;
+  Object.values(TOOL_BUTTON_MAP).forEach(id=>document.getElementById(id).classList.remove('active'));
+  if(TOOL_BUTTON_MAP[t]) document.getElementById(TOOL_BUTTON_MAP[t]).classList.add('active');
+  canvas.style.cursor = (t==='paste'||t==='wandpaste') ? 'copy' : 'crosshair';
+  render();
+}
+document.getElementById('toolPencil').onclick=()=>setTool('pencil');
+document.getElementById('toolFill').onclick=()=>setTool('fill');
+document.getElementById('toolEyedrop').onclick=()=>setTool('eyedrop');
+document.getElementById('toolSelect').onclick=()=>setTool('select');
+document.getElementById('toolLine').onclick=()=>setTool('line');
+document.getElementById('toolRect').onclick=()=>setTool('rect');
+document.getElementById('toolEllipse').onclick=()=>setTool('ellipse');
+
+/* ---------- grid resize (applies to every layer) ---------- */
+function syncGridInputs(){
+  document.getElementById('gridW').value=state.gridW;
+  document.getElementById('gridH').value=state.gridH;
+}
+function copyLayersWithOffset(newW,newH,dx,dy){
+  // dx,dy in TILE units, may be negative (crops that side) -- shared by resize (anchor-derived
+  // offset) and crop-to-selection (offset = -selection origin).
+  const oldW=state.gridW, oldH=state.gridH;
+  const nw=newW*TILE, nh=newH*TILE;
+  const ow=pixW(), oh=pixH();
+  const pdx=dx*TILE, pdy=dy*TILE;
+  state.layers.forEach(layer=>{
+    const np=allocPixels(nw,nh);
+    for(let y=0;y<oh;y++){
+      const ny=y+pdy; if(ny<0||ny>=nh) continue;
+      for(let x=0;x<ow;x++){
+        const nx=x+pdx; if(nx<0||nx>=nw) continue;
+        np[ny*nw+nx]=layer.pixels[y*ow+x];
+      }
+    }
+    const ntp=allocTilePalette(newW,newH);
+    for(let ty=0;ty<oldH;ty++){
+      const nty=ty+dy; if(nty<0||nty>=newH) continue;
+      for(let tx=0;tx<oldW;tx++){
+        const ntx=tx+dx; if(ntx<0||ntx>=newW) continue;
+        ntp[nty*newW+ntx]=layer.tilePalette[ty*oldW+tx];
+      }
+    }
+    layer.pixels=np; layer.tilePalette=ntp;
+    if(layer.refRGBA){
+      const nr=new Uint8ClampedArray(nw*nh*4);
+      for(let y=0;y<oh;y++){
+        const ny=y+pdy; if(ny<0||ny>=nh) continue;
+        for(let x=0;x<ow;x++){
+          const nx=x+pdx; if(nx<0||nx>=nw) continue;
+          const so=(y*ow+x)*4, dO=(ny*nw+nx)*4;
+          nr[dO]=layer.refRGBA[so]; nr[dO+1]=layer.refRGBA[so+1]; nr[dO+2]=layer.refRGBA[so+2]; nr[dO+3]=layer.refRGBA[so+3];
+        }
+      }
+      layer.refRGBA=nr;
+    }
+  });
+  state.gridW=newW; state.gridH=newH;
+}
+function resizeAllLayersTo(newW,newH,anchor){
+  anchor = anchor || 'tl';
+  const {dx,dy}=anchorOffsetTiles(anchor,state.gridW,state.gridH,newW,newH);
+  copyLayersWithOffset(newW,newH,dx,dy);
+}
+function resizeGrid(newW,newH,anchor){
+  newW=clamp(newW,1,MAX_GRID_TILES); newH=clamp(newH,1,MAX_GRID_TILES);
+  pushUndo();
+  resizeAllLayersTo(newW,newH,anchor||currentAnchor);
+  selection=null;
+  syncGridInputs(); render(); scheduleAutosave();
+}
+document.getElementById('btnResize').onclick=()=>{
+  resizeGrid(parseInt(document.getElementById('gridW').value,10)||1,
+              parseInt(document.getElementById('gridH').value,10)||1,
+              currentAnchor);
+};
+document.getElementById('btnCropSel').onclick=()=>{
+  if(!selection){ modalAlert('Select a region first with the Select tool.'); return; }
+  pushUndo();
+  const sel=selection;
+  const newW=sel.x1-sel.x0+1, newH=sel.y1-sel.y0+1;
+  copyLayersWithOffset(newW,newH,-sel.x0,-sel.y0);
+  selection=null;
+  syncGridInputs(); render(); scheduleAutosave();
+};
+
+/* ---------- scale (resample content -- nearest-neighbor approximation) ---------- */
+function resampleIndices(srcW,srcH,srcData,dstW,dstH){
+  const out=new Uint8Array(dstW*dstH);
+  for(let y=0;y<dstH;y++){
+    const sy=Math.min(srcH-1, Math.floor(y*srcH/dstH));
+    for(let x=0;x<dstW;x++){
+      const sx=Math.min(srcW-1, Math.floor(x*srcW/dstW));
+      out[y*dstW+x]=srcData[sy*srcW+sx];
+    }
+  }
+  return out;
+}
+function applyScale(newTilesW,newTilesH){
+  newTilesW=clamp(newTilesW,1,MAX_GRID_TILES); newTilesH=clamp(newTilesH,1,MAX_GRID_TILES);
+  pushUndo();
+  if(selection){
+    const layer=currentLayer();
+    const sel=selection;
+    const px0=sel.x0*TILE, py0=sel.y0*TILE;
+    const srcW=(sel.x1-sel.x0+1)*TILE, srcH=(sel.y1-sel.y0+1)*TILE;
+    const srcData=new Uint8Array(srcW*srcH);
+    for(let y=0;y<srcH;y++)for(let x=0;x<srcW;x++) srcData[y*srcW+x]=getLayerPix(layer,px0+x,py0+y);
+    const dstW=newTilesW*TILE, dstH=newTilesH*TILE;
+    const resampled=resampleIndices(srcW,srcH,srcData,dstW,dstH);
+    const selTW=sel.x1-sel.x0+1, selTH=sel.y1-sel.y0+1;
+    writePixelBlock(layer,px0,py0,srcW,srcH,new Uint8Array(srcW*srcH));
+    writeTilePaletteBlock(layer,sel.x0,sel.y0,selTW,selTH,new Int16Array(selTW*selTH).fill(-1));
+    writePixelBlock(layer,px0,py0,dstW,dstH,resampled);
+    selection={x0:sel.x0,y0:sel.y0,x1:sel.x0+newTilesW-1,y1:sel.y0+newTilesH-1};
+  } else {
+    const oldW=pixW(), oldH=pixH();
+    const dstW=newTilesW*TILE, dstH=newTilesH*TILE;
+    state.layers.forEach(layer=>{
+      layer.pixels=resampleIndices(oldW,oldH,layer.pixels,dstW,dstH);
+      layer.tilePalette=allocTilePalette(newTilesW,newTilesH); // old tile positions no longer correspond to the same art
+    });
+    state.gridW=newTilesW; state.gridH=newTilesH;
+    syncGridInputs();
+  }
+  render(); scheduleAutosave();
+}
+document.getElementById('btnScaleApply').onclick=()=>{
+  applyScale(parseInt(document.getElementById('scaleW').value,10)||1,
+             parseInt(document.getElementById('scaleH').value,10)||1);
+};
+function applyScalePercent(pct){
+  const scope = selection ? {w:selection.x1-selection.x0+1,h:selection.y1-selection.y0+1} : {w:state.gridW,h:state.gridH};
+  const nw=Math.max(1,Math.round(scope.w*pct/100));
+  const nh=Math.max(1,Math.round(scope.h*pct/100));
+  document.getElementById('scaleW').value=nw;
+  document.getElementById('scaleH').value=nh;
+  applyScale(nw,nh);
+}
+document.querySelectorAll('button[data-scalepct]').forEach(b=>{
+  b.onclick=()=>applyScalePercent(+b.dataset.scalepct);
+});
+document.getElementById('btnScalePctApply').onclick=()=>{
+  applyScalePercent(parseFloat(document.getElementById('scalePct').value)||1);
+};
+document.getElementById('scalePct').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ e.preventDefault(); document.getElementById('btnScalePctApply').click(); }
+});
+
+/* ---------- scale in place (resamples the artwork; footprint -- grid or selection -- stays fixed) ---------- */
+function applyScaleInPlace(pct){
+  pct=Math.max(1,pct);
+  pushUndo();
+  const layer=currentLayer();
+  const sel=selection;
+  const fx0 = sel ? sel.x0*TILE : 0;
+  const fy0 = sel ? sel.y0*TILE : 0;
+  const fw = sel ? (sel.x1-sel.x0+1)*TILE : pixW();
+  const fh = sel ? (sel.y1-sel.y0+1)*TILE : pixH();
+
+  const src=new Uint8Array(fw*fh);
+  for(let y=0;y<fh;y++)for(let x=0;x<fw;x++) src[y*fw+x]=getLayerPix(layer,fx0+x,fy0+y);
+
+  const newW=Math.max(1,Math.round(fw*pct/100));
+  const newH=Math.max(1,Math.round(fh*pct/100));
+  const scaled=resampleIndices(fw,fh,src,newW,newH);
+
+  for(let y=0;y<fh;y++)for(let x=0;x<fw;x++) setLayerPix(layer,fx0+x,fy0+y,0);
+  if(sel){
+    const tw=sel.x1-sel.x0+1, th=sel.y1-sel.y0+1;
+    writeTilePaletteBlock(layer,sel.x0,sel.y0,tw,th,new Int16Array(tw*th).fill(-1));
+  } else {
+    layer.tilePalette=allocTilePalette(state.gridW,state.gridH);
+  }
+
+  // note the swapped argument order vs. resize: here the SCALED content is the thing being
+  // positioned ("old" in anchorOffsetTiles' terms) within the FIXED footprint ("new"/target size)
+  const {dx,dy}=anchorOffsetTiles(currentAnchor,newW,newH,fw,fh); // unit-agnostic despite the name -- pixel units here
+  for(let y=0;y<newH;y++){
+    const ty=fy0+dy+y;
+    if(ty<fy0 || ty>=fy0+fh) continue;
+    for(let x=0;x<newW;x++){
+      const tx=fx0+dx+x;
+      if(tx<fx0 || tx>=fx0+fw) continue;
+      setLayerPix(layer,tx,ty,scaled[y*newW+x]);
+    }
+  }
+  render(); scheduleAutosave();
+}
+document.getElementById('btnScaleInPlaceApply').onclick=()=>{
+  applyScaleInPlace(parseFloat(document.getElementById('scaleInPlacePct').value)||1);
+};
+document.getElementById('scaleInPlacePct').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ e.preventDefault(); document.getElementById('btnScaleInPlaceApply').click(); }
+});
+['gridW','gridH'].forEach(id=>{
+  document.getElementById(id).addEventListener('keydown',e=>{
+    if(e.key==='Enter'){ e.preventDefault(); document.getElementById('btnResize').click(); }
+  });
+});
+document.querySelectorAll('button[data-preset]').forEach(b=>{
+  b.onclick=()=>{
+    const [w,h]=b.dataset.preset.split('x').map(Number);
+    document.getElementById('gridW').value=w;
+    document.getElementById('gridH').value=h;
+    resizeGrid(w,h);
+  };
+});
+
+/* ---------- layers UI ---------- */
+function renderLayerList(){
+  const wrap=document.getElementById('layerList');
+  wrap.innerHTML='';
+  for(let i=state.layers.length-1;i>=0;i--){
+    const layer=state.layers[i];
+    const row=document.createElement('div');
+    row.className='paletteRow'+(i===state.activeLayer?' active':'');
+    row.innerHTML=`
+      <input type="checkbox" ${layer.visible?'checked':''} title="Visible">
+      <input type="text" value="${layer.name}">
+      <select title="Default palette for this layer"></select>
+      <span class="tag">${i===state.layers.length-1?'front':(i===0?'back':'')}</span>
+    `;
+    const vis=row.querySelector('input[type=checkbox]');
+    vis.onclick=(e)=>{ e.stopPropagation(); pushUndo(); layer.visible=vis.checked; render(); scheduleAutosave(); };
+    const nameInp=row.querySelector('input[type=text]');
+    nameInp.onclick=e=>e.stopPropagation();
+    nameInp.onchange=e=>{ layer.name=e.target.value||layer.name; render(); scheduleAutosave(); };
+    const palSel=row.querySelector('select');
+    state.paletteBank.forEach((p,pi)=>{
+      const o=document.createElement('option'); o.value=pi; o.textContent=`${pi}:${p.name}`;
+      if(pi===layer.defaultPalette) o.selected=true;
+      palSel.appendChild(o);
+    });
+    palSel.onclick=e=>e.stopPropagation();
+    palSel.onchange=e=>{ pushUndo(); layer.defaultPalette=+e.target.value; render(); scheduleAutosave(); };
+    row.onclick=()=>{ state.activeLayer=i; renderAllLayerUI(); render(); };
+    wrap.appendChild(row);
+  }
+}
+function renderAllLayerUI(){ renderLayerList(); renderTpalSelect(); renderGroupList(); }
+
+document.getElementById('btnLayerAdd').onclick=()=>{
+  pushUndo();
+  state.layers.push(makeLayer('Layer '+(state.layers.length+1)));
+  state.activeLayer=state.layers.length-1;
+  renderAllLayerUI(); render(); scheduleAutosave();
+};
+document.getElementById('btnLayerDup').onclick=()=>{
+  pushUndo();
+  const src=currentLayer();
+  state.layers.push({name:src.name+'_copy', visible:true, defaultPalette:src.defaultPalette,
+    pixels:src.pixels.slice(), tilePalette:src.tilePalette.slice(),
+    refRGBA: src.refRGBA ? src.refRGBA.slice() : null, refConverted: !!src.refConverted,
+    groups:(src.groups||[]).map(g=>({...g}))});
+  state.activeLayer=state.layers.length-1;
+  renderAllLayerUI(); render(); scheduleAutosave();
+};
+document.getElementById('btnLayerDel').onclick=()=>{
+  if(state.layers.length<=1){ modalAlert('At least one layer is required.'); return; }
+  pushUndo();
+  state.layers.splice(state.activeLayer,1);
+  state.activeLayer=clamp(state.activeLayer,0,state.layers.length-1);
+  renderAllLayerUI(); render(); scheduleAutosave();
+};
+document.getElementById('btnLayerUp').onclick=()=>{
+  const i=state.activeLayer; if(i>=state.layers.length-1)return;
+  pushUndo();
+  [state.layers[i],state.layers[i+1]]=[state.layers[i+1],state.layers[i]];
+  state.activeLayer=i+1;
+  renderAllLayerUI(); render(); scheduleAutosave();
+};
+document.getElementById('btnLayerDown').onclick=()=>{
+  const i=state.activeLayer; if(i<=0)return;
+  pushUndo();
+  [state.layers[i],state.layers[i-1]]=[state.layers[i-1],state.layers[i]];
+  state.activeLayer=i-1;
+  renderAllLayerUI(); render(); scheduleAutosave();
+};
+
+/* ---------- merge layers ---------- */
+// Composites `top`'s opaque pixels over `bottom` (mutates bottom in place), and for any tile
+// where `top` painted anything, hands that tile's palette assignment to `top`'s -- matches what
+// the editor already shows on screen (front layer's colors win in the composite preview), and
+// is the only sane choice since one physical 8x8 tile can only reference one palette on hardware.
+function mergeTopIntoBottom(top,bottom){
+  for(let ty=0;ty<state.gridH;ty++){
+    for(let tx=0;tx<state.gridW;tx++){
+      let topHasContent=false;
+      for(let y=0;y<TILE && !topHasContent;y++)for(let x=0;x<TILE;x++){
+        if(getLayerPix(top,tx*TILE+x,ty*TILE+y)!==0){ topHasContent=true; break; }
+      }
+      if(topHasContent){
+        const ov=tilePaletteAt(top,tx,ty);
+        bottom.tilePalette[ty*state.gridW+tx]= ov>=0 ? ov : top.defaultPalette;
+      }
+    }
+  }
+  for(let y=0;y<pixH();y++)for(let x=0;x<pixW();x++){
+    const v=getLayerPix(top,x,y);
+    if(v!==0) setLayerPix(bottom,x,y,v);
+  }
+  if(!bottom.groups) bottom.groups=[];
+  if(top.groups && top.groups.length) bottom.groups=bottom.groups.concat(top.groups.map(g=>({...g})));
+}
+document.getElementById('btnMergeDown').onclick=async ()=>{
+  const i=state.activeLayer;
+  if(i<=0){ modalAlert(`No layer below "${state.layers[i].name}" to merge into.`); return; }
+  const ok=await modalConfirm(`Merge "${state.layers[i].name}" down into "${state.layers[i-1].name}"? This can't be split apart again (though Undo still works).`);
+  if(!ok) return;
+  pushUndo();
+  mergeTopIntoBottom(state.layers[i], state.layers[i-1]);
+  state.layers.splice(i,1);
+  state.activeLayer=i-1;
+  renderAllLayerUI(); render(); scheduleAutosave();
+};
+document.getElementById('btnMergeVisible').onclick=async ()=>{
+  const visIdx=state.layers.map((l,i)=>l.visible?i:-1).filter(i=>i>=0);
+  if(visIdx.length<2){ modalAlert('Need at least 2 visible layers to merge.'); return; }
+  const bottomIdx=visIdx[0];
+  const ok=await modalConfirm(`Merge all ${visIdx.length} visible layers down into "${state.layers[bottomIdx].name}"? This can't be split apart again (though Undo still works).`);
+  if(!ok) return;
+  pushUndo();
+  for(let k=1;k<visIdx.length;k++) mergeTopIntoBottom(state.layers[visIdx[k]], state.layers[bottomIdx]);
+  visIdx.slice(1).sort((a,b)=>b-a).forEach(idx=>state.layers.splice(idx,1));
+  state.activeLayer=clamp(bottomIdx,0,state.layers.length-1);
+  renderAllLayerUI(); render(); scheduleAutosave();
+};
+
+/* ---------- tile palette override UI ---------- */
+function renderTpalSelect(){
+  const sel=document.getElementById('tpalSelect');
+  const prev=sel.value;
+  sel.innerHTML='<option value="-1">— Layer Default —</option>' +
+    state.paletteBank.map((p,i)=>`<option value="${i}">${i}: ${p.name}</option>`).join('');
+  if([...sel.options].some(o=>o.value===prev)) sel.value=prev;
+}
+document.getElementById('btnTpalApply').onclick=()=>{
+  if(!selection){ modalAlert('Select tile(s) first with the Select tool.'); return; }
+  pushUndo();
+  const v=+document.getElementById('tpalSelect').value;
+  const layer=currentLayer();
+  for(let ty=selection.y0;ty<=selection.y1;ty++)for(let tx=selection.x0;tx<=selection.x1;tx++)
+    layer.tilePalette[ty*state.gridW+tx]=v;
+  render(); scheduleAutosave();
+};
+document.getElementById('btnTpalClear').onclick=()=>{
+  if(!selection){ modalAlert('Select tile(s) first with the Select tool.'); return; }
+  pushUndo();
+  const layer=currentLayer();
+  for(let ty=selection.y0;ty<=selection.y1;ty++)for(let tx=selection.x0;tx<=selection.x1;tx++)
+    layer.tilePalette[ty*state.gridW+tx]=-1;
+  render(); scheduleAutosave();
+};
+
+/* ---------- tile groups (named sub-regions, per layer) ---------- */
+function clampGroupsToGrid(){
+  state.layers.forEach(layer=>{
+    if(!layer.groups) layer.groups=[];
+    layer.groups.forEach(g=>{
+      g.x0=clamp(g.x0,0,state.gridW-1);
+      g.y0=clamp(g.y0,0,state.gridH-1);
+      g.w=clamp(g.w,1,state.gridW-g.x0);
+      g.h=clamp(g.h,1,state.gridH-g.y0);
+    });
+  });
+}
+function renderGroupList(){
+  const wrap=document.getElementById('groupList');
+  wrap.innerHTML='';
+  const layer=currentLayer();
+  (layer.groups||[]).forEach((g,i)=>{
+    const row=document.createElement('div');
+    row.className='paletteRow';
+    row.innerHTML=`
+      <span style="width:10px;height:10px;border-radius:2px;flex:0 0 auto;background:${MARKER_COLORS[i%MARKER_COLORS.length]}"></span>
+      <input type="text" value="${g.name}" style="width:90px">
+      <span class="tag">${g.w}x${g.h} @ (${g.x0},${g.y0})</span>
+      <span class="closeTab" title="Delete group">×</span>
+    `;
+    const nameInp=row.querySelector('input[type=text]');
+    nameInp.onclick=e=>e.stopPropagation();
+    nameInp.onchange=e=>{ pushUndo(); g.name=e.target.value||g.name; renderGroupList(); render(); scheduleAutosave(); };
+    row.querySelector('.closeTab').onclick=(e)=>{
+      e.stopPropagation();
+      pushUndo();
+      layer.groups.splice(i,1);
+      renderGroupList(); render(); scheduleAutosave();
+    };
+    row.onclick=()=>{ selection={x0:g.x0,y0:g.y0,x1:g.x0+g.w-1,y1:g.y0+g.h-1}; render(); };
+    wrap.appendChild(row);
+  });
+}
+document.getElementById('btnGroupAdd').onclick=()=>{
+  if(!selection){ modalAlert('Select tile(s) first with the Select tool.'); return; }
+  const name=document.getElementById('groupNameInput').value.trim();
+  if(!name){ modalAlert('Enter a name for this group.'); return; }
+  pushUndo();
+  const layer=currentLayer();
+  if(!layer.groups) layer.groups=[];
+  const ident=sanitizeIdent(name);
+  const rec={name, x0:selection.x0, y0:selection.y0, w:selection.x1-selection.x0+1, h:selection.y1-selection.y0+1};
+  const existingIdx=layer.groups.findIndex(g=>sanitizeIdent(g.name)===ident);
+  if(existingIdx>=0) layer.groups[existingIdx]=rec; else layer.groups.push(rec);
+  document.getElementById('groupNameInput').value='';
+  renderGroupList(); render(); scheduleAutosave();
+};
+document.getElementById('groupNameInput').addEventListener('keydown',e=>{
+  if(e.key==='Enter'){ e.preventDefault(); document.getElementById('btnGroupAdd').click(); }
+});
+
+/* ---------- palette UI ---------- */
+function syncDrawSwatches(){
+  document.querySelectorAll('#drawSwatchesPrimary .swatch').forEach((el,i)=>el.classList.toggle('selected', i===state.drawColor));
+  document.querySelectorAll('#drawSwatchesSecondary .swatch').forEach((el,i)=>el.classList.toggle('selected2', i===state.drawColor2));
+}
+function renderDrawSwatches(){
+  const pal=activePalette();
+  const p=document.getElementById('drawSwatchesPrimary'); p.innerHTML='';
+  const s=document.getElementById('drawSwatchesSecondary'); s.innerHTML='';
+  pal.colors.forEach((c,i)=>{
+    const elP=document.createElement('div');
+    elP.className='swatch'+(i===state.drawColor?' selected':'');
+    elP.innerHTML=`<div class="fill" style="background:${css255(c)}"></div><span class="idx">${i}</span>`;
+    elP.title=`index ${i} — set as primary (LMB) color`;
+    elP.onclick=()=>{ state.drawColor=i; syncDrawSwatches(); };
+    p.appendChild(elP);
+
+    const elS=document.createElement('div');
+    elS.className='swatch'+(i===state.drawColor2?' selected2':'');
+    elS.innerHTML=`<div class="fill" style="background:${css255(c)}"></div><span class="idx">${i}</span>`;
+    elS.title=`index ${i} — set as secondary (RMB) color`;
+    elS.onclick=()=>{ state.drawColor2=i; syncDrawSwatches(); };
+    s.appendChild(elS);
+  });
+}
+function hexWord(c){ return '0x0'+((c.r&0xF)|((c.g&0xF)<<4)|((c.b&0xF)<<8)).toString(16).toUpperCase().padStart(3,'0'); }
+function renderPaletteEditor(){
+  // Rebuilds the whole panel -- safe to call on activePalette switch/init, but NEVER from a
+  // slider's own oninput: destroying the <input> the user is mid-drag on breaks native drag
+  // tracking and makes the slider feel like it only moves in jumps. Live dragging is handled
+  // by updateSliderRowLive() below, which patches text/swatch nodes in place instead.
+  const wrap=document.getElementById('paletteEditor');
+  wrap.innerHTML='';
+  const pal=activePalette();
+  pal.colors.forEach((c,i)=>{
+    const row=document.createElement('div');
+    row.style.marginBottom='8px';
+    row.innerHTML=`
+      <div class="row" style="margin-bottom:2px">
+        <div class="swatch" style="width:20px;height:20px">
+          <div class="fill" data-swatch="${i}" style="background:${css255(c)}"></div>
+        </div>
+        <b>idx ${i}</b>
+        <span class="hint" data-hex="${i}">${hexWord(c)}</span>
+      </div>
+      <div class="slider-row"><span>R</span><input type="range" min="0" max="15" step="1" value="${c.r}" data-ch="r" data-i="${i}"><span class="v">${c.r}</span></div>
+      <div class="slider-row"><span>G</span><input type="range" min="0" max="15" step="1" value="${c.g}" data-ch="g" data-i="${i}"><span class="v">${c.g}</span></div>
+      <div class="slider-row"><span>B</span><input type="range" min="0" max="15" step="1" value="${c.b}" data-ch="b" data-i="${i}"><span class="v">${c.b}</span></div>
+    `;
+    wrap.appendChild(row);
+  });
+  wrap.querySelectorAll('input[type=range]').forEach(inp=>{
+    inp.oninput=()=>{
+      const i=+inp.dataset.i, ch=inp.dataset.ch;
+      const c=activePalette().colors[i];
+      c[ch]=+inp.value;
+      inp.nextElementSibling.textContent=inp.value;
+      const fillEl=wrap.querySelector(`.fill[data-swatch="${i}"]`);
+      if(fillEl) fillEl.style.background=css255(c);
+      const hexEl=wrap.querySelector(`[data-hex="${i}"]`);
+      if(hexEl) hexEl.textContent=hexWord(c);
+      renderDrawSwatches(); renderPaletteBank(); render(); scheduleAutosave();
+    };
+  });
+}
+function renderPaletteBank(){
+  const wrap=document.getElementById('paletteBankList');
+  wrap.innerHTML='';
+  state.paletteBank.forEach((pal,i)=>{
+    const row=document.createElement('div');
+    row.className='paletteRow'+(i===state.activePalette?' active':'');
+    const mini=pal.colors.map(c=>`<div style="background:${css255(c)}"></div>`).join('');
+    row.innerHTML=`<div class="miniSwatches">${mini}</div><input type="text" value="${pal.name}">`;
+    row.querySelector('input').onclick=e=>e.stopPropagation();
+    row.querySelector('input').onchange=e=>{ pal.name=e.target.value||pal.name; renderAllLayerUI(); render(); scheduleAutosave(); };
+    row.onclick=()=>{ state.activePalette=i; renderAllPaletteUI(); render(); };
+    wrap.appendChild(row);
+  });
+}
+function renderAllPaletteUI(){ renderPaletteEditor(); renderDrawSwatches(); renderPaletteBank(); renderAllLayerUI(); }
+
+document.getElementById('btnPalAdd').onclick=()=>{
+  state.paletteBank.push(mkPalette('pal'+state.paletteBank.length,[{r:0,g:0,b:0},{r:5,g:5,b:5},{r:10,g:10,b:10},{r:15,g:15,b:15}]));
+  state.activePalette=state.paletteBank.length-1;
+  renderAllPaletteUI(); render(); scheduleAutosave();
+};
+document.getElementById('btnPalDup').onclick=()=>{
+  const src=activePalette();
+  state.paletteBank.push(mkPalette(src.name+'_copy',src.colors));
+  state.activePalette=state.paletteBank.length-1;
+  renderAllPaletteUI(); render(); scheduleAutosave();
+};
+/* Removes bank palette `idx` and shifts every reference above it down by one, instead of
+   leaving indices above the deleted slot pointing at the wrong (shifted) palette. */
+function removePaletteAt(idx){
+  state.paletteBank.splice(idx,1);
+  state.layers.forEach(l=>{
+    if(l.defaultPalette===idx) l.defaultPalette=0;
+    else if(l.defaultPalette>idx) l.defaultPalette--;
+    l.defaultPalette=clamp(l.defaultPalette,0,state.paletteBank.length-1);
+    for(let i=0;i<l.tilePalette.length;i++){
+      const v=l.tilePalette[i];
+      if(v<0) continue;
+      if(v===idx) l.tilePalette[i]=-1;
+      else if(v>idx) l.tilePalette[i]=v-1;
+    }
+  });
+}
+document.getElementById('btnPalDel').onclick=()=>{
+  if(state.paletteBank.length<=1){ modalAlert('At least one palette is required.'); return; }
+  removePaletteAt(state.activePalette);
+  state.activePalette=clamp(state.activePalette,0,state.paletteBank.length-1);
+  renderAllPaletteUI(); render(); scheduleAutosave();
+};
+document.getElementById('btnPalRemoveUnused').onclick=async ()=>{
+  const used=new Set();
+  state.layers.forEach(l=>{
+    used.add(l.defaultPalette);
+    for(let i=0;i<l.tilePalette.length;i++){ const v=l.tilePalette[i]; if(v>=0) used.add(v); }
+  });
+  const unusedCount=state.paletteBank.length-used.size;
+  if(unusedCount<=0){ await modalAlert('No unused palettes -- every palette in the bank is referenced by at least one layer\'s default or a per-tile override.'); return; }
+  const ok=await modalConfirm(`Remove ${unusedCount} unused palette(s) from the bank? They aren't referenced by any layer's default palette or per-tile override. This isn't covered by Undo.`);
+  if(!ok) return;
+  const keepMap=new Map(); // old bank index -> new bank index
+  const newBank=[];
+  state.paletteBank.forEach((pal,i)=>{ if(used.has(i)){ keepMap.set(i,newBank.length); newBank.push(pal); } });
+  state.paletteBank=newBank;
+  state.layers.forEach(l=>{
+    l.defaultPalette=keepMap.get(l.defaultPalette);
+    for(let i=0;i<l.tilePalette.length;i++){ const v=l.tilePalette[i]; l.tilePalette[i]= v>=0 ? keepMap.get(v) : -1; }
+  });
+  state.activePalette=keepMap.has(state.activePalette) ? keepMap.get(state.activePalette) : 0;
+  renderAllPaletteUI(); render(); scheduleAutosave();
+};
+document.getElementById('chkTransparentPreview').onchange=render;
+document.getElementById('btnUndo').onclick=undo;
+document.getElementById('btnRedo').onclick=redo;
+
+/* ---------- zoom ---------- */
+function setZoom(z){
+  zoom=clamp(Math.round(z),1,40);
+  document.getElementById('zoomRange').value=zoom;
+  document.getElementById('zoomLabel').textContent=zoom+' px/pixel';
+  render();
+}
+document.getElementById('zoomRange').oninput=(e)=>setZoom(+e.target.value);
+document.getElementById('canvasWrap').addEventListener('wheel',(e)=>{
+  if(!e.ctrlKey) return;
+  e.preventDefault();
+  setZoom(zoom + (e.deltaY<0 ? 1 : -1) * Math.max(1,Math.round(zoom*0.15)));
+},{passive:false});
+document.getElementById('btnZoomFit').onclick=()=>{
+  const scrollEl=document.getElementById('canvasScroll');
+  const availW=Math.max(1,scrollEl.clientWidth-16), availH=Math.max(1,scrollEl.clientHeight-16);
+  const fitW=Math.floor(availW/pixW()), fitH=Math.floor(availH/pixH());
+  setZoom(Math.max(1,Math.min(fitW,fitH)));
+};
+
+/* ---------- perspective (vanishing point) guide -- visual reference only, never exported ---------- */
+function renderVpGuides(){
+  if(!document.getElementById('chkVpEnable').checked) return;
+  const count=clamp(parseInt(document.getElementById('vpCount').value,10)||1,1,72);
+  const offset=parseFloat(document.getElementById('vpOffset').value)||0;
+  const vx=(parseFloat(document.getElementById('vpX').value)||0)*zoom;
+  const vy=(parseFloat(document.getElementById('vpY').value)||0)*zoom;
+  const len=Math.hypot(canvas.width,canvas.height)*1.5;
+  ctx.save();
+  ctx.strokeStyle='rgba(255,230,80,0.55)';
+  ctx.lineWidth=1;
+  ctx.setLineDash([]);
+  for(let k=0;k<count;k++){
+    const ang=(offset+k*360/count)*Math.PI/180;
+    const dx=Math.cos(ang)*len, dy=Math.sin(ang)*len;
+    ctx.beginPath();
+    ctx.moveTo(vx-dx,vy-dy);
+    ctx.lineTo(vx+dx,vy+dy);
+    ctx.stroke();
+  }
+  ctx.fillStyle='rgba(255,230,80,0.9)';
+  ctx.beginPath(); ctx.arc(vx,vy,4,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+document.getElementById('chkVpEnable').onchange=render;
+['vpX','vpY','vpCount','vpOffset'].forEach(id=>document.getElementById(id).addEventListener('input',render));
+document.getElementById('btnVpPick').onclick=()=>{ pickingVp=true; canvas.style.cursor='cell'; };
+
+/* ---------- tile usage: count unique 8x8 tiles, optionally merging H/V-flipped duplicates ---------- */
+function tileSignature(layer,tx,ty){
+  const px0=tx*TILE, py0=ty*TILE;
+  const raw=new Array(TILE*TILE);
+  for(let y=0;y<TILE;y++)for(let x=0;x<TILE;x++) raw[y*TILE+x]=getLayerPix(layer,px0+x,py0+y);
+  return raw;
+}
+function flipRowsH(a){ const o=new Array(64); for(let y=0;y<8;y++)for(let x=0;x<8;x++) o[y*8+(7-x)]=a[y*8+x]; return o; }
+function flipRowsV(a){ const o=new Array(64); for(let y=0;y<8;y++)for(let x=0;x<8;x++) o[(7-y)*8+x]=a[y*8+x]; return o; }
+function canonicalTileKey(a){
+  const variants=[a, flipRowsH(a), flipRowsV(a), flipRowsH(flipRowsV(a))];
+  const strs=variants.map(v=>v.join(','));
+  strs.sort();
+  return strs[0];
+}
+document.getElementById('btnCountTiles').onclick=()=>{
+  const ignoreBlank=document.getElementById('chkIgnoreBlank').checked;
+  const ignoreFlips=document.getElementById('chkIgnoreFlips').checked;
+  const lines=[]; let grandUnique=0;
+  state.layers.forEach(layer=>{
+    const seen=new Set();
+    let total=0, blank=0;
+    for(let ty=0;ty<state.gridH;ty++)for(let tx=0;tx<state.gridW;tx++){
+      const arr=tileSignature(layer,tx,ty);
+      total++;
+      if(arr.every(v=>v===0)){ blank++; if(ignoreBlank) continue; }
+      seen.add(ignoreFlips ? canonicalTileKey(arr) : arr.join(','));
+    }
+    lines.push(`"${layer.name}": ${total} tile(s), ${seen.size} unique${ignoreBlank?` (excludes ${blank} blank)`:''}`);
+    grandUnique+=seen.size;
+  });
+  lines.push(`Sum across layers: ${grandUnique} unique tile(s) -- layers export as separate arrays and don't share VRAM tile memory with each other, so this is a sum, not a combined dedup.`);
+  document.getElementById('tileCountOut').textContent=lines.join('\n');
+};
+
+/* ---------- global hint-text toggle ---------- */
+function setupHintToggle(){
+  const chk=document.getElementById('chkShowHints');
+  let show=false; // default OFF -- only ever turns on if the user's own saved preference says so
+  try{ const saved=localStorage.getItem('ngpc_tile_editor_show_hints'); if(saved!==null) show=saved==='1'; }catch(e){}
+  chk.checked=show;
+  document.body.classList.toggle('hideHints', !show);
+  chk.onchange=()=>{
+    document.body.classList.toggle('hideHints', !chk.checked);
+    try{ localStorage.setItem('ngpc_tile_editor_show_hints', chk.checked?'1':'0'); }catch(e){}
+  };
+}
+/* ---------- light-mode (e-ink) toggle -- same body-class + saved-preference pattern as hints ---------- */
+function setupLightModeToggle(){
+  const chk=document.getElementById('chkLightMode');
+  let light=false; // default OFF (this tool's original dark theme) unless a saved preference says on
+  try{ const saved=localStorage.getItem('ngpc_tile_editor_light_mode'); if(saved!==null) light=saved==='1'; }catch(e){}
+  chk.checked=light;
+  document.body.classList.toggle('light', light);
+  chk.onchange=()=>{
+    document.body.classList.toggle('light', chk.checked);
+    try{ localStorage.setItem('ngpc_tile_editor_light_mode', chk.checked?'1':'0'); }catch(e){}
+  };
+}
+
+/* ---------- sidebar / panel collapse ---------- */
+function updateAppGrid(){
+  const l = leftCollapsed ? '26px' : '230px';
+  const r = rightCollapsedFlag ? '26px' : '310px';
+  document.getElementById('app').style.gridTemplateColumns = `${l} 1fr ${r}`;
+}
+function updateSidebarToggleLabels(){
+  document.getElementById('btnCollapseLeft').textContent = leftCollapsed?'▶':'◀';
+  document.getElementById('btnCollapseRight').textContent = rightCollapsedFlag?'◀':'▶';
+}
+document.getElementById('btnCollapseLeft').onclick=()=>{
+  leftCollapsed=!leftCollapsed;
+  document.getElementById('left').classList.toggle('collapsed',leftCollapsed);
+  updateAppGrid(); updateSidebarToggleLabels();
+};
+document.getElementById('btnCollapseRight').onclick=()=>{
+  rightCollapsedFlag=!rightCollapsedFlag;
+  document.getElementById('right').classList.toggle('collapsed',rightCollapsedFlag);
+  updateAppGrid(); updateSidebarToggleLabels();
+};
+function setupCollapsiblePanels(){
+  document.querySelectorAll('.panel').forEach(panel=>{
+    const h2=panel.querySelector('h2');
+    if(!h2 || panel.querySelector('.panelBody')) return;
+    const key='ngpc_tile_editor_panel_'+h2.textContent.trim().replace(/\s+/g,'_');
+    panel.dataset.panelKey=key;
+    const labelHTML=h2.innerHTML;
+    const body=document.createElement('div');
+    body.className='panelBody';
+    while(panel.children.length>1) body.appendChild(panel.children[1]);
+    panel.appendChild(body);
+    h2.innerHTML='';
+    h2.classList.add('panelHeadRow');
+    const label=document.createElement('span');
+    label.className='panelLabel';
+    label.innerHTML=labelHTML;
+    const caret=document.createElement('span');
+    caret.className='caret'; caret.textContent='▾';
+    h2.appendChild(label);
+    h2.appendChild(caret);
+    let collapsedStart=false;
+    try{ collapsedStart = localStorage.getItem(key)==='1'; }catch(e){}
+    if(collapsedStart) panel.classList.add('collapsed');
+    h2.onclick=()=>{
+      panel.classList.toggle('collapsed');
+      try{ localStorage.setItem(key, panel.classList.contains('collapsed')?'1':'0'); }catch(e){}
+    };
+  });
+}
+
+/* ---------- panel reordering (drag the grip handle in any panel header) ---------- */
+function setupPanelReordering(){
+  ['left','right'].forEach(side=>{
+    const container=document.getElementById(side);
+    const orderKey='ngpc_tile_editor_panel_order_'+side;
+    let savedOrder=null;
+    try{ savedOrder=JSON.parse(localStorage.getItem(orderKey)||'null'); }catch(e){}
+    if(Array.isArray(savedOrder)){
+      const panels=[...container.querySelectorAll('.panel')];
+      const byKey=new Map(panels.map(p=>[p.dataset.panelKey,p]));
+      savedOrder.forEach(k=>{ const p=byKey.get(k); if(p) container.appendChild(p); });
+      panels.forEach(p=>{ if(!savedOrder.includes(p.dataset.panelKey)) container.appendChild(p); });
+    }
+    function persistOrder(){
+      const order=[...container.querySelectorAll('.panel')].map(p=>p.dataset.panelKey);
+      try{ localStorage.setItem(orderKey, JSON.stringify(order)); }catch(e){}
+    }
+    let draggedPanel=null;
+    container.querySelectorAll('.panel').forEach(panel=>{
+      const h2=panel.querySelector('h2.panelHeadRow');
+      if(!h2) return;
+      const handle=document.createElement('span');
+      handle.className='dragHandle';
+      handle.title='Drag to reorder this panel';
+      handle.textContent='⠿';
+      handle.draggable=true;
+      handle.onclick=(e)=>e.stopPropagation(); // a plain click (no drag) shouldn't also toggle collapse
+      h2.insertBefore(handle,h2.firstChild);
+      handle.addEventListener('dragstart',(e)=>{
+        draggedPanel=panel;
+        e.dataTransfer.effectAllowed='move';
+        e.dataTransfer.setData('text/plain', panel.dataset.panelKey||'');
+        panel.classList.add('dragging');
+      });
+      handle.addEventListener('dragend',()=>{
+        panel.classList.remove('dragging');
+        draggedPanel=null;
+      });
+      panel.addEventListener('dragover',(e)=>{
+        e.preventDefault();
+        if(!draggedPanel || draggedPanel===panel) return;
+        const rect=panel.getBoundingClientRect();
+        const before=(e.clientY-rect.top)<rect.height/2;
+        container.insertBefore(draggedPanel, before?panel:panel.nextSibling);
+      });
+      panel.addEventListener('drop',(e)=>{ e.preventDefault(); persistOrder(); });
+    });
+  });
+}
+
+/* ---------- keyboard shortcuts ---------- */
+window.addEventListener('keydown',(e)=>{
+  const inField = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
+  if(inField)return;
+  if(e.ctrlKey && e.key.toLowerCase()==='z'){ e.preventDefault(); undo(); return; }
+  if(e.ctrlKey && (e.key.toLowerCase()==='y' || (e.shiftKey && e.key.toLowerCase()==='z'))){ e.preventDefault(); redo(); return; }
+  if(e.ctrlKey && e.key.toLowerCase()==='c'){ e.preventDefault(); document.getElementById('btnCopy').click(); return; }
+  // Ctrl+V is handled entirely by the 'paste' event listener below (it can distinguish an
+  // OS-clipboard image from a plain paste, which a keydown handler alone can't) -- no case here.
+  if(e.key==='Delete'){
+    e.preventDefault();
+    if(pixelMask && (tool==='wand'||tool==='wandpaste')){
+      pushUndo();
+      const layer=currentLayer();
+      const {x0,y0,w,h,mask}=pixelMask;
+      for(let y=0;y<h;y++)for(let x=0;x<w;x++) if(mask[y*w+x]) setLayerPix(layer,x0+x,y0+y,0);
+      render(); scheduleAutosave();
+    } else {
+      document.getElementById('btnClearSel').click();
+    }
+    return;
+  }
+  if(e.altKey && ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
+    e.preventDefault();
+    if(e.key==='ArrowLeft') shiftActive(-1,0);
+    else if(e.key==='ArrowRight') shiftActive(1,0);
+    else if(e.key==='ArrowUp') shiftActive(0,-1);
+    else shiftActive(0,1);
+    return;
+  }
+  if(['1','2','3','4'].includes(e.key)){
+    if(e.shiftKey) state.drawColor2=+e.key-1; else state.drawColor=+e.key-1;
+    syncDrawSwatches(); render(); return;
+  }
+  switch(e.key.toLowerCase()){
+    case 'b': setTool('pencil'); break;
+    case 'f': setTool('fill'); break;
+    case 'i': setTool('eyedrop'); break;
+    case 's': setTool('select'); break;
+    case 'l': setTool('line'); break;
+    case 'w': setTool('wand'); break;
+    case 'r': e.shiftKey?document.getElementById('btnRotCCW').click():document.getElementById('btnRotCW').click(); break;
+    case 'h': document.getElementById('btnFlipH').click(); break;
+    case 'v': document.getElementById('btnFlipV').click(); break;
+    case '[': state.activeLayer=clamp(state.activeLayer-1,0,state.layers.length-1); renderAllLayerUI(); render(); break;
+    case ']': state.activeLayer=clamp(state.activeLayer+1,0,state.layers.length-1); renderAllLayerUI(); render(); break;
+    case 'escape': selection=null; pasteGhost=null; pixelMask=null; wandPasteHover=null; pickingVp=false; render(); break;
+  }
+});
+
+/* ---------- New (full reset: grid size, layers, and palette bank all go back to defaults) ---------- */
+document.getElementById('btnNew').onclick=async ()=>{
+  const ok=await modalConfirm('Start a brand-new project? This resets grid size, all layers, and the palette bank back to defaults. Unsaved changes will be lost (though autosave keeps the last state until you do this).');
+  if(!ok) return;
+  pushUndo();
+  document.getElementById('projName').value='my_tiles';
+  state.gridW=2; state.gridH=2;
+  state.paletteBank=[ mkPalette('pal0',[ {r:0,g:0,b:0},{r:5,g:5,b:5},{r:10,g:10,b:10},{r:15,g:15,b:15} ]) ];
+  state.activePalette=0;
+  state.drawColor=1; state.drawColor2=2;
+  state.layers=[ makeLayer('Layer 1') ];
+  state.activeLayer=0;
+  selection=null; clipboard=null;
+  syncGridInputs(); renderAllPaletteUI(); render(); scheduleAutosave();
+};
+
+/* ---------- C code generation ---------- */
+function packRowFor(layer,x0,y){
+  let word=0;
+  for(let i=0;i<TILE;i++){
+    const v=getLayerPix(layer,x0+i,y)&3;
+    word |= v << (14 - i*2);
+  }
+  return word;
+}
+function generateCode(){
+  const name=document.getElementById('projName').value.trim() || 'my_tiles';
+  const far=document.getElementById('chkFar').checked ? 'NGP_FAR ' : '';
+  const comments=document.getElementById('chkComments').checked;
+  const tw=state.gridW, th=state.gridH;
+  let lines=[];
+  lines.push(`/* Generated by NGPC Tile Editor. ${tw}x${th} tile grid, 8x8px tiles, 2bpp, ${state.layers.length} layer(s). */`);
+  lines.push(`/* Tile order within each layer: row-major (left-to-right, top-to-bottom). */`);
+  lines.push(`/* Each layer is one screen plane's worth of tiles (e.g. sprite back/front, SCR1/SCR2) -- wire each up separately. */`);
+  lines.push('');
+  lines.push(`#define ${name.toUpperCase()}_WIDTH_TILES ${tw}u`);
+  lines.push(`#define ${name.toUpperCase()}_HEIGHT_TILES ${th}u`);
+  lines.push(`#define ${name.toUpperCase()}_TILE_COUNT ${tw*th}u`);
+  lines.push('');
+
+  state.layers.forEach((layer,li)=>{
+    const lname=sanitizeIdent(name+'_'+layer.name);
+    lines.push(`/* ---- Layer ${li}: "${layer.name}"${layer.visible?'':' (hidden in editor)'} ---- */`);
+    lines.push(`static const u16 ${far}${lname}_tiles[] = {`);
+    let tileNum=0;
+    for(let ty=0;ty<th;ty++){
+      for(let tx=0;tx<tw;tx++){
+        if(comments) lines.push(`    /* tile ${tileNum} (col ${tx}, row ${ty}) */`);
+        const words=[];
+        for(let r=0;r<TILE;r++) words.push('0x'+packRowFor(layer,tx*TILE,ty*TILE+r).toString(16).toUpperCase().padStart(4,'0'));
+        lines.push('    '+words.join(', ')+',');
+        tileNum++;
+      }
+    }
+    for(let i=lines.length-1;i>=0;i--){ if(lines[i].trim().startsWith('0x')){ lines[i]=lines[i].replace(/,\s*$/,''); break; } }
+    lines.push('};');
+    lines.push('');
+    lines.push(`static const u8 ${lname}_default_pal = ${layer.defaultPalette}u;`);
+    lines.push(`/* Per-tile palette-bank index, row-major, one s8 per tile; -1 means "use ${lname}_default_pal". */`);
+    lines.push(`static const s8 ${lname}_tile_pal[] = {`);
+    const rowsOut=[];
+    for(let ty=0;ty<th;ty++){
+      const row=[];
+      for(let tx=0;tx<tw;tx++) row.push(layer.tilePalette[ty*tw+tx]);
+      rowsOut.push('    '+row.join(', ')+(ty<th-1?',':''));
+    }
+    lines.push(rowsOut.join('\n'));
+    lines.push('};');
+    lines.push('');
+
+    if(layer.groups && layer.groups.length){
+      lines.push(`/* Named tile groups (sub-regions) -- e.g. sprite-sheet animation frames like walk_up/walk_down. */`);
+      layer.groups.forEach(g=>{
+        const gid=sanitizeIdent(lname+'_'+g.name);
+        const startIndex=g.y0*tw+g.x0;
+        lines.push(`#define ${gid.toUpperCase()}_TILE_INDEX ${startIndex}u  /* top-left tile, row-major index into ${lname}_tiles */`);
+        lines.push(`#define ${gid.toUpperCase()}_COL ${g.x0}u`);
+        lines.push(`#define ${gid.toUpperCase()}_ROW ${g.y0}u`);
+        lines.push(`#define ${gid.toUpperCase()}_WIDTH_TILES ${g.w}u`);
+        lines.push(`#define ${gid.toUpperCase()}_HEIGHT_TILES ${g.h}u`);
+        const idxArr=[];
+        for(let ry=0;ry<g.h;ry++) for(let rx=0;rx<g.w;rx++) idxArr.push((g.y0+ry)*tw+(g.x0+rx));
+        lines.push(`static const u16 ${gid}_tile_indices[] = { ${idxArr.map(ix=>ix+'u').join(', ')} }; /* row-major within the group, ${g.w}x${g.h} */`);
+        lines.push('');
+      });
+    }
+  });
+
+  lines.push(`/* Shared palette table -- every layer above references indices into this. */`);
+  lines.push(`static const u8 ${name}_palette_count = ${state.paletteBank.length}u;`);
+  lines.push(`static const u16 ${far}${name}_palettes[] = {`);
+  state.paletteBank.forEach((pal,pi)=>{
+    const words=pal.colors.map(c=>'0x'+((c.r&0xF)|((c.g&0xF)<<4)|((c.b&0xF)<<8)).toString(16).toUpperCase().padStart(4,'0'));
+    const tag = comments ? `    /* palette ${pi} "${pal.name}" */\n` : '';
+    lines.push(tag + '    '+words.join(', ')+(pi<state.paletteBank.length-1?',':''));
+  });
+  lines.push('};');
+  return lines.join('\n');
+}
+function refreshCode(){ document.getElementById('codeOut').value=generateCode(); }
+document.getElementById('btnRegen').onclick=refreshCode;
+document.getElementById('chkFar').onchange=refreshCode;
+document.getElementById('chkComments').onchange=refreshCode;
+document.getElementById('projName').oninput=()=>{ refreshCode(); scheduleAutosave(); };
+document.getElementById('btnCopyCode').onclick=async ()=>{
+  refreshCode();
+  try{ await navigator.clipboard.writeText(document.getElementById('codeOut').value); flashBtn('btnCopyCode','Copied!'); }
+  catch(e){ document.getElementById('codeOut').select(); document.execCommand('copy'); flashBtn('btnCopyCode','Copied!'); }
+};
+document.getElementById('btnDownloadC').onclick=()=>{
+  refreshCode();
+  const name=document.getElementById('projName').value.trim()||'my_tiles';
+  downloadBlob(new Blob([document.getElementById('codeOut').value],{type:'text/plain'}), name+'.c');
+};
+function flashBtn(id,text){
+  const b=document.getElementById(id); const orig=b.textContent;
+  b.textContent=text; setTimeout(()=>b.textContent=orig,900);
+}
+function downloadBlob(blob,filename){
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=filename; document.body.appendChild(a); a.click();
+  document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+
+/* ---------- PNG export (composites all visible layers) ---------- */
+function buildExportCanvas(scale,fillEmptyWithBack){
+  const w=pixW(), h=pixH();
+  const off=document.createElement('canvas');
+  off.width=w*scale; off.height=h*scale;
+  const octx=off.getContext('2d');
+  octx.imageSmoothingEnabled=false;
+  if(fillEmptyWithBack){
+    const back=state.layers.find(l=>l.visible);
+    if(back){
+      for(let y=0;y<h;y++){ const ty=y>>3;
+        for(let x=0;x<w;x++){ const tx=x>>3;
+          const pal=resolvedPalette(back,tx,ty);
+          const c=pal.colors[0];
+          octx.fillStyle=`rgb(${c.r*17},${c.g*17},${c.b*17})`;
+          octx.fillRect(x*scale,y*scale,scale,scale);
+        }
+      }
+    }
+  }
+  state.layers.forEach(layer=>{
+    if(!layer.visible) return;
+    for(let y=0;y<h;y++){ const ty=y>>3;
+      for(let x=0;x<w;x++){
+        const v=layer.pixels[y*w+x];
+        if(v===0) continue;
+        const tx=x>>3;
+        const pal=resolvedPalette(layer,tx,ty);
+        const c=pal.colors[v];
+        octx.fillStyle=`rgb(${c.r*17},${c.g*17},${c.b*17})`;
+        octx.fillRect(x*scale,y*scale,scale,scale);
+      }
+    }
+  });
+  return off;
+}
+function updatePngPreview(){
+  const scale=+document.getElementById('pngScale').value;
+  const alphaEmpty=document.getElementById('chkPngTransparent').checked;
+  const off=buildExportCanvas(scale, !alphaEmpty);
+  const url=off.toDataURL('image/png');
+  document.getElementById('pngPreview').src=url;
+  document.getElementById('pngPreview').style.width=Math.min(off.width,480)+'px';
+  const link=document.getElementById('pngDownload');
+  link.href=url;
+  link.download=(document.getElementById('projName').value.trim()||'tiles')+'.png';
+  document.getElementById('pngPreviewWrap').style.display='block';
+}
+document.getElementById('btnExportPng').onclick=()=>{
+  // "Export" should mean export: build the PNG AND save it immediately in one click,
+  // using whatever scale/transparency was last set (defaults the first time). The preview
+  // panel below still updates too, scrolled into view, so scale/transparency can be tweaked
+  // and re-downloaded without hunting for a second buried control.
+  updatePngPreview();
+  document.getElementById('pngPreviewWrap').scrollIntoView({behavior:'smooth',block:'nearest'});
+  document.getElementById('pngDownload').click();
+};
+document.getElementById('pngScale').onchange=updatePngPreview;
+document.getElementById('chkPngTransparent').onchange=updatePngPreview;
+
+/* ---------- PNG import (replaces the ACTIVE layer's content) ---------- */
+document.getElementById('btnImportPng').onclick=()=>document.getElementById('fileImportPng').click();
+document.getElementById('fileImportPng').onchange=(e)=>{
+  const file=e.target.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const img=new Image();
+    img.onload=()=>{ importImage(img); };
+    img.src=reader.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+};
+
+/* ---------- paste an image straight onto the canvas (clipboard, not a file) ---------- */
+// Reuses the exact same importImage(img) pipeline as Import PNG (options modal, oversize
+// crop/fit, palette-method modal) -- a pasted image is just a file-less import.
+function loadImageFromBlob(blob){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{ URL.revokeObjectURL(img.src); resolve(img); };
+    img.onerror=()=>{ URL.revokeObjectURL(img.src); reject(new Error('Could not decode that clipboard image.')); };
+    img.src=URL.createObjectURL(blob);
+  });
+}
+// Native paste event: fires on Ctrl+V (and a long-press "Paste" on touch). Checked FIRST for an
+// image so this can fall back to the app's own tile clipboard (btnPasteTool) when there isn't
+// one -- deliberately the only place Ctrl+V is handled (see the keydown handler above).
+document.addEventListener('paste', async (e)=>{
+  const inField=['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName);
+  if(inField) return; // let normal text paste work in the project-name/group-name fields etc.
+  const items=e.clipboardData && e.clipboardData.items;
+  let imageItem=null;
+  if(items){ for(const item of items){ if(item.type && item.type.startsWith('image/')){ imageItem=item; break; } } }
+  e.preventDefault();
+  if(imageItem){
+    const blob=imageItem.getAsFile();
+    if(blob){ try{ importImage(await loadImageFromBlob(blob)); }catch(err){ modalAlert(err.message); } }
+    return;
+  }
+  document.getElementById('btnPasteTool').click();
+});
+// Explicit button (async Clipboard API) -- the reliable path on touch/tablet, where there's no
+// physical Ctrl+V, and a clearer trigger everywhere else too.
+async function pasteImageFromClipboard(){
+  if(!navigator.clipboard || !navigator.clipboard.read){
+    await modalAlert('This browser doesn\'t support reading images from the clipboard via a button. Try Ctrl+V on the canvas instead, or use Import PNG.');
+    return;
+  }
+  try{
+    const items=await navigator.clipboard.read();
+    for(const item of items){
+      const imgType=item.types.find(t=>t.startsWith('image/'));
+      if(imgType){
+        const blob=await item.getType(imgType);
+        importImage(await loadImageFromBlob(blob));
+        return;
+      }
+    }
+    await modalAlert('No image found on the clipboard. Copy an image first, then try Paste Image again.');
+  }catch(err){
+    await modalAlert('Could not read the clipboard -- the browser may be blocking access here (try clicking the page first, or check this site\'s clipboard permission). '+err.message);
+  }
+}
+document.getElementById('btnPasteImage').onclick=pasteImageFromClipboard;
+
+document.getElementById('btnGeneratePerTile').onclick=async ()=>{
+  const layer=currentLayer();
+  if(!layer.refRGBA){ await modalAlert('The active layer has no full-color reference to convert -- import a PNG with the "Full Color (No Palette)" choice first, crop/resize it into place, then run this.'); return; }
+  const tileRect = selection ? {x0:selection.x0,y0:selection.y0,x1:selection.x1,y1:selection.y1} : null;
+  pushUndo();
+  const w=pixW(), h=pixH();
+  const maxRaw=document.getElementById('importMaxPalettes').value.trim();
+  const maxPalettes = maxRaw==='' ? Infinity : Math.max(1,parseInt(maxRaw,10)||1);
+  const summary=applyPerTilePalettes(layer,layer.refRGBA,w,h,state.gridW,state.gridH,maxPalettes,tileRect);
+  layer.refConverted=true; // keep refRGBA itself -- it now shows in the side reference panel instead of the main canvas
+  renderAllPaletteUI(); render(); scheduleAutosave();
+  const tileCount = tileRect ? (tileRect.x1-tileRect.x0+1)*(tileRect.y1-tileRect.y0+1) : state.gridW*state.gridH;
+  if(summary.overflowTiles>0 || summary.mergedGroups>0){
+    let msg=`Generate Palettes Per Tile: added ${summary.newPalettes} new palette(s) (reused ${summary.reusedPalettes} already in the bank) covering ${summary.uniquePalettes} distinct color combination(s) across ${tileCount} tile(s)${tileRect?' (current selection only)':''}.`;
+    if(summary.overflowTiles>0) msg+=`\n\n${summary.overflowTiles} tile(s) had more than 3 unique opaque colors -- those were reduced to the 3 most-used colors in that tile, with the rest nearest-matched (index 0 is reserved for transparency, so a tile only has 3 usable colors on real hardware).`;
+    if(summary.mergedGroups>0) msg+=`\n\n${summary.mergedGroups} distinct tile color-set(s) were merged into the closest surviving palette to stay within your ${maxPalettes}-palette cap -- affected tiles now use that palette's nearest colors instead of their own exact colors.`;
+    await modalAlert(msg);
+  }
+};
+document.getElementById('btnClearRef').onclick=()=>{
+  const layer=currentLayer();
+  pushUndo();
+  layer.refRGBA=null; layer.refConverted=false;
+  render(); scheduleAutosave();
+};
+async function importImage(img){
+  const opts=await showImportOptionsModal(img);
+  if(opts===null) return;
+  const scalePct=opts.scalePct, twoLayer=opts.twoLayer;
+  let srcW=Math.max(1,Math.round(img.width*scalePct/100));
+  let srcH=Math.max(1,Math.round(img.height*scalePct/100));
+  let tw=Math.ceil(srcW/TILE), th=Math.ceil(srcH/TILE);
+  let resampled = scalePct!==100;
+  if(tw>MAX_GRID_TILES || th>MAX_GRID_TILES){
+    // Oversized (after the user's own Import Scale % above) -- ask whether to crop to the
+    // top-left corner (keeps every remaining pixel 1:1) or scale the whole image down to fit
+    // (keeps the whole picture, at reduced detail), rather than silently always cropping.
+    const cropTw=Math.min(tw,MAX_GRID_TILES), cropTh=Math.min(th,MAX_GRID_TILES);
+    const fitScale=Math.min(MAX_GRID_TILES*TILE/srcW, MAX_GRID_TILES*TILE/srcH);
+    const fitW=Math.max(1,Math.round(srcW*fitScale)), fitH=Math.max(1,Math.round(srcH*fitScale));
+    const fitTw=Math.ceil(fitW/TILE), fitTh=Math.ceil(fitH/TILE);
+    const sizeChoice=await showModal(
+      `This image is ${tw}x${th} tiles${scalePct!==100?' after your Import Scale %':''}, larger than the ${MAX_GRID_TILES}x${MAX_GRID_TILES}-tile editing limit. How should it be brought into range?`,
+      [
+        {label:'Cancel Import',value:'cancel'},
+        {label:`Crop to Top-Left ${cropTw}x${cropTh}`,value:'crop'},
+        {label:`Scale to Fit ${fitTw}x${fitTh}`,value:'fit',primary:true},
+      ]);
+    if(sizeChoice==='cancel') return;
+    if(sizeChoice==='fit'){ srcW=fitW; srcH=fitH; tw=fitTw; th=fitTh; resampled=true; }
+    else { tw=cropTw; th=cropTh; }
+  }
+  const w=tw*TILE, h=th*TILE;
+  const off=document.createElement('canvas'); off.width=w; off.height=h;
+  const octx=off.getContext('2d');
+  octx.imageSmoothingEnabled = resampled; // only resample when actually scaling; keep a crisp 1:1 blit (including a plain crop) otherwise
+  octx.drawImage(img,0,0,srcW,srcH); // scales to srcW/srcH, then a still-oversized draw crops to the top-left tile-aligned canvas
+  const data=octx.getImageData(0,0,w,h).data;
+
+  const replaceMsg = twoLayer
+    ? 'This will replace ALL layers with two fresh layers, SCR_1 and SCR_2.'
+    : 'This will replace the active layer\'s content.';
+  const choice=await showModal(replaceMsg,[
+    {label:'Cancel Import',value:'cancel'},
+    {label:'Use Current Palette',value:'current'},
+    {label:'Extract New Palette',value:'extract',primary:true},
+    {label:'Auto Palette Per Tile',value:'pertile'},
+    {label:'Full Color (No Palette)',value:'fullcolor'},
+  ]);
+  if(choice==='cancel') return;
+  const twoLayerActive = twoLayer && (choice==='extract' || choice==='pertile');
+
+  let pal;
+  if(choice==='extract' && !twoLayerActive){
+    pal=extractPalette(data,w,h);
+    state.paletteBank.push(mkPalette('imported',pal));
+    state.activePalette=state.paletteBank.length-1;
+  } else if(choice==='current'){
+    pal=activePalette().colors;
+  }
+  // 'pertile'/2-layer need no single `pal` -- they derive their own palette(s) below.
+  // 'fullcolor' needs no palette at all -- it just stores the raw image for later conversion.
+
+  pushUndo();
+  resizeAllLayersTo(tw, th, 'tl');
+
+  if(twoLayerActive){
+    state.layers=[makeLayer('SCR_1'), makeLayer('SCR_2')];
+    state.activeLayer=0;
+    const layerA=state.layers[0], layerB=state.layers[1];
+    const maxRaw=document.getElementById('importMaxPalettes').value.trim();
+    const maxPalettes = maxRaw==='' ? Infinity : Math.max(1,parseInt(maxRaw,10)||1);
+    if(choice==='pertile'){
+      const {dataA,dataB,overflowTiles:splitOverflowTiles}=splitPerTileIntoTwoBuffers(data,w,h,tw,th);
+      const sa=applyPerTilePalettes(layerA,dataA,w,h,tw,th,maxPalettes);
+      const sb=applyPerTilePalettes(layerB,dataB,w,h,tw,th,maxPalettes);
+      let msg=`2-Layer Auto Palette Per Tile across ${tw*th} tiles:\nSCR_1: ${sa.newPalettes} new + ${sa.reusedPalettes} reused palette(s) (${sa.uniquePalettes} distinct)\nSCR_2: ${sb.newPalettes} new + ${sb.reusedPalettes} reused palette(s) (${sb.uniquePalettes} distinct)`;
+      if(splitOverflowTiles>0) msg+=`\n\n${splitOverflowTiles} tile(s) had more than 6 total unique opaque colors (3 usable per layer, since index 0 stays reserved for transparency on each) -- extra colors were nearest-matched into the closest of the 6 chosen.`;
+      if(sa.mergedGroups>0 || sb.mergedGroups>0) msg+=`\n\n${sa.mergedGroups} SCR_1 / ${sb.mergedGroups} SCR_2 tile color-set(s) were merged to stay within your ${maxPalettes}-palette cap.`;
+      await modalAlert(msg);
+    } else {
+      const r=applyTwoLayerStandard(layerA,layerB,data,w,h);
+      let msg=`2-Layer Extract New Palette: SCR_1 got ${r.colorsACount} real color(s), SCR_2 got ${r.colorsBCount} real color(s) (3 usable per layer, index 0 reserved for transparency on each).`;
+      if(r.droppedColors>0) msg+=`\n\n${r.droppedColors} additional distinct color(s) in the source image were beyond the top 6 most-used across the whole image and got nearest-matched into the closest of the 6 chosen.`;
+      await modalAlert(msg);
+    }
+  } else {
+    const layer=currentLayer();
+    layer.pixels=allocPixels(w,h);
+    layer.tilePalette=allocTilePalette(tw,th);
+    if(choice==='pertile'){
+      const maxRaw=document.getElementById('importMaxPalettes').value.trim();
+      const maxPalettes = maxRaw==='' ? Infinity : Math.max(1,parseInt(maxRaw,10)||1);
+      const summary=applyPerTilePalettes(layer,data,w,h,tw,th,maxPalettes);
+      if(summary.overflowTiles>0 || summary.mergedGroups>0){
+        let msg=`Auto Palette Per Tile: added ${summary.newPalettes} new palette(s) (reused ${summary.reusedPalettes} already in the bank) covering ${summary.uniquePalettes} distinct color combination(s) across ${tw*th} tiles.`;
+        if(summary.overflowTiles>0) msg+=`\n\n${summary.overflowTiles} tile(s) had more than 3 unique opaque colors -- those were reduced to the 3 most-used colors in that tile, with the rest nearest-matched (index 0 is reserved for transparency, so a tile only has 3 usable colors on real hardware).`;
+        if(summary.mergedGroups>0) msg+=`\n\n${summary.mergedGroups} distinct tile color-set(s) were merged into the closest surviving palette to stay within your ${maxPalettes}-palette cap -- affected tiles now use that palette's nearest colors instead of their own exact colors.`;
+        await modalAlert(msg);
+      }
+    } else if(choice==='fullcolor'){
+      layer.refRGBA=new Uint8ClampedArray(data);
+      layer.refConverted=false;
+    } else {
+      if(choice==='extract') layer.defaultPalette=state.activePalette;
+      const pal255=pal.map(c=>[c.r*17,c.g*17,c.b*17]);
+      for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+        const o=(y*w+x)*4;
+        const a=data[o+3];
+        if(a<128){ setLayerPix(layer,x,y,0); continue; }
+        const r=data[o],g=data[o+1],b=data[o+2];
+        let best=0,bestD=Infinity;
+        for(let i=0;i<4;i++){
+          const dr=r-pal255[i][0], dg=g-pal255[i][1], db=b-pal255[i][2];
+          const d=dr*dr+dg*dg+db*db;
+          if(d<bestD){bestD=d;best=i;}
+        }
+        setLayerPix(layer,x,y,best);
+      }
+    }
+  }
+  selection=null;
+  syncGridInputs(); renderAllPaletteUI(); render(); scheduleAutosave();
+}
+/* ---------- 2-layer (SCR_1/SCR_2) import helpers ---------- */
+function colorDistSq(a,b){ const dr=a.r-b.r,dg=a.g-b.g,db=a.b-b.b; return dr*dr+dg*dg+db*db; }
+/* Splits up to 6 {r,g,b,count} entries (4-bit) into two groups of at most 3 each: seeds with the
+   most different pair (max pairwise distance), then greedily assigns the rest to whichever seed
+   is nearer, redirecting to the other group once one side hits its cap of 3 -- since the input is
+   never more than 6 entries and both caps sum to 6, every entry always finds room somewhere. */
+function clusterColorsIntoTwoLayers(entries){
+  if(entries.length===0) return {a:[], b:[]};
+  if(entries.length===1) return {a:entries.slice(), b:[]};
+  let bi=0,bj=1,bd=-1;
+  for(let i=0;i<entries.length;i++)for(let j=i+1;j<entries.length;j++){
+    const d=colorDistSq(entries[i],entries[j]);
+    if(d>bd){bd=d;bi=i;bj=j;}
+  }
+  const groupA=[entries[bi]], groupB=[entries[bj]];
+  entries.forEach((e,idx)=>{
+    if(idx===bi||idx===bj) return;
+    const da=colorDistSq(e,entries[bi]), db=colorDistSq(e,entries[bj]);
+    if(da<=db){ if(groupA.length<3) groupA.push(e); else groupB.push(e); }
+    else { if(groupB.length<3) groupB.push(e); else groupA.push(e); }
+  });
+  return {a:groupA, b:groupB};
+}
+/* Pads a group's real colors to 3 (same deterministic filler as the per-tile algorithm), sorts
+   them by luminance for a canonical order, and prepends the reserved index-0 transparent slot --
+   returns both the final 4-entry `colors` array and a `map` from each real color's ORIGINAL
+   position in `group` to its final index (1-3), needed so per-pixel assignment lands on the right
+   index after padding/sorting reordered things. */
+function canonicalizeGroupColorsWithMap(group){
+  const real=group.map(e=>({r:e.r,g:e.g,b:e.b}));
+  while(real.length<3) real.push({r:(real.length+1)*4,g:(real.length+1)*4,b:(real.length+1)*4});
+  const withIdx=real.map((c,i)=>({c,i}));
+  withIdx.sort((x,y)=>(x.c.r+x.c.g+x.c.b)-(y.c.r+y.c.g+y.c.b));
+  const colors=[{r:0,g:0,b:0}];
+  const map=new Array(real.length);
+  withIdx.forEach((item,pos)=>{ colors.push(item.c); map[item.i]=pos+1; });
+  return {colors, map};
+}
+function pushOrReusePalette(colors,namePrefix){
+  const key=colors.map(c=>c.r+','+c.g+','+c.b).join('|');
+  for(let i=0;i<state.paletteBank.length;i++){
+    if(state.paletteBank[i].colors.map(c=>c.r+','+c.g+','+c.b).join('|')===key) return i;
+  }
+  state.paletteBank.push(mkPalette(namePrefix+state.paletteBank.length, colors));
+  return state.paletteBank.length-1;
+}
+/* Standard 2-layer import: ONE global palette per layer (mirrors "Extract New Palette", just
+   split across two planes). Histograms the whole image, keeps the 6 most-used colors, splits
+   them 3/3 across SCR_1/SCR_2, and nearest-matches every opaque pixel to whichever of those 6
+   colors is closest -- writing it into that pixel's position on its assigned layer and index 0
+   (transparent) at the same position on the OTHER layer, so SCR_2 shows through SCR_1 wherever
+   it has content and SCR_1 shows through where SCR_2 doesn't. */
+function applyTwoLayerStandard(layerA,layerB,data,w,h){
+  const hist=new Map();
+  for(let i=0;i<data.length;i+=4){
+    if(data[i+3]<128) continue;
+    const r=data[i]>>4, g=data[i+1]>>4, b=data[i+2]>>4;
+    const k=r+','+g+','+b;
+    const e=hist.get(k);
+    if(e) e.count++; else hist.set(k,{r,g,b,count:1});
+  }
+  const sortedAll=[...hist.values()].sort((a,b)=>b.count-a.count);
+  const top6=sortedAll.slice(0,6);
+  const droppedColors=Math.max(0,sortedAll.length-6);
+  const {a:groupA,b:groupB}=clusterColorsIntoTwoLayers(top6);
+  const {colors:colorsA,map:mapA}=canonicalizeGroupColorsWithMap(groupA);
+  const {colors:colorsB,map:mapB}=canonicalizeGroupColorsWithMap(groupB);
+  layerA.defaultPalette=pushOrReusePalette(colorsA,'scr1_');
+  layerB.defaultPalette=pushOrReusePalette(colorsB,'scr2_');
+
+  const tagged=[];
+  groupA.forEach((c,i)=>tagged.push({r:c.r,g:c.g,b:c.b,layer:'A',idx:mapA[i]}));
+  groupB.forEach((c,i)=>tagged.push({r:c.r,g:c.g,b:c.b,layer:'B',idx:mapB[i]}));
+
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++){
+    const o=(y*w+x)*4;
+    if(data[o+3]<128 || tagged.length===0){ setLayerPix(layerA,x,y,0); setLayerPix(layerB,x,y,0); continue; }
+    const r=data[o],g=data[o+1],b=data[o+2];
+    let best=tagged[0],bestD=Infinity;
+    tagged.forEach(t=>{
+      const dr=r-t.r*17, dg=g-t.g*17, db=b-t.b*17;
+      const d=dr*dr+dg*dg+db*db;
+      if(d<bestD){bestD=d;best=t;}
+    });
+    setLayerPix(layerA,x,y, best.layer==='A'?best.idx:0);
+    setLayerPix(layerB,x,y, best.layer==='B'?best.idx:0);
+  }
+  return {droppedColors, colorsACount:groupA.length, colorsBCount:groupB.length};
+}
+/* Per-tile 2-layer split: for each 8x8 tile independently, keeps its 6 most-used colors, splits
+   them 3/3 across two output RGBA buffers (same size as the source), and nearest-matches every
+   opaque pixel into whichever buffer its assigned color belongs to -- transparent (alpha 0) in
+   that pixel's position on the OTHER buffer, and on both if the source pixel itself was
+   transparent. The two buffers are then just ordinary (already ≤3-real-color-per-tile) images,
+   so the existing, already-tested applyPerTilePalettes runs on each completely unchanged. */
+function splitPerTileIntoTwoBuffers(data,w,h,tw,th){
+  const dataA=new Uint8ClampedArray(data.length);
+  const dataB=new Uint8ClampedArray(data.length);
+  let overflowTiles=0;
+  for(let ty=0;ty<th;ty++)for(let tx=0;tx<tw;tx++){
+    const x0=tx*TILE, y0=ty*TILE;
+    const hist=new Map();
+    for(let y=0;y<TILE;y++)for(let x=0;x<TILE;x++){
+      const o=((y0+y)*w+(x0+x))*4;
+      if(data[o+3]<128) continue;
+      const r=data[o]>>4, g=data[o+1]>>4, b=data[o+2]>>4;
+      const k=r+','+g+','+b;
+      const e=hist.get(k);
+      if(e) e.count++; else hist.set(k,{r,g,b,count:1});
+    }
+    const sorted=[...hist.values()].sort((a,b)=>b.count-a.count);
+    if(sorted.length>6) overflowTiles++;
+    const {a:groupA,b:groupB}=clusterColorsIntoTwoLayers(sorted.slice(0,6));
+    const tagged=[];
+    groupA.forEach(c=>tagged.push({r:c.r,g:c.g,b:c.b,layer:'A'}));
+    groupB.forEach(c=>tagged.push({r:c.r,g:c.g,b:c.b,layer:'B'}));
+    for(let y=0;y<TILE;y++)for(let x=0;x<TILE;x++){
+      const px=x0+x, py=y0+y;
+      const o=(py*w+px)*4;
+      if(data[o+3]<128 || tagged.length===0){ dataA[o+3]=0; dataB[o+3]=0; continue; }
+      const r=data[o],g=data[o+1],b=data[o+2];
+      let best=tagged[0],bestD=Infinity;
+      tagged.forEach(t=>{
+        const dr=r-t.r*17, dg=g-t.g*17, db=b-t.b*17;
+        const d=dr*dr+dg*dg+db*db;
+        if(d<bestD){bestD=d;best=t;}
+      });
+      if(best.layer==='A'){ dataA[o]=r;dataA[o+1]=g;dataA[o+2]=b;dataA[o+3]=255; dataB[o+3]=0; }
+      else { dataB[o]=r;dataB[o+1]=g;dataB[o+2]=b;dataB[o+3]=255; dataA[o+3]=0; }
+    }
+  }
+  return {dataA,dataB,overflowTiles};
+}
+/* Per-tile auto palette: for each 8x8 tile, pick the up-to-3 most-used opaque colors as that
+   tile's own palette (canonicalized by luminance-sorted order so identical color sets across
+   tiles collapse to one group -- same convention as extractPalette's global sort). Color index 0
+   is ALWAYS reserved as the transparent/backdrop slot (real NGPC hardware ignores whatever RGB
+   sits in palette index 0 on a scroll-plane tile and shows the backdrop through it instead --
+   see feedback_ngpc_scr1_tile0_transparent memory), so only indices 1-3 ever get a real color;
+   a tile's opaque pixels are nearest-matched only against those 3, never index 0, so a genuinely
+   dark/black pixel can't accidentally land on the transparent slot and vanish on hardware. A
+   group whose colors exactly match an existing bank palette reuses that index for free; the rest
+   are "new" groups. If `maxPalettes` caps the number of NEW palettes below how many distinct new
+   groups exist, the most similar new groups are greedily merged (nearest-color-distance pairs
+   first, loser's tiles folded into the more-popular survivor) until the count fits, then every
+   affected tile's pixels are nearest-matched against the survivor's colors -- same technique
+   already used for a single tile with more than 3 colors. Mirrors real NGPC hardware, where
+   palette is a per-tile attribute, not baked into the bitmap.
+   `tileRect` (optional {x0,y0,x1,y1}, inclusive tile units) restricts processing to a
+   sub-region -- e.g. a Select-tool selection -- leaving every tile outside it untouched;
+   omit it (or pass null) to process the whole `tw`x`th` grid, as PNG import does. */
+function applyPerTilePalettes(layer,data,w,h,tw,th,maxPalettes,tileRect){
+  const rect = tileRect || {x0:0,y0:0,x1:tw-1,y1:th-1};
+  const paletteKey=colors=>colors.map(c=>c.r+','+c.g+','+c.b).join('|');
+  const existingKeyToIndex=new Map();
+  state.paletteBank.forEach((p,i)=>existingKeyToIndex.set(paletteKey(p.colors),i));
+
+  let overflowTiles=0;
+  const groupsByKey=new Map(); // key -> {colors, existingIdx?, tiles:[tileIndex,...]}
+  for(let ty=rect.y0;ty<=rect.y1;ty++)for(let tx=rect.x0;tx<=rect.x1;tx++){
+    const x0=tx*TILE, y0=ty*TILE;
+    const hist=new Map(); // "r,g,b" (4-bit) -> {r,g,b,count}
+    for(let y=0;y<TILE;y++)for(let x=0;x<TILE;x++){
+      const o=((y0+y)*w+(x0+x))*4;
+      if(data[o+3]<128) continue;
+      const r=data[o]>>4, g=data[o+1]>>4, b=data[o+2]>>4;
+      const k=r+','+g+','+b;
+      const e=hist.get(k);
+      if(e) e.count++; else hist.set(k,{r,g,b,count:1});
+    }
+    let entries=[...hist.values()];
+    if(entries.length>3){
+      overflowTiles++;
+      entries.sort((a,b)=>b.count-a.count);
+      entries=entries.slice(0,3);
+    }
+    const real=entries.map(e=>({r:e.r,g:e.g,b:e.b}));
+    while(real.length<3) real.push({r:(real.length+1)*4,g:(real.length+1)*4,b:(real.length+1)*4});
+    real.sort((a,b)=>(a.r+a.g+a.b)-(b.r+b.g+b.b));
+    const colors=[{r:0,g:0,b:0}, ...real]; // slot 0 is the reserved transparent placeholder
+
+    const key=paletteKey(colors);
+    let group=groupsByKey.get(key);
+    if(!group){ group={colors, existingIdx:existingKeyToIndex.get(key), tiles:[]}; groupsByKey.set(key,group); }
+    group.tiles.push(ty*tw+tx);
+  }
+
+  const allGroups=[...groupsByKey.values()];
+  const reusedGroups=allGroups.filter(g=>g.existingIdx!==undefined);
+  let newGroups=allGroups.filter(g=>g.existingIdx===undefined);
+  let mergedGroups=0;
+
+  if(Number.isFinite(maxPalettes) && newGroups.length>maxPalettes){
+    const dist=(a,b)=>{ let d=0; for(let i=0;i<4;i++){ const dr=a[i].r-b[i].r,dg=a[i].g-b[i].g,db=a[i].b-b[i].b; d+=dr*dr+dg*dg+db*db; } return d; };
+    while(newGroups.length>Math.max(1,maxPalettes)){
+      let bi=0,bj=1,bd=Infinity;
+      for(let i=0;i<newGroups.length;i++)for(let j=i+1;j<newGroups.length;j++){
+        const d=dist(newGroups[i].colors,newGroups[j].colors);
+        if(d<bd){bd=d;bi=i;bj=j;}
+      }
+      const a=newGroups[bi], b=newGroups[bj];
+      const winner = a.tiles.length>=b.tiles.length ? a : b;
+      const loser = winner===a ? b : a;
+      winner.tiles=winner.tiles.concat(loser.tiles);
+      newGroups=newGroups.filter(g=>g!==loser);
+      mergedGroups++;
+    }
+  }
+
+  const useCount=new Map(); // bankIdx -> tiles assigned, to pick a sensible layer.defaultPalette
+  let newPalettes=0;
+  reusedGroups.concat(newGroups).forEach(group=>{
+    let bankIdx=group.existingIdx;
+    if(bankIdx===undefined){
+      state.paletteBank.push(mkPalette('auto'+state.paletteBank.length,group.colors));
+      bankIdx=state.paletteBank.length-1;
+      newPalettes++;
+    }
+    const pal255=group.colors.map(c=>[c.r*17,c.g*17,c.b*17]);
+    group.tiles.forEach(tileIdx=>{
+      layer.tilePalette[tileIdx]=bankIdx;
+      useCount.set(bankIdx,(useCount.get(bankIdx)||0)+1);
+      const tx=tileIdx%tw, ty=Math.floor(tileIdx/tw);
+      const x0=tx*TILE, y0=ty*TILE;
+      for(let y=0;y<TILE;y++)for(let x=0;x<TILE;x++){
+        const px=x0+x, py=y0+y;
+        const o=(py*w+px)*4;
+        const a=data[o+3];
+        if(a<128){ setLayerPix(layer,px,py,0); continue; }
+        const r=data[o],g=data[o+1],b=data[o+2];
+        let best=1,bestD=Infinity;
+        for(let i=1;i<4;i++){ // never match an opaque pixel to index 0 -- that's the reserved transparent slot
+          const dr=r-pal255[i][0], dg=g-pal255[i][1], db=b-pal255[i][2];
+          const d=dr*dr+dg*dg+db*db;
+          if(d<bestD){bestD=d;best=i;}
+        }
+        setLayerPix(layer,px,py,best);
+      }
+    });
+  });
+
+  if(!tileRect){
+    // Only re-pick the layer's default when the WHOLE grid was processed -- a selection-scoped
+    // run shouldn't clobber the default that every untouched tile's -1 override still relies on.
+    let bestBank=0,bestCount=-1;
+    useCount.forEach((c,idx)=>{ if(c>bestCount){bestCount=c;bestBank=idx;} });
+    layer.defaultPalette=bestBank;
+  }
+
+  return {newPalettes, reusedPalettes:reusedGroups.length, uniquePalettes:reusedGroups.length+newGroups.length, overflowTiles, mergedGroups};
+}
+function extractPalette(data,w,h){
+  const hist=new Map();
+  for(let i=0;i<data.length;i+=4){
+    if(data[i+3]<128)continue;
+    const r=data[i]>>4, g=data[i+1]>>4, b=data[i+2]>>4;
+    const key=r+','+g+','+b;
+    hist.set(key,(hist.get(key)||0)+1);
+  }
+  const sorted=[...hist.entries()].sort((a,b)=>b[1]-a[1]).slice(0,4);
+  const colors=sorted.map(([k])=>{ const [r,g,b]=k.split(',').map(Number); return {r,g,b}; });
+  while(colors.length<4) colors.push({r:colors.length*4,g:colors.length*4,b:colors.length*4});
+  colors.sort((a,b)=>(a.r+a.g+a.b)-(b.r+b.g+b.b));
+  return colors;
+}
+
+/* ---------- project save/load ---------- */
+function serializeProject(){
+  return {
+    version:2,
+    name:document.getElementById('projName').value.trim()||'my_tiles',
+    gridW:state.gridW, gridH:state.gridH,
+    paletteBank:state.paletteBank,
+    activePalette:state.activePalette,
+    activeLayer:state.activeLayer,
+    layers:state.layers.map(l=>({
+      name:l.name, visible:l.visible, defaultPalette:l.defaultPalette,
+      pixels:Array.from(l.pixels), tilePalette:Array.from(l.tilePalette),
+      groups:(l.groups||[]).map(g=>({...g})),
+    })),
+  };
+}
+function migrateLegacy(obj){
+  return {
+    version:2, name:obj.name,
+    gridW:obj.gridW, gridH:obj.gridH,
+    paletteBank:obj.paletteBank,
+    activePalette:obj.activePalette||0,
+    activeLayer:0,
+    layers:[{
+      name:'Layer 1', visible:true, defaultPalette:obj.activePalette||0,
+      pixels:obj.pixels,
+      tilePalette:new Array((obj.gridW||1)*(obj.gridH||1)).fill(-1),
+    }],
+  };
+}
+// State-only restore (grid/palette/layers) -- no clipboard/undo/selection side effects, so it's
+// safe to reuse both for "Load Project" (which layers its own pushUndo+clipboard-clear on top)
+// and for project-tab switching (which deliberately leaves clipboard/wandClipboard untouched so
+// copy/paste can cross tabs).
+function applyProjectData(obj){
+  if(!obj.version || obj.version<2) obj=migrateLegacy(obj);
+  document.getElementById('projName').value=obj.name||'my_tiles';
+  state.gridW=obj.gridW; state.gridH=obj.gridH;
+  state.paletteBank=obj.paletteBank.map(p=>mkPalette(p.name,p.colors));
+  state.activePalette=clamp(obj.activePalette||0,0,state.paletteBank.length-1);
+  state.layers=obj.layers.map(l=>({
+    name:l.name, visible:l.visible!==false, defaultPalette:clamp(l.defaultPalette||0,0,state.paletteBank.length-1),
+    pixels:Uint8Array.from(l.pixels), tilePalette:Int16Array.from(l.tilePalette),
+    groups:(l.groups||[]).map(g=>({...g})), // older saves predate groups -- default to none
+  }));
+  state.activeLayer=clamp(obj.activeLayer||0,0,state.layers.length-1);
+}
+function loadProject(obj){
+  pushUndo();
+  applyProjectData(obj);
+  selection=null; pixelMask=null; clipboard=null; wandClipboard=null;
+  syncGridInputs(); renderAllPaletteUI(); render(); renderProjectTabs();
+}
+document.getElementById('btnSaveProj').onclick=()=>{
+  const name=document.getElementById('projName').value.trim()||'my_tiles';
+  downloadBlob(new Blob([JSON.stringify(serializeProject(),null,1)],{type:'application/json'}), name+'.ngptile.json');
+};
+document.getElementById('btnLoadProj').onclick=()=>document.getElementById('fileLoadProj').click();
+document.getElementById('fileLoadProj').onchange=(e)=>{
+  const file=e.target.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=()=>{ try{ loadProject(JSON.parse(reader.result)); scheduleAutosave(); } catch(err){ modalAlert('Could not load project file: '+err.message); } };
+  reader.readAsText(file);
+  e.target.value='';
+};
+
+/* ---------- project tabs (multiple open projects; clipboard is shared across them) ---------- */
+function captureActiveProjectSnapshot(){
+  return {
+    name: document.getElementById('projName').value.trim()||'my_tiles',
+    snapshot: serializeProject(),
+    zoom, anchor: currentAnchor,
+    undoStack, redoStack,
+  };
+}
+function loadSnapshotIntoLive(rec){
+  applyProjectData(rec.snapshot);
+  zoom = rec.zoom || 18;
+  currentAnchor = rec.anchor || 'tl';
+  undoStack = rec.undoStack ? rec.undoStack.slice() : [];
+  redoStack = rec.redoStack ? rec.redoStack.slice() : [];
+  selection=null; pixelMask=null; pasteGhost=null; wandPasteHover=null;
+  drawing=false; shapeStart=null; shapeEnd=null; selMoving=false; wandMoving=false;
+  syncGridInputs(); renderAnchorGrid(); renderAllPaletteUI();
+  document.getElementById('zoomRange').value=zoom;
+  document.getElementById('zoomLabel').textContent=zoom+' px/pixel';
+  renderProjectTabs();
+  setTool('pencil'); // also renders
+}
+function switchProject(idx){
+  if(idx===activeProjectIdx || idx<0 || idx>=projects.length) return;
+  projects[activeProjectIdx]=captureActiveProjectSnapshot();
+  activeProjectIdx=idx;
+  loadSnapshotIntoLive(projects[idx]);
+  scheduleAutosave();
+}
+function blankProjectRecord(){
+  return {
+    name:'my_tiles',
+    snapshot:{
+      version:2, name:'my_tiles', gridW:2, gridH:2,
+      paletteBank:[{name:'pal0',colors:[{r:0,g:0,b:0},{r:5,g:5,b:5},{r:10,g:10,b:10},{r:15,g:15,b:15}]}],
+      activePalette:0, activeLayer:0,
+      layers:[{name:'Layer 1', visible:true, defaultPalette:0, pixels:new Array(16*16).fill(0), tilePalette:new Array(2*2).fill(-1)}],
+    },
+    zoom:18, anchor:'tl', undoStack:[], redoStack:[],
+  };
+}
+document.getElementById('btnNewProjectTab').onclick=()=>{
+  projects[activeProjectIdx]=captureActiveProjectSnapshot();
+  const rec=blankProjectRecord();
+  projects.push(rec);
+  activeProjectIdx=projects.length-1;
+  loadSnapshotIntoLive(rec);
+  scheduleAutosave();
+};
+async function closeProjectTab(idx){
+  if(projects.length<=1){ modalAlert('At least one project tab must stay open.'); return; }
+  const label = idx===activeProjectIdx ? (document.getElementById('projName').value.trim()||'my_tiles') : (projects[idx].name||'my_tiles');
+  const ok=await modalConfirm(`Close project tab "${label}"? Anything not saved to a file is lost (autosave only remembers open tabs, not closed ones).`);
+  if(!ok) return;
+  projects.splice(idx,1);
+  if(activeProjectIdx===idx){
+    activeProjectIdx=clamp(idx,0,projects.length-1);
+    loadSnapshotIntoLive(projects[activeProjectIdx]);
+  } else {
+    if(activeProjectIdx>idx) activeProjectIdx--;
+    renderProjectTabs();
+  }
+  scheduleAutosave();
+}
+function renderProjectTabs(){
+  const wrap=document.getElementById('projectTabs');
+  wrap.innerHTML='';
+  projects.forEach((p,i)=>{
+    const name = i===activeProjectIdx ? (document.getElementById('projName').value.trim()||'my_tiles') : (p.name||'my_tiles');
+    const tab=document.createElement('div');
+    tab.className='projTab'+(i===activeProjectIdx?' active':'');
+    tab.title='Switch to this project tab';
+    const label=document.createElement('span');
+    label.textContent=name;
+    tab.appendChild(label);
+    if(projects.length>1){
+      const close=document.createElement('span');
+      close.className='closeTab'; close.textContent='×'; close.title='Close this tab';
+      close.onclick=(e)=>{ e.stopPropagation(); closeProjectTab(i); };
+      tab.appendChild(close);
+    }
+    tab.onclick=()=>switchProject(i);
+    wrap.appendChild(tab);
+  });
+}
+document.getElementById('projName').addEventListener('input',()=>{ renderProjectTabs(); });
+
+/* ---------- autosave (localStorage; persists every open project tab) ---------- */
+let autosaveTimer=null;
+function scheduleAutosave(){
+  clearTimeout(autosaveTimer);
+  autosaveTimer=setTimeout(()=>{
+    try{
+      projects[activeProjectIdx]=captureActiveProjectSnapshot();
+      const payload={
+        version:3, activeIndex:activeProjectIdx,
+        projects:projects.map(p=>({name:p.name,snapshot:p.snapshot,zoom:p.zoom,anchor:p.anchor})),
+      };
+      localStorage.setItem('ngpc_tile_editor_autosave', JSON.stringify(payload));
+      const el=document.getElementById('autosaveHint');
+      el.textContent='autosaved '+new Date().toLocaleTimeString();
+    }catch(e){}
+  },400);
+}
+function tryRestoreAutosave(){
+  try{
+    const raw=localStorage.getItem('ngpc_tile_editor_autosave');
+    if(!raw)return false;
+    const obj=JSON.parse(raw);
+    if(obj && obj.version===3 && Array.isArray(obj.projects) && obj.projects.length){
+      projects=obj.projects.map(p=>({name:p.name||'my_tiles',snapshot:p.snapshot,zoom:p.zoom||18,anchor:p.anchor||'tl',undoStack:[],redoStack:[]}));
+      activeProjectIdx=clamp(obj.activeIndex||0,0,projects.length-1);
+    } else {
+      let legacy=obj;
+      if(!legacy.version || legacy.version<2) legacy=migrateLegacy(legacy);
+      projects=[{name:legacy.name||'my_tiles',snapshot:legacy,zoom:18,anchor:'tl',undoStack:[],redoStack:[]}];
+      activeProjectIdx=0;
+    }
+    return true;
+  }catch(e){ return false; }
+}
+
+/* ---------- init ---------- */
+function init(){
+  const restored=tryRestoreAutosave();
+  if(!projects.length){
+    projects=[{name:'my_tiles', snapshot:serializeProject(), zoom:18, anchor:'tl', undoStack:[], redoStack:[]}];
+    activeProjectIdx=0;
+  } else {
+    applyProjectData(projects[activeProjectIdx].snapshot);
+    zoom=projects[activeProjectIdx].zoom||18;
+    currentAnchor=projects[activeProjectIdx].anchor||'tl';
+  }
+  syncGridInputs();
+  renderAnchorGrid();
+  renderAllPaletteUI();
+  renderProjectTabs();
+  setupHintToggle();
+  setupLightModeToggle();
+  setupCollapsiblePanels();
+  setupPanelReordering();
+  updateAppGrid();
+  updateSidebarToggleLabels();
+  document.getElementById('zoomRange').value=zoom;
+  document.getElementById('zoomLabel').textContent=zoom+' px/pixel';
+  render();
+  setTool('pencil');
+  if(restored) document.getElementById('autosaveHint').textContent='restored previous session';
+}
+init();
+})();
+</script>
+</body>
+</html>
