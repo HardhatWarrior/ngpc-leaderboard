@@ -172,7 +172,7 @@
       <div id="username-msg"></div>
     </section>
 
-    <section class="panel">
+    <section class="panel" style="margin-top:20px">
       <h2>Avatar</h2>
       <p class="hint">A 32&times;32 icon, same RGB444 color model as the NGPC Tile Editor (4096 colors) &mdash; every pixel picks independently, no shared per-tile palette limit.</p>
       <div id="tool-row">
@@ -301,8 +301,11 @@
     if(!user) return;
     subStatus.textContent = 'Loading…';
     try{
-      const snap = await A.db.collection('scores').where('uid','==',user.uid).orderBy('submittedAt','desc').get();
-      allSubs = snap.docs;
+      // No .orderBy() here on purpose -- pairing it with the .where('uid',...) filter needs a
+      // composite index Firestore won't build automatically, so this sorts client-side instead
+      // (a signed-in user's own score count is small enough that this is cheap either way).
+      const snap = await A.db.collection('scores').where('uid','==',user.uid).get();
+      allSubs = snap.docs.slice().sort((a,b)=>(b.data().submittedAt||0)-(a.data().submittedAt||0));
       subStatus.textContent = '';
       subPage = 0;
       renderSubPage();

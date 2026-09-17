@@ -188,8 +188,10 @@
 
     subStatus.textContent = 'Loading…';
     try{
-      const snap = await A.db.collection('scores').where('uid','==',uid).orderBy('submittedAt','desc').get();
-      allSubs = snap.docs;
+      // No .orderBy() here on purpose -- pairing it with the .where('uid',...) filter needs a
+      // composite index Firestore won't build automatically, so this sorts client-side instead.
+      const snap = await A.db.collection('scores').where('uid','==',uid).get();
+      allSubs = snap.docs.slice().sort((a,b)=>(b.data().submittedAt||0)-(a.data().submittedAt||0));
       subStatus.textContent = '';
       renderSubPage();
     }catch(e){
