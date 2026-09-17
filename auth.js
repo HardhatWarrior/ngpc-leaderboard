@@ -137,10 +137,32 @@ window.NGPC_AUTH = (function(){
   const AVATAR_SIZE = 16;
   const AVATAR_CELLS = AVATAR_SIZE * AVATAR_SIZE;
 
+  // -1 is a sentinel for "transparent" -- outside the 0..4095 range a real packed RGB444 word
+  // can ever take, so it can't collide with any actual color. Mirrors the tile editor's own
+  // index-0-is-transparent convention (see its "Preview index 0 as transparent" toggle), just
+  // via a dedicated value instead of a reserved palette slot, since this editor has no palette.
+  const TRANSPARENT = -1;
+  function isTransparent(word){ return word === TRANSPARENT; }
   function packColor(r,g,b){ return (r&0xF) | ((g&0xF)<<4) | ((b&0xF)<<8); }
   function unpackColor(word){ return { r: word&0xF, g: (word>>4)&0xF, b: (word>>8)&0xF }; }
   // Same RGB444->CSS scaling the tile editor uses (17 = 255/15, exact even steps 0..255).
   function css255FromWord(word){ const c = unpackColor(word); return 'rgb('+(c.r*17)+','+(c.g*17)+','+(c.b*17)+')'; }
+
+  // Draws one avatar cell -- a flat color, or a checkerboard for a transparent one (same idea as
+  // the tile editor's own transparency preview, just always on here rather than a toggle).
+  function drawAvatarCell(ctx, word, x, y, cellPx){
+    if(isTransparent(word)){
+      const half = cellPx/2;
+      ctx.fillStyle = '#2a2f42';
+      ctx.fillRect(x, y, cellPx, cellPx);
+      ctx.fillStyle = '#454b63';
+      ctx.fillRect(x, y, half, half);
+      ctx.fillRect(x+half, y+half, half, half);
+    } else {
+      ctx.fillStyle = css255FromWord(word);
+      ctx.fillRect(x, y, cellPx, cellPx);
+    }
+  }
 
   async function updateAvatar(packedWords){
     const user = auth.currentUser;
@@ -167,8 +189,7 @@ window.NGPC_AUTH = (function(){
     }
     for(let y=0;y<size;y++){
       for(let x=0;x<size;x++){
-        ctx.fillStyle = css255FromWord(packedWords[y*size+x]);
-        ctx.fillRect(x*cellPx, y*cellPx, cellPx, cellPx);
+        drawAvatarCell(ctx, packedWords[y*size+x], x*cellPx, y*cellPx, cellPx);
       }
     }
   }
@@ -389,7 +410,8 @@ window.NGPC_AUTH = (function(){
     db, auth,
     signUp, signIn, signOut: signOutNow, onAuthChange, refreshProfile,
     updateUsername, updateRecoveryEmail, updateAvatar,
-    packColor, unpackColor, css255FromWord, renderAvatarToCanvas,
+    packColor, unpackColor, css255FromWord, renderAvatarToCanvas, drawAvatarCell,
+    TRANSPARENT, isTransparent,
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,
     friendlyAuthError, escapeHtml,
     get currentUser(){ return currentUser; }

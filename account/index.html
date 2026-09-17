@@ -49,6 +49,7 @@
     background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px;
     display:flex; flex-direction:column; gap:4px;
   }
+  .panel[hidden]{ display:none; }
   .panel h2{
     margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2);
   }
@@ -98,6 +99,22 @@
     width:20px; height:20px; border-radius:4px; border:1px solid var(--border); cursor:pointer; padding:0;
   }
 
+  #tool-row{ display:flex; gap:5px; flex-wrap:wrap; }
+  .tool-btn{
+    background:var(--navy); border:1px solid var(--border); color:var(--dim);
+    border-radius:6px; padding:7px 9px; font-size:15px; line-height:1; cursor:pointer; width:auto;
+  }
+  .tool-btn.active{ border-color:var(--accent2); color:var(--cream); background:var(--panel2); }
+  .chk{ display:flex; align-items:center; gap:6px; font-size:11.5px; color:var(--dim); cursor:pointer; margin:0; }
+  .chk input{ width:auto; margin:0; }
+
+  #import-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:1000; }
+  #import-overlay[hidden]{ display:none; }
+  #import-modal{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:20px; max-width:420px; width:100%; }
+  #import-preview-wrap{ overflow:auto; max-width:100%; max-height:50vh; border:1px solid var(--border); border-radius:6px; margin:12px 0; }
+  #import-preview{ position:relative; image-rendering:pixelated; display:block; }
+  #import-crop{ position:absolute; border:2px solid var(--accent); box-shadow:0 0 0 999px rgba(0,0,0,.45); cursor:move; }
+
   #signed-out-msg{ text-align:center; color:var(--dim); font-size:13px; }
 
   footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
@@ -114,7 +131,7 @@
   <div id="signed-out-msg" hidden>Sign in from the top-right of any page to manage your account.</div>
 
   <div id="account-content" hidden>
-    <section class="panel">
+    <section class="panel" hidden>
       <h2>Username</h2>
       <div class="current-value">Currently <b id="username-current">&mdash;</b></div>
       <label>New username<input type="text" id="username-input" maxlength="16" autocomplete="username"></label>
@@ -122,6 +139,41 @@
         <button class="btn-primary" id="username-save">Save username</button>
       </div>
       <div id="username-msg"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Avatar</h2>
+      <p class="hint">A 16&times;16 icon, same RGB444 color model as the NGPC Tile Editor (4096 colors) &mdash; every pixel picks independently, no shared per-tile palette limit.</p>
+      <div id="tool-row">
+        <button type="button" class="tool-btn active" id="tool-pencil" data-tool="pencil" title="Pencil (B)">&#9998;</button>
+        <button type="button" class="tool-btn" id="tool-eraser" data-tool="eraser" title="Eraser (transparent) (E)">&#9633;</button>
+        <button type="button" class="tool-btn" id="tool-fill" data-tool="fill" title="Flood fill (F)">&#129696;</button>
+        <button type="button" class="tool-btn" id="tool-eyedrop" data-tool="eyedrop" title="Eyedropper (I)">&#128167;</button>
+        <button type="button" class="tool-btn" id="tool-line" data-tool="line" title="Line (L)">&#9585;</button>
+        <button type="button" class="tool-btn" id="tool-rect" data-tool="rect" title="Rectangle (R)">&#9633;</button>
+        <button type="button" class="tool-btn" id="tool-ellipse" data-tool="ellipse" title="Ellipse (O)">&#9711;</button>
+        <label class="chk" style="margin-left:6px"><input type="checkbox" id="chk-filled">Filled</label>
+        <label class="chk"><input type="checkbox" id="chk-grid" checked>Grid</label>
+      </div>
+      <div id="avatar-layout" style="margin-top:12px">
+        <canvas id="avatar-canvas" width="320" height="320"></canvas>
+        <div id="avatar-controls">
+          <div class="row" style="align-items:center">
+            <div id="current-swatch"></div>
+            <span id="current-hex" class="tnum">0x000</span>
+          </div>
+          <div class="slider-row"><span>R</span><input type="range" id="ch-r" min="0" max="15" value="0"><span class="v" id="ch-r-v">0</span></div>
+          <div class="slider-row"><span>G</span><input type="range" id="ch-g" min="0" max="15" value="0"><span class="v" id="ch-g-v">0</span></div>
+          <div class="slider-row"><span>B</span><input type="range" id="ch-b" min="0" max="15" value="0"><span class="v" id="ch-b-v">0</span></div>
+          <div id="recent-swatches"></div>
+          <div class="row">
+            <button class="btn-secondary" id="avatar-clear">Clear</button>
+            <button class="btn-secondary" id="avatar-import">Import from Tile Editor&hellip;</button>
+            <button class="btn-primary" id="avatar-save">Save avatar</button>
+          </div>
+          <div id="avatar-msg"></div>
+        </div>
+      </div>
     </section>
 
     <section class="panel" style="margin-top:20px">
@@ -135,32 +187,27 @@
       </div>
       <div id="email-msg"></div>
     </section>
-
-    <section class="panel" style="margin-top:20px">
-      <h2>Avatar</h2>
-      <p class="hint">A 16&times;16 icon, same RGB444 color model as the NGPC Tile Editor (4096 colors) &mdash; every pixel picks independently, no shared per-tile palette limit.</p>
-      <div id="avatar-layout">
-        <canvas id="avatar-canvas" width="320" height="320"></canvas>
-        <div id="avatar-controls">
-          <div class="row" style="align-items:center">
-            <div id="current-swatch"></div>
-            <span id="current-hex" class="tnum">0x000</span>
-          </div>
-          <div class="slider-row"><span>R</span><input type="range" id="ch-r" min="0" max="15" value="0"><span class="v" id="ch-r-v">0</span></div>
-          <div class="slider-row"><span>G</span><input type="range" id="ch-g" min="0" max="15" value="0"><span class="v" id="ch-g-v">0</span></div>
-          <div class="slider-row"><span>B</span><input type="range" id="ch-b" min="0" max="15" value="0"><span class="v" id="ch-b-v">0</span></div>
-          <div id="recent-swatches"></div>
-          <div class="row">
-            <button class="btn-secondary" id="avatar-clear">Clear</button>
-            <button class="btn-primary" id="avatar-save">Save avatar</button>
-          </div>
-          <div id="avatar-msg"></div>
-        </div>
-      </div>
-    </section>
   </div>
 
   <footer>hardhatwarrior &middot; ngpc-dev.com</footer>
+</div>
+
+<div id="import-overlay" hidden>
+  <div id="import-modal">
+    <h2 style="margin:0 0 4px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent2)">Import from Tile Editor</h2>
+    <p class="hint">Load a <code>.ngptile.json</code> project exported from the NGPC Tile Editor, then drag the 16&times;16 crop box over the region you want. Index-0 pixels (a tile's transparent slot) come in transparent here too.</p>
+    <input type="file" id="import-file" accept=".json,.ngptile.json">
+    <div id="import-preview-wrap" hidden>
+      <div id="import-preview">
+        <div id="import-crop"></div>
+      </div>
+    </div>
+    <div id="import-msg"></div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn-secondary" id="import-cancel">Cancel</button>
+      <button class="btn-primary" id="import-use" disabled>Use this region</button>
+    </div>
+  </div>
 </div>
 
 <script src="/auth.js"></script>
@@ -222,16 +269,48 @@
   const SIZE = A.AVATAR_SIZE;
   const canvas = el('avatar-canvas');
   const cellPx = canvas.width / SIZE;
-  let grid = new Array(A.AVATAR_CELLS).fill(A.packColor(0,0,0));
+  // Blank/new avatar starts fully transparent, not solid black -- paint only where you want
+  // opaque pixels, same mental model as the tile editor's own index-0-transparent tiles.
+  let grid = new Array(A.AVATAR_CELLS).fill(A.TRANSPARENT);
   let current = {r:0,g:0,b:0};
   let recent = [];
+  let currentTool = 'pencil';
+  let previewPoints = null; // tentative shape points while dragging line/rect/ellipse, not yet committed
 
-  // Same renderer auth.js uses for the account-bar chip -- one source of truth for turning a
-  // packed grid into pixels, so the editor and every other avatar display always agree.
-  function drawGrid(){ A.renderAvatarToCanvas(canvas, grid, cellPx); }
+  function render(){
+    A.renderAvatarToCanvas(canvas, grid, cellPx);
+    const ctx = canvas.getContext('2d');
+    if(previewPoints){
+      const word = currentTool==='eraser' ? A.TRANSPARENT : currentWord();
+      previewPoints.forEach(p=>{
+        if(p.x<0||p.x>=SIZE||p.y<0||p.y>=SIZE) return;
+        A.drawAvatarCell(ctx, word, p.x*cellPx, p.y*cellPx, cellPx);
+      });
+    }
+    if(el('chk-grid').checked){
+      ctx.strokeStyle = 'rgba(255,255,255,.15)';
+      ctx.lineWidth = 1;
+      for(let i=0;i<=SIZE;i++){
+        const p = Math.round(i*cellPx)+0.5;
+        ctx.beginPath(); ctx.moveTo(p,0); ctx.lineTo(p,canvas.height); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(0,p); ctx.lineTo(canvas.width,p); ctx.stroke();
+      }
+    }
+  }
+  el('chk-grid').addEventListener('change', render);
+
+  function currentWord(){ return A.packColor(current.r, current.g, current.b); }
+
+  function setCurrent(c){
+    current = c;
+    el('ch-r').value = c.r; el('ch-r-v').textContent = c.r;
+    el('ch-g').value = c.g; el('ch-g-v').textContent = c.g;
+    el('ch-b').value = c.b; el('ch-b-v').textContent = c.b;
+    updateSwatchPreview();
+  }
 
   function updateSwatchPreview(){
-    const word = A.packColor(current.r, current.g, current.b);
+    const word = currentWord();
     el('current-swatch').style.background = A.css255FromWord(word);
     el('current-hex').textContent = '0x'+word.toString(16).toUpperCase().padStart(3,'0');
   }
@@ -258,13 +337,82 @@
   el('recent-swatches').addEventListener('click', (e)=>{
     const btn = e.target.closest('.recent-swatch');
     if(!btn) return;
-    const c = A.unpackColor(+btn.dataset.word);
-    current = c;
-    el('ch-r').value = c.r; el('ch-r-v').textContent = c.r;
-    el('ch-g').value = c.g; el('ch-g-v').textContent = c.g;
-    el('ch-b').value = c.b; el('ch-b-v').textContent = c.b;
-    updateSwatchPreview();
+    setCurrent(A.unpackColor(+btn.dataset.word));
   });
+
+  // ---- tools -- mirrors the NGPC Tile Editor's own set (Pencil/Fill/Eyedropper/Line/Rect/
+  // Ellipse), minus Select/Wand which need clipboard machinery this single-icon editor has no
+  // use for. Eraser is new here -- painting transparent is its own tool rather than a color,
+  // since the color sliders have no way to represent "no color". ----
+  function setTool(t){
+    currentTool = t;
+    document.querySelectorAll('.tool-btn').forEach(b=>b.classList.toggle('active', b.dataset.tool===t));
+  }
+  document.querySelectorAll('.tool-btn').forEach(b=>b.addEventListener('click', ()=>setTool(b.dataset.tool)));
+
+  // Ported directly from the tile editor's own linePoints/rectPoints/ellipsePoints/floodFill --
+  // same algorithms (Bresenham line, edge-detected ellipse via normalized-distance test, iterative
+  // stack-based flood fill), just addressing this editor's flat `grid` instead of a layer's pixels.
+  function linePoints(x0,y0,x1,y1){
+    const pts=[];
+    const dx=Math.abs(x1-x0), dy=-Math.abs(y1-y0);
+    const sx=x0<x1?1:-1, sy=y0<y1?1:-1;
+    let err=dx+dy, x=x0, y=y0;
+    while(true){
+      pts.push({x,y});
+      if(x===x1 && y===y1) break;
+      const e2=2*err;
+      if(e2>=dy){ err+=dy; x+=sx; }
+      if(e2<=dx){ err+=dx; y+=sy; }
+    }
+    return pts;
+  }
+  function rectPoints(x0,y0,x1,y1,filled){
+    const xa=Math.min(x0,x1), xb=Math.max(x0,x1), ya=Math.min(y0,y1), yb=Math.max(y0,y1);
+    const pts=[];
+    if(filled){
+      for(let y=ya;y<=yb;y++)for(let x=xa;x<=xb;x++) pts.push({x,y});
+    } else {
+      for(let x=xa;x<=xb;x++){ pts.push({x,y:ya}); pts.push({x,y:yb}); }
+      for(let y=ya;y<=yb;y++){ pts.push({x:xa,y}); pts.push({x:xb,y}); }
+    }
+    return pts;
+  }
+  function ellipsePoints(x0,y0,x1,y1,filled){
+    const xa=Math.min(x0,x1), xb=Math.max(x0,x1), ya=Math.min(y0,y1), yb=Math.max(y0,y1);
+    const w=xb-xa+1, h=yb-ya+1;
+    const cx=xa+(w-1)/2, cy=ya+(h-1)/2;
+    const rx=w/2, ry=h/2;
+    const pts=[];
+    if(rx<=0||ry<=0){ pts.push({x:xa,y:ya}); return pts; }
+    const inside=(x,y)=>{ const nx=(x-cx)/rx, ny=(y-cy)/ry; return nx*nx+ny*ny<=1; };
+    for(let y=ya;y<=yb;y++){
+      for(let x=xa;x<=xb;x++){
+        if(!inside(x,y)) continue;
+        if(filled){ pts.push({x,y}); continue; }
+        const edge = !inside(x+1,y) || !inside(x-1,y) || !inside(x,y+1) || !inside(x,y-1);
+        if(edge) pts.push({x,y});
+      }
+    }
+    return pts;
+  }
+  function floodFill(x0,y0,target,repl){
+    if(target===repl) return;
+    const stack=[[x0,y0]];
+    while(stack.length){
+      const [x,y]=stack.pop();
+      if(x<0||y<0||x>=SIZE||y>=SIZE) continue;
+      if(grid[y*SIZE+x]!==target) continue;
+      grid[y*SIZE+x]=repl;
+      stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+    }
+  }
+  function shapePoints(a,b){
+    const filled = el('chk-filled').checked;
+    if(currentTool==='line') return linePoints(a.x,a.y,b.x,b.y);
+    if(currentTool==='rect') return rectPoints(a.x,a.y,b.x,b.y,filled);
+    return ellipsePoints(a.x,a.y,b.x,b.y,filled);
+  }
 
   function cellFromEvent(e){
     const rect = canvas.getBoundingClientRect();
@@ -274,28 +422,65 @@
     return {x,y};
   }
   let painting = false;
-  function paintAt(e){
+  let shapeStart = null;
+
+  canvas.addEventListener('pointerdown', (e)=>{
     const cell = cellFromEvent(e);
     if(!cell) return;
-    const word = A.packColor(current.r, current.g, current.b);
-    grid[cell.y*SIZE+cell.x] = word;
-    drawGrid();
-  }
-  canvas.addEventListener('pointerdown', (e)=>{
-    painting = true;
     canvas.setPointerCapture(e.pointerId);
-    paintAt(e);
+    if(currentTool==='pencil' || currentTool==='eraser'){
+      painting = true;
+      grid[cell.y*SIZE+cell.x] = currentTool==='eraser' ? A.TRANSPARENT : currentWord();
+      render();
+    } else if(currentTool==='fill'){
+      floodFill(cell.x, cell.y, grid[cell.y*SIZE+cell.x], currentWord());
+      render();
+    } else if(currentTool==='eyedrop'){
+      const word = grid[cell.y*SIZE+cell.x];
+      if(A.isTransparent(word)) setTool('eraser');
+      else { setCurrent(A.unpackColor(word)); setTool('pencil'); }
+    } else {
+      shapeStart = cell;
+      previewPoints = [cell];
+      render();
+    }
   });
-  canvas.addEventListener('pointermove', (e)=>{ if(painting) paintAt(e); });
+  canvas.addEventListener('pointermove', (e)=>{
+    const cell = cellFromEvent(e);
+    if(!cell) return;
+    if(painting && (currentTool==='pencil'||currentTool==='eraser')){
+      grid[cell.y*SIZE+cell.x] = currentTool==='eraser' ? A.TRANSPARENT : currentWord();
+      render();
+    } else if(shapeStart){
+      previewPoints = shapePoints(shapeStart, cell);
+      render();
+    }
+  });
+  function commitShape(e){
+    if(!shapeStart) return;
+    const cell = cellFromEvent(e) || shapeStart;
+    const pts = shapePoints(shapeStart, cell);
+    const word = currentWord();
+    pts.forEach(p=>{ if(p.x>=0&&p.x<SIZE&&p.y>=0&&p.y<SIZE) grid[p.y*SIZE+p.x]=word; });
+    shapeStart = null;
+    previewPoints = null;
+    pushRecent(word);
+    render();
+  }
   canvas.addEventListener('pointerup', (e)=>{
-    painting = false;
-    pushRecent(A.packColor(current.r, current.g, current.b));
+    if(painting){
+      painting = false;
+      if(currentTool==='pencil') pushRecent(currentWord());
+    }
+    commitShape(e);
   });
-  canvas.addEventListener('pointercancel', ()=>{ painting = false; });
+  canvas.addEventListener('pointercancel', ()=>{
+    painting = false; shapeStart = null; previewPoints = null; render();
+  });
 
   el('avatar-clear').addEventListener('click', ()=>{
-    grid = new Array(A.AVATAR_CELLS).fill(A.packColor(0,0,0));
-    drawGrid();
+    grid = new Array(A.AVATAR_CELLS).fill(A.TRANSPARENT);
+    render();
   });
 
   const avatarMsg = el('avatar-msg');
@@ -314,6 +499,140 @@
     }
   });
 
+  // ---- import from a Tile Editor project (.ngptile.json) ----
+  // Flattens every visible layer back-to-front (later layer paints over earlier, same order the
+  // tile editor's own PNG export uses), resolving each tile's palette override same as the tile
+  // editor's resolvedPalette(), and treating palette index 0 as transparent -- the same rule real
+  // NGPC tile/sprite hardware uses, so this lines up with this editor's own transparency model
+  // with no extra translation step.
+  function migrateLegacyProject(obj){
+    return {
+      version:2, gridW:obj.gridW, gridH:obj.gridH, paletteBank:obj.paletteBank,
+      layers:[{ visible:true, defaultPalette:obj.activePalette||0, pixels:obj.pixels,
+        tilePalette:new Array((obj.gridW||1)*(obj.gridH||1)).fill(-1) }],
+    };
+  }
+  function flattenProject(obj){
+    if(!obj.version || obj.version<2) obj = migrateLegacyProject(obj);
+    const gridW = obj.gridW, gridH = obj.gridH;
+    const w = gridW*8, h = gridH*8;
+    const out = new Array(w*h).fill(A.TRANSPARENT);
+    const paletteBank = obj.paletteBank;
+    (obj.layers||[]).forEach(layer=>{
+      if(layer.visible===false) return;
+      for(let y=0;y<h;y++){
+        const ty = y>>3;
+        for(let x=0;x<w;x++){
+          const v = layer.pixels[y*w+x];
+          if(!v) continue; // 0 (or missing) = transparent
+          const tx = x>>3;
+          const ov = layer.tilePalette ? layer.tilePalette[ty*gridW+tx] : -1;
+          const palIdx = (ov!=null && ov>=0) ? ov : layer.defaultPalette;
+          const pal = paletteBank[palIdx] || paletteBank[0];
+          const c = pal && pal.colors[v];
+          if(c) out[y*w+x] = A.packColor(c.r, c.g, c.b);
+        }
+      }
+    });
+    return {w, h, pixels: out};
+  }
+
+  let importFlat = null;
+  const PREVIEW_SCALE = 14;
+  let cropX = 0, cropY = 0, croppingDrag = false, cropDragOffset = null;
+
+  function updateCropBox(){
+    const box = el('import-crop');
+    box.style.left = (cropX*PREVIEW_SCALE)+'px';
+    box.style.top = (cropY*PREVIEW_SCALE)+'px';
+    box.style.width = (SIZE*PREVIEW_SCALE)+'px';
+    box.style.height = (SIZE*PREVIEW_SCALE)+'px';
+  }
+  function renderImportPreview(){
+    el('import-preview-wrap').hidden = false;
+    const previewEl = el('import-preview');
+    previewEl.querySelectorAll('canvas').forEach(n=>n.remove());
+    const c = document.createElement('canvas');
+    c.width = importFlat.w*PREVIEW_SCALE;
+    c.height = importFlat.h*PREVIEW_SCALE;
+    const ctx = c.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    for(let y=0;y<importFlat.h;y++){
+      for(let x=0;x<importFlat.w;x++){
+        A.drawAvatarCell(ctx, importFlat.pixels[y*importFlat.w+x], x*PREVIEW_SCALE, y*PREVIEW_SCALE, PREVIEW_SCALE);
+      }
+    }
+    previewEl.insertBefore(c, el('import-crop'));
+    previewEl.style.width = c.width+'px';
+    previewEl.style.height = c.height+'px';
+    cropX = 0; cropY = 0;
+    updateCropBox();
+    el('import-use').disabled = false;
+  }
+
+  el('import-crop').addEventListener('pointerdown', (e)=>{
+    croppingDrag = true;
+    el('import-crop').setPointerCapture(e.pointerId);
+    const rect = el('import-preview').getBoundingClientRect();
+    cropDragOffset = { x: e.clientX-rect.left-cropX*PREVIEW_SCALE, y: e.clientY-rect.top-cropY*PREVIEW_SCALE };
+  });
+  el('import-crop').addEventListener('pointermove', (e)=>{
+    if(!croppingDrag) return;
+    const rect = el('import-preview').getBoundingClientRect();
+    const nx = Math.round((e.clientX-rect.left-cropDragOffset.x)/PREVIEW_SCALE);
+    const ny = Math.round((e.clientY-rect.top-cropDragOffset.y)/PREVIEW_SCALE);
+    const maxX = Math.max(0, importFlat.w-SIZE), maxY = Math.max(0, importFlat.h-SIZE);
+    cropX = Math.min(Math.max(nx,0), maxX);
+    cropY = Math.min(Math.max(ny,0), maxY);
+    updateCropBox();
+  });
+  el('import-crop').addEventListener('pointerup', ()=>{ croppingDrag=false; });
+  el('import-crop').addEventListener('pointercancel', ()=>{ croppingDrag=false; });
+
+  el('import-file').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    if(!file) return;
+    const importMsg = el('import-msg');
+    importMsg.innerHTML = '';
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      try{
+        importFlat = flattenProject(JSON.parse(reader.result));
+        renderImportPreview();
+      }catch(err){
+        importMsg.innerHTML = '<div class="msg err">Couldn’t read that file — make sure it’s a Tile Editor project export.</div>';
+      }
+    };
+    reader.onerror = ()=>{ importMsg.innerHTML = '<div class="msg err">Couldn’t read that file.</div>'; };
+    reader.readAsText(file);
+  });
+
+  function closeImport(){
+    el('import-overlay').hidden = true;
+    el('import-file').value = '';
+    el('import-preview-wrap').hidden = true;
+    el('import-use').disabled = true;
+    el('import-msg').innerHTML = '';
+    importFlat = null;
+  }
+  el('avatar-import').addEventListener('click', ()=>{ el('import-overlay').hidden = false; });
+  el('import-cancel').addEventListener('click', closeImport);
+  el('import-overlay').addEventListener('click', (e)=>{ if(e.target===el('import-overlay')) closeImport(); });
+  el('import-use').addEventListener('click', ()=>{
+    if(!importFlat) return;
+    const newGrid = new Array(A.AVATAR_CELLS).fill(A.TRANSPARENT);
+    for(let y=0;y<SIZE;y++){
+      for(let x=0;x<SIZE;x++){
+        const sx=cropX+x, sy=cropY+y;
+        if(sx<0||sy<0||sx>=importFlat.w||sy>=importFlat.h) continue;
+        newGrid[y*SIZE+x] = importFlat.pixels[sy*importFlat.w+sx];
+      }
+    }
+    grid = newGrid;
+    render();
+    closeImport();
+  });
+
   function refreshFromProfile(){
     const user = A.currentUser;
     if(!user) return;
@@ -322,7 +641,7 @@
     emailInput.value = user.recoveryEmail || '';
     if(Array.isArray(user.avatar) && user.avatar.length === A.AVATAR_CELLS){
       grid = user.avatar.slice();
-      drawGrid();
+      render();
     }
   }
 
@@ -338,7 +657,7 @@
   });
 
   updateSwatchPreview();
-  drawGrid();
+  render();
 })();
 </script>
 </body>
