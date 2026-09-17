@@ -11,6 +11,7 @@
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <style>
   :root{
     --navy:#10162a;
@@ -204,6 +205,7 @@
   <footer>hardhatwarrior &middot; ngpc-dev.com</footer>
 </div>
 
+<script src="/auth.js"></script>
 <script>
 (function(){
   "use strict";
@@ -219,21 +221,10 @@
   const MAX_LINES = Math.pow(10, LINES_DIGITS) - 1;
   const MAX_LEVEL = Math.pow(10, LEVEL_DIGITS) - 1;
 
-  // Public client config -- safe to embed (Firebase secures data via Firestore rules, not by
-  // hiding this), same as it ships in every Firebase web app.
-  const firebaseConfig = {
-    apiKey: "AIzaSyDdywSkX8eagOhxtOJulsL9P8KbUGDtqqM",
-    authDomain: "ngpc-leaderboard.firebaseapp.com",
-    projectId: "ngpc-leaderboard",
-    storageBucket: "ngpc-leaderboard.firebasestorage.app",
-    messagingSenderId: "743782972200",
-    appId: "1:743782972200:web:36b586c7b3b73affb06e1d"
-  };
-  let db = null;
-  if(window.firebase){
-    firebase.initializeApp(firebaseConfig);
-    db = firebase.firestore();
-  }
+  // Firebase init + auth (sign-in state, username lookup) is shared across every page -- see
+  // auth.js, loaded just before this script tag. NGPC_AUTH is null if firebase-app-compat.js
+  // itself failed to load, same failure this page already had to handle before auth.js existed.
+  const db = window.NGPC_AUTH ? NGPC_AUTH.db : null;
 
   const el = (id)=>document.getElementById(id);
   const boardEl = el('board');
@@ -317,7 +308,7 @@
     boardEl.innerHTML = docs.map((d,i)=>{
       const data = d.data();
       const rank = i+1;
-      const meta = [fmtWhen(data.submittedAt), data.level!=null?('Lv '+data.level):null, data.lines!=null?(data.lines+' lines'):null]
+      const meta = [fmtWhen(data.submittedAt), data.level!=null?('Lv '+data.level):null, data.lines!=null?(data.lines+' lines'):null, data.username?('@'+escapeHtml(data.username)):null]
         .filter(Boolean).join(' · ');
       return '<div class="row'+(rank===1?' top1':'')+'">'+
         '<div class="rank">'+(rank===1?'&#9733;':('#'+rank))+'</div>'+
@@ -601,7 +592,7 @@
     const btn = el('btn-confirm');
     btn.disabled = true;
     confirmMsg.innerHTML = '';
-    const res = await writeScore({
+    const scoreDoc = {
       game: QR_GAME_CODE,
       initials: pending.initials,
       score: pending.score,
@@ -609,7 +600,15 @@
       level: pending.level,
       source: 'qr',
       submittedAt: Date.now(),
-    });
+    };
+    // Attach who submitted this only if signed in -- anonymous QR submission (no account at all)
+    // keeps working exactly as before; username is purely additive.
+    const authedUser = window.NGPC_AUTH && NGPC_AUTH.currentUser;
+    if(authedUser && authedUser.username){
+      scoreDoc.uid = authedUser.uid;
+      scoreDoc.username = authedUser.username;
+    }
+    const res = await writeScore(scoreDoc);
     btn.disabled = false;
     if(res.ok){
       // Straight to the live board, not a "submitted!" interstitial requiring another click --

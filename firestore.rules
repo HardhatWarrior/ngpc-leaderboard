@@ -7,24 +7,71 @@ rules_version = '2';
 //
 // Each game gets its own isXScore() validator, keyed off the `game` field,
 // OR'd together in the one `allow create`. This is deliberate: a flat single
-// field-list (the original Phase-1-only version) fails CLOSED on any field
-// shape it wasn't written for, so a second game with a different schema
-// would have every write silently rejected rather than just loosely
-// accepted. Per-game functions mean adding a game is additive -- one new
-// function + one new `||` clause -- and no game's data can satisfy another
-// game's validator (game code is checked inside each one), so nothing can
-// spoof a different game's schema.
+// field-list fails CLOSED on any field shape it wasn't written for, so a
+// second game with a different schema would have every write silently
+// rejected rather than just loosely accepted. Per-game functions mean
+// adding a game is additive -- one new function + one new `||` clause --
+// and no game's data can satisfy another game's validator (game code is
+// checked inside each one), so nothing can spoof a different game's schema.
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // ---- username/password auth (see auth.js) ----
+    //
+    // usernames/{usernameLower} exists purely as a uniqueness reservation
+    // (its content is just {uid}) -- allow create: if true never overlaps
+    // with a duplicate claim, because a doc that already exists is
+    // evaluated as an UPDATE, not a create, and update is always denied
+    // below. That denial is the entire uniqueness guarantee; auth.js's
+    // batch write relies on it (no read-then-check race is possible).
+    match /usernames/{usernameLower} {
+      allow read: if true;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid
+        && usernameLower == usernameLower.lower();
+      allow update, delete: if false;
+    }
+
+    // users/{uid} is the public profile (just a username, plus an optional
+    // recovery email that's never read back by any page today -- collected
+    // for a future recovery flow, not exposed via `read` in any UI). Public
+    // read because a username is shown on the leaderboard next to a score.
+    match /users/{uid} {
+      allow read: if true;
+      allow create: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'recoveryEmail', 'createdAt'])
+        && request.resource.data.username is string
+        && request.resource.data.username.matches('^[A-Za-z0-9_]{3,16}$')
+        && request.resource.data.usernameLower == request.resource.data.username.lower()
+        && request.resource.data.createdAt is int
+        && (!('recoveryEmail' in request.resource.data) || request.resource.data.recoveryEmail is string);
+      // No profile editing yet (no UI for it) -- revisit when one exists.
+      allow update, delete: if false;
+    }
+
     match /scores/{scoreId} {
-      // Public leaderboard -- anyone can read, no auth in Phase 1.
+      // Public leaderboard -- anyone can read, signing in is never required to browse.
       allow read: if true;
 
-      // Matches the exact object lb/index.html's writeScore() builds
-      // (game, initials, score, weight, rolls, source, submittedAt).
+      // A score's uid/username pair is optional (anonymous QR submission keeps working exactly
+      // as before) but when present must be internally consistent and can't be spoofed: both
+      // fields travel together, uid must match the actual signed-in caller, and username is
+      // still shape-checked even though it's just a denormalized copy of users/{uid}.username
+      // (not re-verified against that doc -- acceptable here since it can only ever be set to
+      // request.auth's OWN uid, so at worst a stale username after a future rename, not another
+      // user's identity).
+      function hasValidIdentity(d) {
+        return (('uid' in d) == ('username' in d))
+          && (!('uid' in d) || (request.auth != null && request.auth.uid == d.uid))
+          && (!('username' in d) || (d.username is string && d.username.matches('^[A-Za-z0-9_]{3,16}$')));
+      }
+
+      // Matches the object lb/index.html's writeScore() builds (game, initials, score, weight,
+      // rolls, source, submittedAt, plus optional uid/username from auth.js).
       function isBowlingScore(d) {
         return d.game == 'BW'
-          && d.keys().hasOnly(['game', 'initials', 'score', 'weight', 'rolls', 'source', 'submittedAt'])
+          && d.keys().hasOnly(['game', 'initials', 'score', 'weight', 'rolls', 'source', 'submittedAt', 'uid', 'username'])
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.score is int && d.score >= 0 && d.score <= 300
           && d.weight is int && d.weight >= 1 && d.weight <= 99
@@ -32,16 +79,17 @@ service cloud.firestore {
           && d.source is string && d.source == 'qr'
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
-          && d.submittedAt >= request.time.toMillis() - 300000;
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
       }
 
-      // Matches tetris/index.html's writeScore() call (game, initials, score,
-      // lines, level, source, submittedAt) -- field widths mirror the
-      // on-device QR payload's own fixed-width digit fields (8-digit score,
-      // 5-digit lines, 3-digit level; see Tetris's main.c qr_build_payload()).
+      // Matches tetris/index.html's writeScore() call (game, initials, score, lines, level,
+      // source, submittedAt, plus optional uid/username) -- field widths mirror the on-device QR
+      // payload's own fixed-width digit fields (8-digit score, 5-digit lines, 3-digit level; see
+      // Tetris's main.c qr_build_payload()).
       function isTetrisScore(d) {
         return d.game == 'TT'
-          && d.keys().hasOnly(['game', 'initials', 'score', 'lines', 'level', 'source', 'submittedAt'])
+          && d.keys().hasOnly(['game', 'initials', 'score', 'lines', 'level', 'source', 'submittedAt', 'uid', 'username'])
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.score is int && d.score >= 0 && d.score <= 99999999
           && d.lines is int && d.lines >= 0 && d.lines <= 99999
@@ -49,7 +97,8 @@ service cloud.firestore {
           && d.source is string && d.source == 'qr'
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
-          && d.submittedAt >= request.time.toMillis() - 300000;
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
       }
 
       allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data);
@@ -60,7 +109,7 @@ service cloud.firestore {
 
     // Default-deny for every other collection -- Firestore denies unmatched
     // paths by default anyway, but this makes the intent explicit as the
-    // schema grows (Phase 2 users/, Phase 3 comments/).
+    // schema grows (Phase 3 comments/, etc).
     match /{document=**} {
       allow read, write: if false;
     }

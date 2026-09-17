@@ -9,6 +9,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/inlined/index.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <style>
   :root{
     --navy:#10162a;
@@ -195,6 +198,7 @@
   <footer>NGPC homebrew hiscore boards &mdash; fed by an on-device QR code after every completed game.</footer>
 </div>
 
+<script src="/auth.js"></script>
 <script>
 (function(){
   "use strict";
