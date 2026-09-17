@@ -5,39 +5,54 @@ rules_version = '2';
 // the version-controlled source of truth, not something `firebase deploy`
 // pushes automatically. Keep it in sync by hand whenever the rules change.
 //
-// Schema validated below matches the exact object lb/index.html's
-// writeScore()/openConfirm() build (game, initials, score, weight, rolls,
-// source, submittedAt) -- see index.html's own confirm-submit handler.
+// Each game gets its own isXScore() validator, keyed off the `game` field,
+// OR'd together in the one `allow create`. This is deliberate: a flat single
+// field-list (the original Phase-1-only version) fails CLOSED on any field
+// shape it wasn't written for, so a second game with a different schema
+// would have every write silently rejected rather than just loosely
+// accepted. Per-game functions mean adding a game is additive -- one new
+// function + one new `||` clause -- and no game's data can satisfy another
+// game's validator (game code is checked inside each one), so nothing can
+// spoof a different game's schema.
 service cloud.firestore {
   match /databases/{database}/documents {
     match /scores/{scoreId} {
       // Public leaderboard -- anyone can read, no auth in Phase 1.
       allow read: if true;
 
-      // A submission must be a well-formed score for a real, supported
-      // game, written by this page's own submit flow -- not edited or
-      // deleted afterward (no edit UI exists, and moderation is Phase 3).
-      allow create: if request.resource.data.keys().hasOnly(
-                        ['game', 'initials', 'score', 'weight', 'rolls', 'source', 'submittedAt']
-                      )
-                    && request.resource.data.game is string
-                    && request.resource.data.game.matches('^[A-Z]{2}$')
-                    && request.resource.data.initials is string
-                    && request.resource.data.initials.matches('^[A-Z]{3}$')
-                    && request.resource.data.score is int
-                    && request.resource.data.score >= 0
-                    && request.resource.data.score <= 300
-                    && request.resource.data.weight is int
-                    && request.resource.data.weight >= 1
-                    && request.resource.data.weight <= 99
-                    && request.resource.data.rolls is list
-                    && request.resource.data.rolls.size() >= 12
-                    && request.resource.data.rolls.size() <= 21
-                    && request.resource.data.source is string
-                    && request.resource.data.source == 'qr'
-                    && request.resource.data.submittedAt is int
-                    && request.resource.data.submittedAt <= request.time.toMillis() + 300000
-                    && request.resource.data.submittedAt >= request.time.toMillis() - 300000;
+      // Matches the exact object lb/index.html's writeScore() builds
+      // (game, initials, score, weight, rolls, source, submittedAt).
+      function isBowlingScore(d) {
+        return d.game == 'BW'
+          && d.keys().hasOnly(['game', 'initials', 'score', 'weight', 'rolls', 'source', 'submittedAt'])
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.score is int && d.score >= 0 && d.score <= 300
+          && d.weight is int && d.weight >= 1 && d.weight <= 99
+          && d.rolls is list && d.rolls.size() >= 12 && d.rolls.size() <= 21
+          && d.source is string && d.source == 'qr'
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000;
+      }
+
+      // Matches tetris/index.html's writeScore() call (game, initials, score,
+      // lines, level, source, submittedAt) -- field widths mirror the
+      // on-device QR payload's own fixed-width digit fields (8-digit score,
+      // 5-digit lines, 3-digit level; see Tetris's main.c qr_build_payload()).
+      function isTetrisScore(d) {
+        return d.game == 'TT'
+          && d.keys().hasOnly(['game', 'initials', 'score', 'lines', 'level', 'source', 'submittedAt'])
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.score is int && d.score >= 0 && d.score <= 99999999
+          && d.lines is int && d.lines >= 0 && d.lines <= 99999
+          && d.level is int && d.level >= 0 && d.level <= 999
+          && d.source is string && d.source == 'qr'
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000;
+      }
+
+      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data);
 
       allow update: if false;
       allow delete: if false;
