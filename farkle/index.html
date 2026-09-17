@@ -28,6 +28,15 @@
   .wordmark .eyebrow{ font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase; }
   .wordmark h1{ margin:0; font-size:clamp(20px,4.2vw,30px); line-height:1.4; text-wrap:balance; color:var(--cream); }
   .wordmark h1 .sub{ display:block; font-size:.55em; color:var(--dim); margin-top:6px; }
+
+  /* decorative strip -- six dice, a scoring Farkle roll (three 1s + a 5) */
+  .dice-strip{ position:relative; display:grid; grid-template-columns:repeat(6,1fr); gap:6px; max-width:320px; }
+  .die{
+    aspect-ratio:1; background:var(--cream); border:1px solid var(--border); border-radius:5px;
+    display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr);
+    padding:12%; box-shadow:0 2px 0 rgba(0,0,0,.25);
+  }
+  .die .pip{ width:100%; aspect-ratio:1; border-radius:50%; background:var(--navy); justify-self:center; align-self:center; }
   main{ display:grid; grid-template-columns:1.5fr 1fr; gap:20px; align-items:start; }
   @media (max-width:720px){ main{ grid-template-columns:1fr; } }
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
@@ -84,6 +93,7 @@
       <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
       <h1>FARKLE<span class="sub">Hiscores</span></h1>
     </div>
+    <div class="dice-strip" id="dice-strip" aria-hidden="true"></div>
   </header>
 
   <main>
@@ -152,6 +162,33 @@
   const scanVideo = el('scan-video'), scanFile = el('scan-file');
 
   let db = null, pending = null, unsubscribeBoard = null;
+
+  // ---- decorative strip: six dice showing a scoring roll (three 1s + a 5, classic Farkle points) ----
+  const DIE_PIPS = {
+    1: [[1,1]],
+    2: [[0,0],[2,2]],
+    3: [[0,0],[1,1],[2,2]],
+    4: [[0,0],[0,2],[2,0],[2,2]],
+    5: [[0,0],[0,2],[1,1],[2,0],[2,2]],
+    6: [[0,0],[0,2],[1,0],[1,2],[2,0],[2,2]],
+  };
+  function buildDie(value){
+    const die = document.createElement('div');
+    die.className = 'die';
+    (DIE_PIPS[value]||[]).forEach(([r,c])=>{
+      const pip = document.createElement('span');
+      pip.className = 'pip';
+      pip.style.gridRow = String(r+1);
+      pip.style.gridColumn = String(c+1);
+      die.appendChild(pip);
+    });
+    return die;
+  }
+  (function buildDiceStrip(){
+    const strip = el('dice-strip');
+    if(!strip) return;
+    [1,1,1,5,3,4].forEach(v=>strip.appendChild(buildDie(v)));
+  })();
 
   function parseFarklePayload(text){
     if(text.length !== 20) return {error:"That code is too short — rescan with the whole code in frame."};
