@@ -189,23 +189,23 @@
       </div>
     </a>
 
-    <div class="tile disabled">
+    <a class="tile" href="https://claude.ai/artifact/GzSzqxBDGeKKbENCwfNBAT">
       <div class="tile-art">
         <img src="/assets/yahtzee-title.png" alt="Neo Yahtzee title screen" width="160" height="152">
       </div>
       <div class="tile-body">
         <div class="tile-name">Neo Yahtzee</div>
       </div>
-    </div>
+    </a>
 
-    <div class="tile disabled">
+    <a class="tile" href="https://claude.ai/artifact/1Czbw63BHVh6bsevLmwhdL">
       <div class="tile-art">
         <img src="/assets/farkle-title.png" alt="Farkle title screen" width="160" height="152">
       </div>
       <div class="tile-body">
         <div class="tile-name">Farkle</div>
       </div>
-    </div>
+    </a>
   </div>
 
   <footer>NGPC homebrew hiscore boards &mdash; fed by an on-device QR code after every completed game.</footer>
@@ -221,7 +221,7 @@
   // done HERE (rather than on a game's own page, or via a device camera app tapping the QR's own
   // URL) hands back raw decoded text with no path to read a folder name out of. Add one entry per
   // game; nothing else on this page needs to change.
-  const GAME_ROUTES = { BW: 'lb', TT: 'tetris' };
+  const GAME_ROUTES = { BW: 'lb', TT: 'tetris', YZ: 'https://claude.ai/artifact/GzSzqxBDGeKKbENCwfNBAT', FK: 'https://claude.ai/artifact/1Czbw63BHVh6bsevLmwhdL' };
 
   const el = (id)=>document.getElementById(id);
   const formMsg = el('form-msg');
@@ -245,7 +245,7 @@
 
   function routeToGame(text){
     const payload = lastPathSegment(text).toUpperCase();
-    const code = payload.slice(0,2);
+    const code = payload.slice(0,2).toUpperCase();
     const slug = GAME_ROUTES[code];
     if(!slug){
       formMsg.innerHTML = '<div class="msg err">Unrecognized game code ("'+escapeHtml(code)+'") &mdash; that leaderboard might not be set up yet.</div>';

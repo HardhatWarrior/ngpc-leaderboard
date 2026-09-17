@@ -37,8 +37,8 @@ service cloud.firestore {
     }
 
     // users/{uid} is the public profile (username, optional recovery email -- never read back by
-    // any page today, collected for a future recovery flow -- and an optional 16x16 avatar, a
-    // flat list of 256 RGB444 words packed r|g<<4|b<<8 same as the tile editor's own hexWord()).
+    // any page today, collected for a future recovery flow -- and an optional 32x32 avatar, a
+    // flat list of 1024 RGB444 words packed r|g<<4|b<<8 same as the tile editor's own hexWord()).
     // Public read because a username/avatar is shown on the leaderboard next to a score.
     match /users/{uid} {
       allow read: if true;
@@ -48,7 +48,7 @@ service cloud.firestore {
           && d.username.matches('^[A-Za-z0-9_]{3,16}$')
           && d.usernameLower == d.username.lower()
           && (!('recoveryEmail' in d) || d.recoveryEmail is string)
-          && (!('avatar' in d) || (d.avatar is list && d.avatar.size() == 256));
+          && (!('avatar' in d) || (d.avatar is list && d.avatar.size() == 1024));
       }
 
       allow create: if request.auth != null && request.auth.uid == uid
@@ -116,7 +116,54 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data);
+      // Yahtzee: game, initials, score, categoryScores (13 ints), source, submittedAt,
+      // optional uid/username.
+      function isYahtzeeScore(d) {
+        return d.game == 'YZ'
+          && d.keys().hasOnly(['game', 'initials', 'score', 'categoryScores', 'source', 'submittedAt', 'uid', 'username'])
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.score is int && d.score >= 0 && d.score <= 9999
+          && d.categoryScores is list && d.categoryScores.size() == 13
+          && d.categoryScores[0] is int && d.categoryScores[0] >= 0 && d.categoryScores[0] <= 30  // ones-sixes
+          && d.categoryScores[1] is int && d.categoryScores[1] >= 0 && d.categoryScores[1] <= 30
+          && d.categoryScores[2] is int && d.categoryScores[2] >= 0 && d.categoryScores[2] <= 30
+          && d.categoryScores[3] is int && d.categoryScores[3] >= 0 && d.categoryScores[3] <= 30
+          && d.categoryScores[4] is int && d.categoryScores[4] >= 0 && d.categoryScores[4] <= 30
+          && d.categoryScores[5] is int && d.categoryScores[5] >= 0 && d.categoryScores[5] <= 30
+          && d.categoryScores[6] is int && d.categoryScores[6] >= 0 && d.categoryScores[6] <= 30  // 3-kind through chance
+          && d.categoryScores[7] is int && d.categoryScores[7] >= 0 && d.categoryScores[7] <= 30
+          && d.categoryScores[8] is int && d.categoryScores[8] >= 0 && d.categoryScores[8] <= 25  // full house
+          && d.categoryScores[9] is int && d.categoryScores[9] >= 0 && d.categoryScores[9] <= 30  // small straight
+          && d.categoryScores[10] is int && d.categoryScores[10] >= 0 && d.categoryScores[10] <= 40  // large straight
+          && d.categoryScores[11] is int && d.categoryScores[11] >= 0 && d.categoryScores[11] <= 50  // yahtzee
+          && d.categoryScores[12] is int && d.categoryScores[12] >= 0 && d.categoryScores[12] <= 30  // chance
+          && d.source is string && d.source == 'qr'
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
+      // Farkle: game, initials, score, rounds, opened, farkles, resultChar, resultDisplay,
+      // source, submittedAt, optional uid/username.
+      function isFarkleScore(d) {
+        return d.game == 'FK'
+          && d.keys().hasOnly(['game', 'initials', 'score', 'rounds', 'opened', 'farkles', 'resultChar', 'resultDisplay', 'source', 'submittedAt', 'uid', 'username'])
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.score is int && d.score >= 0 && d.score <= 65535
+          && d.rounds is int && d.rounds >= 0 && d.rounds <= 999
+          && d.opened is int && d.opened >= 0 && d.opened <= 999
+          && d.farkles is int && d.farkles >= 0 && d.farkles <= 999
+          && d.resultChar is string && d.resultChar.matches('^[1WLD]$')
+          && d.resultDisplay is string && d.resultDisplay.matches('^(SOLO|WIN|LOSS|DRAW)$')
+          && d.source is string && d.source == 'qr'
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
+      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data);
 
       allow update: if false;
       allow delete: if false;
