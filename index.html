@@ -253,7 +253,11 @@
     }
     // A real navigation, not a fetch -- lands on that game's own page, which reads the payload
     // right back out of this same hash via its own payloadFromEntry() and opens the confirm view.
-    location.href = '/' + slug.toLowerCase() + '/#' + payload;
+    // The "?v=" cache-buster forces a fresh fetch of that page's HTML/JS instead of letting the
+    // browser reuse a copy from its local disk cache (GitHub Pages serves max-age=600) -- without
+    // it, testing multiple scans in a short window can silently replay stale code that doesn't
+    // know about the hash-payload yet, and only a manual reload (which revalidates) fixes it.
+    location.href = '/' + slug.toLowerCase() + '/?v=' + Date.now() + '#' + payload;
   }
 
   function handleScanResult(text){
