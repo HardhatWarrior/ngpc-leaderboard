@@ -337,7 +337,7 @@
       return;
     }
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
-      showFallback('Live camera isn't supported here.');
+      showFallback('Live camera is not supported here.');
       return;
     }
     try{ cameraStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false }); }
@@ -423,7 +423,7 @@
     formMsg.innerHTML = '<div class="msg ok">Reading code…</div>';
     let img;
     try{ img = await loadImage(file); }catch(e){
-      formMsg.innerHTML = '<div class="msg err">Couldn't read that photo — try again or use JPG/PNG.</div>';
+      formMsg.innerHTML = '<div class="msg err">Could not read that photo — try again or use JPG/PNG.</div>';
       return;
     }
     if(!img.width || !img.height){ formMsg.innerHTML = '<div class="msg err">That photo came back empty — try again.</div>'; return; }
