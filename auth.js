@@ -211,6 +211,11 @@ window.NGPC_AUTH = (function(){
       case 'auth/operation-not-allowed':
       case 'auth/configuration-not-found': return 'Sign-up isn’t available right now — try again later.';
       case 'auth/network-request-failed': return 'Couldn’t reach the server — check your connection and try again.';
+      // Firestore's own codes (hyphenated, distinct vocabulary from the auth/* codes above) --
+      // profile/avatar/username updates go through Firestore, not just the Auth SDK.
+      case 'permission-denied': return 'That was rejected by the site’s access rules — try again later.';
+      case 'resource-exhausted': return 'Too many requests right now — wait a moment and try again.';
+      case 'unavailable': return 'Couldn’t reach the server right now. Try again in a bit.';
       default: return 'Something went wrong — try again.';
     }
   }
