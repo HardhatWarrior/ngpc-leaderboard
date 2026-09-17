@@ -1553,6 +1553,17 @@ function resampleIndices(srcW,srcH,srcData,dstW,dstH){
   }
   return out;
 }
+// Photo-quality (bilinear) resample for a full-color reference image -- nearest-neighbor
+// (resampleIndices) is correct for indexed pixel art but would look blocky/aliased on a photo.
+function resampleRGBA(srcW,srcH,srcData,dstW,dstH){
+  const srcCanvas=document.createElement('canvas'); srcCanvas.width=srcW; srcCanvas.height=srcH;
+  srcCanvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(srcData),srcW,srcH),0,0);
+  const dstCanvas=document.createElement('canvas'); dstCanvas.width=dstW; dstCanvas.height=dstH;
+  const dctx=dstCanvas.getContext('2d');
+  dctx.imageSmoothingEnabled=true; dctx.imageSmoothingQuality='high';
+  dctx.drawImage(srcCanvas,0,0,dstW,dstH);
+  return new Uint8ClampedArray(dctx.getImageData(0,0,dstW,dstH).data);
+}
 function applyScale(newTilesW,newTilesH){
   newTilesW=clamp(newTilesW,1,MAX_GRID_TILES); newTilesH=clamp(newTilesH,1,MAX_GRID_TILES);
   pushUndo();
@@ -1576,6 +1587,7 @@ function applyScale(newTilesW,newTilesH){
     state.layers.forEach(layer=>{
       layer.pixels=resampleIndices(oldW,oldH,layer.pixels,dstW,dstH);
       layer.tilePalette=allocTilePalette(newTilesW,newTilesH); // old tile positions no longer correspond to the same art
+      if(layer.refRGBA) layer.refRGBA=resampleRGBA(oldW,oldH,layer.refRGBA,dstW,dstH);
     });
     state.gridW=newTilesW; state.gridH=newTilesH;
     syncGridInputs();

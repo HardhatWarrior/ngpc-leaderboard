@@ -188,7 +188,7 @@ label.chk{display:flex;align-items:center;gap:6px;cursor:pointer;}
     <div class="panel">
       <h2>Map Layers</h2>
       <div class="layerList" id="mapLayerList"></div>
-      <div class="hint" style="margin-top:4px">Always exactly Layer 1 and Layer 2, regardless of how many tileset layers are imported. Assign each one to SCR_1 (back) or SCR_2 (front) with its dropdown -- each cell also remembers which tileset layer its tile came from.</div>
+      <div class="hint" style="margin-top:4px">Always exactly Layer 1 and Layer 2, regardless of how many tileset layers are imported. Assign each one to SCR_1 (back) or SCR_2 (front) with its dropdown -- each cell also remembers which tileset layer its tile came from. The 3rd row, Sprite Plane, is fixed to SPR_PLANE and can't be reassigned -- click it to switch to the Sprite tool below and place preview sprites for reference.</div>
     </div>
 
     <div class="panel">
@@ -632,7 +632,7 @@ function renderAllLayerUI(){
   if(!mapState) return;
   mapState.layers.forEach((l,i)=>{
     const row=document.createElement('div');
-    row.className='layerRow'+(i===activeMapLayer?' active':'');
+    row.className='layerRow'+(i===activeMapLayer && tool!=='sprite'?' active':'');
     row.innerHTML=`<input type="checkbox" ${l.visible?'checked':''}> <span style="flex:1">${l.name}</span>`;
     row.querySelector('input').onclick=e=>{ e.stopPropagation(); l.visible=e.target.checked; render(); scheduleAutosave(); };
     const sel=document.createElement('select');
@@ -641,9 +641,24 @@ function renderAllLayerUI(){
     sel.onclick=e=>e.stopPropagation();
     sel.onchange=e=>{ setLayerScrTarget(l,e.target.value); renderAllLayerUI(); render(); scheduleAutosave(); };
     row.appendChild(sel);
-    row.onclick=()=>{ activeMapLayer=i; renderAllLayerUI(); renderBudget(); render(); };
+    row.onclick=()=>{ activeMapLayer=i; if(tool==='sprite') setTool('stamp'); renderAllLayerUI(); renderBudget(); render(); };
     wrap.appendChild(row);
   });
+  // Fixed 3rd "layer" for the sprite plane -- real hardware sprites aren't part of either scroll
+  // plane, so unlike Layer 1/2 this one can never be reassigned to SCR_1/SCR_2 (no dropdown, just
+  // a static SPR_PLANE tag). Selecting it switches to the Sprite tool rather than changing which
+  // tile layer paints, since placed sprites are a flat overlapping list, not a per-cell grid.
+  const sprRow=document.createElement('div');
+  sprRow.className='layerRow'+(tool==='sprite'?' active':'');
+  const sprVisible=document.getElementById('chkSpritesVisible').checked;
+  sprRow.innerHTML=`<input type="checkbox" ${sprVisible?'checked':''}> <span style="flex:1">Sprite Plane</span><span class="hint" style="padding:0 6px;white-space:nowrap">SPR_PLANE</span>`;
+  sprRow.querySelector('input').onclick=e=>{
+    e.stopPropagation();
+    document.getElementById('chkSpritesVisible').checked=e.target.checked;
+    render(); scheduleAutosave();
+  };
+  sprRow.onclick=()=>{ setTool('sprite'); };
+  wrap.appendChild(sprRow);
   renderBudget();
 }
 function renderBudget(){
@@ -701,7 +716,7 @@ function deleteSprite(i){
   renderSpriteList(); render(); scheduleAutosave();
 }
 document.getElementById('spritePriority').onchange=e=>{ spritePriority=e.target.value; };
-document.getElementById('chkSpritesVisible').onchange=render;
+document.getElementById('chkSpritesVisible').onchange=()=>{ renderAllLayerUI(); render(); };
 
 /* ---------- map grid size ---------- */
 function syncMapInputs(){
@@ -1080,6 +1095,7 @@ function setTool(t){
   if(t!=='stamp' && t!=='sprite' && stampHoverCell){ stampHoverCell=null; }
   ['toolStamp','toolErase','toolFill','toolEyedrop','toolSelect','toolSprite'].forEach(id=>document.getElementById(id).classList.remove('active'));
   document.getElementById('tool'+t[0].toUpperCase()+t.slice(1)).classList.add('active');
+  renderAllLayerUI();
   render();
 }
 document.getElementById('toolStamp').onclick=()=>setTool('stamp');
