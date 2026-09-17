@@ -264,10 +264,15 @@
   }
 
   function initDb(){
-    if(!firebase || !firebase.firestore){ boardStatusEl.textContent = 'Firebase failed to load.'; return; }
-    db = firebase.firestore();
-    boardStatusEl.textContent = '';
-    subscribeBoard();
+    if(!firebase){ boardStatusEl.innerHTML = '<div class="msg err">Firebase SDK failed to load</div>'; return; }
+    if(!firebase.firestore){ boardStatusEl.innerHTML = '<div class="msg err">Firestore module not available</div>'; return; }
+    try{
+      db = firebase.firestore();
+      boardStatusEl.textContent = '';
+      subscribeBoard();
+    }catch(e){
+      boardStatusEl.innerHTML = '<div class="msg err">Firestore init failed: '+escapeHtml(e.message)+'</div>';
+    }
   }
 
   async function writeScore(data){

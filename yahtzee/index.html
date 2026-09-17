@@ -266,10 +266,15 @@
   }
 
   function initDb(){
-    if(!firebase || !firebase.firestore){ boardStatusEl.textContent = 'Firebase failed to load.'; return; }
-    db = firebase.firestore();
-    boardStatusEl.textContent = '';
-    subscribeBoard();
+    if(!firebase){ boardStatusEl.innerHTML = '<div class="msg err">Firebase SDK failed to load</div>'; return; }
+    if(!firebase.firestore){ boardStatusEl.innerHTML = '<div class="msg err">Firestore module not available</div>'; return; }
+    try{
+      db = firebase.firestore();
+      boardStatusEl.textContent = '';
+      subscribeBoard();
+    }catch(e){
+      boardStatusEl.innerHTML = '<div class="msg err">Firestore init failed: '+escapeHtml(e.message)+'</div>';
+    }
   }
 
   async function writeScore(data){
@@ -327,6 +332,7 @@
 
   async function startLiveScan(){
     formMsg.innerHTML = '';
+    console.log('startLiveScan called, decoders:', {zbar: !!window.zbarWasm, barcode: !!getBarcodeDetector(), jsqr: !!window.jsQR});
     if(!window.zbarWasm && !getBarcodeDetector() && !window.jsQR){ formMsg.innerHTML = '<div class="msg err">QR scanning library failed to load.</div>'; return; }
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
       showFallback('Live camera isn't supported here.');
@@ -460,8 +466,10 @@
   el('btn-again').addEventListener('click', ()=>{ pending = null; showStage('idle'); });
 
   initDb();
+  console.log('DB initialized:', !!db);
 
   const fromEntry = payloadFromEntry();
+  console.log('Payload from entry:', fromEntry);
   if(fromEntry){
     openConfirm(fromEntry);
     history.replaceState(null, '', location.pathname);
