@@ -55,9 +55,8 @@
     display:flex; flex-direction:column; gap:2px;
   }
   #scan-panel h2{
-    margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2);
+    margin:0 0 14px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2);
   }
-  #scan-panel .hint{ margin:0 0 14px; color:var(--dim); font-size:12.5px; line-height:1.5; }
 
   button{
     font:inherit; border:none; border-radius:8px; padding:12px 16px; cursor:pointer;
@@ -127,8 +126,7 @@
 
   .tile-body{ padding:14px 16px 16px; display:flex; flex-direction:column; gap:4px; }
   .tile-name{ font-size:13.5px; font-weight:700; color:var(--cream); }
-  .tile-tag{ font-size:12px; color:var(--dim); }
-  .tile.disabled .tile-name, .tile.disabled .tile-tag{ color:var(--dim); opacity:.7; }
+  .tile.disabled .tile-name{ color:var(--dim); opacity:.7; }
 
   footer{ text-align:center; color:var(--dim); font-size:11px; }
   footer a{ color:var(--accent2); }
@@ -144,7 +142,6 @@
 
   <section id="scan-panel">
     <h2>Scan QR Code</h2>
-    <p class="hint">Works for any game &mdash; the code itself says which leaderboard it belongs on.</p>
 
     <div id="idle-view">
       <button class="btn-primary" id="btn-scan">Scan QR Code</button>
@@ -180,7 +177,6 @@
       </div>
       <div class="tile-body">
         <div class="tile-name">Neo Bowling</div>
-        <div class="tile-tag">Pseudo-3D ten-pin &mdash; VS Link 2P</div>
       </div>
     </a>
 
@@ -190,7 +186,6 @@
       </div>
       <div class="tile-body">
         <div class="tile-name">Tetris</div>
-        <div class="tile-tag">VS Link &mdash; leaderboard in testing</div>
       </div>
     </a>
   </div>
