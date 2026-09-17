@@ -132,7 +132,8 @@ window.NGPC_AUTH = (function(){
 
   // ---- injected UI: account bar (top of #shell) + sign-in/up modal (document.body) ----
   const STYLE = `
-    #acct-bar{ display:flex; justify-content:flex-end; align-items:center; gap:10px; font-size:12px; color:var(--dim); margin-bottom:14px; }
+    #acct-bar{ display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12px; color:var(--dim); margin-bottom:14px; }
+    #acct-right{ display:flex; align-items:center; gap:10px; }
     .acct-link{ background:none; border:none; color:var(--accent2); font:inherit; font-size:12px; cursor:pointer; padding:0; text-decoration:underline; width:auto; }
     #auth-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:1000; }
     #auth-overlay[hidden]{ display:none; }
@@ -233,7 +234,14 @@ window.NGPC_AUTH = (function(){
     if(!shell) return;
     const bar = document.createElement('div');
     bar.id = 'acct-bar';
-    bar.innerHTML = '<span id="acct-status">Signed out</span><button type="button" class="acct-link" id="acct-btn">Sign In / Sign Up</button>';
+    // Every page that loads this file gets the same top bar, so a "back to all games" link
+    // belongs here too rather than duplicated per game page -- just skip it on the landing page
+    // itself, where it'd point at the page you're already on.
+    const isHome = location.pathname === '/' || location.pathname === '/index.html';
+    const homeLink = isHome ? '' : '<a class="acct-link" href="/">&larr; All games</a>';
+    bar.innerHTML = '<div id="acct-left">'+homeLink+'</div>'
+      + '<div id="acct-right"><span id="acct-status">Signed out</span>'
+      + '<button type="button" class="acct-link" id="acct-btn">Sign In / Sign Up</button></div>';
     shell.insertBefore(bar, shell.firstChild);
     const statusEl = bar.querySelector('#acct-status');
     const btnEl = bar.querySelector('#acct-btn');
