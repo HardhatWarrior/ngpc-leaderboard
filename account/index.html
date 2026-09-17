@@ -54,6 +54,8 @@
     margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2);
   }
   .panel .hint{ margin:0 0 14px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+  .panel .hint a{ color:var(--accent2); }
+  .panel .hint a:hover{ text-decoration:none; }
 
   label{ display:block; font-size:11.5px; color:var(--dim); margin-bottom:12px; }
   input[type=text], input[type=email], input[type=password]{
@@ -174,7 +176,7 @@
 
     <section class="panel" style="margin-top:20px">
       <h2>Avatar</h2>
-      <p class="hint">A 32&times;32 icon, same RGB444 color model as the NGPC Tile Editor (4096 colors) &mdash; every pixel picks independently, no shared per-tile palette limit.</p>
+      <p class="hint">A 32&times;32 icon, same RGB444 color model as the <a href="/tile_editor/" target="_blank" rel="noopener">NGPC Tile Editor</a> (4096 colors) &mdash; every pixel picks independently, no shared per-tile palette limit. Prefer designing there? Open the Tile Editor in a new tab, then use &ldquo;Import from Tile Editor&rdquo; below to bring your project in.</p>
       <div id="tool-row">
         <button type="button" class="tool-btn active" id="tool-pencil" data-tool="pencil" title="Pencil (B)">&#9998;</button>
         <button type="button" class="tool-btn" id="tool-eraser" data-tool="eraser" title="Eraser (transparent) (E)">&#9633;</button>
