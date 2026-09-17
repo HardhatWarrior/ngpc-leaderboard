@@ -148,19 +148,13 @@ window.NGPC_AUTH = (function(){
   // Same RGB444->CSS scaling the tile editor uses (17 = 255/15, exact even steps 0..255).
   function css255FromWord(word){ const c = unpackColor(word); return 'rgb('+(c.r*17)+','+(c.g*17)+','+(c.b*17)+')'; }
 
-  // Draws one avatar cell at grid position (gx,gy) -- a flat color, or one of two checker shades
-  // (alternating by grid parity, not a sub-cell pattern -- see renderAvatarToCanvas's own comment
-  // on why a per-cell flat fill is what stays crisp at any scale) for a transparent one, same idea
-  // as the tile editor's own transparency preview, just always on here rather than a toggle.
+  // Draws one avatar cell at grid position (gx,gy) -- a flat color for opaque pixels.
+  // Transparent cells are left untouched, allowing the background behind the canvas to show through.
   function drawAvatarCell(ctx, word, gx, gy, cellPx){
+    if(isTransparent(word)) return;
     const x = gx*cellPx, y = gy*cellPx;
-    if(isTransparent(word)){
-      ctx.fillStyle = ((gx+gy)&1) ? '#454b63' : '#2a2f42';
-      ctx.fillRect(x, y, cellPx, cellPx);
-    } else {
-      ctx.fillStyle = css255FromWord(word);
-      ctx.fillRect(x, y, cellPx, cellPx);
-    }
+    ctx.fillStyle = css255FromWord(word);
+    ctx.fillRect(x, y, cellPx, cellPx);
   }
 
   async function updateAvatar(packedWords){
