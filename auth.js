@@ -148,16 +148,15 @@ window.NGPC_AUTH = (function(){
   // Same RGB444->CSS scaling the tile editor uses (17 = 255/15, exact even steps 0..255).
   function css255FromWord(word){ const c = unpackColor(word); return 'rgb('+(c.r*17)+','+(c.g*17)+','+(c.b*17)+')'; }
 
-  // Draws one avatar cell -- a flat color, or a checkerboard for a transparent one (same idea as
-  // the tile editor's own transparency preview, just always on here rather than a toggle).
-  function drawAvatarCell(ctx, word, x, y, cellPx){
+  // Draws one avatar cell at grid position (gx,gy) -- a flat color, or one of two checker shades
+  // (alternating by grid parity, not a sub-cell pattern -- see renderAvatarToCanvas's own comment
+  // on why a per-cell flat fill is what stays crisp at any scale) for a transparent one, same idea
+  // as the tile editor's own transparency preview, just always on here rather than a toggle.
+  function drawAvatarCell(ctx, word, gx, gy, cellPx){
+    const x = gx*cellPx, y = gy*cellPx;
     if(isTransparent(word)){
-      const half = cellPx/2;
-      ctx.fillStyle = '#2a2f42';
+      ctx.fillStyle = ((gx+gy)&1) ? '#454b63' : '#2a2f42';
       ctx.fillRect(x, y, cellPx, cellPx);
-      ctx.fillStyle = '#454b63';
-      ctx.fillRect(x, y, half, half);
-      ctx.fillRect(x+half, y+half, half, half);
     } else {
       ctx.fillStyle = css255FromWord(word);
       ctx.fillRect(x, y, cellPx, cellPx);
@@ -173,13 +172,37 @@ window.NGPC_AUTH = (function(){
     await db.collection('users').doc(user.uid).update({avatar: packedWords});
   }
 
+  // Batched avatar lookup for a leaderboard render -- one query per up-to-30 uids (Firestore's
+  // own cap on an `in` clause) rather than one read per row, and always fresh rather than
+  // denormalized onto the score doc (which would go stale the moment someone repaints their
+  // avatar after already having scores on the board). Returns {uid: packedWords}, silently
+  // omitting any uid with no profile or no avatar saved.
+  async function fetchAvatars(uids){
+    const unique = Array.from(new Set(uids)).filter(Boolean);
+    const map = {};
+    if(!unique.length) return map;
+    const chunks = [];
+    for(let i=0;i<unique.length;i+=30) chunks.push(unique.slice(i,i+30));
+    await Promise.all(chunks.map(async (chunk)=>{
+      try{
+        const snap = await db.collection('users').where(firebase.firestore.FieldPath.documentId(),'in',chunk).get();
+        snap.forEach(doc=>{
+          const d = doc.data();
+          if(Array.isArray(d.avatar) && d.avatar.length===AVATAR_CELLS) map[doc.id]=d.avatar;
+        });
+      }catch(e){ /* board still renders fine without avatars on a lookup failure */ }
+    }));
+    return map;
+  }
+
   // Draws a packed avatar (or a flat placeholder color if avatar is null/wrong length) onto a
-  // <canvas> at cellPx-per-pixel, no smoothing -- used by the account bar chip and the account
-  // page's own preview, so both always render identically off the exact same packed data.
+  // <canvas> at cellPx-per-pixel -- used by the account bar chip, the leaderboard row chip, and
+  // the account page's own preview, so all three always render identically off the exact same
+  // packed data.
   function renderAvatarToCanvas(canvas, packedWords, cellPx){
     const size = AVATAR_SIZE;
-    canvas.width = size*cellPx;
-    canvas.height = size*cellPx;
+    canvas.width = Math.round(size*cellPx);
+    canvas.height = Math.round(size*cellPx);
     const ctx = canvas.getContext('2d');
     ctx.imageSmoothingEnabled = false;
     if(!Array.isArray(packedWords) || packedWords.length !== AVATAR_CELLS){
@@ -187,11 +210,22 @@ window.NGPC_AUTH = (function(){
       ctx.fillRect(0,0,canvas.width,canvas.height);
       return;
     }
+    // Render at native 1:1 (one canvas pixel per avatar cell) first, THEN scale up via drawImage
+    // -- fillRect()'s own edges anti-alias at non-integer coordinates no matter what
+    // imageSmoothingEnabled is set to (that flag only governs drawImage's interpolation, not
+    // path/rect fills), so drawing cells directly at a fractional cellPx (e.g. the leaderboard
+    // row chip's 28/16 = 1.75px) blended adjacent colors at every cell boundary instead of
+    // staying crisp. Compositing through a native-resolution buffer sidesteps that entirely,
+    // at any cellPx, integer or not.
+    const native = document.createElement('canvas');
+    native.width = size; native.height = size;
+    const nctx = native.getContext('2d');
     for(let y=0;y<size;y++){
       for(let x=0;x<size;x++){
-        drawAvatarCell(ctx, packedWords[y*size+x], x*cellPx, y*cellPx, cellPx);
+        drawAvatarCell(nctx, packedWords[y*size+x], x, y, 1);
       }
     }
+    ctx.drawImage(native, 0, 0, size, size, 0, 0, canvas.width, canvas.height);
   }
 
   function friendlyAuthError(e){
@@ -382,7 +416,9 @@ window.NGPC_AUTH = (function(){
     onAuthChange((user)=>{
       signedIn = !!user;
       if(user){
-        statusEl.textContent = 'Hi, ' + (user.username || '(loading…)');
+        // Stored username keeps whatever case the person typed at signup -- always
+        // uppercased at display time only, everywhere a username is shown.
+        statusEl.textContent = 'Hi, ' + (user.username ? user.username.toUpperCase() : '(loading…)');
         statusEl.href = '/account/';
         btnEl.textContent = 'Sign Out';
         if(user.avatar){
@@ -414,7 +450,7 @@ window.NGPC_AUTH = (function(){
   return {
     db, auth,
     signUp, signIn, signOut: signOutNow, onAuthChange, refreshProfile,
-    updateUsername, updateRecoveryEmail, updateAvatar,
+    updateUsername, updateRecoveryEmail, updateAvatar, fetchAvatars,
     packColor, unpackColor, css255FromWord, renderAvatarToCanvas, drawAvatarCell,
     TRANSPARENT, isTransparent,
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,

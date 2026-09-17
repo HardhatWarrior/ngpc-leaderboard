@@ -284,7 +284,7 @@
       const word = currentTool==='eraser' ? A.TRANSPARENT : currentWord();
       previewPoints.forEach(p=>{
         if(p.x<0||p.x>=SIZE||p.y<0||p.y>=SIZE) return;
-        A.drawAvatarCell(ctx, word, p.x*cellPx, p.y*cellPx, cellPx);
+        A.drawAvatarCell(ctx, word, p.x, p.y, cellPx);
       });
     }
     if(el('chk-grid').checked){
@@ -559,7 +559,7 @@
     ctx.imageSmoothingEnabled = false;
     for(let y=0;y<importFlat.h;y++){
       for(let x=0;x<importFlat.w;x++){
-        A.drawAvatarCell(ctx, importFlat.pixels[y*importFlat.w+x], x*PREVIEW_SCALE, y*PREVIEW_SCALE, PREVIEW_SCALE);
+        A.drawAvatarCell(ctx, importFlat.pixels[y*importFlat.w+x], x, y, PREVIEW_SCALE);
       }
     }
     previewEl.insertBefore(c, el('import-crop'));
@@ -636,7 +636,7 @@
   function refreshFromProfile(){
     const user = A.currentUser;
     if(!user) return;
-    el('username-current').textContent = user.username || '(unknown)';
+    el('username-current').textContent = user.username ? user.username.toUpperCase() : '(unknown)';
     el('email-current').textContent = user.recoveryEmail || 'not set';
     emailInput.value = user.recoveryEmail || '';
     if(Array.isArray(user.avatar) && user.avatar.length === A.AVATAR_CELLS){
