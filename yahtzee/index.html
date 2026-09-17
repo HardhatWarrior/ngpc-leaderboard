@@ -203,6 +203,19 @@
     return {error:'Unknown game code "'+code+'".'};
   }
 
+  function lastPathSegment(text){
+    const parts = String(text||'').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length-1] : '';
+  }
+
+  function payloadFromEntry(){
+    const raw = location.hash ? location.hash.slice(1) : lastPathSegment(location.pathname);
+    const last = decodeURIComponent(lastPathSegment(raw));
+    if(last.length < 44) return null;
+    const result = parsePayload(last);
+    return result.error ? null : result;
+  }
+
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
   function renderBoard(docs){
@@ -447,6 +460,12 @@
   el('btn-again').addEventListener('click', ()=>{ pending = null; showStage('idle'); });
 
   initDb();
+
+  const fromEntry = payloadFromEntry();
+  if(fromEntry){
+    openConfirm(fromEntry);
+    history.replaceState(null, '', location.pathname);
+  }
 })();
 </script>
 
