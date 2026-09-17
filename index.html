@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/inlined/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
 <style>
   :root{
     --navy:#10162a;
@@ -18,6 +20,8 @@
     --accent:#b23a52;
     --accent-ink:#fbeef1;
     --accent2:#5c8fd6;
+    --good:#4fbf8b;
+    --danger:#e5615a;
   }
   *{ box-sizing:border-box; }
   html,body{ height:auto; }
@@ -41,6 +45,43 @@
     text-shadow:2px 2px 0 var(--navy), 0 0 18px rgba(92,143,214,.35);
   }
   header p{ margin:0; color:var(--dim); font-size:13.5px; }
+
+  /* ---------- universal scan panel ---------- */
+  #scan-panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px;
+    display:flex; flex-direction:column; gap:2px;
+  }
+  #scan-panel h2{
+    margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2);
+  }
+  #scan-panel .hint{ margin:0 0 14px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+
+  button{
+    font:inherit; border:none; border-radius:8px; padding:12px 16px; cursor:pointer;
+    font-weight:600; font-size:13.5px; width:100%;
+  }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); }
+  .btn-primary:hover:not(:disabled){ background:#c14259; }
+  .btn-secondary{ background:transparent; border:1px solid var(--border); color:var(--cream); margin-top:8px; }
+  .btn-secondary:hover:not(:disabled){ border-color:var(--accent2); }
+
+  .scan-video-wrap{
+    position:relative; aspect-ratio:16/10; border-radius:10px; overflow:hidden;
+    background:#000; margin-bottom:10px; max-width:360px;
+  }
+  #scan-video{ width:100%; height:100%; object-fit:cover; display:block; }
+  .scan-frame{
+    position:absolute; inset:16% 30%; border:2px solid var(--accent2); border-radius:12px;
+    box-shadow:0 0 0 999px rgba(0,0,0,.4); pointer-events:none;
+  }
+  .file-btn{ display:block; text-align:center; cursor:pointer; }
+
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; margin-top:12px; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+  .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
+
+  .grid-heading{ color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.1em; }
 
   #grid{
     display:grid;
@@ -100,8 +141,35 @@
 <div id="shell">
   <header>
     <h1 class="px">NGPC HISCORES</h1>
-    <p>Pick a game to see its leaderboard, or scan the QR code it shows after a completed run.</p>
+    <p>Scan the QR code your game shows after a completed run, or pick a game below to browse its board.</p>
   </header>
+
+  <section id="scan-panel">
+    <h2>Scan QR Code</h2>
+    <p class="hint">Works for any game &mdash; the code itself says which leaderboard it belongs on.</p>
+
+    <div id="idle-view">
+      <button class="btn-primary" id="btn-scan">Scan QR Code</button>
+
+      <div id="scan-live" hidden>
+        <div class="scan-video-wrap">
+          <video id="scan-video" playsinline muted></video>
+          <div class="scan-frame" aria-hidden="true"></div>
+        </div>
+        <button class="btn-secondary" id="btn-cancel-scan">Cancel</button>
+      </div>
+
+      <div id="scan-fallback" hidden>
+        <label class="btn-primary file-btn" for="scan-file">Take / choose a photo</label>
+        <input type="file" accept="image/*" id="scan-file" hidden>
+        <button class="btn-secondary" id="btn-cancel-fallback">Cancel</button>
+      </div>
+
+      <div id="form-msg"></div>
+    </div>
+  </section>
+
+  <div class="grid-heading">Or browse a leaderboard directly</div>
 
   <div id="grid">
     <!-- Live games and "coming soon" placeholders are both listed by hand here -- there's no
@@ -118,19 +186,249 @@
       </div>
     </a>
 
-    <div class="tile disabled">
+    <a class="tile" href="/tetris/">
       <div class="tile-art placeholder">
         <span class="px" style="font-size:9px;">TETRIS</span>
       </div>
       <div class="tile-body">
         <div class="tile-name">Tetris</div>
-        <div class="tile-tag">Coming soon</div>
+        <div class="tile-tag">VS Link &mdash; leaderboard in testing</div>
       </div>
-    </div>
+    </a>
   </div>
 
   <footer>NGPC homebrew hiscore boards &mdash; fed by an on-device QR code after every completed game.</footer>
 </div>
 
+<script>
+(function(){
+  "use strict";
+  // Every game's on-device QR encodes a full URL whose payload's first 2 characters are that
+  // game's own routing code (see e.g. Bowling's ngpc_qr.c QR_GAME_CODE / Tetris's main.c
+  // QR_GAME_CODE) -- this is the one place that code has to be mapped to a folder, since a scan
+  // done HERE (rather than on a game's own page, or via a device camera app tapping the QR's own
+  // URL) hands back raw decoded text with no path to read a folder name out of. Add one entry per
+  // game; nothing else on this page needs to change.
+  const GAME_ROUTES = { BW: 'lb', TT: 'tetris' };
+
+  const el = (id)=>document.getElementById(id);
+  const formMsg = el('form-msg');
+  const btnScan = el('btn-scan');
+  const scanLive = el('scan-live');
+  const scanFallback = el('scan-fallback');
+  const scanVideo = el('scan-video');
+  const scanFile = el('scan-file');
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // Same treatment lb/index.html and tetris/index.html use on their own in-page scans -- a QR's
+  // raw decoded content is the FULL URL (prefix and all) when it encodes one, so this strips down
+  // to just the payload either way (also a no-op for an old bare-payload QR with no URL/slashes).
+  function lastPathSegment(text){
+    const parts = String(text||'').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length-1] : '';
+  }
+
+  function routeToGame(text){
+    const payload = lastPathSegment(text).toUpperCase();
+    const code = payload.slice(0,2);
+    const slug = GAME_ROUTES[code];
+    if(!slug){
+      formMsg.innerHTML = '<div class="msg err">Unrecognized game code ("'+escapeHtml(code)+'") &mdash; that leaderboard might not be set up yet.</div>';
+      return;
+    }
+    // A real navigation, not a fetch -- lands on that game's own page, which reads the payload
+    // right back out of this same hash via its own payloadFromEntry() and opens the confirm view.
+    location.href = '/' + slug.toLowerCase() + '/#' + payload;
+  }
+
+  function handleScanResult(text){
+    formMsg.innerHTML = '';
+    routeToGame(text);
+  }
+
+  /* ---------- camera scan (getUserMedia), falling back to a native camera/file picker --
+     identical decode stack to lb/index.html and tetris/index.html; see their own comments for
+     why zbar-wasm is tried first, native BarcodeDetector second, jsQR last. ---------- */
+  let cameraStream = null;
+  let scanRAF = null;
+  const scanCanvas = document.createElement('canvas');
+  const scanCtx = scanCanvas.getContext('2d', {willReadFrequently:true});
+
+  function resetScanUI(){
+    if(scanRAF){ cancelAnimationFrame(scanRAF); scanRAF = null; }
+    if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+    scanLive.hidden = true;
+    scanFallback.hidden = true;
+    btnScan.hidden = false;
+  }
+
+  function showFallback(msg){
+    if(scanRAF){ cancelAnimationFrame(scanRAF); scanRAF = null; }
+    if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+    scanLive.hidden = true;
+    btnScan.hidden = true;
+    scanFallback.hidden = false;
+    if(msg) formMsg.innerHTML = '<div class="msg err">'+escapeHtml(msg)+'</div>';
+  }
+
+  function libraryMissingMsg(){
+    return "QR scanning isn’t available right now (a required library failed to load) — try reloading the page.";
+  }
+
+  let barcodeDetector;
+  function getBarcodeDetector(){
+    if(barcodeDetector !== undefined) return barcodeDetector;
+    if(!('BarcodeDetector' in window)){ barcodeDetector = null; return null; }
+    try{ barcodeDetector = new window.BarcodeDetector({formats:['qr_code']}); }
+    catch(e){ barcodeDetector = null; }
+    return barcodeDetector;
+  }
+  function noDecoderAvailable(){ return !window.zbarWasm && !getBarcodeDetector() && !window.jsQR; }
+
+  async function decodeViaZbarWasm(source, w0, h0){
+    if(!window.zbarWasm || !w0 || !h0) return null;
+    const target = 1000;
+    const scale = Math.min(1, target/Math.max(w0,h0));
+    const w = Math.round(w0*scale), h = Math.round(h0*scale);
+    scanCanvas.width = w; scanCanvas.height = h;
+    scanCtx.drawImage(source, 0, 0, w, h);
+    const imageData = scanCtx.getImageData(0, 0, w, h);
+    try{
+      const symbols = await window.zbarWasm.scanImageData(imageData);
+      if(symbols && symbols.length) return symbols[0].decode();
+    }catch(e){ /* fall through */ }
+    return null;
+  }
+
+  function jsqrFallback(source, w0, h0, scales){
+    if(!window.jsQR || !w0 || !h0) return null;
+    for(const target of scales){
+      const scale = Math.min(1, target/Math.max(w0,h0));
+      const w = Math.round(w0*scale), h = Math.round(h0*scale);
+      scanCanvas.width = w; scanCanvas.height = h;
+      scanCtx.drawImage(source, 0, 0, w, h);
+      const frame = scanCtx.getImageData(0, 0, w, h);
+      const code = window.jsQR(frame.data, w, h, {inversionAttempts:'attemptBoth'});
+      if(code && code.data) return code.data;
+    }
+    return null;
+  }
+
+  async function decodeSource(source, w0, h0, jsqrScales){
+    const viaZbar = await decodeViaZbarWasm(source, w0, h0);
+    if(viaZbar) return viaZbar;
+    const bd = getBarcodeDetector();
+    if(bd){
+      try{
+        const results = await bd.detect(source);
+        if(results && results.length && results[0].rawValue) return results[0].rawValue;
+      }catch(e){ /* fall through to jsQR */ }
+    }
+    return jsqrFallback(source, w0, h0, jsqrScales);
+  }
+
+  const LIVE_SCALES = [500, 900];
+  let liveBusy = false;
+  async function scanLoop(){
+    if(noDecoderAvailable()){
+      resetScanUI();
+      formMsg.innerHTML = '<div class="msg err">'+libraryMissingMsg()+'</div>';
+      return;
+    }
+    scanRAF = requestAnimationFrame(scanLoop);
+    if(scanVideo.readyState !== scanVideo.HAVE_ENOUGH_DATA) return;
+    if(liveBusy) return;
+    const w = scanVideo.videoWidth, h = scanVideo.videoHeight;
+    if(!w || !h) return;
+    liveBusy = true;
+    try{
+      const value = await decodeSource(scanVideo, w, h, LIVE_SCALES);
+      if(value) handleScanResult(value);
+    } finally { liveBusy = false; }
+  }
+
+  async function startLiveScan(){
+    formMsg.innerHTML = '';
+    if(noDecoderAvailable()){
+      formMsg.innerHTML = '<div class="msg err">'+libraryMissingMsg()+'</div>';
+      return;
+    }
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      showFallback('Live camera preview isn’t supported in this browser/view (no camera API present).');
+      return;
+    }
+    try{
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false });
+    }catch(e){
+      const name = (e && e.name) || 'Error';
+      showFallback('Live camera preview isn’t available here (' + name + ') — take a photo of the QR code instead.');
+      return;
+    }
+    scanVideo.srcObject = cameraStream;
+    try{ await scanVideo.play(); }catch(e){ /* some browsers auto-play on metadata; ignore */ }
+    btnScan.hidden = true;
+    scanFallback.hidden = true;
+    scanLive.hidden = false;
+    scanLoop();
+  }
+
+  function loadViaImageElement(file){
+    return new Promise((resolve,reject)=>{
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = ()=>{ URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('img element failed to decode "'+file.type+'"')); };
+      img.src = url;
+    });
+  }
+
+  async function loadImage(file){
+    if(window.createImageBitmap){
+      try{ return await createImageBitmap(file); }
+      catch(e){ /* fall through */ }
+    }
+    return loadViaImageElement(file);
+  }
+
+  const FILE_SCALES = [350, 500, 700, 900, 1200];
+
+  async function scanFromFile(file){
+    if(noDecoderAvailable()){
+      formMsg.innerHTML = '<div class="msg err">'+libraryMissingMsg()+'</div>';
+      return;
+    }
+    formMsg.innerHTML = '<div class="msg ok">Reading code&hellip;</div>';
+    let img;
+    try{ img = await loadImage(file); }
+    catch(e){
+      const type = file.type || 'unknown type';
+      formMsg.innerHTML = '<div class="msg err">Couldn’t read that photo (' + escapeHtml(type) + ') — try again, or use a JPG/PNG if your phone saved it as something else.</div>';
+      return;
+    }
+    if(!img.width || !img.height){
+      formMsg.innerHTML = '<div class="msg err">That photo came back empty — try again.</div>';
+      return;
+    }
+    const value = await decodeSource(img, img.width, img.height, FILE_SCALES);
+    if(value){
+      handleScanResult(value);
+    } else {
+      formMsg.innerHTML = '<div class="msg err">No QR code found in that photo (read as ' + img.width + '×' + img.height + ') — make sure the whole code is in frame, hold the console steady and avoid glare, then try again.</div>';
+    }
+  }
+
+  btnScan.addEventListener('click', startLiveScan);
+  el('btn-cancel-scan').addEventListener('click', resetScanUI);
+  el('btn-cancel-fallback').addEventListener('click', resetScanUI);
+  scanFile.addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    e.target.value = '';
+    if(file) scanFromFile(file);
+  });
+})();
+</script>
 </body>
 </html>

@@ -130,8 +130,8 @@
   .btn-secondary{ background:transparent; border:1px solid var(--border); color:var(--cream); margin-top:8px; }
   .btn-secondary:hover:not(:disabled){ border-color:var(--accent2); }
 
-  #confirm-view, #success-view{ display:none; }
-  #confirm-view.show, #success-view.show{ display:block; }
+  #confirm-view{ display:none; }
+  #confirm-view.show{ display:block; }
   #idle-view.hide{ display:none; }
   .confirm-score{ text-align:center; padding:18px 0 20px; }
   .confirm-score .who{ font-family:"Press Start 2P",monospace; font-size:22px; letter-spacing:.08em; color:var(--cream); }
@@ -140,8 +140,6 @@
   .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; margin-top:12px; }
   .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
   .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
-  .success-icon{ text-align:center; font-size:40px; margin-bottom:6px; }
-  #success-view p{ text-align:center; color:var(--dim); font-size:13px; }
 
   footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
 </style>
@@ -200,12 +198,6 @@
         <button class="btn-secondary" id="btn-back">Cancel</button>
         <div id="confirm-msg"></div>
       </div>
-
-      <div id="success-view">
-        <div class="success-icon">&#127881;</div>
-        <p id="success-text">Score submitted to the leaderboard.</p>
-        <button class="btn-secondary" id="btn-again">Back to leaderboard</button>
-      </div>
     </section>
   </main>
 
@@ -248,7 +240,6 @@
   const boardStatusEl = el('board-status');
   const idleView = el('idle-view');
   const confirmView = el('confirm-view');
-  const successView = el('success-view');
   const formMsg = el('form-msg');
   const confirmMsg = el('confirm-msg');
   const btnScan = el('btn-scan');
@@ -384,7 +375,6 @@
   function showStage(stage){
     idleView.classList.toggle('hide', stage!=='idle');
     confirmView.classList.toggle('show', stage==='confirm');
-    successView.classList.toggle('show', stage==='success');
   }
 
   function openConfirm(initials, score, lines, level){
@@ -622,17 +612,17 @@
     });
     btn.disabled = false;
     if(res.ok){
-      el('success-text').textContent = pending.initials + ' — ' + pending.score + ' submitted to the leaderboard.';
+      // Straight to the live board, not a "submitted!" interstitial requiring another click --
+      // the whole point of scanning was to see where this score landed. The toast below gets
+      // naturally overwritten within a moment anyway, once the live query (this client is already
+      // subscribed to it) picks up the write it just made and re-renders the board.
+      const toastText = pending.initials + ' — ' + pending.score + ' submitted!';
       pending = null;
-      showStage('success');
+      showStage('idle');
+      boardStatusEl.innerHTML = '<div class="msg ok">'+escapeHtml(toastText)+'</div>';
     } else {
       confirmMsg.innerHTML = '<div class="msg err">'+friendlyDbError(res.error)+'</div>';
     }
-  });
-
-  el('btn-again').addEventListener('click', ()=>{
-    pending = null;
-    showStage('idle');
   });
 
   // ---- boot ----
