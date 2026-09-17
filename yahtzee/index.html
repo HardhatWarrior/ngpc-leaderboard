@@ -332,15 +332,17 @@
 
   async function startLiveScan(){
     formMsg.innerHTML = '';
-    console.log('startLiveScan called, decoders:', {zbar: !!window.zbarWasm, barcode: !!getBarcodeDetector(), jsqr: !!window.jsQR});
-    if(!window.zbarWasm && !getBarcodeDetector() && !window.jsQR){ formMsg.innerHTML = '<div class="msg err">QR scanning library failed to load.</div>'; return; }
+    if(!window.zbarWasm && !getBarcodeDetector() && !window.jsQR){
+      formMsg.innerHTML = '<div class="msg err">QR scanning library failed (zbar: '+!!window.zbarWasm+', barcode: '+!!getBarcodeDetector()+', jsqr: '+!!window.jsQR+')</div>';
+      return;
+    }
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
       showFallback('Live camera isn't supported here.');
       return;
     }
     try{ cameraStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false }); }
     catch(e){
-      showFallback('Live camera isn't available.');
+      showFallback('Camera access denied: '+escapeHtml(e.message));
       return;
     }
     scanVideo.srcObject = cameraStream;
@@ -440,10 +442,10 @@
 
   el('btn-confirm').addEventListener('click', async ()=>{
     if(!pending) return;
-    if(!db){ confirmMsg.innerHTML = '<div class="msg err">'+friendlyDbError()+'</div>'; return; }
+    if(!db){ confirmMsg.innerHTML = '<div class="msg err">Database not initialized</div>'; return; }
     const btn = el('btn-confirm');
     btn.disabled = true;
-    confirmMsg.innerHTML = '';
+    confirmMsg.innerHTML = '<div class="msg ok">Submitting…</div>';
     const record = {
       game: QR_GAME_CODE,
       initials: pending.initials,
@@ -452,14 +454,19 @@
       source: 'qr',
       submittedAt: Date.now(),
     };
-    const res = await writeScore(record);
-    btn.disabled = false;
-    if(res.ok){
-      el('success-text').textContent = pending.initials + ' — ' + pending.score + ' submitted to the leaderboard.';
-      pending = null;
-      showStage('success');
-    } else {
-      confirmMsg.innerHTML = '<div class="msg err">'+friendlyDbError(res.error)+'</div>';
+    try{
+      const res = await writeScore(record);
+      btn.disabled = false;
+      if(res.ok){
+        el('success-text').textContent = pending.initials + ' — ' + pending.score + ' submitted to the leaderboard.';
+        pending = null;
+        showStage('success');
+      } else {
+        confirmMsg.innerHTML = '<div class="msg err">Write failed: '+escapeHtml(res.error?.message || 'unknown')+'</div>';
+      }
+    }catch(e){
+      btn.disabled = false;
+      confirmMsg.innerHTML = '<div class="msg err">Submit error: '+escapeHtml(e.message)+'</div>';
     }
   });
 
