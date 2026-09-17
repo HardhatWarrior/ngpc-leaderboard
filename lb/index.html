@@ -127,7 +127,6 @@
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
   .row.has-detail{ cursor:pointer; }
   .row.has-detail:hover{ background:rgba(92,143,214,.08); }
-  .detail-hint{ color:var(--dim); font-size:9px; margin-left:4px; }
   .row-detail{ padding:2px 8px 14px; }
 
   /* real per-game scorecard grid -- used in the confirm step and expanded leaderboard rows */
@@ -455,7 +454,7 @@
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
       const rowHtml = '<div class="row'+(rank===1?' top1':'')+(hasDetail?' has-detail':'')+'"'+(hasDetail?' data-detail="d'+i+'"':'')+'>'+
         '<div class="rank">'+(rank===1?pinIconSVG():('#'+rank))+'</div>'+
-        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+(hasDetail?' <span class="detail-hint">&#9662; scorecard</span>':'')+'</div>'+
+        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           (usernameLine ? '<div class="row-meta">'+usernameLine+'</div>' : '')+'</div>'+
         '<div class="score-col"><div class="score-val tnum">'+(data.score!=null?data.score:'-')+'</div>'+
           (scoreMeta ? '<div class="row-meta">'+scoreMeta+'</div>' : '')+'</div>'+
