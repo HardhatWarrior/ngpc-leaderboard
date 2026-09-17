@@ -92,11 +92,95 @@ window.NGPC_AUTH = (function(){
 
   function signOutNow(){ return auth.signOut(); }
 
+  // ---- profile updates (account page) ----
+
+  async function updateUsername(newUsernameRaw){
+    const user = auth.currentUser;
+    if(!user) throw {code:'not-signed-in', message:'Sign in first.'};
+    const newUsername = (newUsernameRaw||'').trim();
+    if(!USERNAME_RE.test(newUsername)){
+      throw {code:'invalid-username', message:'Usernames are 3-16 characters: letters, numbers, underscore only.'};
+    }
+    const newLower = newUsername.toLowerCase();
+    const oldLower = currentUser && currentUser.usernameLower;
+    if(oldLower === newLower){
+      throw {code:'same-username', message:'That’s already your username.'};
+    }
+    try{
+      // Same all-or-nothing batch approach as signUp: release the old reservation, claim the
+      // new one, and update the profile in one shot. The new claim is what can actually fail
+      // (already taken by someone else), and a batch failure leaves the old reservation intact
+      // -- no window where the account has no username pointing at it.
+      const batch = db.batch();
+      if(oldLower) batch.delete(db.collection('usernames').doc(oldLower));
+      batch.set(db.collection('usernames').doc(newLower), {uid:user.uid});
+      batch.update(db.collection('users').doc(user.uid), {username:newUsername, usernameLower:newLower});
+      await batch.commit();
+    }catch(e){
+      if(e && e.code === 'permission-denied'){
+        throw {code:'username-taken', message:'That username is already taken.'};
+      }
+      throw e;
+    }
+  }
+
+  async function updateRecoveryEmail(emailRaw){
+    const user = auth.currentUser;
+    if(!user) throw {code:'not-signed-in', message:'Sign in first.'};
+    const email = (emailRaw||'').trim();
+    // Firestore rejects `undefined`, and there's no user-facing way to fully clear a field via
+    // .update() with a plain value -- FieldValue.delete() is the documented way to remove one.
+    const value = email ? email : firebase.firestore.FieldValue.delete();
+    await db.collection('users').doc(user.uid).update({recoveryEmail: value});
+  }
+
+  const AVATAR_SIZE = 16;
+  const AVATAR_CELLS = AVATAR_SIZE * AVATAR_SIZE;
+
+  function packColor(r,g,b){ return (r&0xF) | ((g&0xF)<<4) | ((b&0xF)<<8); }
+  function unpackColor(word){ return { r: word&0xF, g: (word>>4)&0xF, b: (word>>8)&0xF }; }
+  // Same RGB444->CSS scaling the tile editor uses (17 = 255/15, exact even steps 0..255).
+  function css255FromWord(word){ const c = unpackColor(word); return 'rgb('+(c.r*17)+','+(c.g*17)+','+(c.b*17)+')'; }
+
+  async function updateAvatar(packedWords){
+    const user = auth.currentUser;
+    if(!user) throw {code:'not-signed-in', message:'Sign in first.'};
+    if(!Array.isArray(packedWords) || packedWords.length !== AVATAR_CELLS){
+      throw {code:'invalid-avatar', message:'Avatar must be a '+AVATAR_SIZE+'x'+AVATAR_SIZE+' grid.'};
+    }
+    await db.collection('users').doc(user.uid).update({avatar: packedWords});
+  }
+
+  // Draws a packed avatar (or a flat placeholder color if avatar is null/wrong length) onto a
+  // <canvas> at cellPx-per-pixel, no smoothing -- used by the account bar chip and the account
+  // page's own preview, so both always render identically off the exact same packed data.
+  function renderAvatarToCanvas(canvas, packedWords, cellPx){
+    const size = AVATAR_SIZE;
+    canvas.width = size*cellPx;
+    canvas.height = size*cellPx;
+    const ctx = canvas.getContext('2d');
+    ctx.imageSmoothingEnabled = false;
+    if(!Array.isArray(packedWords) || packedWords.length !== AVATAR_CELLS){
+      ctx.fillStyle = '#37426e'; // matches the shared --border token; canvas can't resolve CSS vars
+      ctx.fillRect(0,0,canvas.width,canvas.height);
+      return;
+    }
+    for(let y=0;y<size;y++){
+      for(let x=0;x<size;x++){
+        ctx.fillStyle = css255FromWord(packedWords[y*size+x]);
+        ctx.fillRect(x*cellPx, y*cellPx, cellPx, cellPx);
+      }
+    }
+  }
+
   function friendlyAuthError(e){
     const code = e && e.code;
     switch(code){
       case 'invalid-username': return e.message;
       case 'username-taken': return e.message;
+      case 'same-username': return e.message;
+      case 'not-signed-in': return e.message;
+      case 'invalid-avatar': return e.message;
       case 'auth/email-already-in-use': return 'That username is already taken.';
       case 'auth/weak-password': return 'Password needs to be at least 6 characters.';
       case 'auth/wrong-password':
@@ -114,26 +198,43 @@ window.NGPC_AUTH = (function(){
   // (e.g. "attach my username to this score doc, if I happen to be signed in right now") ----
   let currentUser = null;
   const listeners = [];
-  auth.onAuthStateChanged(async (user)=>{
+  async function loadProfile(uid){
+    let data = {};
+    try{
+      const snap = await db.collection('users').doc(uid).get();
+      if(snap.exists) data = snap.data();
+    }catch(e){ /* leave defaults -- bar shows a generic signed-in state */ }
+    currentUser = {
+      uid,
+      username: data.username || null,
+      usernameLower: data.usernameLower || null,
+      recoveryEmail: data.recoveryEmail || null,
+      avatar: Array.isArray(data.avatar) ? data.avatar : null,
+    };
+    listeners.forEach(cb=>cb(currentUser));
+  }
+  auth.onAuthStateChanged((user)=>{
     if(!user){
       currentUser = null;
       listeners.forEach(cb=>cb(null));
       return;
     }
-    let username = null;
-    try{
-      const snap = await db.collection('users').doc(user.uid).get();
-      if(snap.exists) username = snap.data().username;
-    }catch(e){ /* leave username null -- bar shows a generic signed-in state */ }
-    currentUser = {uid:user.uid, username};
-    listeners.forEach(cb=>cb(currentUser));
+    loadProfile(user.uid);
   });
   function onAuthChange(cb){ listeners.push(cb); if(currentUser!==undefined) cb(currentUser); }
+  // Firestore profile changes (username/email/avatar) don't re-fire onAuthStateChanged -- that
+  // only fires on actual sign-in/out. Call this after any updateX() so the account bar and
+  // currentUser reflect the change immediately instead of waiting for a page reload.
+  function refreshProfile(){
+    const user = auth.currentUser;
+    return user ? loadProfile(user.uid) : Promise.resolve();
+  }
 
   // ---- injected UI: account bar (top of #shell) + sign-in/up modal (document.body) ----
   const STYLE = `
     #acct-bar{ display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12px; color:var(--dim); margin-bottom:14px; }
-    #acct-right{ display:flex; align-items:center; gap:10px; }
+    #acct-right{ display:flex; align-items:center; gap:8px; }
+    #acct-avatar{ border-radius:3px; border:1px solid var(--border); display:block; image-rendering:pixelated; }
     .acct-link{ background:none; border:none; color:var(--accent2); font:inherit; font-size:12px; cursor:pointer; padding:0; text-decoration:underline; width:auto; }
     #auth-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:1000; }
     #auth-overlay[hidden]{ display:none; }
@@ -240,11 +341,13 @@ window.NGPC_AUTH = (function(){
     const isHome = location.pathname === '/' || location.pathname === '/index.html';
     const homeLink = isHome ? '' : '<a class="acct-link" href="/">&larr; All games</a>';
     bar.innerHTML = '<div id="acct-left">'+homeLink+'</div>'
-      + '<div id="acct-right"><span id="acct-status">Signed out</span>'
+      + '<div id="acct-right"><canvas id="acct-avatar" width="18" height="18" hidden></canvas>'
+      + '<a id="acct-status" class="acct-link">Signed out</a>'
       + '<button type="button" class="acct-link" id="acct-btn">Sign In / Sign Up</button></div>';
     shell.insertBefore(bar, shell.firstChild);
     const statusEl = bar.querySelector('#acct-status');
     const btnEl = bar.querySelector('#acct-btn');
+    const avatarEl = bar.querySelector('#acct-avatar');
     let signedIn = false;
     btnEl.addEventListener('click', ()=>{
       if(signedIn) signOutNow();
@@ -254,10 +357,19 @@ window.NGPC_AUTH = (function(){
       signedIn = !!user;
       if(user){
         statusEl.textContent = 'Hi, ' + (user.username || '(loading…)');
+        statusEl.href = '/account/';
         btnEl.textContent = 'Sign Out';
+        if(user.avatar){
+          renderAvatarToCanvas(avatarEl, user.avatar, 18/AVATAR_SIZE);
+          avatarEl.hidden = false;
+        } else {
+          avatarEl.hidden = true;
+        }
       } else {
         statusEl.textContent = 'Signed out';
+        statusEl.removeAttribute('href');
         btnEl.textContent = 'Sign In / Sign Up';
+        avatarEl.hidden = true;
       }
     });
   }
@@ -275,7 +387,11 @@ window.NGPC_AUTH = (function(){
 
   return {
     db, auth,
-    signUp, signIn, signOut: signOutNow, onAuthChange,
+    signUp, signIn, signOut: signOutNow, onAuthChange, refreshProfile,
+    updateUsername, updateRecoveryEmail, updateAvatar,
+    packColor, unpackColor, css255FromWord, renderAvatarToCanvas,
+    AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,
+    friendlyAuthError, escapeHtml,
     get currentUser(){ return currentUser; }
   };
 })();

@@ -30,24 +30,39 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['uid'])
         && request.resource.data.uid == request.auth.uid
         && usernameLower == usernameLower.lower();
-      allow update, delete: if false;
+      // A username change (account page) releases the old reservation before claiming the new
+      // one -- only the uid that holds a reservation can release it.
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+      allow update: if false;
     }
 
-    // users/{uid} is the public profile (just a username, plus an optional
-    // recovery email that's never read back by any page today -- collected
-    // for a future recovery flow, not exposed via `read` in any UI). Public
-    // read because a username is shown on the leaderboard next to a score.
+    // users/{uid} is the public profile (username, optional recovery email -- never read back by
+    // any page today, collected for a future recovery flow -- and an optional 16x16 avatar, a
+    // flat list of 256 RGB444 words packed r|g<<4|b<<8 same as the tile editor's own hexWord()).
+    // Public read because a username/avatar is shown on the leaderboard next to a score.
     match /users/{uid} {
       allow read: if true;
+
+      function isWellFormedProfile(d) {
+        return d.username is string
+          && d.username.matches('^[A-Za-z0-9_]{3,16}$')
+          && d.usernameLower == d.username.lower()
+          && (!('recoveryEmail' in d) || d.recoveryEmail is string)
+          && (!('avatar' in d) || (d.avatar is list && d.avatar.size() == 256));
+      }
+
       allow create: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'recoveryEmail', 'createdAt'])
-        && request.resource.data.username is string
-        && request.resource.data.username.matches('^[A-Za-z0-9_]{3,16}$')
-        && request.resource.data.usernameLower == request.resource.data.username.lower()
+        && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'recoveryEmail', 'createdAt', 'avatar'])
         && request.resource.data.createdAt is int
-        && (!('recoveryEmail' in request.resource.data) || request.resource.data.recoveryEmail is string);
-      // No profile editing yet (no UI for it) -- revisit when one exists.
-      allow update, delete: if false;
+        && isWellFormedProfile(request.resource.data);
+
+      // Account page: username/email/avatar can change, createdAt cannot.
+      allow update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'recoveryEmail', 'createdAt', 'avatar'])
+        && request.resource.data.createdAt == resource.data.createdAt
+        && isWellFormedProfile(request.resource.data);
+
+      allow delete: if false;
     }
 
     match /scores/{scoreId} {

@@ -23,10 +23,18 @@ games, fed by QR codes generated on-device after a completed game.
   of whatever uppercase segment its own QR encodes.
 - `assets/` — shared static images (currently just each game's title-screen capture for its
   landing-page tile, taken from the real emulator via `ngpc_emu_screenshot`, not mocked up).
+- `auth.js` — shared username/password auth (see its own header comment for the synthetic-email
+  design), loaded by every page via `<script src="/auth.js">`. Injects an account bar (top of
+  `#shell`) and a sign-in/up modal into any page that loads it — no markup to copy per page.
+- `account/index.html` — signed-in users can change their username, set/clear an optional recovery
+  email (not yet wired to an actual reset-email flow — see `auth.js`), and paint a 16x16 avatar
+  (same RGB444 color model as the NGPC Tile Editor, no per-tile palette limit since this isn't
+  real tile hardware — every pixel picks independently).
 - `firestore.rules` — the Firestore security rules, version-controlled here since this project has
   no Firebase CLI/service-account wired up; deploy by hand via the Firebase console (Firestore
   Database > Rules). Validates each game's score schema separately, keyed off the `game` field, so
-  one game's rules can't be satisfied by another game's differently-shaped data.
+  one game's rules can't be satisfied by another game's differently-shaped data. Also covers the
+  `usernames/` (uniqueness reservations) and `users/` (public profiles) collections auth.js uses.
 - `CNAME` — GitHub Pages custom domain config.
 
 ## Adding a new game
