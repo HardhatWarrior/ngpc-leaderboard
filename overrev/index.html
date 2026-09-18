@@ -59,6 +59,18 @@
   .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
   .panel .hint{ margin:0 0 16px; color:var(--dim); font-size:12.5px; line-height:1.5; }
 
+  /* ---------- board mode toggle -- default view is the 10 most recent runs across every course
+     (same spirit as the main page's own recent-activity ticker), since a brand-new leaderboard
+     with few submissions shouldn't force a course pick before showing anything. "By Course" is
+     the fair fastest-time ranking, still scoped to one course at a time (see below). ---------- */
+  .mode-toggle{ display:flex; gap:8px; margin-bottom:14px; }
+  .mode-btn{
+    width:auto; background:transparent; border:1px solid var(--border); color:var(--dim);
+    border-radius:8px; padding:8px 14px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer;
+  }
+  .mode-btn:hover{ border-color:var(--accent2); }
+  .mode-btn.active{ border-color:var(--accent); color:var(--cream); background:rgba(63,169,220,.12); }
+
   /* ---------- course filter -- the "fair" comparison group per the kit's own README is every
      category field combined, but exposing all of course/car/tune/difficulty/transmission as
      filters is a lot of UI for a first pass; course alone (the dominant "which track" axis) is
@@ -128,8 +140,12 @@
   <main>
     <section class="panel">
       <h2>Leaderboard</h2>
-      <p class="hint">Fastest times, ranked by lap time within one course &mdash; times across different courses aren't comparable. Updates live as new runs are logged.</p>
-      <select id="course-select"></select>
+      <p class="hint" id="board-hint">Most recent runs, across every course. Updates live as new runs are logged.</p>
+      <div class="mode-toggle">
+        <button type="button" class="mode-btn active" id="mode-recent" data-mode="recent">Recent</button>
+        <button type="button" class="mode-btn" id="mode-course" data-mode="course">By Course</button>
+      </div>
+      <select id="course-select" hidden></select>
       <div id="board-status"></div>
       <div id="board"></div>
     </section>
@@ -194,6 +210,8 @@
 
   const el = (id)=>document.getElementById(id);
   const boardEl = el('board'), boardStatusEl = el('board-status'), courseSelect = el('course-select');
+  const boardHintEl = el('board-hint'), modeRecentBtn = el('mode-recent'), modeCourseBtn = el('mode-course');
+  let boardMode = 'recent'; // 'recent' | 'course'
   const idleView = el('idle-view'), confirmView = el('confirm-view'), successView = el('success-view');
   const formMsg = el('form-msg'), confirmMsg = el('confirm-msg');
   const btnScan = el('btn-scan'), scanLive = el('scan-live'), scanFallback = el('scan-fallback');
@@ -259,7 +277,16 @@
   }
 
   async function renderBoard(docs){
-    if(!docs.length){ boardEl.innerHTML = '<div class="empty-state">No times yet for this course &mdash; be the first on the board.</div>'; return; }
+    if(!docs.length){
+      const emptyText = boardMode === 'course' ? 'No times yet for this course &mdash; be the first on the board.' : 'No submissions yet &mdash; be the first on the board.';
+      boardEl.innerHTML = '<div class="empty-state">'+emptyText+'</div>';
+      return;
+    }
+    // "Recent" mode isn't ranked by performance, so rank 1 there just means "newest" -- no
+    // trophy/top1 highlight in that mode, and the course name is shown per row since results
+    // span every course (redundant but harmless in "By Course" mode, where it's already implied
+    // by the dropdown).
+    const rankByPerformance = boardMode === 'course';
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
@@ -269,11 +296,11 @@
       catch(e){ return ''; } // a corrupted/legacy stored doc -- skip rather than crash the board
       const rank = i+1;
       const usernameLine = raw.username ? ('<a href="/user/?u='+encodeURIComponent(raw.username)+'">@'+escapeHtml(raw.username.toUpperCase())+'</a>') : '';
-      const meta = [fmtWhen(raw.submittedAt), CARS[data.car], usernameLine].filter(Boolean).join(' · ');
+      const meta = [COURSES[data.course], fmtWhen(raw.submittedAt), CARS[data.car], usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = raw.uid && avatars[raw.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
-      const rowHtml = '<div class="row has-detail'+(rank===1?' top1':'')+'" data-detail="d'+i+'">'+
-        '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
+      const rowHtml = '<div class="row has-detail'+(rankByPerformance && rank===1?' top1':'')+'" data-detail="d'+i+'">'+
+        '<div class="rank">'+(rankByPerformance && rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.name||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
         '<div class="score-val tnum">'+escapeHtml(data.time)+'</div>'+
@@ -309,18 +336,39 @@
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const courseIdx = parseInt(courseSelect.value, 10) || 0;
-    // Ticks ascending -- lower is better, per the kit's own README (not this site's usual
-    // descending "high score" order). Scoped by game + course; the kit's README also flags
-    // car/tune/difficulty/transmission as part of a fully "fair" comparison group, but course is
-    // the dominant axis and the only one filtered here for now -- the rest show per-row instead.
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('course','==',courseIdx).orderBy('ticks','asc').limit(25);
+    let q;
+    if(boardMode === 'course'){
+      const courseIdx = parseInt(courseSelect.value, 10) || 0;
+      // Ticks ascending -- lower is better, per the kit's own README (not this site's usual
+      // descending "high score" order). Scoped by game + course; the kit's README also flags
+      // car/tune/difficulty/transmission as part of a fully "fair" comparison group, but course
+      // is the dominant axis and the only one filtered here for now -- the rest show per-row.
+      q = db.collection('scores').where('game','==',QR_GAME_CODE).where('course','==',courseIdx).orderBy('ticks','asc').limit(25);
+    } else {
+      // Default view: the 10 most recent runs across every course, same spirit as the main
+      // page's own recent-activity ticker -- doesn't force a course pick before showing anything.
+      q = db.collection('scores').where('game','==',QR_GAME_CODE).orderBy('submittedAt','desc').limit(10);
+    }
     unsubscribeBoard = q.onSnapshot(
       (snap)=>{ renderBoard(snap.docs); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
     );
   }
   courseSelect.addEventListener('change', subscribeBoard);
+
+  function setBoardMode(mode){
+    if(boardMode === mode) return;
+    boardMode = mode;
+    modeRecentBtn.classList.toggle('active', mode==='recent');
+    modeCourseBtn.classList.toggle('active', mode==='course');
+    courseSelect.hidden = mode !== 'course';
+    boardHintEl.textContent = mode === 'course'
+      ? 'Fastest times, ranked by lap time within one course — times across different courses aren’t comparable.'
+      : 'Most recent runs, across every course. Updates live as new runs are logged.';
+    subscribeBoard();
+  }
+  modeRecentBtn.addEventListener('click', ()=>setBoardMode('recent'));
+  modeCourseBtn.addEventListener('click', ()=>setBoardMode('course'));
 
   function initDb(){
     if(!firebase){ boardStatusEl.innerHTML = '<div class="msg err">Firebase SDK failed to load</div>'; return; }
