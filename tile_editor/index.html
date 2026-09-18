@@ -528,7 +528,7 @@ function makeLayer(name){
     pixels: allocPixels(pixW(),pixH()),
     tilePalette: allocTilePalette(state.gridW,state.gridH),
     defaultPalette: state.activePalette||0,
-    refRGBA: null, // full-color reference from "Full Color (No Palette)" import; in-memory only, never persisted
+    refRGBA: null, // full-color reference from "Full Color (No Palette)" import; persisted via Save/Load Project
     refConverted: false, // true once Generate Palettes Per Tile has run at least once -- main canvas shows indexed art + a side reference panel instead of substituting refRGBA for the whole canvas
     groups: [], // named tile sub-regions: {name,x0,y0,w,h} in tile units
   };
@@ -2423,6 +2423,15 @@ function buildExportCanvas(scale,fillEmptyWithBack){
   }
   state.layers.forEach(layer=>{
     if(!layer.visible) return;
+    if(layer.refRGBA && !layer.refConverted){
+      // Not yet converted to indexed tiles -- export the full-color reference itself (already
+      // snapped to the 4096 RGB444 colors on import) rather than the still-empty indexed pixels.
+      const refCanvas=document.createElement('canvas'); refCanvas.width=w; refCanvas.height=h;
+      refCanvas.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(layer.refRGBA),w,h),0,0);
+      octx.imageSmoothingEnabled=false;
+      octx.drawImage(refCanvas,0,0,w,h,0,0,w*scale,h*scale);
+      return;
+    }
     for(let y=0;y<h;y++){ const ty=y>>3;
       for(let x=0;x<w;x++){
         const v=layer.pixels[y*w+x];
@@ -2648,7 +2657,18 @@ async function importImage(img){
         await modalAlert(msg);
       }
     } else if(choice==='fullcolor'){
-      layer.refRGBA=new Uint8ClampedArray(data);
+      // Snap every pixel to the nearest of the real 4096 RGB444 colors (4 bits/channel, same
+      // steps-of-17 mapping used everywhere else a palette color becomes an 8-bit CSS color) --
+      // full color here means "any of the 4096 hardware colors, independently per pixel", not an
+      // unrestricted 24-bit image.
+      const q=new Uint8ClampedArray(data.length);
+      for(let i=0;i<data.length;i+=4){
+        q[i]=Math.round(data[i]/17)*17;
+        q[i+1]=Math.round(data[i+1]/17)*17;
+        q[i+2]=Math.round(data[i+2]/17)*17;
+        q[i+3]=data[i+3];
+      }
+      layer.refRGBA=q;
       layer.refConverted=false;
     } else {
       if(choice==='extract') layer.defaultPalette=state.activePalette;
@@ -2950,6 +2970,9 @@ function serializeProject(){
       name:l.name, visible:l.visible, defaultPalette:l.defaultPalette,
       pixels:Array.from(l.pixels), tilePalette:Array.from(l.tilePalette),
       groups:(l.groups||[]).map(g=>({...g})),
+      // Full-color reference (see the "Full Color (No Palette)" import choice): persisted so a
+      // save/load round-trip keeps it, unlike the old in-memory-only behavior.
+      refRGBA: l.refRGBA ? Array.from(l.refRGBA) : null, refConverted: !!l.refConverted,
     })),
   };
 }
@@ -2981,6 +3004,8 @@ function applyProjectData(obj){
     name:l.name, visible:l.visible!==false, defaultPalette:clamp(l.defaultPalette||0,0,state.paletteBank.length-1),
     pixels:Uint8Array.from(l.pixels), tilePalette:Int16Array.from(l.tilePalette),
     groups:(l.groups||[]).map(g=>({...g})), // older saves predate groups -- default to none
+    // older saves predate the full-color reference too -- default to none
+    refRGBA: l.refRGBA ? Uint8ClampedArray.from(l.refRGBA) : null, refConverted: !!l.refConverted,
   }));
   state.activeLayer=clamp(obj.activeLayer||0,0,state.layers.length-1);
 }
