@@ -190,6 +190,22 @@ service cloud.firestore {
         && ('uid' in resource.data) && resource.data.uid == request.auth.uid;
     }
 
+    // Landing page's raw page-view counter (index.html only). meta/siteStats is pre-created by
+    // hand via the console with just {pageViews: 0} -- allow create is deliberately false so a
+    // client can never spoof its shape or seed an arbitrary starting value. Anonymous write is
+    // intentional (most visitors aren't signed in and should still be counted), but constrained
+    // to exactly a same-field +1 per write: FieldValue.increment() resolves before rules
+    // evaluate, so request.resource.data.pageViews already reflects the post-increment value here
+    // -- a client still can't ever set it to an arbitrary/negative number or touch any other key.
+    match /meta/{docId} {
+      allow read: if true;
+      allow create: if false;
+      allow update: if docId == 'siteStats'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pageViews'])
+        && request.resource.data.pageViews == resource.data.pageViews + 1;
+      allow delete: if false;
+    }
+
     // Default-deny for every other collection -- Firestore denies unmatched
     // paths by default anyway, but this makes the intent explicit as the
     // schema grows (Phase 3 comments/, etc).

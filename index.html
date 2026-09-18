@@ -50,6 +50,32 @@
   }
   header p{ margin:0; color:var(--dim); font-size:13.5px; }
 
+  /* ---------- player search ---------- */
+  #search-wrap{ position:relative; width:100%; max-width:360px; margin:0 auto; }
+  #search-username{
+    display:block; width:100%; background:var(--panel); border:1px solid var(--border);
+    color:var(--cream); border-radius:10px; padding:11px 14px; font:inherit; font-size:13.5px;
+    box-sizing:border-box;
+  }
+  #search-username::placeholder{ color:var(--dim); }
+  #search-username:focus{ outline:none; border-color:var(--accent2); }
+  #search-results{
+    position:absolute; top:calc(100% + 6px); left:0; right:0; z-index:5;
+    background:var(--panel2); border:1px solid var(--border); border-radius:10px;
+    padding:6px; max-height:280px; overflow-y:auto;
+    box-shadow:0 8px 24px rgba(0,0,0,.35);
+  }
+  .search-result{
+    display:flex; align-items:center; gap:10px; padding:8px 8px; border-radius:7px;
+    text-decoration:none; color:var(--cream); font-size:13px; font-weight:600;
+  }
+  .search-result:hover, .search-result:focus-visible{ background:rgba(92,143,214,.14); }
+  .search-avatar{
+    width:24px; height:24px; border-radius:4px; border:1px solid var(--border);
+    image-rendering:pixelated; flex:none; background:var(--navy);
+  }
+  .search-empty{ color:var(--dim); font-size:12.5px; padding:10px 8px; }
+
   /* ---------- recent-activity ticker ---------- */
   #ticker-wrap{
     background:var(--panel); border:1px solid var(--border); border-radius:12px;
@@ -165,6 +191,7 @@
 
   footer{ text-align:center; color:var(--dim); font-size:11px; }
   footer a{ color:var(--accent2); }
+  #traffic-counter{ display:block; margin-top:6px; font-variant-numeric:tabular-nums; }
 </style>
 </head>
 <body>
@@ -174,6 +201,11 @@
     <h1 class="px">NGPC HISCORES</h1>
     <p>Scan the QR code your game shows after a completed run, or pick a game below to browse its board.</p>
   </header>
+
+  <div id="search-wrap">
+    <input type="text" id="search-username" placeholder="Search usernames&hellip;" autocomplete="off" maxlength="16">
+    <div id="search-results" hidden></div>
+  </div>
 
   <div id="ticker-wrap">
     <div id="ticker-track"></div>
@@ -257,7 +289,10 @@
 
   </div>
 
-  <footer>NGPC homebrew hiscore boards &mdash; fed by an on-device QR code after every completed game.</footer>
+  <footer>
+    NGPC homebrew hiscore boards &mdash; fed by an on-device QR code after every completed game.
+    <span id="traffic-counter"></span>
+  </footer>
 </div>
 
 <script src="/auth.js"></script>
@@ -553,6 +588,118 @@
     );
   }
   connectTicker();
+
+  /* ---------- player search -- typeahead over the usernames/{lower} reservation collection.
+     Its document ID *is* the lowercased username (see auth.js's signUp/updateUsername), so a
+     plain range query on FieldPath.documentId() gives a real prefix search with no extra index
+     or service: >= "bob" and < "bob" matches every reservation starting with "bob". Each
+     match's display-case username + avatar comes from a second batched users/ lookup, same
+     pattern as the ticker's own avatar fetch. ---------- */
+  function connectPlayerSearch(){
+    const db = window.NGPC_AUTH ? NGPC_AUTH.db : null;
+    const input = el('search-username');
+    const results = el('search-results');
+    if(!input || !results) return;
+
+    let seq = 0; // guards a slow older query's results from clobbering a newer keystroke's
+    function hideResults(){ results.hidden = true; results.innerHTML = ''; }
+
+    async function runSearch(raw){
+      const prefix = raw.trim().toLowerCase();
+      const mySeq = ++seq;
+      if(!prefix){ hideResults(); return; }
+      if(!db){ return; }
+      let snap;
+      try{
+        snap = await db.collection('usernames')
+          .where(firebase.firestore.FieldPath.documentId(), '>=', prefix)
+          .where(firebase.firestore.FieldPath.documentId(), '<', prefix + '')
+          .limit(8)
+          .get();
+      }catch(e){ return; }
+      if(mySeq !== seq) return;
+      if(snap.empty){
+        results.innerHTML = '<div class="search-empty">No matching usernames.</div>';
+        results.hidden = false;
+        return;
+      }
+      const uids = snap.docs.map(d=>d.data().uid).filter(Boolean);
+      let profiles = {};
+      if(uids.length){
+        try{
+          const usersSnap = await db.collection('users').where(firebase.firestore.FieldPath.documentId(),'in',uids).get();
+          usersSnap.forEach(d=>{ profiles[d.id] = d.data(); });
+        }catch(e){ /* fall back to each reservation's own lowercase id below */ }
+      }
+      if(mySeq !== seq) return;
+      const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
+      if(mySeq !== seq) return;
+      results.innerHTML = snap.docs.map((d,i)=>{
+        const uid = d.data().uid;
+        const profile = profiles[uid];
+        const displayName = (profile && profile.username) ? profile.username : d.id;
+        const hasAvatar = uid && avatars[uid];
+        const avatarHtml = hasAvatar
+          ? '<canvas class="search-avatar" data-search-avatar="'+i+'"></canvas>'
+          : '<div class="search-avatar"></div>';
+        return '<a class="search-result" href="/user/?u='+encodeURIComponent(displayName)+'">'+avatarHtml+'<span>@'+escapeHtml(displayName.toUpperCase())+'</span></a>';
+      }).join('');
+      results.hidden = false;
+      snap.docs.forEach((d,i)=>{
+        const uid = d.data().uid;
+        if(!uid || !avatars[uid]) return;
+        results.querySelectorAll('[data-search-avatar="'+i+'"]').forEach(canvasEl=>{
+          NGPC_AUTH.renderAvatarToCanvas(canvasEl, avatars[uid], 24/NGPC_AUTH.AVATAR_SIZE);
+        });
+      });
+    }
+
+    let debounceTimer = null;
+    input.addEventListener('input', ()=>{
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(()=>runSearch(input.value), 250);
+    });
+    input.addEventListener('focus', ()=>{ if(input.value.trim()) runSearch(input.value); });
+    input.addEventListener('keydown', (e)=>{
+      if(e.key !== 'Enter') return;
+      e.preventDefault();
+      const first = results.querySelector('.search-result');
+      if(first) location.href = first.getAttribute('href');
+      else if(input.value.trim()) location.href = '/user/?u='+encodeURIComponent(input.value.trim());
+    });
+    document.addEventListener('click', (e)=>{
+      if(!e.target.closest('#search-wrap')) hideResults();
+    });
+  }
+  connectPlayerSearch();
+
+  /* ---------- page traffic counter -- meta/siteStats is a single pre-seeded doc (see
+     firestore.rules; a client can never create it, only atomically +1 its one pageViews field),
+     so this is a raw "how many times has this page loaded" count, not a deduped unique-visitor
+     count -- there's no server backend here to do real dedup/anti-abuse beyond that +1-per-write
+     rule. sessionStorage guards against the same browser tab inflating it on every refresh, but
+     that's just courtesy bookkeeping, not a security boundary. ---------- */
+  function connectTrafficCounter(){
+    const db = window.NGPC_AUTH ? NGPC_AUTH.db : null;
+    const counterEl = el('traffic-counter');
+    if(!db || !counterEl) return;
+    const ref = db.collection('meta').doc('siteStats');
+    let alreadyCounted = false;
+    try{ alreadyCounted = sessionStorage.getItem('ngpc_counted') === '1'; }catch(e){ /* private mode etc -- just count every time */ }
+    if(!alreadyCounted){
+      ref.update({ pageViews: firebase.firestore.FieldValue.increment(1) }).catch(()=>{ /* doc not seeded yet, or offline -- counter just won't move */ });
+      try{ sessionStorage.setItem('ngpc_counted', '1'); }catch(e){}
+    }
+    ref.onSnapshot(
+      (doc)=>{
+        if(doc.exists && typeof doc.data().pageViews === 'number'){
+          counterEl.textContent = doc.data().pageViews.toLocaleString() + ' page views';
+        }
+      },
+      (err)=>{ /* decorative -- leave the counter blank on error */ }
+    );
+  }
+  connectTrafficCounter();
 })();
 </script>
 </body>
