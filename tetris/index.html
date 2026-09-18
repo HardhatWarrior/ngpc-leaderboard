@@ -72,6 +72,10 @@
     margin:0; font-size:clamp(20px,4.2vw,30px); line-height:1.4;
     color:var(--cream);
   }
+  .title-block{ display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+  .created-by{ font-size:11px; color:var(--dim); }
+  .created-by a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
+  .created-by a:hover{ color:var(--accent2); }
   /* Only shown to a signed-in visitor -- see the onAuthChange hookup near the bottom of the
      script. Anonymous QR submission still works fine without ever seeing this. Tucked into the
      header panel's own bottom-right corner (header has position:relative) as a plain small link,
@@ -178,7 +182,10 @@
   <header>
     <div class="wordmark">
       <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
-      <h1>TETRIS</h1>
+      <div class="title-block">
+        <h1>TETRIS</h1>
+        <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
+      </div>
     </div>
     <img src="/assets/tetris-title.png" alt="Tetris title screen" class="header-art" width="160" height="152">
     <a href="/play/tetris/" class="play-link" id="play-link" hidden>&#127918; Play Tetris in Browser</a>
