@@ -163,7 +163,23 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data);
+      // 2048: game, initials, score, moves, source, submittedAt, optional uid/username -- field
+      // widths mirror the on-device QR payload's own fixed-width digit fields (5-digit score,
+      // 4-digit moves; see 2048's main.c qr_build_payload()).
+      function is2048Score(d) {
+        return d.game == '2K'
+          && d.keys().hasOnly(['game', 'initials', 'score', 'moves', 'source', 'submittedAt', 'uid', 'username'])
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.score is int && d.score >= 0 && d.score <= 65535
+          && d.moves is int && d.moves >= 0 && d.moves <= 9999
+          && d.source is string && d.source == 'qr'
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
+      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data);
 
       allow update: if false;
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --

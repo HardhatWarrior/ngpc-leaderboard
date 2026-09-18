@@ -164,7 +164,7 @@
       </div>
     </section>
 
-    <section class="panel" hidden>
+    <section class="panel">
       <h2>Username</h2>
       <div class="current-value">Currently <b id="username-current">&mdash;</b></div>
       <label>New username<input type="text" id="username-input" maxlength="16" autocomplete="username"></label>
@@ -257,7 +257,7 @@
   const el = (id)=>document.getElementById(id);
   const signedOutMsg = el('signed-out-msg');
   const content = el('account-content');
-  const GAME_NAMES = { BW: 'Neo Bowling', TT: 'Tetris', YZ: 'Neo Yahtzee', FK: 'Farkle' };
+  const GAME_NAMES = { BW: 'Neo Bowling', TT: 'Tetris', YZ: 'Neo Yahtzee', FK: 'Farkle', '2K': '2048' };
   const SUB_PAGE_SIZE = 20;
 
   // ---- your submissions ----

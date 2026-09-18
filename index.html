@@ -246,6 +246,15 @@
       </div>
     </a>
 
+    <a class="tile" href="/2048/">
+      <div class="tile-art">
+        <img src="/assets/2048-title.png" alt="2048 title screen" width="160" height="152">
+      </div>
+      <div class="tile-body">
+        <div class="tile-name">2048</div>
+      </div>
+    </a>
+
   </div>
 
   <footer>NGPC homebrew hiscore boards &mdash; fed by an on-device QR code after every completed game.</footer>
@@ -261,8 +270,8 @@
   // done HERE (rather than on a game's own page, or via a device camera app tapping the QR's own
   // URL) hands back raw decoded text with no path to read a folder name out of. Add one entry per
   // game; nothing else on this page needs to change.
-  const GAME_ROUTES = { BW: 'lb', TT: 'tetris', YZ: 'yahtzee', FK: 'farkle' };
-  const GAME_NAMES = { BW: 'Neo Bowling', TT: 'Tetris', YZ: 'Neo Yahtzee', FK: 'Farkle' };
+  const GAME_ROUTES = { BW: 'lb', TT: 'tetris', YZ: 'yahtzee', FK: 'farkle', '2K': '2048' };
+  const GAME_NAMES = { BW: 'Neo Bowling', TT: 'Tetris', YZ: 'Neo Yahtzee', FK: 'Farkle', '2K': '2048' };
 
   const el = (id)=>document.getElementById(id);
   const formMsg = el('form-msg');
