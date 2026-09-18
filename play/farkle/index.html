@@ -54,6 +54,14 @@
   .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
   .msg.info{ background:rgba(92,143,214,.12); color:var(--dim); border:1px solid var(--border); }
 
+  /* Shown until sign-in is confirmed; the emulator itself isn't even requested until then --
+     see the script tail. This is a client-side gate only (same limit as everything else on this
+     static site: no server to enforce it against a determined visitor), but it does stop the
+     ROM/cores from loading and keeps the player out of the page for a signed-out visitor. */
+  #signin-gate{ width:100%; max-width:480px; text-align:center; padding:24px; }
+  #player-content{ width:100%; display:flex; flex-direction:column; gap:18px; align-items:center; }
+  #player-content[hidden], #signin-gate[hidden]{ display:none; }
+
   footer{ text-align:center; color:var(--dim); font-size:11px; }
 </style>
 </head>
@@ -66,22 +74,17 @@
       Submit Score once the in-game QR code is on screen.</p>
   </header>
 
-  <div id="player-panel"><div id="game"></div></div>
+  <div id="signin-gate">&#128274; Sign in (top right) to use the in-browser player.</div>
 
-  <button type="button" id="btn-submit">Submit Score</button>
-  <div id="submit-msg"></div>
+  <div id="player-content" hidden>
+    <div id="player-panel"><div id="game"></div></div>
 
-  <footer>Captures your screen for one frame to read the on-screen QR code, then submits it the same way a real scan does.</footer>
+    <button type="button" id="btn-submit">Submit Score</button>
+    <div id="submit-msg"></div>
+
+    <footer>Captures your screen for one frame to read the on-screen QR code, then submits it the same way a real scan does.</footer>
+  </div>
 </div>
-
-<script type="text/javascript">
-  // Set up the player
-  EJS_player = '#game';
-  EJS_gameUrl = 'farkle.ngp'; // Url to Game rom
-  EJS_pathtodata = "../emulatorjs/data/";
-  EJS_core = 'ngp';
-</script>
-<script src="../emulatorjs/data/loader.js"></script>
 
 <script src="/auth.js"></script>
 <script>
@@ -93,8 +96,38 @@
   // this particular page will only ever see this one game's own QR on screen).
   const GAME_ROUTES = { BW: 'lb', TT: 'tetris', YZ: 'yahtzee', FK: 'farkle', '2K': '2048' };
   const el = (id)=>document.getElementById(id);
+  const gateEl = el('signin-gate');
+  const contentEl = el('player-content');
   const btnSubmit = el('btn-submit');
   const msgEl = el('submit-msg');
+
+  // The player is hidden -- and the ROM/EmulatorJS cores never even requested -- until sign-in
+  // is confirmed. loader.js is only injected here, on first confirmed sign-in, rather than as a
+  // static <script src> tag, so a signed-out visitor never triggers the multi-MB download at all.
+  let emulatorRequested = false;
+  function loadEmulator(){
+    if(emulatorRequested) return;
+    emulatorRequested = true;
+    window.EJS_player = '#game';
+    window.EJS_gameUrl = 'farkle.ngp'; // Url to Game rom
+    window.EJS_pathtodata = '../emulatorjs/data/';
+    window.EJS_core = 'ngp';
+    const loaderScript = document.createElement('script');
+    loaderScript.src = '../emulatorjs/data/loader.js';
+    document.body.appendChild(loaderScript);
+  }
+
+  function applyAuthState(user){
+    gateEl.hidden = !!user;
+    contentEl.hidden = !user;
+    if(user) loadEmulator();
+  }
+  if(window.NGPC_AUTH){
+    NGPC_AUTH.onAuthChange(applyAuthState);
+  } else {
+    // auth.js itself failed to load -- fail closed, same as "hidden if not signed in" intends.
+    applyAuthState(null);
+  }
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
