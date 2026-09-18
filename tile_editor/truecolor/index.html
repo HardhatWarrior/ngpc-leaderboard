@@ -1,0 +1,506 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NGPC True Color Tool</title>
+<style>
+:root{
+  --bg:#1e1f26; --panel:#262832; --panel2:#2d3040; --border:#3a3d4d;
+  --text:#e6e6ec; --dim:#9294a6; --accent:#5fb3ff; --accent2:#ff9f5f;
+  --danger:#ff6b6b; --good:#5fe0a0;
+  --canvas-bg:#202127; --checker:#2a2c36;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);
+  font:13px/1.4 "Segoe UI",system-ui,sans-serif;height:100%;}
+button,input,select{font:inherit;color:inherit;}
+button{background:var(--panel2);border:1px solid var(--border);color:var(--text);
+  padding:5px 10px;border-radius:4px;cursor:pointer;}
+button:hover{border-color:var(--accent);}
+button.active{background:var(--accent);color:#0b0d12;border-color:var(--accent);font-weight:600;}
+button:disabled{opacity:.4;cursor:default;}
+input[type=text],input[type=number]{background:var(--panel);border:1px solid var(--border);color:var(--text);
+  padding:4px 6px;border-radius:4px;width:60px;}
+input[type=range]{width:100%;accent-color:var(--accent);}
+h1{font-size:14px;margin:0;font-weight:600;letter-spacing:.02em;}
+h2{font-size:11px;margin:0 0 6px;text-transform:uppercase;letter-spacing:.06em;color:var(--dim);}
+.hint{color:var(--dim);font-size:11px;}
+.row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;}
+.col{display:flex;flex-direction:column;gap:6px;}
+.sep{width:1px;align-self:stretch;background:var(--border);margin:0 4px;}
+.panel{background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:10px;}
+a.filelike{color:var(--accent);text-decoration:none;font-size:12px;}
+a.filelike:hover{text-decoration:underline;}
+#app{display:grid;grid-template-columns:230px 1fr 260px;grid-template-rows:auto 1fr;
+  height:100vh;gap:8px;padding:8px;}
+#topbar{grid-column:1/4;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:8px 12px;flex-wrap:wrap;}
+#left{grid-row:2;overflow:auto;display:flex;flex-direction:column;gap:8px;}
+#right{grid-row:2;overflow:auto;display:flex;flex-direction:column;gap:8px;}
+#center{grid-row:2;display:flex;flex-direction:column;overflow:hidden;}
+#topStatusBar{flex:0 0 auto;display:flex;justify-content:space-between;gap:10px;
+  background:var(--panel);border:1px solid var(--border);border-radius:6px;padding:6px 10px;margin-bottom:8px;}
+#canvasScroll{flex:1;overflow:auto;background:var(--canvas-bg);border:1px solid var(--border);border-radius:6px;}
+#canvasWrap{display:inline-block;padding:16px;}
+#mainCanvas{image-rendering:pixelated;background:
+  linear-gradient(45deg,var(--checker) 25%,transparent 25%),
+  linear-gradient(-45deg,var(--checker) 25%,transparent 25%),
+  linear-gradient(45deg,transparent 75%,var(--checker) 75%),
+  linear-gradient(-45deg,transparent 75%,var(--checker) 75%);
+  background-size:16px 16px; background-position:0 0,0 8px,8px -8px,-8px 0;
+  cursor:crosshair;}
+.swatch{width:28px;height:28px;border-radius:4px;border:2px solid var(--border);cursor:pointer;flex:0 0 auto;}
+.swatch.active{border-color:var(--accent);}
+.statusText{white-space:pre-wrap;}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="topbar">
+    <div class="row">
+      <h1>NGPC True Color Tool</h1>
+      <span class="sep"></span>
+      <input id="projName" type="text" value="my_truecolor" style="width:130px" title="Project name">
+      <button id="btnNew">New</button>
+      <button id="btnSaveProj">Save Project</button>
+      <button id="btnLoadProj">Load Project</button>
+      <input id="fileLoadProj" type="file" accept=".json,.ngptrue.json" style="display:none">
+      <a class="filelike" href="../" title="Back to the indexed 2bpp Tile Editor">&larr; Tile Editor</a>
+    </div>
+    <div class="row">
+      <button id="btnImportPng">Import PNG</button>
+      <input id="fileImportPng" type="file" accept="image/png" style="display:none">
+      <span class="sep"></span>
+      <span class="hint" id="autosaveLabel"></span>
+    </div>
+  </div>
+
+  <div id="left">
+    <div class="panel">
+      <h2>About</h2>
+      <div class="hint">A per-pixel true-color canvas -- every pixel independently picks any of the 4096 real RGB444 colors (4 bits/channel), with none of the Tile Editor's per-tile 3-color-plus-transparent hardware limit. Not meant for real NGPC tile/sprite hardware -- this is a reference/asset tool, e.g. for painting an avatar for the <a class="filelike" href="https://www.ngpc-dev.com/account/" target="_blank">hiscore site's avatar maker</a>, which uses the exact same color model and can import a saved project from here directly.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Canvas Size (pixels)</h2>
+      <div class="row">
+        <input id="gridW" type="number" min="1" max="256" value="32">
+        <span>x</span>
+        <input id="gridH" type="number" min="1" max="256" value="32">
+        <button id="btnResize">Resize</button>
+      </div>
+      <div class="hint" style="margin-top:4px">Grows/crops from the top-left, keeping existing pixels in place.</div>
+      <div class="row" style="margin-top:6px">
+        <button data-preset="32x32">32x32 (Avatar)</button>
+      </div>
+      <div class="row" style="margin-top:10px">
+        <input id="scaleW" type="number" min="1" max="256" value="32">
+        <span>x</span>
+        <input id="scaleH" type="number" min="1" max="256" value="32">
+        <button id="btnScaleApply">Scale</button>
+      </div>
+      <div class="hint" style="margin-top:4px">Resamples the artwork itself to a new size (bilinear -- smooth, good for a photo) and re-quantizes to the nearest 4096-color match.</div>
+    </div>
+
+    <div class="panel">
+      <h2>Tools</h2>
+      <div class="row">
+        <button id="toolPencil" class="active" title="Pencil (B)">&#9998; Pencil</button>
+        <button id="toolEraser" title="Eraser (E)">&#9003; Eraser</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="toolFill" title="Fill (F)">&#128167; Fill</button>
+        <button id="toolEyedrop" title="Eyedropper (I)">&#128167;&#65039; Pick</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Zoom</h2>
+      <input id="zoomRange" type="range" min="2" max="32" value="12">
+      <div class="hint" id="zoomLabel">12 px/pixel</div>
+    </div>
+  </div>
+
+  <div id="center">
+    <div id="topStatusBar">
+      <span id="posInfo">&mdash;</span>
+      <span id="dimInfo">32x32 px</span>
+    </div>
+    <div id="canvasScroll">
+      <div id="canvasWrap"><canvas id="mainCanvas" width="384" height="384"></canvas></div>
+    </div>
+  </div>
+
+  <div id="right">
+    <div class="panel">
+      <h2>Color (RGB444, 0-15 per channel &mdash; 4096 total)</h2>
+      <div class="row">
+        <div id="colorPreview" class="swatch" style="border-color:var(--accent)"></div>
+        <span class="hint" id="colorHex"></span>
+      </div>
+      <div class="col" style="margin-top:8px">
+        <label class="hint">R <input id="sliderR" type="range" min="0" max="15" value="15"></label>
+        <label class="hint">G <input id="sliderG" type="range" min="0" max="15" value="0"></label>
+        <label class="hint">B <input id="sliderB" type="range" min="0" max="15" value="0"></label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Recent Colors</h2>
+      <div class="row" id="recentColors"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Export</h2>
+      <button id="btnExportPng" style="width:100%">Export PNG</button>
+      <div class="hint" style="margin-top:6px" id="avatarExportHint"></div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+"use strict";
+const TILE=1; // unused placeholder for parity with other tools' terminology
+const MAX_SIZE=256;
+const TRANSPARENT=-1;
+function packColor(r,g,b){ return (r&0xF)|((g&0xF)<<4)|((b&0xF)<<8); }
+function unpackColor(word){ return {r:word&0xF, g:(word>>4)&0xF, b:(word>>8)&0xF}; }
+function clamp(v,a,b){ return Math.max(a,Math.min(b,v)); }
+
+let state={ w:32, h:32, pixels:new Int32Array(32*32).fill(TRANSPARENT) };
+let zoom=12;
+let tool='pencil';
+let drawing=false;
+let currentColor={r:15,g:0,b:0};
+let recentColors=[];
+
+const canvas=document.getElementById('mainCanvas');
+const ctx=canvas.getContext('2d');
+
+function idx(x,y){ return y*state.w+x; }
+function inBounds(x,y){ return x>=0&&y>=0&&x<state.w&&y<state.h; }
+
+function render(){
+  canvas.width=state.w*zoom; canvas.height=state.h*zoom;
+  ctx.imageSmoothingEnabled=false;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let y=0;y<state.h;y++){
+    for(let x=0;x<state.w;x++){
+      const word=state.pixels[idx(x,y)];
+      if(word===TRANSPARENT) continue;
+      const c=unpackColor(word);
+      ctx.fillStyle=`rgb(${c.r*17},${c.g*17},${c.b*17})`;
+      ctx.fillRect(x*zoom,y*zoom,zoom,zoom);
+    }
+  }
+  document.getElementById('dimInfo').textContent=`${state.w}x${state.h} px`;
+}
+
+function syncGridInputs(){
+  document.getElementById('gridW').value=state.w;
+  document.getElementById('gridH').value=state.h;
+  document.getElementById('scaleW').value=state.w;
+  document.getElementById('scaleH').value=state.h;
+  document.getElementById('avatarExportHint').textContent = (state.w===32&&state.h===32)
+    ? 'This canvas is 32x32 -- Save Project below, then use "Import from Tile Editor" on the avatar maker to load it directly.'
+    : `This canvas is ${state.w}x${state.h} -- resize/scale to exactly 32x32 to use it as an avatar.`;
+}
+
+/* ---------- color picker ---------- */
+function updateColorUI(){
+  document.getElementById('sliderR').value=currentColor.r;
+  document.getElementById('sliderG').value=currentColor.g;
+  document.getElementById('sliderB').value=currentColor.b;
+  const css=`rgb(${currentColor.r*17},${currentColor.g*17},${currentColor.b*17})`;
+  document.getElementById('colorPreview').style.background=css;
+  document.getElementById('colorHex').textContent=`R${currentColor.r} G${currentColor.g} B${currentColor.b}`;
+}
+['sliderR','sliderG','sliderB'].forEach((id,i)=>{
+  document.getElementById(id).addEventListener('input',e=>{
+    const ch=['r','g','b'][i];
+    currentColor[ch]=+e.target.value;
+    updateColorUI();
+  });
+});
+function pushRecentColor(word){
+  recentColors=recentColors.filter(w=>w!==word);
+  recentColors.unshift(word);
+  recentColors=recentColors.slice(0,12);
+  renderRecentColors();
+}
+function renderRecentColors(){
+  const wrap=document.getElementById('recentColors');
+  wrap.innerHTML='';
+  recentColors.forEach(word=>{
+    const c=unpackColor(word);
+    const sw=document.createElement('div');
+    sw.className='swatch';
+    sw.style.background=`rgb(${c.r*17},${c.g*17},${c.b*17})`;
+    sw.title=`R${c.r} G${c.g} B${c.b}`;
+    sw.onclick=()=>{ currentColor=c; updateColorUI(); };
+    wrap.appendChild(sw);
+  });
+}
+updateColorUI();
+
+/* ---------- tools ---------- */
+function setTool(t){
+  tool=t;
+  ['toolPencil','toolEraser','toolFill','toolEyedrop'].forEach(id=>document.getElementById(id).classList.remove('active'));
+  document.getElementById('tool'+t[0].toUpperCase()+t.slice(1)).classList.add('active');
+}
+document.getElementById('toolPencil').onclick=()=>setTool('pencil');
+document.getElementById('toolEraser').onclick=()=>setTool('eraser');
+document.getElementById('toolFill').onclick=()=>setTool('fill');
+document.getElementById('toolEyedrop').onclick=()=>setTool('eyedrop');
+document.addEventListener('keydown',e=>{
+  if(['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)) return;
+  if(e.key==='b') setTool('pencil');
+  else if(e.key==='e') setTool('eraser');
+  else if(e.key==='f') setTool('fill');
+  else if(e.key==='i') setTool('eyedrop');
+});
+
+function floodFill(x0,y0,target,replacement){
+  if(target===replacement) return;
+  const stack=[[x0,y0]];
+  while(stack.length){
+    const [x,y]=stack.pop();
+    if(!inBounds(x,y)) continue;
+    if(state.pixels[idx(x,y)]!==target) continue;
+    state.pixels[idx(x,y)]=replacement;
+    stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+  }
+}
+
+function paintAt(x,y){
+  if(!inBounds(x,y)) return;
+  if(tool==='pencil'){
+    const word=packColor(currentColor.r,currentColor.g,currentColor.b);
+    state.pixels[idx(x,y)]=word;
+    pushRecentColor(word);
+  } else if(tool==='eraser'){
+    state.pixels[idx(x,y)]=TRANSPARENT;
+  } else if(tool==='fill'){
+    floodFill(x,y,state.pixels[idx(x,y)],packColor(currentColor.r,currentColor.g,currentColor.b));
+  } else if(tool==='eyedrop'){
+    const word=state.pixels[idx(x,y)];
+    if(word!==TRANSPARENT){ currentColor=unpackColor(word); updateColorUI(); }
+    setTool('pencil');
+  }
+}
+
+function cellFromEvent(e){
+  const rect=canvas.getBoundingClientRect();
+  const x=Math.floor((e.clientX-rect.left)/zoom);
+  const y=Math.floor((e.clientY-rect.top)/zoom);
+  return {x,y};
+}
+canvas.addEventListener('pointerdown',e=>{
+  canvas.setPointerCapture(e.pointerId);
+  drawing=true;
+  const c=cellFromEvent(e);
+  document.getElementById('posInfo').textContent=`${c.x},${c.y}`;
+  paintAt(c.x,c.y); render(); scheduleAutosave();
+});
+canvas.addEventListener('pointermove',e=>{
+  const c=cellFromEvent(e);
+  if(inBounds(c.x,c.y)) document.getElementById('posInfo').textContent=`${c.x},${c.y}`;
+  if(!drawing) return;
+  if(tool==='fill'||tool==='eyedrop') return; // single-shot tools
+  paintAt(c.x,c.y); render(); scheduleAutosave();
+});
+canvas.addEventListener('pointerup',()=>{ drawing=false; });
+canvas.addEventListener('pointerleave',()=>{ document.getElementById('posInfo').textContent='—'; });
+
+/* ---------- zoom ---------- */
+document.getElementById('zoomRange').addEventListener('input',e=>{
+  zoom=+e.target.value;
+  document.getElementById('zoomLabel').textContent=zoom+' px/pixel';
+  render();
+});
+
+/* ---------- resize (crop/pad, top-left anchored) ---------- */
+function resizeTo(newW,newH){
+  newW=clamp(newW,1,MAX_SIZE); newH=clamp(newH,1,MAX_SIZE);
+  const np=new Int32Array(newW*newH).fill(TRANSPARENT);
+  for(let y=0;y<Math.min(state.h,newH);y++){
+    for(let x=0;x<Math.min(state.w,newW);x++){
+      np[y*newW+x]=state.pixels[y*state.w+x];
+    }
+  }
+  state={w:newW,h:newH,pixels:np};
+  syncGridInputs(); render(); scheduleAutosave();
+}
+document.getElementById('btnResize').onclick=()=>{
+  resizeTo(parseInt(document.getElementById('gridW').value,10)||1,
+           parseInt(document.getElementById('gridH').value,10)||1);
+};
+document.querySelectorAll('button[data-preset]').forEach(b=>{
+  b.onclick=()=>{
+    const [w,h]=b.dataset.preset.split('x').map(Number);
+    resizeTo(w,h);
+  };
+});
+
+/* ---------- scale (bilinear resample -- appropriate for a photo, then re-quantize) ---------- */
+function quantizeChannel(v){ return clamp(Math.round(v/17),0,15); }
+function resampleAndQuantize(srcW,srcH,srcPixels,dstW,dstH){
+  // Encode current pixels (transparent = alpha 0) into an offscreen canvas, let the browser do a
+  // proper bilinear resample, then decode back to packed words -- same approach as the Tile
+  // Editor's resampleRGBA for its full-color reference image.
+  const srcCanvas=document.createElement('canvas'); srcCanvas.width=srcW; srcCanvas.height=srcH;
+  const sctx=srcCanvas.getContext('2d');
+  const srcImg=sctx.createImageData(srcW,srcH);
+  for(let i=0;i<srcW*srcH;i++){
+    const word=srcPixels[i];
+    const o=i*4;
+    if(word===TRANSPARENT){ srcImg.data[o+3]=0; continue; }
+    const c=unpackColor(word);
+    srcImg.data[o]=c.r*17; srcImg.data[o+1]=c.g*17; srcImg.data[o+2]=c.b*17; srcImg.data[o+3]=255;
+  }
+  sctx.putImageData(srcImg,0,0);
+  const dstCanvas=document.createElement('canvas'); dstCanvas.width=dstW; dstCanvas.height=dstH;
+  const dctx=dstCanvas.getContext('2d');
+  dctx.imageSmoothingEnabled=true; dctx.imageSmoothingQuality='high';
+  dctx.drawImage(srcCanvas,0,0,dstW,dstH);
+  const dstData=dctx.getImageData(0,0,dstW,dstH).data;
+  const out=new Int32Array(dstW*dstH);
+  for(let i=0;i<dstW*dstH;i++){
+    const o=i*4;
+    if(dstData[o+3]<128){ out[i]=TRANSPARENT; continue; }
+    out[i]=packColor(quantizeChannel(dstData[o]),quantizeChannel(dstData[o+1]),quantizeChannel(dstData[o+2]));
+  }
+  return out;
+}
+document.getElementById('btnScaleApply').onclick=()=>{
+  const newW=clamp(parseInt(document.getElementById('scaleW').value,10)||1,1,MAX_SIZE);
+  const newH=clamp(parseInt(document.getElementById('scaleH').value,10)||1,1,MAX_SIZE);
+  const newPixels=resampleAndQuantize(state.w,state.h,state.pixels,newW,newH);
+  state={w:newW,h:newH,pixels:newPixels};
+  syncGridInputs(); render(); scheduleAutosave();
+};
+
+/* ---------- import PNG (quantizes straight to the 4096 RGB444 colors, no palette rules) ---------- */
+async function importImage(img){
+  const off=document.createElement('canvas'); off.width=img.width; off.height=img.height;
+  const octx=off.getContext('2d');
+  octx.drawImage(img,0,0);
+  const data=octx.getImageData(0,0,img.width,img.height).data;
+  const w=Math.min(img.width,MAX_SIZE), h=Math.min(img.height,MAX_SIZE);
+  const np=new Int32Array(w*h).fill(TRANSPARENT);
+  for(let y=0;y<h;y++){
+    for(let x=0;x<w;x++){
+      const o=(y*img.width+x)*4;
+      const a=data[o+3];
+      if(a<128) continue;
+      np[y*w+x]=packColor(quantizeChannel(data[o]),quantizeChannel(data[o+1]),quantizeChannel(data[o+2]));
+    }
+  }
+  state={w,h,pixels:np};
+  syncGridInputs(); render(); scheduleAutosave();
+}
+document.getElementById('btnImportPng').onclick=()=>document.getElementById('fileImportPng').click();
+document.getElementById('fileImportPng').onchange=(e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    const img=new Image();
+    img.onload=()=>importImage(img);
+    img.src=reader.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value='';
+};
+
+/* ---------- export PNG ---------- */
+document.getElementById('btnExportPng').onclick=()=>{
+  const off=document.createElement('canvas'); off.width=state.w; off.height=state.h;
+  const octx=off.getContext('2d');
+  const img=octx.createImageData(state.w,state.h);
+  for(let i=0;i<state.w*state.h;i++){
+    const word=state.pixels[i]; const o=i*4;
+    if(word===TRANSPARENT) continue;
+    const c=unpackColor(word);
+    img.data[o]=c.r*17; img.data[o+1]=c.g*17; img.data[o+2]=c.b*17; img.data[o+3]=255;
+  }
+  octx.putImageData(img,0,0);
+  off.toBlob(blob=>{
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');
+    a.href=url; a.download=(document.getElementById('projName').value.trim()||'my_truecolor')+'.png';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),2000);
+  });
+};
+
+/* ---------- save/load project ---------- */
+function serializeProject(){
+  return {
+    version:1, kind:'ngpc-truecolor',
+    name:document.getElementById('projName').value.trim()||'my_truecolor',
+    w:state.w, h:state.h,
+    pixels:Array.from(state.pixels),
+  };
+}
+function loadProject(obj){
+  if(!Array.isArray(obj.pixels) || !obj.w || !obj.h) throw new Error('Not a recognized true-color project file.');
+  document.getElementById('projName').value=obj.name||'my_truecolor';
+  state={w:obj.w,h:obj.h,pixels:Int32Array.from(obj.pixels)};
+  syncGridInputs(); render(); scheduleAutosave();
+}
+document.getElementById('btnSaveProj').onclick=()=>{
+  const name=document.getElementById('projName').value.trim()||'my_truecolor';
+  const blob=new Blob([JSON.stringify(serializeProject(),null,1)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=name+'.ngptrue.json';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(()=>URL.revokeObjectURL(url),2000);
+};
+document.getElementById('btnLoadProj').onclick=()=>document.getElementById('fileLoadProj').click();
+document.getElementById('fileLoadProj').onchange=(e)=>{
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=()=>{
+    try{ loadProject(JSON.parse(reader.result)); }
+    catch(err){ alert('Could not load project file: '+err.message); }
+  };
+  reader.readAsText(file);
+  e.target.value='';
+};
+document.getElementById('btnNew').onclick=()=>{
+  if(!confirm('Start a new blank canvas? Unsaved changes will be lost.')) return;
+  state={w:32,h:32,pixels:new Int32Array(32*32).fill(TRANSPARENT)};
+  document.getElementById('projName').value='my_truecolor';
+  syncGridInputs(); render(); scheduleAutosave();
+};
+
+/* ---------- autosave ---------- */
+let autosaveTimer=null;
+function scheduleAutosave(){
+  if(autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer=setTimeout(()=>{
+    try{
+      localStorage.setItem('ngpc_truecolor_autosave', JSON.stringify(serializeProject()));
+      document.getElementById('autosaveLabel').textContent='autosaved '+new Date().toLocaleTimeString();
+    }catch(e){}
+  },400);
+}
+(function restoreAutosave(){
+  try{
+    const raw=localStorage.getItem('ngpc_truecolor_autosave');
+    if(raw) loadProject(JSON.parse(raw));
+  }catch(e){}
+})();
+
+syncGridInputs();
+render();
+})();
+</script>
+</body>
+</html>

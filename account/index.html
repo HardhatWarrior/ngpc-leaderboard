@@ -229,8 +229,8 @@
 <div id="import-overlay" hidden>
   <div id="import-modal">
     <h2 style="margin:0 0 4px;font-size:12px;letter-spacing:.1em;text-transform:uppercase;color:var(--accent2)">Import from Tile Editor</h2>
-    <p class="hint">Load a <code>.ngptile.json</code> project exported from the NGPC Tile Editor, then drag the 32&times;32 crop box over the region you want. Index-0 pixels (a tile's transparent slot) come in transparent here too.</p>
-    <input type="file" id="import-file" accept=".json,.ngptile.json">
+    <p class="hint">Load a <code>.ngptile.json</code> project from the NGPC Tile Editor, or a <code>.ngptrue.json</code> project from its <a href="/tile_editor/truecolor/" target="_blank" rel="noopener">True Color Tool</a>, then drag the 32&times;32 crop box over the region you want. Transparent pixels (a tile's index-0 slot, or an unpainted true-color pixel) come in transparent here too.</p>
+    <input type="file" id="import-file" accept=".json,.ngptile.json,.ngptrue.json">
     <div id="import-preview-wrap" hidden>
       <div id="import-preview">
         <div id="import-crop"></div>
@@ -628,7 +628,18 @@
         tilePalette:new Array((obj.gridW||1)*(obj.gridH||1)).fill(-1) }],
     };
   }
+  // The True Color Tool's own project format is already a flat array of packed RGB444 words with
+  // -1 for transparent -- identical encoding to this editor's own packColor/TRANSPARENT, so no
+  // palette-flatten step is needed, just a straight passthrough (unlike a .ngptile.json, whose
+  // colors live in a palette bank indexed per-tile).
+  function isTrueColorProject(obj){
+    return obj && obj.kind==='ngpc-truecolor' && Array.isArray(obj.pixels) && obj.w && obj.h;
+  }
+  function flattenTrueColorProject(obj){
+    return { w:obj.w, h:obj.h, pixels: obj.pixels.map(v=> (v===null||v===undefined||v<0) ? A.TRANSPARENT : v) };
+  }
   function flattenProject(obj){
+    if(isTrueColorProject(obj)) return flattenTrueColorProject(obj);
     if(!obj.version || obj.version<2) obj = migrateLegacyProject(obj);
     const gridW = obj.gridW, gridH = obj.gridH;
     const w = gridW*8, h = gridH*8;
