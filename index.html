@@ -677,19 +677,13 @@
      firestore.rules; a client can never create it, only atomically +1 its one pageViews field),
      so this is a raw "how many times has this page loaded" count, not a deduped unique-visitor
      count -- there's no server backend here to do real dedup/anti-abuse beyond that +1-per-write
-     rule. sessionStorage guards against the same browser tab inflating it on every refresh, but
-     that's just courtesy bookkeeping, not a security boundary. ---------- */
+     rule, and every load (including a plain refresh) counts on purpose. ---------- */
   function connectTrafficCounter(){
     const db = window.NGPC_AUTH ? NGPC_AUTH.db : null;
     const counterEl = el('traffic-counter');
     if(!db || !counterEl) return;
     const ref = db.collection('meta').doc('siteStats');
-    let alreadyCounted = false;
-    try{ alreadyCounted = sessionStorage.getItem('ngpc_counted') === '1'; }catch(e){ /* private mode etc -- just count every time */ }
-    if(!alreadyCounted){
-      ref.update({ pageViews: firebase.firestore.FieldValue.increment(1) }).catch(()=>{ /* doc not seeded yet, or offline -- counter just won't move */ });
-      try{ sessionStorage.setItem('ngpc_counted', '1'); }catch(e){}
-    }
+    ref.update({ pageViews: firebase.firestore.FieldValue.increment(1) }).catch(()=>{ /* doc not seeded yet, or offline -- counter just won't move */ });
     ref.onSnapshot(
       (doc)=>{
         if(doc.exists && typeof doc.data().pageViews === 'number'){
