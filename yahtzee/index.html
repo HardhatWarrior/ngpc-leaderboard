@@ -24,19 +24,29 @@
   #shell{ width:100%; max-width:960px; display:flex; flex-direction:column; gap:22px; }
   header{ background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--border); border-radius:14px; padding:22px 22px 18px; display:flex; flex-direction:column; gap:14px; position:relative; overflow:hidden; }
   header::before{ content:""; position:absolute; inset:0; background:radial-gradient(circle at 85% -10%, rgba(178,58,82,.35), transparent 55%); pointer-events:none; }
-  .wordmark{ position:relative; display:flex; flex-direction:column; gap:6px; }
+  .wordmark{ position:relative; display:flex; flex-direction:row; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px; }
   .wordmark .eyebrow{ font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase; }
-  .wordmark h1{ margin:0; font-size:clamp(20px,4.2vw,30px); line-height:1.4; text-wrap:balance; color:var(--cream); }
-  .wordmark h1 .sub{ display:block; font-size:.55em; color:var(--dim); margin-top:6px; }
-
-  /* decorative strip -- five dice, all showing the same face (a "Yahtzee") */
-  .dice-strip{ position:relative; display:grid; grid-template-columns:repeat(5,1fr); gap:6px; max-width:280px; }
-  .die{
-    aspect-ratio:1; background:var(--cream); border:1px solid var(--border); border-radius:5px;
-    display:grid; grid-template-columns:repeat(3,1fr); grid-template-rows:repeat(3,1fr);
-    padding:12%; box-shadow:0 2px 0 rgba(0,0,0,.25);
+  .wordmark h1{ margin:0; font-size:clamp(20px,4.2vw,30px); line-height:1.4; color:var(--cream); }
+  /* Only shown to a signed-in visitor -- see the onAuthChange hookup near the bottom of the
+     script. Anonymous QR submission still works fine without ever seeing this. Tucked into the
+     header panel's own bottom-right corner (header has position:relative) as a plain small link,
+     not a button, so it reads as a quiet aside rather than a second call-to-action. */
+  .play-link{
+    position:absolute; right:16px; bottom:14px;
+    display:inline-flex; align-items:center; gap:5px;
+    color:var(--accent2); font-size:11.5px; font-weight:600;
+    text-decoration:underline; text-underline-offset:2px;
   }
-  .die .pip{ width:100%; aspect-ratio:1; border-radius:50%; background:var(--navy); justify-self:center; align-self:center; }
+  .play-link:hover{ color:var(--cream); }
+  .play-link[hidden]{ display:none; }
+
+  /* decorative header art -- the same real title-screen capture the main page's own tile uses,
+     not a redraw of it. */
+  .header-art{
+    position:relative; width:160px; max-width:45%; aspect-ratio:160/152;
+    image-rendering:pixelated; border-radius:8px; border:1px solid var(--border);
+    box-shadow:0 4px 14px rgba(0,0,0,.35);
+  }
   main{ display:grid; grid-template-columns:1.5fr 1fr; gap:20px; align-items:start; }
   @media (max-width:720px){ main{ grid-template-columns:1fr; } }
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
@@ -91,9 +101,10 @@
   <header>
     <div class="wordmark">
       <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
-      <h1>NEO YAHTZEE<span class="sub">Hiscores</span></h1>
+      <h1>NEO YAHTZEE</h1>
     </div>
-    <div class="dice-strip" id="dice-strip" aria-hidden="true"></div>
+    <img src="/assets/yahtzee-title.png" alt="Neo Yahtzee title screen" class="header-art" width="160" height="152">
+    <a href="/play/yahtzee/" class="play-link" id="play-link" hidden>&#127918; Play Neo Yahtzee in Browser</a>
   </header>
 
   <main>
@@ -166,33 +177,6 @@
   const scanVideo = el('scan-video'), scanFile = el('scan-file');
 
   let db = null, pending = null, unsubscribeBoard = null;
-
-  // ---- decorative strip: five dice all showing 6s, i.e. an actual "Yahtzee" ----
-  const DIE_PIPS = {
-    1: [[1,1]],
-    2: [[0,0],[2,2]],
-    3: [[0,0],[1,1],[2,2]],
-    4: [[0,0],[0,2],[2,0],[2,2]],
-    5: [[0,0],[0,2],[1,1],[2,0],[2,2]],
-    6: [[0,0],[0,2],[1,0],[1,2],[2,0],[2,2]],
-  };
-  function buildDie(value){
-    const die = document.createElement('div');
-    die.className = 'die';
-    (DIE_PIPS[value]||[]).forEach(([r,c])=>{
-      const pip = document.createElement('span');
-      pip.className = 'pip';
-      pip.style.gridRow = String(r+1);
-      pip.style.gridColumn = String(c+1);
-      die.appendChild(pip);
-    });
-    return die;
-  }
-  (function buildDiceStrip(){
-    const strip = el('dice-strip');
-    if(!strip) return;
-    for(let i=0;i<5;i++) strip.appendChild(buildDie(6));
-  })();
 
   function computeYahtzeeTotals(scores){
     let upper = 0;
@@ -532,6 +516,12 @@
   });
 
   el('btn-again').addEventListener('click', ()=>{ pending = null; showStage('idle'); });
+
+  // The in-browser player is only offered to a signed-in visitor -- anonymous QR submission
+  // stays exactly as-is either way, this is purely about who sees the link.
+  if(window.NGPC_AUTH){
+    NGPC_AUTH.onAuthChange((user)=>{ el('play-link').hidden = !user; });
+  }
 
   initDb();
   console.log('DB initialized:', !!db);

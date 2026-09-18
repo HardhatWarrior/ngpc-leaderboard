@@ -61,19 +61,34 @@
     background:radial-gradient(circle at 85% -10%, rgba(178,58,82,.35), transparent 55%);
     pointer-events:none;
   }
-  .wordmark{ position:relative; display:flex; flex-direction:column; gap:6px; }
+  .wordmark{ position:relative; display:flex; flex-direction:row; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px; }
   .wordmark .eyebrow{
     font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase;
   }
   .wordmark h1{
-    margin:0; font-size:clamp(20px,4.2vw,30px); line-height:1.4; text-wrap:balance;
+    margin:0; font-size:clamp(20px,4.2vw,30px); line-height:1.4;
     color:var(--cream);
   }
-  .wordmark h1 .sub{ display:block; font-size:.55em; color:var(--dim); margin-top:6px; }
+  /* Only shown to a signed-in visitor -- see the onAuthChange hookup near the bottom of the
+     script. Anonymous QR submission still works fine without ever seeing this. Tucked into the
+     header panel's own bottom-right corner (header has position:relative) as a plain small link,
+     not a button, so it reads as a quiet aside rather than a second call-to-action. */
+  .play-link{
+    position:absolute; right:16px; bottom:14px;
+    display:inline-flex; align-items:center; gap:5px;
+    color:var(--accent2); font-size:11.5px; font-weight:600;
+    text-decoration:underline; text-underline-offset:2px;
+  }
+  .play-link:hover{ color:var(--cream); }
+  .play-link[hidden]{ display:none; }
 
-  /* decorative strip -- the 7 tetromino colors, standard guideline palette */
-  .piece-strip{ position:relative; display:grid; grid-template-columns:repeat(7,1fr); gap:4px; }
-  .piece-box{ aspect-ratio:1; border:1px solid var(--border); border-radius:3px; }
+  /* decorative header art -- the same real title-screen capture the main page's own tile uses,
+     not a redraw of it. */
+  .header-art{
+    position:relative; width:160px; max-width:45%; aspect-ratio:160/152;
+    image-rendering:pixelated; border-radius:8px; border:1px solid var(--border);
+    box-shadow:0 4px 14px rgba(0,0,0,.35);
+  }
 
   /* ---------- layout ---------- */
   main{ display:grid; grid-template-columns:1.5fr 1fr; gap:20px; align-items:start; }
@@ -160,9 +175,10 @@
   <header>
     <div class="wordmark">
       <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
-      <h1>TETRIS<span class="sub">Hiscores</span></h1>
+      <h1>TETRIS</h1>
     </div>
-    <div class="piece-strip" id="piece-strip" aria-hidden="true"></div>
+    <img src="/assets/tetris-title.png" alt="Tetris title screen" class="header-art" width="160" height="152">
+    <a href="/play/tetris/" class="play-link" id="play-link" hidden>&#127918; Play Tetris in Browser</a>
   </header>
 
   <main>
@@ -251,18 +267,6 @@
   const scanFile = el('scan-file');
 
   let pending = null; // {initials, score, lines, level}
-
-  // ---- decorative strip: the 7 tetromino colors, standard guideline palette ----
-  (function buildPieceStrip(){
-    const strip = el('piece-strip');
-    const colors = ['#31c7de','#e8d44d','#9c4fd6','#4fbf6a','#e0544a','#4f74d6','#e0913f'];
-    colors.forEach(c=>{
-      const box = document.createElement('div');
-      box.className = 'piece-box';
-      box.style.background = c;
-      strip.appendChild(box);
-    });
-  })();
 
   function validScore(n){ return Number.isInteger(n) && n>=0 && n<=MAX_SCORE; }
 
@@ -666,6 +670,12 @@
       history.replaceState(null, '', '/tetris/');
     }
   }
+  // The in-browser player is only offered to a signed-in visitor -- anonymous QR submission
+  // stays exactly as-is either way, this is purely about who sees the link.
+  if(window.NGPC_AUTH){
+    NGPC_AUTH.onAuthChange((user)=>{ el('play-link').hidden = !user; });
+  }
+
   boot();
 })();
 </script>

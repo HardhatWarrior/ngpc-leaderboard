@@ -28,11 +28,12 @@
   .wordmark .eyebrow{ font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase; }
   .wordmark h1{ margin:0; font-size:clamp(20px,4.2vw,30px); line-height:1.4; color:var(--cream); }
   /* Only shown to a signed-in visitor -- see the onAuthChange hookup near the bottom of the
-     script. Anonymous QR submission still works fine without ever seeing this. Styled as a
-     plain small link (not a button) so it reads as a quiet aside between the heading and the
-     title-screen art, not a second call-to-action competing with the panel's own layout. */
+     script. Anonymous QR submission still works fine without ever seeing this. Tucked into the
+     header panel's own bottom-right corner (header has position:relative) as a plain small link,
+     not a button, so it reads as a quiet aside rather than a second call-to-action. */
   .play-link{
-    align-self:flex-start; display:inline-flex; align-items:center; gap:5px;
+    position:absolute; right:16px; bottom:14px;
+    display:inline-flex; align-items:center; gap:5px;
     color:var(--accent2); font-size:11.5px; font-weight:600;
     text-decoration:underline; text-underline-offset:2px;
   }
