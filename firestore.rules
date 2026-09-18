@@ -179,7 +179,36 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data);
+      // Over Rev: game, initials (1-8 chars, not 3 -- this game's QR carries a free-typed name,
+      // not fixed initials), rules/course/car/tune/mode/difficulty/transmission/ticks/won/
+      // localRecord/event/sequence/raw, source, submittedAt, optional uid/username. Sorted
+      // ascending by ticks on the leaderboard (lower is better), unlike every other game here.
+      // Shape/bounds only -- does not re-verify the OV1 Base32/CRC24 encoding itself; see
+      // overrev-leaderboard-kit/README.md for why that's a client-side-only guarantee.
+      function isOverRevScore(d) {
+        return d.game == 'OV'
+          && d.keys().hasOnly(['game', 'initials', 'rules', 'course', 'car', 'tune', 'mode', 'difficulty', 'transmission', 'ticks', 'won', 'localRecord', 'event', 'sequence', 'raw', 'source', 'submittedAt', 'uid', 'username'])
+          && d.initials is string && d.initials.matches('^[A-Z0-9]{1,8}$')
+          && d.rules is int && d.rules == 1
+          && d.course is int && d.course >= 0 && d.course < 10
+          && d.car is int && d.car >= 0 && d.car < 8
+          && d.tune is int && d.tune >= 0 && d.tune <= 255
+          && d.mode is int && d.mode == 1
+          && d.difficulty is int && d.difficulty >= 0 && d.difficulty <= 3
+          && d.transmission is string && d.transmission in ['AT', 'MT']
+          && d.ticks is int && d.ticks >= 1 && d.ticks <= 65535
+          && d.won is bool && d.localRecord is bool
+          && d.event is int && d.event == 0
+          && d.sequence is int && d.sequence >= 0 && d.sequence <= 65535
+          && d.raw is string && d.raw.matches('^OV1:[A-Z0-9]{1,8}:[A-Z2-7]{24}$')
+          && d.source is string && d.source == 'qr'
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
+      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data);
 
       allow update: if false;
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --

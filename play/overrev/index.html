@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Farkle Web Player</title>
+<title>Over Rev Web Player</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -15,7 +15,7 @@
 <style>
   :root{
     --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
-    --cream:#f4eedd; --dim:#93a0c9; --accent:#a84d5e; --accent-ink:#fbeef1;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#3fa9dc; --accent-ink:#06202e;
     --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
   }
   *{ box-sizing:border-box; }
@@ -45,7 +45,7 @@
     font-weight:600; font-size:13.5px; width:100%; max-width:480px;
     background:var(--accent); color:var(--accent-ink);
   }
-  #btn-submit:hover:not(:disabled){ background:#b85a6b; }
+  #btn-submit:hover:not(:disabled){ background:#5fbce6; }
   #btn-submit:disabled{ opacity:.5; cursor:not-allowed; }
 
   #submit-msg{ width:100%; max-width:480px; }
@@ -69,7 +69,7 @@
 
 <div id="shell">
   <header>
-    <h1 class="px">FARKLE WEB PLAYER</h1>
+    <h1 class="px">OVER REV WEB PLAYER</h1>
     <p>Testing build &mdash; not linked from the site yet. Play in the window below, then hit
       Submit Score once the in-game QR code is on screen.</p>
   </header>
@@ -109,7 +109,7 @@
     if(emulatorRequested) return;
     emulatorRequested = true;
     window.EJS_player = '#game';
-    window.EJS_gameUrl = 'farkle.ngp'; // Url to Game rom
+    window.EJS_gameUrl = 'overrev.ngp'; // Url to Game rom
     window.EJS_pathtodata = '../emulatorjs/data/';
     window.EJS_core = 'ngp';
     const loaderScript = document.createElement('script');
