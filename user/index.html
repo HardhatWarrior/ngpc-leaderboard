@@ -39,9 +39,12 @@
     width:64px; height:64px; border-radius:8px; border:1px solid var(--border);
     image-rendering:pixelated; flex:none; background:var(--navy); position:relative;
   }
-  .profile-info{ position:relative; display:flex; flex-direction:column; gap:4px; }
+  .profile-info{ position:relative; display:flex; flex-direction:column; gap:4px; flex:1 1 0; min-width:0; }
   .profile-info .eyebrow{ font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase; }
-  .profile-info h1{ margin:0; font-size:clamp(18px,4vw,24px); color:var(--cream); }
+  .profile-info h1{
+    margin:0; font-size:clamp(18px,4vw,24px); color:var(--cream);
+    white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
 
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
   .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
@@ -152,6 +155,23 @@
   el('sub-prev').addEventListener('click', ()=>{ subPage = Math.max(0, subPage-1); renderSubPage(); });
   el('sub-next').addEventListener('click', ()=>{ subPage += 1; renderSubPage(); });
 
+  // Press Start 2P is wide and USERNAME_RE allows up to 16 chars -- at the header's default
+  // clamp() size a long name can outgrow the space next to the avatar, so shrink it (never wrap)
+  // until it actually fits instead of letting header's overflow:hidden clip it silently.
+  function fitProfileName(){
+    const h1 = el('profile-name');
+    h1.style.fontSize = '';
+    const maxSize = parseFloat(getComputedStyle(h1).fontSize);
+    const minSize = 10;
+    let size = maxSize;
+    h1.style.fontSize = size + 'px';
+    while(size > minSize && h1.scrollWidth > h1.clientWidth){
+      size -= 1;
+      h1.style.fontSize = size + 'px';
+    }
+  }
+  window.addEventListener('resize', fitProfileName);
+
   function showNotFound(msg){
     notFoundMsg.hidden = false;
     notFoundMsg.innerHTML = '<div class="msg err">'+escapeHtml(msg)+'</div>';
@@ -181,6 +201,7 @@
     }catch(e){ /* profile is optional decoration -- proceed without it */ }
 
     el('profile-name').textContent = (profile && profile.username ? profile.username : username).toUpperCase();
+    fitProfileName();
     if(profile && Array.isArray(profile.avatar) && profile.avatar.length === A.AVATAR_CELLS){
       A.renderAvatarToCanvas(el('profile-avatar'), profile.avatar, 64/A.AVATAR_SIZE);
     }

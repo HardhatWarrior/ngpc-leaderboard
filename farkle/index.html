@@ -102,7 +102,7 @@
   <main>
     <section class="panel">
       <h2>Leaderboard</h2>
-      <p class="hint">Top runs, ranked by score. Updates live as new games are logged.</p>
+      <p class="hint">Fastest wins, ranked by fewest rounds to 10000. Updates live as new games are logged.</p>
       <div id="board-status"></div>
       <div id="board"></div>
     </section>
@@ -272,7 +272,7 @@
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.score!=null?String(data.score).padStart(5,'0'):'-')+'</div>'+
+        '<div class="score-val tnum">'+(data.rounds!=null?String(data.rounds).padStart(3,'0'):'-')+'</div>'+
       '</div>';
       const detailHtml = hasDetail ? '<div class="row-detail" id="d'+i+'" hidden>'+renderFarkleScorecardHTML(data)+'</div>' : '';
       return rowHtml + detailHtml;
@@ -307,7 +307,7 @@
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).orderBy('score','desc').limit(25);
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).orderBy('rounds','asc').limit(25);
     unsubscribeBoard = q.onSnapshot(
       (snap)=>{ renderBoard(snap.docs); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
