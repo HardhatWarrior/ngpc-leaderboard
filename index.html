@@ -319,6 +319,16 @@
   // game; nothing else on this page needs to change.
   const GAME_ROUTES = { BW: 'lb', TT: 'tetris', YZ: 'yahtzee', FK: 'farkle', '2K': '2048', OV: 'overrev' };
   const GAME_NAMES = { BW: 'Neo Bowling', TT: 'Tetris', YZ: 'Neo Yahtzee', FK: 'Farkle', '2K': '2048', OV: 'Over Rev' };
+  // Over Rev's own scores/{doc} has no generic `score` field (ticks + course instead, see
+  // overrev/index.html and overrev-leaderboard-kit/README.md) -- the ticker needs its own small
+  // course-name lookup and tick-to-time formatter to show something meaningful for it, matching
+  // the two fields already sitting on the doc rather than pulling in the full OverRevProtocol
+  // decoder just for this. Order mirrors overrev-leaderboard-kit/catalog.json exactly.
+  const OV_COURSES = ['Cypress Lane','City Circuit','Canyon Run','Coast Road','Night Works','Volcano Pass','Rice Fields','Autumn Woods','Sakura Temple','Snow Pass'];
+  function formatOvTicks(ticks){
+    const seconds = Math.floor(ticks/60);
+    return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0')+'.'+String(Math.floor((ticks%60)*100/60)).padStart(2,'0');
+  }
 
   const el = (id)=>document.getElementById(id);
   const formMsg = el('form-msg');
@@ -565,6 +575,9 @@
     const itemHtml = docs.map((d,i)=>{
       const data = d.data();
       const gameName = GAME_NAMES[data.game] || data.game || '?';
+      const isOV = data.game === 'OV';
+      const gameLine = isOV ? (gameName+' · '+(OV_COURSES[data.course]||'?')) : gameName;
+      const scoreDisplay = isOV ? (data.ticks!=null?formatOvTicks(data.ticks):'-') : (data.score!=null?data.score:'-');
       const who = data.username
         ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>')
         : escapeHtml(data.initials||'???');
@@ -574,8 +587,8 @@
         : '<div class="ticker-avatar"></div>';
       return '<div class="ticker-item">'+
         avatarHtml+
-        '<div><div class="ticker-who">'+who+'</div><div class="ticker-game">'+escapeHtml(gameName)+'</div></div>'+
-        '<div class="ticker-score tnum">'+(data.score!=null?data.score:'-')+'</div>'+
+        '<div><div class="ticker-who">'+who+'</div><div class="ticker-game">'+escapeHtml(gameLine)+'</div></div>'+
+        '<div class="ticker-score tnum">'+escapeHtml(String(scoreDisplay))+'</div>'+
         '<div class="ticker-when">'+fmtTickerWhen(data.submittedAt)+'</div>'+
       '</div>';
     }).join('');
