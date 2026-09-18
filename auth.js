@@ -248,6 +248,172 @@ window.NGPC_AUTH = (function(){
     }
   }
 
+  // ---- shared score-detail rendering -- the account page's Submissions list and the public
+  // player-stats page both need every game's own per-row click-to-expand detail (or, for Tetris,
+  // its own inline meta text), matching each game's own leaderboard exactly. Centralized here
+  // (rather than duplicated a 3rd/4th time across account/index.html and user/index.html, the way
+  // each *leaderboard* page's own QR-scan code is duplicated per game) since both pages need every
+  // game's renderer at once, not just one. Ported verbatim from each game's own leaderboard page --
+  // see lb/index.html's computeScores/frameMarks, yahtzee/index.html's computeYahtzeeTotals, etc.
+  // for the reference implementations this was copied from.
+  const SCORE_MAX_FRAMES = 10;
+
+  function bowlingMarkChar(pins){
+    if(pins===10) return 'X';
+    if(pins===0) return '-';
+    return String(pins);
+  }
+  function bowlingComputeScores(rolls){
+    const scores = new Array(SCORE_MAX_FRAMES).fill(null);
+    let ri = 0, running = 0;
+    for(let frame=0; frame<SCORE_MAX_FRAMES; frame++){
+      if(frame < 9){
+        if(ri >= rolls.length) break;
+        if(rolls[ri] === 10){
+          if(ri+2 >= rolls.length) break;
+          running += 10 + rolls[ri+1] + rolls[ri+2];
+          ri += 1;
+        } else {
+          if(ri+1 >= rolls.length) break;
+          if(rolls[ri] + rolls[ri+1] === 10){
+            if(ri+2 >= rolls.length) break;
+            running += 10 + rolls[ri+2];
+          } else {
+            running += rolls[ri] + rolls[ri+1];
+          }
+          ri += 2;
+        }
+      } else {
+        const remaining = rolls.length - ri;
+        if(remaining < 2) break;
+        const needThree = rolls[ri]===10 || (rolls[ri]+rolls[ri+1]===10);
+        if(needThree && remaining < 3) break;
+        let frameTotal = rolls[ri] + rolls[ri+1];
+        if(needThree) frameTotal += rolls[ri+2];
+        running += frameTotal;
+        ri += needThree ? 3 : 2;
+      }
+      scores[frame] = running;
+    }
+    return scores;
+  }
+  function bowlingFrameMarks(rolls){
+    const marks = Array.from({length:SCORE_MAX_FRAMES}, ()=>[]);
+    let ri = 0;
+    for(let frame=0; frame<SCORE_MAX_FRAMES; frame++){
+      if(ri >= rolls.length) break;
+      if(frame < 9){
+        const r1 = rolls[ri];
+        if(r1 === 10){ marks[frame]=['X']; ri+=1; continue; }
+        const m1 = bowlingMarkChar(r1);
+        if(ri+1 >= rolls.length){ marks[frame]=[m1]; break; }
+        const r2 = rolls[ri+1];
+        marks[frame] = [m1, (r1+r2===10)?'/':bowlingMarkChar(r2)];
+        ri += 2;
+      } else {
+        const r1 = rolls[ri];
+        const m1 = bowlingMarkChar(r1);
+        if(ri+1 >= rolls.length){ marks[frame]=[m1]; break; }
+        const r2 = rolls[ri+1];
+        let m2, needThird;
+        if(r1===10){ m2=bowlingMarkChar(r2); needThird=true; }
+        else if(r1+r2===10){ m2='/'; needThird=true; }
+        else { m2=bowlingMarkChar(r2); needThird=false; }
+        marks[frame] = [m1, m2];
+        if(!needThird) break;
+        if(ri+2 >= rolls.length) break;
+        marks[frame].push(bowlingMarkChar(rolls[ri+2]));
+        break;
+      }
+    }
+    return marks;
+  }
+  function renderBowlingScorecardHTML(rolls){
+    const scores = bowlingComputeScores(rolls);
+    const marks = bowlingFrameMarks(rolls);
+    let html = '<div class="scorecard-grid">';
+    for(let f=0; f<SCORE_MAX_FRAMES; f++){
+      const m = marks[f] || [];
+      html += '<div class="sc-frame">'+
+        '<div class="sc-marks">'+m.map(c=>'<span>'+escapeHtml(c)+'</span>').join('')+'</div>'+
+        '<div class="sc-total tnum">'+(scores[f]!=null ? scores[f] : '')+'</div>'+
+      '</div>';
+    }
+    return html + '</div>';
+  }
+
+  const YZ_CATS = ['Ones','Twos','Threes','Fours','Fives','Sixes','3-Kind','4-Kind','House','Small','Large','Yahtzee','Chance'];
+  const YZ_UPPER_COUNT = 6, YZ_BONUS_THRESHOLD = 63, YZ_BONUS_AMOUNT = 35;
+  function yahtzeeComputeTotals(scores){
+    let upper = 0;
+    for(let i=0;i<YZ_UPPER_COUNT;i++) upper += scores[i];
+    const bonus = upper >= YZ_BONUS_THRESHOLD ? YZ_BONUS_AMOUNT : 0;
+    const upperTotal = upper + bonus;
+    let lower = 0;
+    for(let i=YZ_UPPER_COUNT;i<YZ_CATS.length;i++) lower += scores[i];
+    const grand = upperTotal + lower;
+    return {upper, bonus, upperTotal, lower, grand};
+  }
+  function renderYahtzeeScorecardHTML(scores){
+    const t = yahtzeeComputeTotals(scores);
+    let rows = '';
+    for(let i=0;i<YZ_CATS.length;i++){
+      if(i === YZ_UPPER_COUNT){
+        rows += '<tr class="yz-total"><td>Bonus (63+)</td><td class="yz-val tnum">'+t.bonus+'</td></tr>';
+        rows += '<tr class="yz-total"><td>Upper total</td><td class="yz-val tnum">'+t.upperTotal+'</td></tr>';
+      }
+      rows += '<tr><td>'+escapeHtml(YZ_CATS[i])+'</td><td class="yz-val tnum">'+scores[i]+'</td></tr>';
+    }
+    rows += '<tr class="yz-total"><td>Lower total</td><td class="yz-val tnum">'+t.lower+'</td></tr>';
+    rows += '<tr class="yz-grand"><td>Grand total</td><td class="yz-val tnum">'+t.grand+'</td></tr>';
+    return '<table class="yz-sheet">'+rows+'</table>';
+  }
+
+  function renderFarkleScorecardHTML(data){
+    const badgeClass = data.resultDisplay === 'WIN' ? 'win' : data.resultDisplay === 'LOSS' ? 'loss' : data.resultDisplay === 'DRAW' ? 'draw' : 'solo';
+    const rows = '<tr><td>Score</td><td class="fk-val tnum">'+data.score+'</td></tr>'+
+      '<tr><td>Rounds</td><td class="fk-val tnum">'+data.rounds+'</td></tr>'+
+      '<tr><td>Opened</td><td class="fk-val tnum">'+data.opened+'</td></tr>'+
+      '<tr><td>Farkles</td><td class="fk-val tnum">'+data.farkles+'</td></tr>'+
+      '<tr><td colspan="2"><div class="fk-badge '+badgeClass+'">'+(data.resultDisplay||'')+'</div></td></tr>';
+    return '<table class="fk-sheet">'+rows+'</table>';
+  }
+
+  function render2048ScorecardHTML(data){
+    const rows = '<tr><td>Score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
+      '<tr><td>Moves</td><td class="tk-val tnum">'+data.moves+'</td></tr>';
+    return '<table class="tk-sheet">'+rows+'</table>';
+  }
+
+  // True for a game whose row expands into a click-to-reveal detail (Bowling/Yahtzee/Farkle/2048);
+  // false for Tetris, whose own leaderboard shows lines/level as plain inline meta text instead --
+  // scoreInlineMeta() covers that case.
+  function scoreHasDetail(data){
+    switch(data.game){
+      case 'BW': return Array.isArray(data.rolls) && data.rolls.length>0;
+      case 'YZ': return Array.isArray(data.categoryScores) && data.categoryScores.length===YZ_CATS.length;
+      case 'FK': return data.resultDisplay !== undefined && data.rounds !== undefined;
+      case '2K': return data.moves !== undefined;
+      default: return false;
+    }
+  }
+  function scoreDetailHTML(data){
+    switch(data.game){
+      case 'BW': return renderBowlingScorecardHTML(data.rolls);
+      case 'YZ': return renderYahtzeeScorecardHTML(data.categoryScores);
+      case 'FK': return renderFarkleScorecardHTML(data);
+      case '2K': return render2048ScorecardHTML(data);
+      default: return '';
+    }
+  }
+  function scoreInlineMeta(data){
+    if(data.game==='TT'){
+      return [data.level!=null?('Lv '+data.level):null, data.lines!=null?(data.lines+' lines'):null]
+        .filter(Boolean).join(' · ');
+    }
+    return '';
+  }
+
   // ---- current-user state, kept live for any page's own inline script to read synchronously
   // (e.g. "attach my username to this score doc, if I happen to be signed in right now") ----
   let currentUser = null;
@@ -267,13 +433,23 @@ window.NGPC_AUTH = (function(){
     };
     listeners.forEach(cb=>cb(currentUser));
   }
+  // Resolves once currentUser has settled after page load (signed-out, or signed-in AND its
+  // profile/username fetched) -- auth.onAuthStateChanged() resolving the persisted session and
+  // loadProfile()'s own Firestore read are both async, so a caller that reads `currentUser`
+  // synchronously right after page load (e.g. a QR-scan deep link that opens straight into a
+  // submit button) can race both of them and see a signed-out-looking null even though the user
+  // IS signed in -- every game page's submit handler awaits this first specifically to avoid
+  // silently submitting a signed-in user's score without their uid/username.
+  let markAuthReady;
+  const authReady = new Promise(resolve=>{ markAuthReady = resolve; });
   auth.onAuthStateChanged((user)=>{
     if(!user){
       currentUser = null;
       listeners.forEach(cb=>cb(null));
+      markAuthReady();
       return;
     }
-    loadProfile(user.uid);
+    loadProfile(user.uid).then(markAuthReady);
   });
   function onAuthChange(cb){ listeners.push(cb); if(currentUser!==undefined) cb(currentUser); }
   // Firestore profile changes (username/email/avatar) don't re-fire onAuthStateChanged -- that
@@ -449,6 +625,8 @@ window.NGPC_AUTH = (function(){
     TRANSPARENT, isTransparent,
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,
     friendlyAuthError, escapeHtml,
+    scoreHasDetail, scoreDetailHTML, scoreInlineMeta,
+    authReady,
     get currentUser(){ return currentUser; }
   };
 })();

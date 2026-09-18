@@ -50,15 +50,56 @@
   .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
   .panel .hint{ margin:0 0 14px; color:var(--dim); font-size:12.5px; line-height:1.5; }
 
+  .sub-controls{ display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+  .sub-controls-label{ font-size:11px; color:var(--dim); text-transform:uppercase; letter-spacing:.08em; }
+  .sub-sort-btn{
+    font:inherit; width:auto; background:transparent; border:1px solid var(--border); color:var(--dim);
+    border-radius:6px; padding:6px 10px; font-size:11.5px; font-weight:600; cursor:pointer; display:flex; align-items:center; gap:4px;
+  }
+  .sub-sort-btn:hover{ border-color:var(--accent2); }
+  .sub-sort-btn.active{ border-color:var(--accent2); color:var(--cream); }
+  .sub-sort-btn .sort-arrow{ font-size:9px; }
+  /* general sibling (~), not adjacent (+): a sub-detail panel can sit between two .sub-row
+     elements once a game's detail is expanded, which would otherwise break an adjacent match */
   .sub-row{
     display:grid; grid-template-columns:1fr auto; align-items:center; gap:10px;
     padding:10px 4px; border-radius:6px;
   }
   .sub-row ~ .sub-row{ border-top:1px solid var(--border); }
+  .sub-row.has-detail{ cursor:pointer; }
+  .sub-row.has-detail:hover{ background:rgba(92,143,214,.08); }
   .sub-game{ font-size:12.5px; font-weight:600; color:var(--cream); }
   .sub-when{ font-size:11px; color:var(--dim); margin-top:2px; }
   .sub-score{ font-family:"IBM Plex Mono",monospace; font-size:15px; color:var(--good); text-align:right; }
   .sub-empty{ color:var(--dim); font-size:12.5px; padding:12px 4px; }
+
+  /* per-game expanded detail -- ported verbatim from each game's own leaderboard page (see
+     auth.js's scoreDetailHTML) so a submission here looks identical to its board entry. */
+  .sub-detail{ padding:2px 4px 14px; }
+  .scorecard-grid{ display:grid; grid-template-columns:repeat(10,1fr); gap:3px; margin:14px 0; }
+  .sc-frame{
+    background:var(--navy); border:1px solid var(--border); border-radius:4px;
+    padding:3px 1px 4px; text-align:center; min-width:0;
+  }
+  .sc-marks{
+    display:flex; justify-content:center; gap:2px; min-height:11px;
+    font-family:"IBM Plex Mono",monospace; font-size:9px; font-weight:600; color:var(--accent2);
+  }
+  .sc-marks span{ min-width:7px; }
+  .sc-total{ font-size:9.5px; margin-top:3px; color:var(--cream); font-weight:600; }
+  .yz-sheet{ width:100%; border-collapse:collapse; margin:14px 0; font-size:11.5px; }
+  .yz-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
+  .yz-sheet td.yz-val{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
+  .yz-sheet tr.yz-total td{ color:var(--good); font-weight:600; border-top:1px solid var(--border); }
+  .yz-sheet tr.yz-grand td{ color:var(--good); font-weight:700; font-size:13px; }
+  .fk-sheet, .tk-sheet{ width:100%; border-collapse:collapse; margin:14px 0; font-size:11.5px; }
+  .fk-sheet td, .tk-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
+  .fk-sheet td.fk-val, .tk-sheet td.tk-val{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
+  .fk-badge{ display:inline-block; font-family:"Press Start 2P",monospace; font-size:10px; padding:3px 8px; border-radius:4px; margin-top:8px; }
+  .fk-badge.win{ background:rgba(79,191,139,.25); color:var(--good); }
+  .fk-badge.loss{ background:rgba(229,97,90,.25); color:var(--danger); }
+  .fk-badge.draw{ background:rgba(160,132,200,.25); color:var(--accent2); }
+  .fk-badge.solo{ background:rgba(74,124,192,.25); color:#4a7cc0; }
 
   .sub-pager{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:12px; }
   .sub-pager button{
@@ -91,7 +132,12 @@
 
   <section class="panel" id="subs-panel" hidden>
     <h2>Submissions</h2>
-    <p class="hint">Every score this player has submitted while signed in, across every game, newest first.</p>
+    <p class="hint">Every score this player has submitted while signed in, across every game. Click one with a scorecard to expand it.</p>
+    <div class="sub-controls">
+      <span class="sub-controls-label">Sort by</span>
+      <button type="button" class="sub-sort-btn" data-sort="date">Date <span class="sort-arrow"></span></button>
+      <button type="button" class="sub-sort-btn" data-sort="game">Game <span class="sort-arrow"></span></button>
+    </div>
     <div id="sub-status"></div>
     <div id="sub-list"></div>
     <div class="sub-pager" id="sub-pager" hidden>
@@ -109,7 +155,7 @@
 (function(){
   "use strict";
   const GAME_NAMES = { BW: 'Neo Bowling', TT: 'Tetris', YZ: 'Neo Yahtzee', FK: 'Farkle', '2K': '2048' };
-  const SUB_PAGE_SIZE = 20;
+  const SUB_PAGE_SIZE = 10;
 
   const el = (id)=>document.getElementById(id);
   const notFoundMsg = el('not-found-msg');
@@ -120,6 +166,8 @@
   const subPageLabel = el('sub-page-label');
   let allSubs = [];
   let subPage = 0;
+  let subSortKey = 'date';  // 'date' | 'game'
+  let subSortDir = 'desc';  // 'asc' | 'desc'
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -130,6 +178,47 @@
     return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
   }
 
+  function sortSubs(){
+    allSubs.sort((a,b)=>{
+      const da = a.data(), db_ = b.data();
+      let cmp;
+      if(subSortKey === 'game'){
+        const ga = GAME_NAMES[da.game] || da.game || '';
+        const gb = GAME_NAMES[db_.game] || db_.game || '';
+        cmp = ga.localeCompare(gb);
+        if(cmp === 0) cmp = (da.submittedAt||0) - (db_.submittedAt||0); // tie-break oldest->newest within a game
+      } else {
+        cmp = (da.submittedAt||0) - (db_.submittedAt||0);
+      }
+      return subSortDir === 'asc' ? cmp : -cmp;
+    });
+  }
+
+  function updateSubSortButtons(){
+    document.querySelectorAll('.sub-sort-btn').forEach(btn=>{
+      const isActive = btn.dataset.sort === subSortKey;
+      btn.classList.toggle('active', isActive);
+      btn.querySelector('.sort-arrow').textContent = isActive ? (subSortDir==='asc' ? '▲' : '▼') : '';
+    });
+  }
+
+  function setSubSort(key){
+    if(subSortKey === key){
+      subSortDir = subSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      subSortKey = key;
+      subSortDir = key === 'date' ? 'desc' : 'asc'; // newest-first by default; A-Z by default for game
+    }
+    sortSubs();
+    subPage = 0;
+    renderSubPage();
+    updateSubSortButtons();
+  }
+  document.querySelectorAll('.sub-sort-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>setSubSort(btn.dataset.sort));
+  });
+  updateSubSortButtons();
+
   function renderSubPage(){
     const totalPages = Math.max(1, Math.ceil(allSubs.length / SUB_PAGE_SIZE));
     subPage = Math.min(subPage, totalPages-1);
@@ -139,13 +228,22 @@
       subPager.hidden = true;
       return;
     }
-    subList.innerHTML = pageItems.map(d=>{
+    const A = window.NGPC_AUTH;
+    subList.innerHTML = pageItems.map((d,i)=>{
       const data = d.data();
       const gameName = GAME_NAMES[data.game] || data.game || '?';
-      return '<div class="sub-row">'+
-        '<div><div class="sub-game">'+escapeHtml(gameName)+'</div><div class="sub-when">'+fmtWhen(data.submittedAt)+'</div></div>'+
+      // Matches each game's own leaderboard exactly: Bowling/Yahtzee/Farkle/2048 rows expand into
+      // a click-to-reveal scorecard, Tetris instead folds its lines/level into the meta line.
+      const hasDetail = A && A.scoreHasDetail(data);
+      const inlineMeta = A ? A.scoreInlineMeta(data) : '';
+      const whenLine = fmtWhen(data.submittedAt) + (inlineMeta ? ' · '+inlineMeta : '');
+      const detailId = 'sub-detail-'+i;
+      const rowHtml = '<div class="sub-row'+(hasDetail?' has-detail':'')+'"'+(hasDetail?' data-detail="'+detailId+'"':'')+'>'+
+        '<div><div class="sub-game">'+escapeHtml(gameName)+'</div><div class="sub-when">'+whenLine+'</div></div>'+
         '<div class="sub-score tnum">'+(data.score!=null?data.score:'-')+'</div>'+
       '</div>';
+      const detailHtml = hasDetail ? '<div class="sub-detail" id="'+detailId+'" hidden>'+A.scoreDetailHTML(data)+'</div>' : '';
+      return rowHtml + detailHtml;
     }).join('');
     subPager.hidden = totalPages<=1;
     subPageLabel.textContent = 'Page '+(subPage+1)+' of '+totalPages;
@@ -154,6 +252,13 @@
   }
   el('sub-prev').addEventListener('click', ()=>{ subPage = Math.max(0, subPage-1); renderSubPage(); });
   el('sub-next').addEventListener('click', ()=>{ subPage += 1; renderSubPage(); });
+
+  subList.addEventListener('click', (e)=>{
+    const row = e.target.closest('.sub-row.has-detail');
+    if(!row) return;
+    const detailId = row.dataset.detail;
+    if(detailId) el(detailId).hidden = !el(detailId).hidden;
+  });
 
   // Press Start 2P is wide and USERNAME_RE allows up to 16 chars -- at the header's default
   // clamp() size a long name can outgrow the space next to the avatar, so shrink it (never wrap)
@@ -212,8 +317,10 @@
       // No .orderBy() here on purpose -- pairing it with the .where('uid',...) filter needs a
       // composite index Firestore won't build automatically, so this sorts client-side instead.
       const snap = await A.db.collection('scores').where('uid','==',uid).get();
-      allSubs = snap.docs.slice().sort((a,b)=>(b.data().submittedAt||0)-(a.data().submittedAt||0));
+      allSubs = snap.docs.slice();
+      sortSubs();
       subStatus.textContent = '';
+      subPage = 0;
       renderSubPage();
     }catch(e){
       subStatus.innerHTML = '<div class="msg err">Couldn’t load submissions right now — try again in a bit.</div>';

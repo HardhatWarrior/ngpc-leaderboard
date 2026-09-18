@@ -630,6 +630,9 @@
     };
     // Attach who submitted this only if signed in -- anonymous QR submission (no account at all)
     // keeps working exactly as before; username is purely additive.
+    // Wait for auth to actually settle first -- a QR-scan deep link opens straight into this
+    // confirm screen, and a fast submit can otherwise race the still-resolving sign-in check.
+    if(window.NGPC_AUTH) await NGPC_AUTH.authReady;
     const authedUser = window.NGPC_AUTH && NGPC_AUTH.currentUser;
     if(authedUser && authedUser.username){
       scoreDoc.uid = authedUser.uid;
