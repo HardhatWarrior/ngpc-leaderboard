@@ -1,13 +1,240 @@
-<html>
-    <body>
-        <div style="background-color:cyan"><div id="game"></div></div>
-        <script type="text/javascript">
-            // Set up the player
-            EJS_player = '#game';
-            EJS_gameUrl = '2048.ngp'; // Url to Game rom
-            EJS_pathtodata = "emulatorjs/data/";
-            EJS_core = 'ngp';
-        </script>
-        <script src="emulatorjs/data/loader.js"></script>
-    </body>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>2048 Web Player</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/inlined/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#f2994a; --accent-ink:#2b1608;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:auto; }
+  body{
+    margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+    padding-inline:20px; padding-block:32px; display:flex; justify-content:center;
+  }
+  .px{ font-family:"Press Start 2P",monospace; }
+  #shell{ width:100%; max-width:520px; display:flex; flex-direction:column; gap:18px; align-items:center; }
+
+  header{ text-align:center; display:flex; flex-direction:column; gap:8px; }
+  header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
+  header p{ margin:0; color:var(--dim); font-size:13px; }
+
+  /* ---------- windowed player panel -- a fixed-size box; EmulatorJS's own .ejs_parent is
+     width:100%/height:100% of whatever contains it, so sizing this div is all that's needed to
+     "window" it instead of letting it fill the page. ---------- */
+  #player-panel{
+    width:100%; max-width:480px; aspect-ratio:160/152;
+    background:#000; border:1px solid var(--border); border-radius:14px; overflow:hidden;
+  }
+  #game{ width:100%; height:100%; }
+
+  #btn-submit{
+    font:inherit; border:none; border-radius:8px; padding:13px 20px; cursor:pointer;
+    font-weight:600; font-size:13.5px; width:100%; max-width:480px;
+    background:var(--accent); color:var(--accent-ink);
+  }
+  #btn-submit:hover:not(:disabled){ background:#f5a866; }
+  #btn-submit:disabled{ opacity:.5; cursor:not-allowed; }
+
+  #submit-msg{ width:100%; max-width:480px; }
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; text-align:center; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+  .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
+  .msg.info{ background:rgba(92,143,214,.12); color:var(--dim); border:1px solid var(--border); }
+
+  footer{ text-align:center; color:var(--dim); font-size:11px; }
+</style>
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <h1 class="px">2048 WEB PLAYER</h1>
+    <p>Testing build &mdash; not linked from the site yet. Play in the window below, then hit
+      Submit Score once the in-game QR code is on screen.</p>
+  </header>
+
+  <div id="player-panel"><div id="game"></div></div>
+
+  <button type="button" id="btn-submit">Submit Score</button>
+  <div id="submit-msg"></div>
+
+  <footer>Captures your screen for one frame to read the on-screen QR code, then submits it the same way a real scan does.</footer>
+</div>
+
+<script type="text/javascript">
+  // Set up the player
+  EJS_player = '#game';
+  EJS_gameUrl = '2048.ngp'; // Url to Game rom
+  EJS_pathtodata = "emulatorjs/data/";
+  EJS_core = 'ngp';
+</script>
+<script src="emulatorjs/data/loader.js"></script>
+
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  const QR_GAME_CODE = '2K';
+  const el = (id)=>document.getElementById(id);
+  const btnSubmit = el('btn-submit');
+  const msgEl = el('submit-msg');
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function showMsg(cls, text){ msgEl.innerHTML = '<div class="msg '+cls+'">'+escapeHtml(text)+'</div>'; }
+
+  function lastPathSegment(text){
+    const parts = String(text||'').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length-1] : '';
+  }
+
+  /* ---------- QR decode stack -- identical to every other page's own scan code (zbar-wasm
+     tried first, native BarcodeDetector second, jsQR last); see e.g. /2048/index.html's own
+     comments for why. Only the image *source* differs here: a single captured screen frame
+     instead of a live camera video or an uploaded photo. ---------- */
+  const scanCanvas = document.createElement('canvas');
+  const scanCtx = scanCanvas.getContext('2d', {willReadFrequently:true});
+
+  let barcodeDetector;
+  function getBarcodeDetector(){
+    if(barcodeDetector !== undefined) return barcodeDetector;
+    if(!('BarcodeDetector' in window)){ barcodeDetector = null; return null; }
+    try{ barcodeDetector = new window.BarcodeDetector({formats:['qr_code']}); }
+    catch(e){ barcodeDetector = null; }
+    return barcodeDetector;
+  }
+
+  async function decodeViaZbarWasm(source, w0, h0){
+    if(!window.zbarWasm || !w0 || !h0) return null;
+    const scale = Math.min(1, 1000/Math.max(w0,h0));
+    const w = Math.round(w0*scale), h = Math.round(h0*scale);
+    scanCanvas.width = w; scanCanvas.height = h;
+    scanCtx.drawImage(source, 0, 0, w, h);
+    try{
+      const symbols = await window.zbarWasm.scanImageData(scanCtx.getImageData(0, 0, w, h));
+      if(symbols && symbols.length) return symbols[0].decode();
+    }catch(e){ /* fall through */ }
+    return null;
+  }
+
+  function jsqrFallback(source, w0, h0, scales){
+    if(!window.jsQR || !w0 || !h0) return null;
+    for(const target of scales){
+      const scale = Math.min(1, target/Math.max(w0,h0));
+      const w = Math.round(w0*scale), h = Math.round(h0*scale);
+      scanCanvas.width = w; scanCanvas.height = h;
+      scanCtx.drawImage(source, 0, 0, w, h);
+      const frame = scanCtx.getImageData(0, 0, w, h);
+      const code = window.jsQR(frame.data, w, h, {inversionAttempts:'attemptBoth'});
+      if(code && code.data) return code.data;
+    }
+    return null;
+  }
+
+  async function decodeSource(source, w0, h0, scales){
+    const viaZbar = await decodeViaZbarWasm(source, w0, h0);
+    if(viaZbar) return viaZbar;
+    const bd = getBarcodeDetector();
+    if(bd){
+      try{
+        const results = await bd.detect(source);
+        if(results && results.length && results[0].rawValue) return results[0].rawValue;
+      }catch(e){ /* fall through to jsQR */ }
+    }
+    return jsqrFallback(source, w0, h0, scales);
+  }
+
+  function wait(ms){ return new Promise(r=>setTimeout(r, ms)); }
+
+  /* ---------- capture one frame of the screen/window the person picks, decode it, and route
+     into the real 2048 leaderboard page's own confirm/submit flow -- same hash-payload handoff
+     the main site's QR scan and every leaderboard's own scan already use (see index.html's
+     routeToGame()), so this page never needs its own copy of the Firestore write/auth logic. ---------- */
+  async function captureAndSubmit(){
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
+      showMsg('err', 'Screen capture isn’t supported in this browser.');
+      return;
+    }
+    btnSubmit.disabled = true;
+    showMsg('info', 'Choose this tab/window when prompted, with the QR code visible…');
+
+    let stream;
+    try{
+      stream = await navigator.mediaDevices.getDisplayMedia({
+        video: { displaySurface: 'window' },
+        preferCurrentTab: true, // Chrome-only hint; ignored elsewhere, falls back to the normal picker
+        audio: false,
+      });
+    }catch(e){
+      showMsg('err', 'Screen share was cancelled or denied — try again and pick this tab/window.');
+      btnSubmit.disabled = false;
+      return;
+    }
+
+    try{
+      const video = document.createElement('video');
+      video.srcObject = stream;
+      video.muted = true;
+      await new Promise((resolve, reject)=>{
+        video.onloadedmetadata = resolve;
+        video.onerror = ()=>reject(new Error('video failed to load'));
+      });
+      await video.play();
+      // Give the captured stream a couple of frames to actually start painting real content
+      // before grabbing one, rather than risking a blank first frame right as sharing begins.
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+
+      const w = video.videoWidth, h = video.videoHeight;
+      if(!w || !h) throw new Error('captured frame was empty');
+      const frameCanvas = document.createElement('canvas');
+      frameCanvas.width = w; frameCanvas.height = h;
+      frameCanvas.getContext('2d').drawImage(video, 0, 0, w, h);
+
+      stream.getTracks().forEach(t=>t.stop()); // one frame is all that's needed -- stop sharing right away
+
+      showMsg('info', 'Looking for a QR code…');
+      const value = await decodeSource(frameCanvas, w, h, [700, 1100, 1500, 2000]);
+      if(!value){
+        showMsg('err', 'No QR code found in the captured screen — make sure the game’s QR code is fully visible (not covered by another window) and try again.');
+        btnSubmit.disabled = false;
+        return;
+      }
+
+      const payload = lastPathSegment(value).toUpperCase();
+      const code = payload.slice(0, 2);
+      if(code !== QR_GAME_CODE){
+        showMsg('err', 'That QR code doesn’t look like a 2048 score code ("'+escapeHtml(code)+'").');
+        btnSubmit.disabled = false;
+        return;
+      }
+
+      showMsg('ok', 'Found it — opening the leaderboard…');
+      // Same "?v=" cache-buster + hash handoff the main page's own scan uses, so /2048/ always
+      // fetches fresh code and reads the payload back out via its existing payloadFromEntry().
+      location.href = '/2048/?v='+Date.now()+'#'+payload;
+    }catch(e){
+      stream.getTracks().forEach(t=>t.stop());
+      showMsg('err', 'Capture failed: '+escapeHtml(e.message||'unknown error'));
+      btnSubmit.disabled = false;
+    }
+  }
+
+  btnSubmit.addEventListener('click', captureAndSubmit);
+})();
+</script>
+</body>
 </html>
