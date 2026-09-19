@@ -107,10 +107,16 @@
   .ticker-who a{ color:var(--cream); text-decoration:underline; text-underline-offset:2px; }
   .ticker-who a:hover{ color:var(--accent2); }
   .ticker-game{ font-size:10.5px; color:var(--accent2); text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; }
+  /* Score+date share one line (as before), with the new relative-time line
+     directly under both -- kept to 2 lines total so this column matches
+     the who/game column's own 2-line height instead of growing the row. */
+  .ticker-score-col{ display:flex; flex-direction:column; gap:1px; }
+  .ticker-score-row{ display:flex; align-items:baseline; gap:8px; }
   .ticker-score{
     font-family:"Press Start 2P",monospace; font-size:12px; color:var(--good); white-space:nowrap;
   }
   .ticker-when{ font-size:10.5px; color:var(--dim); white-space:nowrap; }
+  .ticker-relative{ font-size:9.5px; color:var(--dim); white-space:nowrap; }
   #ticker-empty{ padding:12px 16px; color:var(--dim); font-size:12.5px; }
 
   /* ---------- universal scan panel ---------- */
@@ -680,6 +686,16 @@
     return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
   }
 
+  function fmtRelativeTime(ts){
+    if(!ts) return '';
+    const minutes = Math.floor((Date.now()-ts)/60000);
+    if(minutes < 1) return 'just now';
+    if(minutes < 60) return minutes+'m ago';
+    const hours = Math.floor(minutes/60);
+    if(hours < 24) return hours+'h ago';
+    return Math.floor(hours/24)+'d ago';
+  }
+
   async function renderTicker(docs){
     const trackEl = el('ticker-track');
     if(!trackEl) return;
@@ -706,8 +722,11 @@
       return '<div class="ticker-item">'+
         avatarHtml+
         '<div><div class="ticker-who">'+who+'</div><div class="ticker-game">'+escapeHtml(gameLine)+'</div></div>'+
-        '<div class="ticker-score tnum">'+escapeHtml(String(scoreDisplay))+'</div>'+
-        '<div class="ticker-when">'+fmtTickerWhen(data.submittedAt)+'</div>'+
+        '<div class="ticker-score-col">'+
+          '<div class="ticker-score-row"><div class="ticker-score tnum">'+escapeHtml(String(scoreDisplay))+'</div>'+
+          '<div class="ticker-when">'+fmtTickerWhen(data.submittedAt)+'</div></div>'+
+          '<div class="ticker-relative">'+fmtRelativeTime(data.submittedAt)+'</div>'+
+        '</div>'+
       '</div>';
     }).join('');
     // Doubled so translateX(-50%) lands exactly back on an identical copy -- an invisible seam.
