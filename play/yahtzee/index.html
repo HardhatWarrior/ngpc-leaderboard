@@ -340,24 +340,51 @@
     return jsqrFallback(source, w0, h0, scales);
   }
 
-  /* ---------- ask EmulatorJS's own screenshot API for a PNG of what's on screen right now,
-     decode it, and route into the real leaderboard page's own confirm/submit flow -- same
-     hash-payload handoff the main site's QR scan and every leaderboard's own scan already use
-     (see index.html's routeToGame()), so this page never needs its own copy of the Firestore
-     write/auth logic.
+  /* ---------- grab a frame straight from the emulator's own canvas, decode it, and route into
+     the real leaderboard page's own confirm/submit flow -- same hash-payload handoff the main
+     site's QR scan and every leaderboard's own scan already use (see index.html's
+     routeToGame()), so this page never needs its own copy of the Firestore write/auth logic.
 
-     Uses EJS_emulator.takeScreenshot() rather than getDisplayMedia screen-share: works
-     identically on desktop and mobile with no permission prompt, and is the only option on
-     iOS -- Safari/Edge there don't implement the Screen Capture API at all. (A raw drawImage()
-     of the emulator's own <canvas> was tried first and rejected: it's WebGL-backed without
-     preserveDrawingBuffer, so by the time a click handler runs, the drawing buffer has already
-     been cleared and every readback comes back blank. takeScreenshot() is EmulatorJS's own
-     supported way around that -- verified against the real bundle to return a real, non-blank
-     PNG blob.)
+     This used to go through EJS_emulator.takeScreenshot(), EmulatorJS's own screenshot API --
+     chosen over getDisplayMedia screen-share because it needs no permission prompt and is the
+     only option on iOS (Safari/Edge there don't implement the Screen Capture API at all). That
+     API turned out to have a real bug of its own, though: its default "canvas" source assumes
+     the game is rendered *centered* within the canvas and crops to the middle, but it's
+     actually rendered top-aligned (confirmed empirically) -- fine in this page's normal
+     windowed layout, where the panel's own aspect-ratio already matches the game's, but in
+     maximize mode (a much taller container) that center-crop grabs mostly the empty letterboxed
+     space *below* the game, missing the real screen -- and hence any on-screen QR code --
+     entirely. (The build's alternate "retroarch" source, which reads the emulator core's raw
+     framebuffer directly and would have sidestepped this, was tried too -- it just hangs and
+     never resolves on this core/version.)
+
+     grabGameFrame() below replaces all of that: a plain requestAnimationFrame-wrapped
+     drawImage() of EJS_emulator.canvas reliably returns real, non-blank pixels (confirmed
+     empirically -- this is also why a *synchronous* drawImage() from a click handler doesn't
+     work: the canvas is WebGL-backed without preserveDrawingBuffer, so its drawing buffer has
+     already been cleared by the time a click handler runs; deferring one frame via
+     requestAnimationFrame, the same trick EmulatorJS's own internal screenshot code uses,
+     avoids that), and crops to just the visible top-aligned game area ourselves using the same
+     known-correct math positionFsBtn() above already uses.
 
      Two controls call this: the page's own Submit Score button below, and (once the emulator
      boots) the floating fsBtn injected above for maximize-mode use. captureBusy guards both from
      firing a second overlapping capture. ---------- */
+  function grabGameFrame(){
+    const canvas = window.EJS_emulator && EJS_emulator.canvas;
+    if(!canvas || !canvas.width || !canvas.height) return Promise.resolve(null);
+    return new Promise(resolve=>{
+      requestAnimationFrame(()=>{
+        const visH = Math.min(canvas.height, canvas.width / NATIVE_ASPECT);
+        const visW = Math.min(canvas.width, canvas.height * NATIVE_ASPECT);
+        const out = document.createElement('canvas');
+        out.width = visW; out.height = visH;
+        out.getContext('2d', {alpha:false}).drawImage(canvas, 0, 0, visW, visH, 0, 0, visW, visH);
+        resolve(out);
+      });
+    });
+  }
+
   let captureBusy = false;
   function setBusy(busy){
     captureBusy = busy;
@@ -367,28 +394,19 @@
 
   async function captureAndSubmit(){
     if(captureBusy) return;
-    if(!window.EJS_emulator || typeof EJS_emulator.takeScreenshot !== 'function'){
+    if(!window.EJS_emulator || !EJS_emulator.canvas){
       showMsg('err', 'The game isn’t ready yet — make sure it’s running, then try again.');
       return;
     }
     setBusy(true);
     showMsg('info', 'Looking for a QR code…');
 
-    let objectUrl;
     try{
-      const { blob } = await EJS_emulator.takeScreenshot();
-      objectUrl = URL.createObjectURL(blob);
-      const img = new Image();
-      await new Promise((resolve, reject)=>{
-        img.onload = resolve;
-        img.onerror = ()=>reject(new Error('screenshot failed to decode'));
-        img.src = objectUrl;
-      });
+      const frame = await grabGameFrame();
+      if(!frame) throw new Error('screenshot was empty');
+      const w = frame.width, h = frame.height;
 
-      const w = img.naturalWidth, h = img.naturalHeight;
-      if(!w || !h) throw new Error('screenshot was empty');
-
-      const value = await decodeSource(img, w, h, [700, 1100, 1500, 2000]);
+      const value = await decodeSource(frame, w, h, [700, 1100, 1500, 2000]);
       if(!value){
         showMsg('err', 'No QR code found on screen — make sure the in-game QR code is fully visible and try again.');
         setBusy(false);
@@ -412,8 +430,6 @@
     }catch(e){
       showMsg('err', 'Capture failed: '+escapeHtml(e.message||'unknown error'));
       setBusy(false);
-    }finally{
-      if(objectUrl) URL.revokeObjectURL(objectUrl);
     }
   }
 
