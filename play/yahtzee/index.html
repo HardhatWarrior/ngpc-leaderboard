@@ -239,6 +239,15 @@
     btnMaximize.innerHTML = on ? '&times;' : '&#10530;';
     btnMaximize.title = on ? 'Exit full screen' : 'Full screen';
     if(fsBtn) fsBtn.style.display = on ? 'block' : 'none';
+    // #btn-submit/#submit-msg were only ever *visually* covered by the maximized panel's
+    // z-index, never actually hidden -- #player-panel going position:fixed takes it out of
+    // flow, so #btn-submit (still display:block the whole time) ends up rendered right under
+    // the maximized panel rather than off-screen. Almost certainly harmless in a compliant
+    // browser (a covered element shouldn't receive taps meant for what's stacked above it), but
+    // there's no reason to leave a live, un-hidden Submit Score button sitting there at all --
+    // explicitly hiding it removes any doubt.
+    btnSubmit.style.display = on ? 'none' : '';
+    msgEl.style.display = on ? 'none' : '';
     // EmulatorJS only recalculates its own canvas size on a real `window` resize event -- our
     // CSS class toggle doesn't fire one, so nudge it directly once the new layout has settled,
     // then measure the canvas's new (letterboxed) size once that resize has actually painted.
