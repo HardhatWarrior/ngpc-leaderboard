@@ -186,15 +186,47 @@
     fsBtn = document.createElement('button');
     fsBtn.type = 'button';
     fsBtn.textContent = 'Submit Score';
-    // top-right, below where EJS's own hamburger menu sits -- bottom-right collides with the
-    // virtual gamepad's own touch buttons (varies per game/layout, not something we control).
-    fsBtn.style.cssText = 'display:none; position:absolute; right:12px; top:56px; z-index:2147483647;'
+    // Position is set dynamically by positionFsBtn() below, right under the actual rendered
+    // game canvas -- EJS letterboxes the game's near-square aspect ratio inside the much taller
+    // maximized container, so a fixed offset would either sit on top of the game (too small) or
+    // float in empty space above the touch controls (too big), depending on the device.
+    fsBtn.style.cssText = 'display:none; position:absolute; z-index:2147483647;'
       + 'font:600 13.5px "IBM Plex Sans",system-ui,sans-serif; padding:10px 16px; border:none;'
       + 'border-radius:8px; cursor:pointer; background:var(--accent); color:var(--accent-ink);'
-      + 'box-shadow:0 2px 10px rgba(0,0,0,.5);';
+      + 'box-shadow:0 2px 10px rgba(0,0,0,.5); white-space:nowrap;';
     gameEl.appendChild(fsBtn);
     fsBtn.addEventListener('click', ()=>captureAndSubmit());
     return true;
+  }
+
+  // Measures EJS's own letterboxed canvas (not #game, which is the full maximized container)
+  // and places fsBtn just below it, horizontally centered under it -- so it reads as "the
+  // submit button for this game" rather than floating in whatever empty space the aspect-ratio
+  // letterboxing happens to leave.
+  // The NGP's native resolution -- same ratio used for #player-panel's own aspect-ratio in the
+  // un-maximized layout above.
+  const NATIVE_ASPECT = 160 / 152;
+  function positionFsBtn(){
+    if(!fsBtn) return;
+    const gameEl = document.getElementById('game');
+    if(!gameEl) return;
+    const gameRect = gameEl.getBoundingClientRect();
+    if(!gameRect.width || !gameRect.height) return; // not actually rendered yet
+    // .ejs_canvas's own CSS box always fills #game entirely -- EJS letterboxes the game's near-
+    // square aspect ratio *inside* the canvas's pixel buffer via its internal WebGL viewport,
+    // which getBoundingClientRect() can't see at all (confirmed empirically: the canvas element
+    // reports the full container size regardless of how little of it is actually drawn to).
+    // Deriving the visible area from the known aspect ratio instead of measuring a DOM rect --
+    // width-constrained and top-aligned, matching how this build lays out a portrait container
+    // (full width, height computed from the aspect ratio, pinned to the top so the virtual
+    // gamepad has room below -- confirmed empirically too, via screenshots).
+    const visibleHeight = Math.min(gameRect.height, gameRect.width / NATIVE_ASPECT);
+    const visibleWidth = visibleHeight * NATIVE_ASPECT;
+    const offsetX = (gameRect.width - visibleWidth) / 2;
+    fsBtn.style.top = (visibleHeight + 12) + 'px';
+    fsBtn.style.left = (offsetX + visibleWidth / 2) + 'px';
+    fsBtn.style.right = 'auto';
+    fsBtn.style.transform = 'translateX(-50%)';
   }
 
   const btnMaximize = el('btn-maximize');
@@ -208,15 +240,22 @@
     btnMaximize.title = on ? 'Exit full screen' : 'Full screen';
     if(fsBtn) fsBtn.style.display = on ? 'block' : 'none';
     // EmulatorJS only recalculates its own canvas size on a real `window` resize event -- our
-    // CSS class toggle doesn't fire one, so nudge it directly once the new layout has settled.
+    // CSS class toggle doesn't fire one, so nudge it directly once the new layout has settled,
+    // then measure the canvas's new (letterboxed) size once that resize has actually painted.
     if(window.EJS_emulator && typeof EJS_emulator.handleResize === 'function'){
-      requestAnimationFrame(()=>EJS_emulator.handleResize());
+      requestAnimationFrame(()=>{
+        EJS_emulator.handleResize();
+        requestAnimationFrame(positionFsBtn);
+      });
+    } else if(on){
+      requestAnimationFrame(positionFsBtn);
     }
   }
   btnMaximize.addEventListener('click', ()=>setMaximized(!isMaximized));
   document.addEventListener('keydown', (e)=>{
     if(e.key === 'Escape' && isMaximized) setMaximized(false);
   });
+  window.addEventListener('resize', ()=>{ if(isMaximized) positionFsBtn(); });
 
   function applyAuthState(user){
     gateEl.hidden = !!user;
