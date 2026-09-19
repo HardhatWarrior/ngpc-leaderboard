@@ -391,15 +391,51 @@ window.NGPC_AUTH = (function(){
     return '<table class="tk-sheet">'+rows+'</table>';
   }
 
-  // True for a game whose row expands into a click-to-reveal detail (Bowling/Yahtzee/Farkle/2048);
-  // false for Tetris, whose own leaderboard shows lines/level as plain inline meta text instead --
-  // scoreInlineMeta() covers that case.
+  // Over Rev's own catalog data, same convention every game page uses for its small constant
+  // lookup tables (e.g. YZ_CATS above) -- mirrors overrev/index.html's embedded copy, which in
+  // turn mirrors overrev-leaderboard-kit/catalog.json (rules revision 1).
+  const OV_CARS = ['COMET','PROTO','GT','TURBO','WEDGE','BIKE','FORMULA','STINGER'];
+  const OV_UPGRADE_NAMES = ['TOP SPEED','HANDLING','ACCELERATION','BRAKING'];
+  const OV_DIFFICULTY_NAMES = ['EASY','MEDIUM','HARD','ULTRA'];
+  // ticks are 60/sec (same NGP-style frame counter overrev/index.html's own ticker formats).
+  function formatOvTicks(ticks){
+    const seconds = Math.floor(ticks/60);
+    return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0')+'.'+String(Math.floor((ticks%60)*100/60)).padStart(2,'0');
+  }
+  // Only game/initials/rules/course/car/tune/mode/difficulty/transmission/ticks/won/localRecord/
+  // event/sequence/raw/source/submittedAt actually get written to the score doc (see overrev/
+  // index.html's own submit handler) -- upgrades and the display name/time strings only exist by
+  // re-decoding the stored raw QR payload, same as overrev/index.html's own board rendering does.
+  function renderOverRevScorecardHTML(data){
+    const upgradeRows = OV_UPGRADE_NAMES.map((name,i)=>
+      '<tr><td>'+name+'</td><td class="ov-val tnum">Lv '+data.upgrades[i]+'</td></tr>'
+    ).join('');
+    const rows = '<tr><td>Car</td><td class="ov-val">'+escapeHtml(OV_CARS[data.car]||'?')+'</td></tr>'+
+      '<tr><td>Difficulty</td><td class="ov-val">'+escapeHtml(OV_DIFFICULTY_NAMES[data.difficulty]||'?')+'</td></tr>'+
+      '<tr><td>Transmission</td><td class="ov-val">'+escapeHtml(data.transmission)+'</td></tr>'+
+      upgradeRows+
+      '<tr><td colspan="2">'+
+        (data.won ? '<div class="ov-badge won">FINISHED</div>' : '')+
+        (data.localRecord ? '<div class="ov-badge record">LOCAL RECORD</div>' : '')+
+      '</td></tr>';
+    return '<table class="ov-sheet">'+rows+'</table>';
+  }
+
+  // True for a game whose row expands into a click-to-reveal detail (Bowling/Yahtzee/Farkle/
+  // 2048/Over Rev); false for Tetris, whose own leaderboard shows lines/level as plain inline
+  // meta text instead -- scoreInlineMeta() covers that case.
   function scoreHasDetail(data){
     switch(data.game){
       case 'BW': return Array.isArray(data.rolls) && data.rolls.length>0;
       case 'YZ': return Array.isArray(data.categoryScores) && data.categoryScores.length===YZ_CATS.length;
       case 'FK': return data.resultDisplay !== undefined && data.rounds !== undefined;
       case '2K': return data.moves !== undefined;
+      case 'OV':
+        // Same "skip rather than crash" stance overrev/index.html's own board rendering takes on
+        // a corrupted/legacy stored doc -- OverRevProtocol comes from overrev/protocol.js, which
+        // isn't loaded on every page, so this fails closed (no expand affordance) if it's missing.
+        if(!data.raw || !window.OverRevProtocol) return false;
+        try{ OverRevProtocol.decode(data.raw); return true; }catch(e){ return false; }
       default: return false;
     }
   }
@@ -409,6 +445,9 @@ window.NGPC_AUTH = (function(){
       case 'YZ': return renderYahtzeeScorecardHTML(data.categoryScores);
       case 'FK': return renderFarkleScorecardHTML(data);
       case '2K': return render2048ScorecardHTML(data);
+      case 'OV':
+        try{ return renderOverRevScorecardHTML(Object.assign({}, data, OverRevProtocol.decode(data.raw))); }
+        catch(e){ return ''; }
       default: return '';
     }
   }
@@ -418,6 +457,13 @@ window.NGPC_AUTH = (function(){
         .filter(Boolean).join(' · ');
     }
     return '';
+  }
+  // The one place besides scoreHasDetail/scoreDetailHTML a page needs to special-case Over Rev:
+  // its score doc has no `score` field at all (ticks/course instead -- see index.html's own
+  // recent-activity ticker, which hit this same gap first).
+  function scoreValueDisplay(data){
+    if(data.game === 'OV') return data.ticks!=null ? formatOvTicks(data.ticks) : '-';
+    return data.score!=null ? data.score : '-';
   }
 
   // ---- current-user state, kept live for any page's own inline script to read synchronously
@@ -631,7 +677,7 @@ window.NGPC_AUTH = (function(){
     TRANSPARENT, isTransparent,
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,
     friendlyAuthError, escapeHtml,
-    scoreHasDetail, scoreDetailHTML, scoreInlineMeta,
+    scoreHasDetail, scoreDetailHTML, scoreInlineMeta, scoreValueDisplay,
     authReady,
     get currentUser(){ return currentUser; }
   };
