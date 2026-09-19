@@ -27,6 +27,12 @@
     margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
     padding-inline:20px; padding-block:32px; display:flex; justify-content:center;
   }
+  /* Taking #player-panel out of flow via position:fixed (maximize mode, below) can leave
+     <html>/<body> collapsed to just their remaining in-flow content height, since they're
+     height:auto above. A position:fixed descendant's containing block is supposed to be the
+     viewport regardless of that, but forcing full height here removes any ambiguity rather
+     than relying on it. */
+  html.maximizing, html.maximizing body{ height:100%; overflow:hidden; }
   .px{ font-family:"Press Start 2P",monospace; }
   #shell{ width:100%; max-width:520px; display:flex; flex-direction:column; gap:18px; align-items:center; }
 
@@ -38,10 +44,37 @@
      width:100%/height:100% of whatever contains it, so sizing this div is all that's needed to
      "window" it instead of letting it fill the page. ---------- */
   #player-panel{
-    width:100%; max-width:480px; aspect-ratio:160/152;
+    width:100%; max-width:480px; aspect-ratio:160/152; position:relative;
     background:#000; border:1px solid var(--border); border-radius:14px; overflow:hidden;
   }
   #game{ width:100%; height:100%; }
+
+  /* Our own "maximize" mode -- NOT the browser's real Fullscreen API. EmulatorJS's own
+     "Enter Fullscreen" button uses Element.requestFullscreen(), which iOS Safari/Edge (WebKit)
+     never implemented for anything but <video> -- the emulator's own code checks for it and
+     hides its own fullscreen menu item entirely when it's missing, which is exactly why it was
+     absent on mobile. This is a CSS-only stand-in that works identically everywhere: toggling
+     this class just makes the panel cover the viewport via position:fixed. See btnMaximize's
+     click handler for the JS half (also nudges EmulatorJS to redraw at the new size, since it
+     only does that on its own on a real `window` resize event). */
+  #player-panel.maximized{
+    position:fixed; inset:0; z-index:9999;
+    width:100vw; height:100vh; max-width:none; aspect-ratio:auto; border-radius:0; border:none;
+  }
+  #btn-maximize{
+    position:absolute; left:10px; top:10px; z-index:5; width:34px; height:34px;
+    border:none; border-radius:8px; cursor:pointer; background:rgba(0,0,0,.55); color:#fff;
+    font-size:16px; line-height:1; display:flex; align-items:center; justify-content:center;
+  }
+
+  /* Shrink the page's own side/top padding on narrow screens so the panel (locked to the
+     game's own near-square aspect ratio) gets noticeably more room even before maximizing --
+     EmulatorJS's virtual gamepad overlay is positioned relative to the canvas, so a bigger
+     canvas means more real spacing around its own touch buttons instead of them feeling glued
+     to the game underneath. */
+  @media (max-width: 600px){
+    body{ padding-inline:10px; padding-block:20px; }
+  }
 
   #btn-submit{
     font:inherit; border:none; border-radius:8px; padding:13px 20px; cursor:pointer;
@@ -80,7 +113,10 @@
   <div id="signin-gate">&#128274; Sign in (top right) to use the in-browser player.</div>
 
   <div id="player-content" hidden>
-    <div id="player-panel"><div id="game"></div></div>
+    <div id="player-panel">
+      <button type="button" id="btn-maximize" title="Full screen">&#10530;</button>
+      <div id="game"></div>
+    </div>
 
     <button type="button" id="btn-submit">Submit Score</button>
     <div id="submit-msg"></div>
@@ -118,7 +154,117 @@
     const loaderScript = document.createElement('script');
     loaderScript.src = '../emulatorjs/data/loader.js';
     document.body.appendChild(loaderScript);
+    const pollId = setInterval(()=>{ if(injectFullscreenButton()) clearInterval(pollId); }, 300);
+    setTimeout(()=>clearInterval(pollId), 30000); // give up quietly if EJS never finishes booting
   }
+
+  /* ---------- #btn-maximize toggles our own CSS-only "maximize" mode (see the .maximized rule
+     above) rather than the browser's real Fullscreen API -- EmulatorJS's own "Enter Fullscreen"
+     menu item uses Element.requestFullscreen(), which iOS Safari/Edge never implemented for
+     anything but <video>, and the emulator's own code detects that and hides its own fullscreen
+     button entirely when it's missing (confirmed by reading the bundle). This CSS approach
+     works identically on every platform instead.
+
+     The page's regular Submit Score button below is a *sibling* of #player-panel, so it's
+     visually covered the moment .maximized makes the panel fill the viewport (same underlying
+     problem the real Fullscreen API would have caused, just via z-index instead of the
+     browser enforcing it) -- fsBtn below is the fix, a floating button injected as a *child* of
+     #game so it stays on top and reachable. #submit-msg is equally covered while maximized,
+     hence mirroring status text onto fsBtn's own label in showMsg() further down.
+
+     Can't just append fsBtn once up front, either -- EmulatorJS clears and rebuilds #game's own
+     contents as part of its init, which would silently wipe out anything added before that
+     finishes (caught this empirically: the button existed right after being appended, then was
+     gone by the time the emulator had booted). Polling for one of EJS's own child elements is
+     the only "is it done yet" signal this old build exposes -- it ships no EJS_ready-style
+     callback at all. ---------- */
+  let fsBtn = null;
+  function injectFullscreenButton(){
+    const gameEl = document.getElementById('game');
+    if(!gameEl || !gameEl.querySelector('.ejs_canvas_parent')) return false;
+    if(fsBtn) return true;
+    fsBtn = document.createElement('button');
+    fsBtn.type = 'button';
+    fsBtn.textContent = 'Submit Score';
+    // Position is set dynamically by positionFsBtn() below, right under the actual rendered
+    // game canvas -- EJS letterboxes the game's near-square aspect ratio inside the much taller
+    // maximized container, so a fixed offset would either sit on top of the game (too small) or
+    // float in empty space above the touch controls (too big), depending on the device.
+    fsBtn.style.cssText = 'display:none; position:absolute; z-index:2147483647;'
+      + 'font:600 13.5px "IBM Plex Sans",system-ui,sans-serif; padding:10px 16px; border:none;'
+      + 'border-radius:8px; cursor:pointer; background:var(--accent); color:var(--accent-ink);'
+      + 'box-shadow:0 2px 10px rgba(0,0,0,.5); white-space:nowrap;';
+    gameEl.appendChild(fsBtn);
+    fsBtn.addEventListener('click', ()=>captureAndSubmit());
+    return true;
+  }
+
+  // Measures EJS's own letterboxed canvas (not #game, which is the full maximized container)
+  // and places fsBtn just below it, horizontally centered under it -- so it reads as "the
+  // submit button for this game" rather than floating in whatever empty space the aspect-ratio
+  // letterboxing happens to leave.
+  // The NGP's native resolution -- same ratio used for #player-panel's own aspect-ratio in the
+  // un-maximized layout above.
+  const NATIVE_ASPECT = 160 / 152;
+  function positionFsBtn(){
+    if(!fsBtn) return;
+    const gameEl = document.getElementById('game');
+    if(!gameEl) return;
+    const gameRect = gameEl.getBoundingClientRect();
+    if(!gameRect.width || !gameRect.height) return; // not actually rendered yet
+    // .ejs_canvas's own CSS box always fills #game entirely -- EJS letterboxes the game's near-
+    // square aspect ratio *inside* the canvas's pixel buffer via its internal WebGL viewport,
+    // which getBoundingClientRect() can't see at all (confirmed empirically: the canvas element
+    // reports the full container size regardless of how little of it is actually drawn to).
+    // Deriving the visible area from the known aspect ratio instead of measuring a DOM rect --
+    // width-constrained and top-aligned, matching how this build lays out a portrait container
+    // (full width, height computed from the aspect ratio, pinned to the top so the virtual
+    // gamepad has room below -- confirmed empirically too, via screenshots).
+    const visibleHeight = Math.min(gameRect.height, gameRect.width / NATIVE_ASPECT);
+    const visibleWidth = visibleHeight * NATIVE_ASPECT;
+    const offsetX = (gameRect.width - visibleWidth) / 2;
+    fsBtn.style.top = (visibleHeight + 12) + 'px';
+    fsBtn.style.left = (offsetX + visibleWidth / 2) + 'px';
+    fsBtn.style.right = 'auto';
+    fsBtn.style.transform = 'translateX(-50%)';
+  }
+
+  const btnMaximize = el('btn-maximize');
+  const playerPanel = el('player-panel');
+  let isMaximized = false;
+  function setMaximized(on){
+    isMaximized = on;
+    playerPanel.classList.toggle('maximized', on);
+    document.documentElement.classList.toggle('maximizing', on);
+    btnMaximize.innerHTML = on ? '&times;' : '&#10530;';
+    btnMaximize.title = on ? 'Exit full screen' : 'Full screen';
+    if(fsBtn) fsBtn.style.display = on ? 'block' : 'none';
+    // #btn-submit/#submit-msg were only ever *visually* covered by the maximized panel's
+    // z-index, never actually hidden -- #player-panel going position:fixed takes it out of
+    // flow, so #btn-submit (still display:block the whole time) ends up rendered right under
+    // the maximized panel rather than off-screen. Almost certainly harmless in a compliant
+    // browser (a covered element shouldn't receive taps meant for what's stacked above it), but
+    // there's no reason to leave a live, un-hidden Submit Score button sitting there at all --
+    // explicitly hiding it removes any doubt.
+    btnSubmit.style.display = on ? 'none' : '';
+    msgEl.style.display = on ? 'none' : '';
+    // EmulatorJS only recalculates its own canvas size on a real `window` resize event -- our
+    // CSS class toggle doesn't fire one, so nudge it directly once the new layout has settled,
+    // then measure the canvas's new (letterboxed) size once that resize has actually painted.
+    if(window.EJS_emulator && typeof EJS_emulator.handleResize === 'function'){
+      requestAnimationFrame(()=>{
+        EJS_emulator.handleResize();
+        requestAnimationFrame(positionFsBtn);
+      });
+    } else if(on){
+      requestAnimationFrame(positionFsBtn);
+    }
+  }
+  btnMaximize.addEventListener('click', ()=>setMaximized(!isMaximized));
+  document.addEventListener('keydown', (e)=>{
+    if(e.key === 'Escape' && isMaximized) setMaximized(false);
+  });
+  window.addEventListener('resize', ()=>{ if(isMaximized) positionFsBtn(); });
 
   function applyAuthState(user){
     gateEl.hidden = !!user;
@@ -135,7 +281,12 @@
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
-  function showMsg(cls, text){ msgEl.innerHTML = '<div class="msg '+cls+'">'+escapeHtml(text)+'</div>'; }
+  function showMsg(cls, text){
+    msgEl.innerHTML = '<div class="msg '+cls+'">'+escapeHtml(text)+'</div>';
+    // #submit-msg is covered up while maximized (see .maximized above) -- fsBtn's own label is
+    // the only feedback surface visible there, so mirror the same text onto it.
+    if(fsBtn) fsBtn.textContent = text.length > 34 ? text.slice(0, 31)+'…' : text;
+  }
 
   function lastPathSegment(text){
     const parts = String(text||'').split('/').filter(Boolean);
@@ -198,46 +349,76 @@
     return jsqrFallback(source, w0, h0, scales);
   }
 
-  /* ---------- ask EmulatorJS's own screenshot API for a PNG of what's on screen right now,
-     decode it, and route into the real leaderboard page's own confirm/submit flow -- same
-     hash-payload handoff the main site's QR scan and every leaderboard's own scan already use
-     (see index.html's routeToGame()), so this page never needs its own copy of the Firestore
-     write/auth logic.
+  /* ---------- grab a frame straight from the emulator's own canvas, decode it, and route into
+     the real leaderboard page's own confirm/submit flow -- same hash-payload handoff the main
+     site's QR scan and every leaderboard's own scan already use (see index.html's
+     routeToGame()), so this page never needs its own copy of the Firestore write/auth logic.
 
-     Uses EJS_emulator.takeScreenshot() rather than getDisplayMedia screen-share: works
-     identically on desktop and mobile with no permission prompt, and is the only option on
-     iOS -- Safari/Edge there don't implement the Screen Capture API at all. (A raw drawImage()
-     of the emulator's own <canvas> was tried first and rejected: it's WebGL-backed without
-     preserveDrawingBuffer, so by the time a click handler runs, the drawing buffer has already
-     been cleared and every readback comes back blank. takeScreenshot() is EmulatorJS's own
-     supported way around that -- verified against the real bundle to return a real, non-blank
-     PNG blob.) ---------- */
+     This used to go through EJS_emulator.takeScreenshot(), EmulatorJS's own screenshot API --
+     chosen over getDisplayMedia screen-share because it needs no permission prompt and is the
+     only option on iOS (Safari/Edge there don't implement the Screen Capture API at all). That
+     API turned out to have a real bug of its own, though: its default "canvas" source assumes
+     the game is rendered *centered* within the canvas and crops to the middle, but it's
+     actually rendered top-aligned (confirmed empirically) -- fine in this page's normal
+     windowed layout, where the panel's own aspect-ratio already matches the game's, but in
+     maximize mode (a much taller container) that center-crop grabs mostly the empty letterboxed
+     space *below* the game, missing the real screen -- and hence any on-screen QR code --
+     entirely. (The build's alternate "retroarch" source, which reads the emulator core's raw
+     framebuffer directly and would have sidestepped this, was tried too -- it just hangs and
+     never resolves on this core/version.)
+
+     grabGameFrame() below replaces all of that: a plain requestAnimationFrame-wrapped
+     drawImage() of EJS_emulator.canvas reliably returns real, non-blank pixels (confirmed
+     empirically -- this is also why a *synchronous* drawImage() from a click handler doesn't
+     work: the canvas is WebGL-backed without preserveDrawingBuffer, so its drawing buffer has
+     already been cleared by the time a click handler runs; deferring one frame via
+     requestAnimationFrame, the same trick EmulatorJS's own internal screenshot code uses,
+     avoids that), and crops to just the visible top-aligned game area ourselves using the same
+     known-correct math positionFsBtn() above already uses.
+
+     Two controls call this: the page's own Submit Score button below, and (once the emulator
+     boots) the floating fsBtn injected above for maximize-mode use. captureBusy guards both from
+     firing a second overlapping capture. ---------- */
+  function grabGameFrame(){
+    const canvas = window.EJS_emulator && EJS_emulator.canvas;
+    if(!canvas || !canvas.width || !canvas.height) return Promise.resolve(null);
+    return new Promise(resolve=>{
+      requestAnimationFrame(()=>{
+        const visH = Math.min(canvas.height, canvas.width / NATIVE_ASPECT);
+        const visW = Math.min(canvas.width, canvas.height * NATIVE_ASPECT);
+        const out = document.createElement('canvas');
+        out.width = visW; out.height = visH;
+        out.getContext('2d', {alpha:false}).drawImage(canvas, 0, 0, visW, visH, 0, 0, visW, visH);
+        resolve(out);
+      });
+    });
+  }
+
+  let captureBusy = false;
+  function setBusy(busy){
+    captureBusy = busy;
+    btnSubmit.disabled = busy;
+    if(fsBtn) fsBtn.disabled = busy;
+  }
+
   async function captureAndSubmit(){
-    if(!window.EJS_emulator || typeof EJS_emulator.takeScreenshot !== 'function'){
+    if(captureBusy) return;
+    if(!window.EJS_emulator || !EJS_emulator.canvas){
       showMsg('err', 'The game isn’t ready yet — make sure it’s running, then try again.');
       return;
     }
-    btnSubmit.disabled = true;
+    setBusy(true);
     showMsg('info', 'Looking for a QR code…');
 
-    let objectUrl;
     try{
-      const { blob } = await EJS_emulator.takeScreenshot();
-      objectUrl = URL.createObjectURL(blob);
-      const img = new Image();
-      await new Promise((resolve, reject)=>{
-        img.onload = resolve;
-        img.onerror = ()=>reject(new Error('screenshot failed to decode'));
-        img.src = objectUrl;
-      });
+      const frame = await grabGameFrame();
+      if(!frame) throw new Error('screenshot was empty');
+      const w = frame.width, h = frame.height;
 
-      const w = img.naturalWidth, h = img.naturalHeight;
-      if(!w || !h) throw new Error('screenshot was empty');
-
-      const value = await decodeSource(img, w, h, [700, 1100, 1500, 2000]);
+      const value = await decodeSource(frame, w, h, [700, 1100, 1500, 2000]);
       if(!value){
         showMsg('err', 'No QR code found on screen — make sure the in-game QR code is fully visible and try again.');
-        btnSubmit.disabled = false;
+        setBusy(false);
         return;
       }
 
@@ -246,7 +427,7 @@
       const slug = GAME_ROUTES[code];
       if(!slug){
         showMsg('err', 'Unrecognized game code ("'+escapeHtml(code)+'") — that leaderboard might not be set up yet.');
-        btnSubmit.disabled = false;
+        setBusy(false);
         return;
       }
 
@@ -257,9 +438,7 @@
       location.href = '/'+slug+'/?v='+Date.now()+'#'+payload;
     }catch(e){
       showMsg('err', 'Capture failed: '+escapeHtml(e.message||'unknown error'));
-      btnSubmit.disabled = false;
-    }finally{
-      if(objectUrl) URL.revokeObjectURL(objectUrl);
+      setBusy(false);
     }
   }
 
