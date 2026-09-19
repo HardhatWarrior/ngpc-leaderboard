@@ -208,7 +208,27 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data);
+      // Gardenia: game, mode (1 Picnic/2 Gardener/3 Landscaper), initials, score,
+      // startLevel/levelReached (info only, not re-derived or bounds-checked against each other),
+      // source, submittedAt, optional uid/username. Field widths mirror the author's own QR
+      // spec's fixed-width digit fields (5-digit score, 2-digit level fields). Sorted descending
+      // by score, scoped to one mode at a time -- see gardenia/index.html's own board query.
+      function isGardeniaScore(d) {
+        return d.game == 'GD'
+          && d.keys().hasOnly(['game', 'mode', 'initials', 'score', 'startLevel', 'levelReached', 'source', 'submittedAt', 'uid', 'username'])
+          && d.mode is int && d.mode >= 1 && d.mode <= 3
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.score is int && d.score >= 0 && d.score <= 99999
+          && d.startLevel is int && d.startLevel >= 0 && d.startLevel <= 99
+          && d.levelReached is int && d.levelReached >= 0 && d.levelReached <= 99
+          && d.source is string && d.source == 'qr'
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
+      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data);
 
       allow update: if false;
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --
