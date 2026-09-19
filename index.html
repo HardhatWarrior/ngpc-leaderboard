@@ -149,6 +149,16 @@
 
   .grid-heading{ color:var(--dim); font-size:12px; text-transform:uppercase; letter-spacing:.1em; }
 
+  .grid-heading-row{ display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  .sort-toggle{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; }
+  .sort-status{ color:var(--dim); font-size:11px; }
+  .sort-btn{
+    width:auto; background:transparent; border:1px solid var(--border); color:var(--dim);
+    border-radius:8px; padding:6px 12px; font:inherit; font-size:11.5px; font-weight:600; cursor:pointer;
+  }
+  .sort-btn:hover{ border-color:var(--accent2); }
+  .sort-btn.active{ border-color:var(--accent); color:var(--cream); background:rgba(178,58,82,.14); }
+
   #grid{
     display:grid;
     grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));
@@ -205,11 +215,6 @@
     <p>Scan the QR code your game shows after a completed run, or pick a game below to browse its board.</p>
   </header>
 
-  <div id="search-wrap">
-    <input type="text" id="search-username" placeholder="Search usernames&hellip;" autocomplete="off" maxlength="16">
-    <div id="search-results" hidden></div>
-  </div>
-
   <div id="ticker-wrap">
     <div id="ticker-track"></div>
   </div>
@@ -238,14 +243,28 @@
     </div>
   </section>
 
-  <div class="grid-heading">Or browse a leaderboard directly</div>
+  <div class="grid-heading-row">
+    <div class="grid-heading">Or browse a leaderboard directly</div>
+    <div class="sort-toggle">
+      <button type="button" class="sort-btn active" id="sort-recent" data-sort="recent">Most Recent</button>
+      <button type="button" class="sort-btn" id="sort-active" data-sort="active">Most Active</button>
+      <button type="button" class="sort-btn" id="sort-alpha" data-sort="alpha">A&ndash;Z</button>
+      <span class="sort-status" id="sort-status"></span>
+    </div>
+  </div>
 
   <div id="grid">
     <!-- Live games and "coming soon" placeholders are both listed by hand here -- there's no
          registry file shared with 404.html, which only needs to case-fix a path, not know
-         anything about a game's name or art. Add a new <a class="tile"> block per game. -->
+         anything about a game's name or art. Add a new <a class="tile"> block per game.
+         data-game is that game's own QR routing code (see GAME_ROUTES below), used to look up
+         its weekly submission count for the "Most Active" sort. data-added is when this game
+         was added to the site (bump it by hand on a meaningful relaunch/rebuild, same spirit as
+         everything else on this page that's hand-maintained rather than derived) -- it drives
+         the default "Most Recent" sort, which a static site with no backend can't compute from
+         real git history at page-load time. -->
 
-    <a class="tile" href="/lb/">
+    <a class="tile" href="/lb/" data-game="BW" data-added="2026-09-16T13:50:07-07:00">
       <div class="tile-art">
         <img src="/assets/bowling-title.png" alt="Neo Bowling title screen" width="160" height="152">
       </div>
@@ -254,7 +273,7 @@
       </div>
     </a>
 
-    <a class="tile" href="/tetris/">
+    <a class="tile" href="/tetris/" data-game="TT" data-added="2026-09-16T17:06:13-07:00">
       <div class="tile-art">
         <img src="/assets/tetris-title.png" alt="Tetris title screen" width="160" height="152">
       </div>
@@ -263,7 +282,7 @@
       </div>
     </a>
 
-    <a class="tile" href="/yahtzee/">
+    <a class="tile" href="/yahtzee/" data-game="YZ" data-added="2026-09-17T14:09:29-07:00">
       <div class="tile-art">
         <img src="/assets/yahtzee-title.png" alt="Neo Yahtzee title screen" width="160" height="152">
       </div>
@@ -272,7 +291,7 @@
       </div>
     </a>
 
-    <a class="tile" href="/farkle/">
+    <a class="tile" href="/farkle/" data-game="FK" data-added="2026-09-17T14:09:30-07:00">
       <div class="tile-art">
         <img src="/assets/farkle-title.png" alt="Farkle title screen" width="160" height="152">
       </div>
@@ -281,7 +300,7 @@
       </div>
     </a>
 
-    <a class="tile" href="/2048/">
+    <a class="tile" href="/2048/" data-game="2K" data-added="2026-09-18T09:24:05-07:00">
       <div class="tile-art">
         <img src="/assets/2048-title.png" alt="2048 title screen" width="160" height="152">
       </div>
@@ -290,7 +309,7 @@
       </div>
     </a>
 
-    <a class="tile" href="/overrev/">
+    <a class="tile" href="/overrev/" data-game="OV" data-added="2026-09-18T13:33:36-07:00">
       <div class="tile-art">
         <img src="/assets/overrev-title.png" alt="Over Rev title screen" width="160" height="152">
       </div>
@@ -299,7 +318,7 @@
       </div>
     </a>
 
-    <a class="tile" href="/gardenia/">
+    <a class="tile" href="/gardenia/" data-game="GD" data-added="2026-09-19T09:05:59-07:00">
       <div class="tile-art">
         <img src="/assets/gardenia-title.png" alt="Gardenia title screen" width="160" height="152">
       </div>
@@ -308,6 +327,13 @@
       </div>
     </a>
 
+  </div>
+
+  <div class="grid-heading">Or search for a player</div>
+
+  <div id="search-wrap">
+    <input type="text" id="search-username" placeholder="Search usernames&hellip;" autocomplete="off" maxlength="16">
+    <div id="search-results" hidden></div>
   </div>
 
   <footer>
@@ -350,6 +376,61 @@
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
+
+  /* ---------- game tile sorting -- "Most Recent" (default) and "A-Z" are pure client-side
+     reorders of each tile's own data-added/tile-name; "Most Active" needs a real query (each
+     game's submission count over the trailing 7 days), so it's fetched lazily on first use
+     rather than on every page load, and cached for the rest of this visit (a plain reload
+     refreshes it -- this isn't a live count like the ticker). One doc read per matching
+     submission (Query.count() isn't available on this compat SDK build), which is cheap at this
+     site's real volume. */
+  let sortMode = 'recent';
+  let weeklyCounts = null; // {gameCode: count}, null until loaded
+  const gridEl = el('grid');
+  const sortStatusEl = el('sort-status');
+  const sortButtons = [el('sort-recent'), el('sort-active'), el('sort-alpha')];
+  const tileEls = Array.from(gridEl.querySelectorAll('.tile'));
+
+  function applySort(mode){
+    const sorted = tileEls.slice().sort((a, b)=>{
+      if(mode === 'alpha'){
+        return a.querySelector('.tile-name').textContent.localeCompare(b.querySelector('.tile-name').textContent);
+      }
+      if(mode === 'active' && weeklyCounts){
+        const diff = (weeklyCounts[b.dataset.game]||0) - (weeklyCounts[a.dataset.game]||0);
+        if(diff !== 0) return diff;
+      }
+      // Default order, and "active"'s own tiebreak (including before its counts have loaded).
+      return new Date(b.dataset.added) - new Date(a.dataset.added);
+    });
+    sorted.forEach(tile=>gridEl.appendChild(tile));
+  }
+
+  async function loadWeeklyCounts(){
+    const db = window.NGPC_AUTH ? NGPC_AUTH.db : null;
+    if(!db){ weeklyCounts = {}; return; }
+    sortStatusEl.textContent = 'Loading activity…';
+    const weekAgo = Date.now() - 7*24*60*60*1000;
+    const counts = {};
+    await Promise.all(Object.keys(GAME_ROUTES).map(async (code)=>{
+      try{
+        const snap = await db.collection('scores').where('game','==',code).where('submittedAt','>=',weekAgo).get();
+        counts[code] = snap.size;
+      }catch(e){ counts[code] = 0; }
+    }));
+    weeklyCounts = counts;
+    sortStatusEl.textContent = '';
+  }
+
+  function setSort(mode){
+    sortMode = mode;
+    sortButtons.forEach(btn=>btn.classList.toggle('active', btn.dataset.sort === mode));
+    if(mode === 'active' && !weeklyCounts){
+      loadWeeklyCounts().then(()=>{ if(sortMode === 'active') applySort('active'); });
+    }
+    applySort(mode);
+  }
+  sortButtons.forEach(btn=>btn.addEventListener('click', ()=>setSort(btn.dataset.sort)));
 
   // Same treatment lb/index.html and tetris/index.html use on their own in-page scans -- a QR's
   // raw decoded content is the FULL URL (prefix and all) when it encodes one, so this strips down
@@ -622,6 +703,7 @@
     );
   }
   connectTicker();
+  applySort(sortMode); // HTML source order is oldest-first, not "Most Recent"'s own newest-first
 
   /* ---------- player search -- typeahead over the usernames/{lower} reservation collection.
      Its document ID *is* the lowercased username (see auth.js's signUp/updateUsername), so a
