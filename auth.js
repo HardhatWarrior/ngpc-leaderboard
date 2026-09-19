@@ -394,6 +394,7 @@ window.NGPC_AUTH = (function(){
   // Over Rev's own catalog data, same convention every game page uses for its small constant
   // lookup tables (e.g. YZ_CATS above) -- mirrors overrev/index.html's embedded copy, which in
   // turn mirrors overrev-leaderboard-kit/catalog.json (rules revision 1).
+  const OV_COURSES = ['CYPRESS LANE','CITY CIRCUIT','CANYON RUN','COAST ROAD','NIGHT WORKS','VOLCANO PASS','RICE FIELDS','AUTUMN WOODS','SAKURA TEMPLE','SNOW PASS'];
   const OV_CARS = ['COMET','PROTO','GT','TURBO','WEDGE','BIKE','FORMULA','STINGER'];
   const OV_UPGRADE_NAMES = ['TOP SPEED','HANDLING','ACCELERATION','BRAKING'];
   const OV_DIFFICULTY_NAMES = ['EASY','MEDIUM','HARD','ULTRA'];
@@ -410,7 +411,8 @@ window.NGPC_AUTH = (function(){
     const upgradeRows = OV_UPGRADE_NAMES.map((name,i)=>
       '<tr><td>'+name+'</td><td class="ov-val tnum">Lv '+data.upgrades[i]+'</td></tr>'
     ).join('');
-    const rows = '<tr><td>Car</td><td class="ov-val">'+escapeHtml(OV_CARS[data.car]||'?')+'</td></tr>'+
+    const rows = '<tr><td>Track</td><td class="ov-val">'+escapeHtml(OV_COURSES[data.course]||'?')+'</td></tr>'+
+      '<tr><td>Car</td><td class="ov-val">'+escapeHtml(OV_CARS[data.car]||'?')+'</td></tr>'+
       '<tr><td>Difficulty</td><td class="ov-val">'+escapeHtml(OV_DIFFICULTY_NAMES[data.difficulty]||'?')+'</td></tr>'+
       '<tr><td>Transmission</td><td class="ov-val">'+escapeHtml(data.transmission)+'</td></tr>'+
       upgradeRows+
@@ -455,6 +457,11 @@ window.NGPC_AUTH = (function(){
     if(data.game==='TT'){
       return [data.level!=null?('Lv '+data.level):null, data.lines!=null?(data.lines+' lines'):null]
         .filter(Boolean).join(' · ');
+    }
+    if(data.game==='OV'){
+      // Unlike the fuller detail view, this doesn't need OverRevProtocol -- course is one of the
+      // fields written directly to the score doc (see renderOverRevScorecardHTML's comment above).
+      return data.course!=null ? (OV_COURSES[data.course]||'') : '';
     }
     return '';
   }
