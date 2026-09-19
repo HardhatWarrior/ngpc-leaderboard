@@ -212,6 +212,7 @@
   // own small constant lookup tables (e.g. Yahtzee's YZ_CATS).
   const COURSES = ['CYPRESS LANE','CITY CIRCUIT','CANYON RUN','COAST ROAD','NIGHT WORKS','VOLCANO PASS','RICE FIELDS','AUTUMN WOODS','SAKURA TEMPLE','SNOW PASS'];
   const CARS = ['COMET','PROTO','GT','TURBO','WEDGE','BIKE','FORMULA','STINGER'];
+  // Kept for a future re-enable, but not rendered anywhere right now -- see renderOverRevScorecardHTML.
   const UPGRADE_NAMES = ['TOP SPEED','HANDLING','ACCELERATION','BRAKING'];
   const DIFFICULTY_NAMES = ['EASY','MEDIUM','HARD','ULTRA'];
 
@@ -269,13 +270,11 @@
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
   function renderOverRevScorecardHTML(data){
-    const upgradeRows = UPGRADE_NAMES.map((name,i)=>
-      '<tr><td>'+name+'</td><td class="ov-val tnum">Lv '+data.upgrades[i]+'</td></tr>'
-    ).join('');
+    // Upgrade levels (top speed/handling/acceleration/braking) are deliberately not shown --
+    // the data's still in data.upgrades/Firestore, just turned off site-wide for now.
     const rows = '<tr><td>Car</td><td class="ov-val">'+escapeHtml(CARS[data.car]||'?')+'</td></tr>'+
       '<tr><td>Difficulty</td><td class="ov-val">'+escapeHtml(DIFFICULTY_NAMES[data.difficulty]||'?')+'</td></tr>'+
       '<tr><td>Transmission</td><td class="ov-val">'+escapeHtml(data.transmission)+'</td></tr>'+
-      upgradeRows+
       '<tr><td colspan="2">'+
         (data.won ? '<div class="ov-badge won">FINISHED</div>' : '')+
         (data.localRecord ? '<div class="ov-badge record">LOCAL RECORD</div>' : '')+

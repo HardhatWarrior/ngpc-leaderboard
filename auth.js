@@ -396,6 +396,7 @@ window.NGPC_AUTH = (function(){
   // turn mirrors overrev-leaderboard-kit/catalog.json (rules revision 1).
   const OV_COURSES = ['CYPRESS LANE','CITY CIRCUIT','CANYON RUN','COAST ROAD','NIGHT WORKS','VOLCANO PASS','RICE FIELDS','AUTUMN WOODS','SAKURA TEMPLE','SNOW PASS'];
   const OV_CARS = ['COMET','PROTO','GT','TURBO','WEDGE','BIKE','FORMULA','STINGER'];
+  // Kept for a future re-enable, but not rendered anywhere right now -- see renderOverRevScorecardHTML.
   const OV_UPGRADE_NAMES = ['TOP SPEED','HANDLING','ACCELERATION','BRAKING'];
   const OV_DIFFICULTY_NAMES = ['EASY','MEDIUM','HARD','ULTRA'];
   // ticks are 60/sec (same NGP-style frame counter overrev/index.html's own ticker formats).
@@ -408,14 +409,12 @@ window.NGPC_AUTH = (function(){
   // index.html's own submit handler) -- upgrades and the display name/time strings only exist by
   // re-decoding the stored raw QR payload, same as overrev/index.html's own board rendering does.
   function renderOverRevScorecardHTML(data){
-    const upgradeRows = OV_UPGRADE_NAMES.map((name,i)=>
-      '<tr><td>'+name+'</td><td class="ov-val tnum">Lv '+data.upgrades[i]+'</td></tr>'
-    ).join('');
+    // Upgrade levels (top speed/handling/acceleration/braking) are deliberately not shown --
+    // the data's still in data.upgrades/Firestore, just turned off site-wide for now.
     const rows = '<tr><td>Track</td><td class="ov-val">'+escapeHtml(OV_COURSES[data.course]||'?')+'</td></tr>'+
       '<tr><td>Car</td><td class="ov-val">'+escapeHtml(OV_CARS[data.car]||'?')+'</td></tr>'+
       '<tr><td>Difficulty</td><td class="ov-val">'+escapeHtml(OV_DIFFICULTY_NAMES[data.difficulty]||'?')+'</td></tr>'+
       '<tr><td>Transmission</td><td class="ov-val">'+escapeHtml(data.transmission)+'</td></tr>'+
-      upgradeRows+
       '<tr><td colspan="2">'+
         (data.won ? '<div class="ov-badge won">FINISHED</div>' : '')+
         (data.localRecord ? '<div class="ov-badge record">LOCAL RECORD</div>' : '')+
