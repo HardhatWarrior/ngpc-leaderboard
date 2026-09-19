@@ -159,6 +159,10 @@
   .sort-btn:hover{ border-color:var(--accent2); }
   .sort-btn.active{ border-color:var(--accent); color:var(--cream); background:rgba(178,58,82,.14); }
 
+  .period-toggle{ display:flex; justify-content:flex-end; gap:6px; margin-top:8px; }
+  .period-toggle[hidden]{ display:none; }
+  .period-btn{ font-size:10.5px; padding:5px 10px; }
+
   #grid{
     display:grid;
     grid-template-columns:repeat(auto-fit, minmax(230px, 1fr));
@@ -251,6 +255,11 @@
       <button type="button" class="sort-btn" id="sort-alpha" data-sort="alpha">A&ndash;Z</button>
       <span class="sort-status" id="sort-status"></span>
     </div>
+  </div>
+
+  <div class="period-toggle" id="period-toggle" hidden>
+    <button type="button" class="sort-btn period-btn active" id="period-week" data-period="week">This Week</button>
+    <button type="button" class="sort-btn period-btn" id="period-all" data-period="all">All Time</button>
   </div>
 
   <div id="grid">
@@ -379,25 +388,30 @@
 
   /* ---------- game tile sorting -- "Most Recent" (default) and "A-Z" are pure client-side
      reorders of each tile's own data-added/tile-name; "Most Active" needs a real query (each
-     game's submission count over the trailing 7 days), so it's fetched lazily on first use
-     rather than on every page load, and cached for the rest of this visit (a plain reload
-     refreshes it -- this isn't a live count like the ticker). One doc read per matching
-     submission (Query.count() isn't available on this compat SDK build), which is cheap at this
-     site's real volume. */
+     game's submission count, either over the trailing 7 days or all-time), so each period's
+     counts are fetched lazily on first use rather than on every page load, and cached per period
+     for the rest of this visit (a plain reload refreshes them -- this isn't a live count like the
+     ticker). One doc read per matching submission (Query.count() isn't available on this compat
+     SDK build), which is cheap at this site's real volume -- "all time" reads more than "This
+     Week" as the site grows, but it's still just one query per game, run once per visit. */
   let sortMode = 'recent';
-  let weeklyCounts = null; // {gameCode: count}, null until loaded
+  let activePeriod = 'week'; // 'week' | 'all', only meaningful while sortMode === 'active'
+  const countsCache = { week: null, all: null }; // {gameCode: count} per period, null until loaded
   const gridEl = el('grid');
   const sortStatusEl = el('sort-status');
   const sortButtons = [el('sort-recent'), el('sort-active'), el('sort-alpha')];
+  const periodToggleEl = el('period-toggle');
+  const periodButtons = [el('period-week'), el('period-all')];
   const tileEls = Array.from(gridEl.querySelectorAll('.tile'));
 
   function applySort(mode){
+    const counts = countsCache[activePeriod];
     const sorted = tileEls.slice().sort((a, b)=>{
       if(mode === 'alpha'){
         return a.querySelector('.tile-name').textContent.localeCompare(b.querySelector('.tile-name').textContent);
       }
-      if(mode === 'active' && weeklyCounts){
-        const diff = (weeklyCounts[b.dataset.game]||0) - (weeklyCounts[a.dataset.game]||0);
+      if(mode === 'active' && counts){
+        const diff = (counts[b.dataset.game]||0) - (counts[a.dataset.game]||0);
         if(diff !== 0) return diff;
       }
       // Default order, and "active"'s own tiebreak (including before its counts have loaded).
@@ -406,31 +420,45 @@
     sorted.forEach(tile=>gridEl.appendChild(tile));
   }
 
-  async function loadWeeklyCounts(){
+  async function loadCounts(period){
     const db = window.NGPC_AUTH ? NGPC_AUTH.db : null;
-    if(!db){ weeklyCounts = {}; return; }
+    if(!db){ countsCache[period] = {}; return; }
     sortStatusEl.textContent = 'Loading activity…';
     const weekAgo = Date.now() - 7*24*60*60*1000;
     const counts = {};
     await Promise.all(Object.keys(GAME_ROUTES).map(async (code)=>{
       try{
-        const snap = await db.collection('scores').where('game','==',code).where('submittedAt','>=',weekAgo).get();
+        let q = db.collection('scores').where('game','==',code);
+        if(period === 'week') q = q.where('submittedAt','>=',weekAgo);
+        const snap = await q.get();
         counts[code] = snap.size;
       }catch(e){ counts[code] = 0; }
     }));
-    weeklyCounts = counts;
+    countsCache[period] = counts;
     sortStatusEl.textContent = '';
   }
 
   function setSort(mode){
     sortMode = mode;
     sortButtons.forEach(btn=>btn.classList.toggle('active', btn.dataset.sort === mode));
-    if(mode === 'active' && !weeklyCounts){
-      loadWeeklyCounts().then(()=>{ if(sortMode === 'active') applySort('active'); });
+    periodToggleEl.hidden = mode !== 'active';
+    if(mode === 'active' && !countsCache[activePeriod]){
+      loadCounts(activePeriod).then(()=>{ if(sortMode === 'active') applySort('active'); });
     }
     applySort(mode);
   }
   sortButtons.forEach(btn=>btn.addEventListener('click', ()=>setSort(btn.dataset.sort)));
+
+  function setPeriod(period){
+    if(activePeriod === period) return;
+    activePeriod = period;
+    periodButtons.forEach(btn=>btn.classList.toggle('active', btn.dataset.period === period));
+    if(!countsCache[period]){
+      loadCounts(period).then(()=>{ if(activePeriod === period) applySort(sortMode); });
+    }
+    applySort(sortMode);
+  }
+  periodButtons.forEach(btn=>btn.addEventListener('click', ()=>setPeriod(btn.dataset.period)));
 
   // Same treatment lb/index.html and tetris/index.html use on their own in-page scans -- a QR's
   // raw decoded content is the FULL URL (prefix and all) when it encodes one, so this strips down
