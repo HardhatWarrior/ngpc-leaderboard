@@ -454,6 +454,11 @@ window.NGPC_AUTH = (function(){
     }
   }
   function scoreInlineMeta(data){
+    if(data.game==='BW'){
+      // Matches lb/index.html's own leaderboard row exactly (ball weight is the one extra field
+      // Bowling's own board surfaces beyond date, same gap Over Rev's missing track name was).
+      return data.weight ? (data.weight+' lb ball') : '';
+    }
     if(data.game==='TT'){
       return [data.level!=null?('Lv '+data.level):null, data.lines!=null?(data.lines+' lines'):null]
         .filter(Boolean).join(' · ');
@@ -467,9 +472,12 @@ window.NGPC_AUTH = (function(){
   }
   // The one place besides scoreHasDetail/scoreDetailHTML a page needs to special-case Over Rev:
   // its score doc has no `score` field at all (ticks/course instead -- see index.html's own
-  // recent-activity ticker, which hit this same gap first).
+  // recent-activity ticker, which hit this same gap first). Farkle has a `score` field, but its
+  // own leaderboard (farkle/index.html) ranks and headlines `rounds` instead -- shown here too,
+  // so a Farkle run's "main" number matches what its own board actually shows for it.
   function scoreValueDisplay(data){
     if(data.game === 'OV') return data.ticks!=null ? formatOvTicks(data.ticks) : '-';
+    if(data.game === 'FK') return data.rounds!=null ? (data.rounds+' rounds') : '-';
     return data.score!=null ? data.score : '-';
   }
 
