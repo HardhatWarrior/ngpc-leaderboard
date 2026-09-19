@@ -85,7 +85,7 @@
     <button type="button" id="btn-submit">Submit Score</button>
     <div id="submit-msg"></div>
 
-    <footer>Captures your screen for one frame to read the on-screen QR code, then submits it the same way a real scan does.</footer>
+    <footer>Reads the in-game QR code directly from the emulator, then submits it the same way a real scan does.</footer>
   </div>
 </div>
 
@@ -198,56 +198,45 @@
     return jsqrFallback(source, w0, h0, scales);
   }
 
-  /* ---------- capture one frame of the screen/window the person picks, decode it, and route
-     into the real leaderboard page's own confirm/submit flow -- same hash-payload handoff the
-     main site's QR scan and every leaderboard's own scan already use (see index.html's
-     routeToGame()), so this page never needs its own copy of the Firestore write/auth logic. ---------- */
+  /* ---------- ask EmulatorJS's own screenshot API for a PNG of what's on screen right now,
+     decode it, and route into the real leaderboard page's own confirm/submit flow -- same
+     hash-payload handoff the main site's QR scan and every leaderboard's own scan already use
+     (see index.html's routeToGame()), so this page never needs its own copy of the Firestore
+     write/auth logic.
+
+     Uses EJS_emulator.takeScreenshot() rather than getDisplayMedia screen-share: works
+     identically on desktop and mobile with no permission prompt, and is the only option on
+     iOS -- Safari/Edge there don't implement the Screen Capture API at all. (A raw drawImage()
+     of the emulator's own <canvas> was tried first and rejected: it's WebGL-backed without
+     preserveDrawingBuffer, so by the time a click handler runs, the drawing buffer has already
+     been cleared and every readback comes back blank. takeScreenshot() is EmulatorJS's own
+     supported way around that -- verified against the real bundle to return a real, non-blank
+     PNG blob.) ---------- */
   async function captureAndSubmit(){
-    if(!navigator.mediaDevices || !navigator.mediaDevices.getDisplayMedia){
-      showMsg('err', 'Screen capture isn’t supported in this browser.');
+    if(!window.EJS_emulator || typeof EJS_emulator.takeScreenshot !== 'function'){
+      showMsg('err', 'The game isn’t ready yet — make sure it’s running, then try again.');
       return;
     }
     btnSubmit.disabled = true;
-    showMsg('info', 'Choose this tab/window when prompted, with the QR code visible…');
+    showMsg('info', 'Looking for a QR code…');
 
-    let stream;
+    let objectUrl;
     try{
-      stream = await navigator.mediaDevices.getDisplayMedia({
-        video: { displaySurface: 'window' },
-        preferCurrentTab: true, // Chrome-only hint; ignored elsewhere, falls back to the normal picker
-        audio: false,
-      });
-    }catch(e){
-      showMsg('err', 'Screen share was cancelled or denied — try again and pick this tab/window.');
-      btnSubmit.disabled = false;
-      return;
-    }
-
-    try{
-      const video = document.createElement('video');
-      video.srcObject = stream;
-      video.muted = true;
+      const { blob } = await EJS_emulator.takeScreenshot();
+      objectUrl = URL.createObjectURL(blob);
+      const img = new Image();
       await new Promise((resolve, reject)=>{
-        video.onloadedmetadata = resolve;
-        video.onerror = ()=>reject(new Error('video failed to load'));
+        img.onload = resolve;
+        img.onerror = ()=>reject(new Error('screenshot failed to decode'));
+        img.src = objectUrl;
       });
-      await video.play();
-      // Give the captured stream a couple of frames to actually start painting real content
-      // before grabbing one, rather than risking a blank first frame right as sharing begins.
-      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
 
-      const w = video.videoWidth, h = video.videoHeight;
-      if(!w || !h) throw new Error('captured frame was empty');
-      const frameCanvas = document.createElement('canvas');
-      frameCanvas.width = w; frameCanvas.height = h;
-      frameCanvas.getContext('2d').drawImage(video, 0, 0, w, h);
+      const w = img.naturalWidth, h = img.naturalHeight;
+      if(!w || !h) throw new Error('screenshot was empty');
 
-      stream.getTracks().forEach(t=>t.stop()); // one frame is all that's needed -- stop sharing right away
-
-      showMsg('info', 'Looking for a QR code…');
-      const value = await decodeSource(frameCanvas, w, h, [700, 1100, 1500, 2000]);
+      const value = await decodeSource(img, w, h, [700, 1100, 1500, 2000]);
       if(!value){
-        showMsg('err', 'No QR code found in the captured screen — make sure the game’s QR code is fully visible (not covered by another window) and try again.');
+        showMsg('err', 'No QR code found on screen — make sure the in-game QR code is fully visible and try again.');
         btnSubmit.disabled = false;
         return;
       }
@@ -267,9 +256,10 @@
       // existing payloadFromEntry().
       location.href = '/'+slug+'/?v='+Date.now()+'#'+payload;
     }catch(e){
-      stream.getTracks().forEach(t=>t.stop());
       showMsg('err', 'Capture failed: '+escapeHtml(e.message||'unknown error'));
       btnSubmit.disabled = false;
+    }finally{
+      if(objectUrl) URL.revokeObjectURL(objectUrl);
     }
   }
 
