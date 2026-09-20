@@ -73,6 +73,30 @@
   .game-list-name{ font-weight:600; color:var(--cream); font-size:13px; }
   .game-list-status{ font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; }
 
+  /* ---------- payload reference panel -- information only, no inputs. Static per-game data
+     (see PAYLOAD_SPECS below), not read from Firestore -- there's nowhere that stores this for
+     the 7 already-shipped games, and it's meant as a read-only technical reference for whoever's
+     managing a game here, not something editable from this page. ---------- */
+  .panel-header{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    cursor:pointer; user-select:none;
+  }
+  .panel-header .chevron{ flex:none; color:var(--dim); font-size:10px; transition:transform .15s; }
+  .panel-header.collapsed .chevron{ transform:rotate(-90deg); }
+  .panel-header:focus-visible{ outline:2px solid var(--accent2); outline-offset:3px; border-radius:4px; }
+  .panel-body{ margin-top:14px; }
+  .panel-body[hidden]{ display:none; }
+
+  .spec-group{ margin-bottom:16px; }
+  .spec-group:last-child{ margin-bottom:0; }
+  .spec-label{ font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.06em; margin-bottom:6px; }
+  .spec-value{ font-size:12.5px; line-height:1.6; }
+  .spec-mono{ font-family:"IBM Plex Mono",monospace; font-size:11.5px; background:var(--navy); border-radius:6px; padding:8px 10px; word-break:break-all; }
+  .spec-table{ width:100%; border-collapse:collapse; font-size:11.5px; }
+  .spec-table th{ text-align:left; color:var(--dim); font-size:10px; text-transform:uppercase; padding:4px 6px; }
+  .spec-table td{ padding:5px 6px; border-bottom:1px solid var(--border); color:var(--cream); }
+  .spec-note{ color:var(--dim); }
+
   footer{ text-align:center; color:var(--dim); font-size:11px; }
   footer a{ color:var(--accent2); }
 </style>
@@ -118,6 +142,26 @@
     </div>
   </section>
 
+  <section class="panel" id="payload-panel" hidden>
+    <div class="panel-header" data-toggle="payload-body" role="button" tabindex="0" aria-expanded="true">
+      <h2>Payload Format</h2>
+      <span class="chevron">&#9660;</span>
+    </div>
+    <div class="panel-body" id="payload-body">
+      <p class="hint">Read-only reference -- how this game's on-device QR encodes a result and how the leaderboard turns it back into a score. Not editable here; changing it means changing the device firmware and the leaderboard page's own parsePayload() together.</p>
+      <div id="payload-content"></div>
+    </div>
+  </section>
+  <section class="panel" id="payload-missing-panel" hidden>
+    <div class="panel-header" data-toggle="payload-missing-body" role="button" tabindex="0" aria-expanded="true">
+      <h2>Payload Format</h2>
+      <span class="chevron">&#9660;</span>
+    </div>
+    <div class="panel-body" id="payload-missing-body">
+      <p class="hint" style="margin:0">No payload reference recorded for this game yet.</p>
+    </div>
+  </section>
+
   <footer><a href="/">&larr; All games</a></footer>
 </div>
 
@@ -139,12 +183,236 @@
   const romMsg = el('rom-msg');
   const updatedBadgeRow = el('updated-badge-row');
   const clearUpdatedBtn = el('clear-updated');
+  const payloadPanel = el('payload-panel');
+  const payloadMissingPanel = el('payload-missing-panel');
+  const payloadContentEl = el('payload-content');
+
+  document.querySelectorAll('.panel-header[data-toggle]').forEach(header=>{
+    const body = el(header.dataset.toggle);
+    if(!body) return;
+    function toggle(){
+      const collapsing = !body.hidden;
+      body.hidden = collapsing;
+      header.classList.toggle('collapsed', collapsing);
+      header.setAttribute('aria-expanded', String(!collapsing));
+    }
+    header.addEventListener('click', toggle);
+    header.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggle(); } });
+  });
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
   function statusLabel(s){
     return s==='beta' ? 'Beta' : s==='final' ? 'Final' : 'In Development';
+  }
+
+  /* ---------- static payload reference, keyed by slug -----------------------------------------
+     Hand-maintained, same convention as GAME_ROUTES/GAME_NAMES on the main page -- there's
+     nowhere in Firestore this is stored for the 7 games shipped before /dev/submit/ existed, and
+     even for a future submitted game the submission's own free-text spec isn't reliable enough
+     to render unreviewed (see the "why is this hand-built" conversation). Sourced directly from
+     each leaderboard page's own parsePayload()/writeScore() and firestore.rules' isXScore(), not
+     guessed -- verify against those before trusting this if the two ever drift apart. `example`
+     is either a REAL payload (decoded from an actual device/photo, or from this session's own
+     emulator+pyzbar verification) or a bracketed TEMPLATE ([XXX] = that field's own width/
+     format) when constructing a realistic full example isn't safe to fabricate by hand (Bowling's
+     roll history has real frame-scoring constraints; Over Rev's data block is CRC16-checksummed
+     Base32, not plain digits) -- exampleIsReal says which. */
+  const PAYLOAD_SPECS = {
+    bw: {
+      urlPrefix: 'HTTPS://WWW.NGPC-DEV.COM/BW/',
+      urlNote: 'Full scheme + "WWW." -- unlike Yahtzee/Farkle below, Bowling’s device firmware hasn’t been shortened to the bare-apex-domain form yet.',
+      fields: [
+        {name:'Game code', width:'2', format:'fixed', notes:'"BW"'},
+        {name:'Initials', width:'3', format:'A-Z', notes:''},
+        {name:'Ball weight', width:'2', format:'numeric, zero-padded', notes:'lbs, 1-99'},
+        {name:'Roll count', width:'2', format:'numeric, zero-padded', notes:'12-21'},
+        {name:'Rolls', width:'1 × roll count', format:'0-9 or A', notes:'A = strike (10 pins); variable length'},
+      ],
+      totalLength: '29 (prefix) + 2 + 3 + 2 + 2 + roll count = 38 + roll count = 50–59 chars, variable',
+      sortField: 'score (descending)',
+      scorecard: 'The 300-point total is NOT sent raw — the leaderboard reconstructs it client-side from the roll history alone, using the same strike/spare lookahead as score.c (see lb/index.html’s computeScores()/frameMarks()). Frame-by-frame marks (X, /, -) are derived the same way for the expandable scorecard.',
+      example: 'BW' + 'DJD' + '14' + '12' + '[12–21 roll chars]',
+      exampleIsReal: false,
+      firestore: [
+        {field:'game', type:'"BW" (fixed)'},
+        {field:'initials', type:'string, ^[A-Z]{3}$'},
+        {field:'score', type:'int, 0–300'},
+        {field:'weight', type:'int, 1–99'},
+        {field:'rolls', type:'list<int>, 12–21 entries'},
+      ],
+    },
+    tt: {
+      urlPrefix: 'HTTPS://WWW.NGPC-DEV.COM/TT/',
+      urlNote: 'Full scheme + "WWW." — same not-yet-shortened situation as Bowling.',
+      fields: [
+        {name:'Game code', width:'2', format:'fixed', notes:'"TT"'},
+        {name:'Initials', width:'3', format:'A-Z', notes:''},
+        {name:'Score', width:'8', format:'numeric, zero-padded', notes:''},
+        {name:'Lines', width:'5', format:'numeric, zero-padded', notes:''},
+        {name:'Level', width:'3', format:'numeric, zero-padded', notes:''},
+      ],
+      totalLength: '29 (prefix) + 2 + 3 + 8 + 5 + 3 = 50 chars, fixed',
+      sortField: 'score (descending)',
+      scorecard: 'Score/lines/level are sent as final raw totals — no reconstruction needed, the leaderboard just prints them.',
+      example: 'TT' + 'DJD' + '00014020' + '00089' + '007',
+      exampleIsReal: false,
+      firestore: [
+        {field:'game', type:'"TT" (fixed)'},
+        {field:'initials', type:'string, ^[A-Z]{3}$'},
+        {field:'score', type:'int, 0–99,999,999'},
+        {field:'lines', type:'int, 0–99,999'},
+        {field:'level', type:'int, 0–999'},
+      ],
+    },
+    yz: {
+      urlPrefix: 'NGPC-DEV.COM/YZ/',
+      urlNote: 'Scheme- and "WWW."-less — confirmed live that the bare apex domain resolves with no redirect, so the prefix drops both.',
+      fields: [
+        {name:'Game code', width:'2', format:'fixed', notes:'"YZ"'},
+        {name:'Initials', width:'3', format:'A-Z', notes:''},
+        {name:'13 category scores', width:'3 each (39 total)', format:'numeric, zero-padded', notes:'Ones…Sixes, 3-Kind…Chance, in CAT_ONES..CAT_CHANCE order'},
+      ],
+      totalLength: '16 (prefix) + 2 + 3 + 39 = 60 chars, fixed',
+      sortField: 'score (descending) — the grand total, derived (see below), not a raw field',
+      scorecard: 'Upper-section bonus (+35 at 63+), upper total, lower total and grand total are all derived client-side from the 13 raw category values (computeYahtzeeTotals()), matching upper_total_arr()/grand_total_arr() on the device — none of those four are sent raw.',
+      example: 'YZ' + 'DJD' + '005010015020025030' + '030030025030040050030',
+      exampleIsReal: false,
+      firestore: [
+        {field:'game', type:'"YZ" (fixed)'},
+        {field:'initials', type:'string, ^[A-Z]{3}$'},
+        {field:'score', type:'int, 0–9999 (the derived grand total)'},
+        {field:'categoryScores', type:'list<int>, exactly 13 entries, each individually bounded (30 for most, 25 house, 40 large straight, 50 yahtzee)'},
+      ],
+    },
+    fk: {
+      urlPrefix: 'NGPC-DEV.COM/FK/',
+      urlNote: 'Scheme- and "WWW."-less, added this session — previously a bare payload with no URL at all.',
+      fields: [
+        {name:'Game code', width:'2', format:'fixed', notes:'"FK"'},
+        {name:'Initials', width:'3', format:'A-Z', notes:''},
+        {name:'Score', width:'5', format:'numeric, zero-padded', notes:''},
+        {name:'Rounds', width:'3', format:'numeric, zero-padded', notes:'turns taken'},
+        {name:'Opened', width:'3', format:'numeric, zero-padded', notes:'round first banked ≥750, 0 = never'},
+        {name:'Farkles', width:'3', format:'numeric, zero-padded', notes:''},
+        {name:'Result', width:'1', format:'1, W, L, or D', notes:'1 = solo win; W/L/D = VS Link win/loss/draw'},
+      ],
+      totalLength: '16 (prefix) + 2 + 3 + 5 + 3 + 3 + 3 + 1 = 36 chars, fixed',
+      sortField: 'score (descending)',
+      scorecard: 'Every field is a final raw value already — resultChar (\'1\'/\'W\'/\'L\'/\'D\') is expanded client-side into resultDisplay (SOLO/WIN/LOSS/DRAW) for display, no numeric derivation needed.',
+      example: 'NGPC-DEV.COM/FK/FKDBG106000120030021',
+      exampleIsReal: true,
+      firestore: [
+        {field:'game', type:'"FK" (fixed)'},
+        {field:'initials', type:'string, ^[A-Z]{3}$'},
+        {field:'score', type:'int, 0–65,535'},
+        {field:'rounds', type:'int, 0–999'},
+        {field:'opened', type:'int, 0–999'},
+        {field:'farkles', type:'int, 0–999'},
+        {field:'resultChar', type:'string, ^[1WLD]$'},
+        {field:'resultDisplay', type:'string, SOLO|WIN|LOSS|DRAW'},
+      ],
+    },
+    '2k': {
+      urlPrefix: null,
+      urlNote: 'Bare payload, no URL wrapper — a stock camera app shows this as plain text, not a tappable link. Submission goes through the site’s own in-page scanner only.',
+      fields: [
+        {name:'Game code', width:'2', format:'fixed', notes:'"2K"'},
+        {name:'Initials', width:'3', format:'A-Z', notes:''},
+        {name:'Score', width:'5', format:'numeric, zero-padded', notes:''},
+        {name:'Moves', width:'4', format:'numeric, zero-padded', notes:''},
+      ],
+      totalLength: '2 + 3 + 5 + 4 = 14 chars, fixed (no prefix)',
+      sortField: 'score (descending)',
+      scorecard: 'Both fields are final raw values — printed as-is, nothing derived.',
+      example: '2K' + 'DJD' + '02048' + '0137',
+      exampleIsReal: false,
+      firestore: [
+        {field:'game', type:'"2K" (fixed)'},
+        {field:'initials', type:'string, ^[A-Z]{3}$'},
+        {field:'score', type:'int, 0–65,535'},
+        {field:'moves', type:'int, 0–9999'},
+      ],
+    },
+    overrev: {
+      thirdParty: true,
+      urlPrefix: null,
+      urlNote: 'Bare "OV1:…" payload, no URL wrapper on the device side (see overrev/protocol.js’s own extractPayload() comment — it also accepts a full ngpc-dev.com/overrev/… URL or a #-hash form, for the leaderboard’s own internal link-handoff, but that’s not what the cartridge itself encodes).',
+      fields: [
+        {name:'Header', width:'4', format:'fixed', notes:'"OV1:"'},
+        {name:'Name', width:'1–8', format:'A-Z0-9', notes:'free-typed, not fixed 3-char initials'},
+        {name:'Separator', width:'1', format:'fixed', notes:'":"'},
+        {name:'Data block', width:'24', format:'Base32 (A-Z, 2-7)', notes:'15 raw bytes: rules(2)/course(1)/car(1)/tune(1)/flags(1)/ticks(3)/event(2)/sequence(2)/CRC16(2)'},
+      ],
+      totalLength: '4 + 1–8 + 1 + 24 = 30–37 chars, variable (name length)',
+      sortField: 'ticks (ascending — lower is better, the only game here sorted that way)',
+      scorecard: 'The 24-char Base32 block unpacks to 15 bytes: rules revision, course/car/tune (upgrade levels), a flags byte (difficulty/transmission/won/localRecord bits), ticks (race time, 3 bytes), event, sequence, then a CRC16 over everything before it — decode() in protocol.js rejects the payload outright if that checksum doesn’t match. Time display (M:SS.hh) is derived from ticks (60 ticks/sec).',
+      example: 'OV1:[1-8 char name]:[24 Base32 chars]',
+      exampleIsReal: false,
+      firestore: [
+        {field:'game', type:'"OV" (fixed)'},
+        {field:'initials', type:'string, ^[A-Z0-9]{1,8}$ (the free-typed name)'},
+        {field:'ticks', type:'int, 1–65,535'},
+        {field:'course', type:'int, 0–9'},
+        {field:'car', type:'int, 0–7'},
+        {field:'tune / difficulty / transmission / won / localRecord / rules / event / sequence', type:'shape/bounds-checked, see firestore.rules’ isOverRevScore()'},
+        {field:'raw', type:'string, the full "OV1:name:data" text — kept verbatim so the CRC can be re-checked later if needed'},
+      ],
+    },
+    gardenia: {
+      thirdParty: true,
+      urlPrefix: 'HTTPS://WWW.NGPC-DEV.COM/GARDENIA/',
+      urlNote: 'Full scheme + "WWW." + the folder’s full name (not shortened to a 2-char code) — confirmed from a real photographed QR this session, not device source (Gardenia’s firmware isn’t in this workspace).',
+      fields: [
+        {name:'Game code', width:'2', format:'fixed', notes:'"GD"'},
+        {name:'Mode', width:'2', format:'"01"/"02"/"03"', notes:'01 Picnic, 02 Gardener, 03 Landscaper'},
+        {name:'Initials', width:'3', format:'A-Z', notes:''},
+        {name:'Score', width:'5', format:'numeric, zero-padded', notes:''},
+        {name:'Starting level', width:'2', format:'numeric, zero-padded', notes:'info only'},
+        {name:'Level reached', width:'2', format:'numeric, zero-padded', notes:'info only'},
+      ],
+      totalLength: '35 (prefix) + 2 + 2 + 3 + 5 + 2 + 2 = 51 chars, fixed',
+      sortField: 'score (descending), scoped to one mode at a time — modes aren’t comparable to each other',
+      scorecard: 'Every field is a final raw value — printed as-is. startLevel/levelReached are shown but not re-derived or cross-checked against each other.',
+      example: 'HTTPS://WWW.NGPC-DEV.COM/GARDENIA/GD03DJD000200101',
+      exampleIsReal: true,
+      firestore: [
+        {field:'game', type:'"GD" (fixed)'},
+        {field:'mode', type:'int, 1–3'},
+        {field:'initials', type:'string, ^[A-Z]{3}$'},
+        {field:'score', type:'int, 0–99,999'},
+        {field:'startLevel', type:'int, 0–99'},
+        {field:'levelReached', type:'int, 0–99'},
+      ],
+    },
+  };
+
+  function renderPayloadSpec(slug){
+    const spec = PAYLOAD_SPECS[slug];
+    if(!spec){ payloadMissingPanel.hidden = false; return; }
+    payloadPanel.hidden = false;
+
+    const fieldsHtml = spec.fields.map(f=>
+      '<tr><td>'+escapeHtml(f.name)+'</td><td>'+escapeHtml(f.width)+'</td><td>'+escapeHtml(f.format)+'</td><td class="spec-note">'+escapeHtml(f.notes)+'</td></tr>'
+    ).join('');
+    const firestoreHtml = spec.firestore.map(f=>
+      '<tr><td>'+escapeHtml(f.field)+'</td><td class="spec-note">'+escapeHtml(f.type)+'</td></tr>'
+    ).join('');
+
+    payloadContentEl.innerHTML =
+      (spec.thirdParty ? '<div class="spec-group"><div class="spec-value spec-note">Third-party game — this dev doesn’t control the device firmware; everything below is observed from the leaderboard’s own decoder / a real scan, not read from source.</div></div>' : '')
+      + '<div class="spec-group"><div class="spec-label">QR URL prefix</div><div class="spec-value">'
+        + (spec.urlPrefix ? '<div class="spec-mono">'+escapeHtml(spec.urlPrefix)+'</div>' : '<span class="spec-note">none — bare payload</span>')
+        + '<div class="spec-note" style="margin-top:6px">'+escapeHtml(spec.urlNote)+'</div></div></div>'
+      + '<div class="spec-group"><div class="spec-label">Payload fields</div>'
+        + '<table class="spec-table"><thead><tr><th>Field</th><th>Width</th><th>Format</th><th>Notes</th></tr></thead><tbody>'+fieldsHtml+'</tbody></table></div>'
+      + '<div class="spec-group"><div class="spec-label">Total length</div><div class="spec-value">'+escapeHtml(spec.totalLength)+'</div></div>'
+      + '<div class="spec-group"><div class="spec-label">Sort</div><div class="spec-value">'+escapeHtml(spec.sortField)+'</div></div>'
+      + '<div class="spec-group"><div class="spec-label">Scorecard reconstruction</div><div class="spec-value">'+escapeHtml(spec.scorecard)+'</div></div>'
+      + '<div class="spec-group"><div class="spec-label">'+(spec.exampleIsReal ? 'Example (real, decoded this session)' : 'Example (template — not a real scan)')+'</div><div class="spec-mono">'+escapeHtml(spec.example)+'</div></div>'
+      + '<div class="spec-group"><div class="spec-label">Firestore scores/ doc shape</div>'
+        + '<table class="spec-table"><tbody>'+firestoreHtml+'</tbody></table></div>';
   }
 
   async function renderList(db, user, isAdmin){
@@ -182,6 +450,7 @@
     el('page-title').textContent = (data.name||slug).toUpperCase();
     el('edit-title').textContent = data.name || slug;
     editPanel.hidden = false;
+    renderPayloadSpec(slug);
 
     let currentStatus = data.devStatus || 'dev';
     function paintStatusButtons(){
