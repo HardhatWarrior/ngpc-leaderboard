@@ -281,22 +281,25 @@ window.NGPC_AUTH = (function(){
       ctx.fillRect(0,0,canvas.width,canvas.height);
       return;
     }
-    // Render at native 1:1 (one canvas pixel per avatar cell) first, THEN scale up via drawImage
-    // -- fillRect()'s own edges anti-alias at non-integer coordinates no matter what
-    // imageSmoothingEnabled is set to (that flag only governs drawImage's interpolation, not
-    // path/rect fills), so drawing cells directly at a fractional cellPx (e.g. the leaderboard
-    // row chip's 28/16 = 1.75px) blended adjacent colors at every cell boundary instead of
-    // staying crisp. Compositing through a native-resolution buffer sidesteps that entirely,
-    // at any cellPx, integer or not.
-    const native = document.createElement('canvas');
-    native.width = size; native.height = size;
-    const nctx = native.getContext('2d');
+    // Each cell's pixel bounds are rounded independently (x*cellPx and (x+1)*cellPx, not
+    // width=round(cellPx)) so every column/row gets a size derived from cumulative rounding --
+    // this is what keeps a non-integer cellPx (e.g. the leaderboard row chip's 48/32 = 1.5px)
+    // symmetric. Drawing at native 1:1 and upscaling via drawImage() looked crisp (no fillRect
+    // anti-aliasing) but let the browser's own non-integer nearest-neighbor blit decide which
+    // source pixels get duplicated -- that decision isn't guaranteed symmetric across a row/
+    // column, and at 1.5x it visibly skewed silhouettes (an avatar edited square came out
+    // lopsided on the leaderboard). Filling rects directly at rounded bounds avoids both
+    // problems at once: pixel-aligned edges stay crisp, and the scale-up is deterministic.
     for(let y=0;y<size;y++){
+      const y0 = Math.round(y*cellPx), y1 = Math.round((y+1)*cellPx);
       for(let x=0;x<size;x++){
-        drawAvatarCell(nctx, packedWords[y*size+x], x, y, 1);
+        const word = packedWords[y*size+x];
+        if(isTransparent(word)) continue;
+        const x0 = Math.round(x*cellPx), x1 = Math.round((x+1)*cellPx);
+        ctx.fillStyle = css255FromWord(word);
+        ctx.fillRect(x0, y0, x1-x0, y1-y0);
       }
     }
-    ctx.drawImage(native, 0, 0, size, size, 0, 0, canvas.width, canvas.height);
   }
 
   function friendlyAuthError(e){
