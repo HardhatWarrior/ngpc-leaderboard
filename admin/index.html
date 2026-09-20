@@ -235,9 +235,15 @@
       return;
     }
     contentEl.hidden = false;
-    const users = await loadUsers(NGPC_AUTH.db);
-    renderStats(users);
-    renderRows(users, NGPC_AUTH.db);
+    try{
+      const users = await loadUsers(NGPC_AUTH.db);
+      renderStats(users);
+      renderRows(users, NGPC_AUTH.db);
+    }catch(e){
+      statusEl.innerHTML = '<div class="msg err">Couldn’t load players: '+escapeHtml((e&&e.message)||'unknown error')
+        +'. If you just added account approval, make sure the updated firestore.rules has been'
+        +' published to Firebase Console (and the approval backfill script run first).</div>';
+    }
   }
   boot();
 })();
