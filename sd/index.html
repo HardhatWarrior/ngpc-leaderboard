@@ -57,7 +57,7 @@
     box-shadow:0 4px 14px rgba(0,0,0,.35); object-fit:cover;
   }
 
-  main{ display:grid; grid-template-columns:1.5fr 1fr; gap:20px; align-items:start; }
+  main{ display:grid; grid-template-columns:1fr 1.5fr; gap:20px; align-items:start; }
   @media (max-width:720px){ main{ grid-template-columns:1fr; } }
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
   .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
@@ -128,25 +128,11 @@
 
   <main>
     <section class="panel">
-      <h2>Leaderboard</h2>
-      <p class="hint" id="board-hint">Fastest solves on Easy, ranked by time. Times aren't comparable across difficulties.</p>
-      <div class="mode-toggle">
-        <button type="button" class="mode-btn active" id="diff-E" data-diff="E">Easy</button>
-        <button type="button" class="mode-btn" id="diff-M" data-diff="M">Medium</button>
-        <button type="button" class="mode-btn" id="diff-H" data-diff="H">Hard</button>
-      </div>
-      <div id="board-status"></div>
-      <div id="board"></div>
-    </section>
-
-    <section class="panel">
       <h2>Submit a score</h2>
-      <p class="hint">Scores only come in by scanning the QR code the game shows after a completed puzzle &mdash; there's no manual entry, so every row on the board is a real result. You must be signed in to submit.</p>
 
       <!-- Members only -- gates the whole scan mechanism (camera + file fallback), not just the
            final submit step; defaults hidden in markup so it never flashes before auth resolves. -->
       <div id="scan-signin-required">
-        <p class="hint">Sign in to scan a QR code.</p>
         <button type="button" class="btn-primary" id="scan-signin-btn">Sign In</button>
       </div>
 
@@ -185,6 +171,17 @@
         <button class="btn-secondary" id="btn-again">Back to leaderboard</button>
       </div>
     </section>
+
+    <section class="panel">
+      <h2>Leaderboard</h2>
+      <div class="mode-toggle">
+        <button type="button" class="mode-btn active" id="diff-E" data-diff="E">Easy</button>
+        <button type="button" class="mode-btn" id="diff-M" data-diff="M">Medium</button>
+        <button type="button" class="mode-btn" id="diff-H" data-diff="H">Hard</button>
+      </div>
+      <div id="board-status"></div>
+      <div id="board"></div>
+    </section>
   </main>
 
   <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com</footer>
@@ -199,7 +196,7 @@
   let activeDiff = 'E';
 
   const el = (id)=>document.getElementById(id);
-  const boardEl = el('board'), boardStatusEl = el('board-status'), boardHintEl = el('board-hint');
+  const boardEl = el('board'), boardStatusEl = el('board-status');
   const idleView = el('idle-view'), confirmView = el('confirm-view'), successView = el('success-view');
   const formMsg = el('form-msg'), confirmMsg = el('confirm-msg');
   const btnScan = el('btn-scan'), scanLive = el('scan-live'), scanFallback = el('scan-fallback');
@@ -325,7 +322,6 @@
     if(activeDiff === diff) return;
     activeDiff = diff;
     diffButtons.forEach(btn=>btn.classList.toggle('active', btn.dataset.diff===diff));
-    boardHintEl.textContent = 'Fastest solves on '+DIFF_NAMES[diff]+', ranked by time. Times aren’t comparable across difficulties.';
     subscribeBoard();
   }
   diffButtons.forEach(btn=>btn.addEventListener('click', ()=>setDiff(btn.dataset.diff)));

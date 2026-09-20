@@ -64,7 +64,7 @@
     box-shadow:0 4px 14px rgba(0,0,0,.35);
   }
 
-  main{ display:grid; grid-template-columns:1.5fr 1fr; gap:20px; align-items:start; }
+  main{ display:grid; grid-template-columns:1fr 1.5fr; gap:20px; align-items:start; }
   @media (max-width:720px){ main{ grid-template-columns:1fr; } }
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
   .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
@@ -154,25 +154,11 @@
 
   <main>
     <section class="panel">
-      <h2>Leaderboard</h2>
-      <p class="hint" id="board-hint">Most recent runs, across every course. Updates live as new runs are logged.</p>
-      <div class="mode-toggle">
-        <button type="button" class="mode-btn active" id="mode-recent" data-mode="recent">Recent</button>
-        <button type="button" class="mode-btn" id="mode-course" data-mode="course">By Course</button>
-      </div>
-      <select id="course-select" hidden></select>
-      <div id="board-status"></div>
-      <div id="board"></div>
-    </section>
-
-    <section class="panel">
       <h2>Submit a time</h2>
-      <p class="hint">Times only come in by scanning the QR code the game shows after a completed race &mdash; there's no manual entry, so every row on the board is a real result. You must be signed in to submit.</p>
 
       <!-- Members only -- gates the whole scan mechanism (camera + file fallback), not just the
            final submit step; defaults hidden in markup so it never flashes before auth resolves. -->
       <div id="scan-signin-required">
-        <p class="hint">Sign in to scan a QR code.</p>
         <button type="button" class="btn-primary" id="scan-signin-btn">Sign In</button>
       </div>
 
@@ -211,6 +197,17 @@
         <button class="btn-secondary" id="btn-again">Back to leaderboard</button>
       </div>
     </section>
+
+    <section class="panel">
+      <h2>Leaderboard</h2>
+      <div class="mode-toggle">
+        <button type="button" class="mode-btn active" id="mode-recent" data-mode="recent">Recent</button>
+        <button type="button" class="mode-btn" id="mode-course" data-mode="course">By Course</button>
+      </div>
+      <select id="course-select" hidden></select>
+      <div id="board-status"></div>
+      <div id="board"></div>
+    </section>
   </main>
 
   <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com</footer>
@@ -233,7 +230,7 @@
 
   const el = (id)=>document.getElementById(id);
   const boardEl = el('board'), boardStatusEl = el('board-status'), courseSelect = el('course-select');
-  const boardHintEl = el('board-hint'), modeRecentBtn = el('mode-recent'), modeCourseBtn = el('mode-course');
+  const modeRecentBtn = el('mode-recent'), modeCourseBtn = el('mode-course');
   let boardMode = 'recent'; // 'recent' | 'course'
   const idleView = el('idle-view'), confirmView = el('confirm-view'), successView = el('success-view');
   const formMsg = el('form-msg'), confirmMsg = el('confirm-msg');
@@ -383,9 +380,6 @@
     modeRecentBtn.classList.toggle('active', mode==='recent');
     modeCourseBtn.classList.toggle('active', mode==='course');
     courseSelect.hidden = mode !== 'course';
-    boardHintEl.textContent = mode === 'course'
-      ? 'Fastest times, ranked by lap time within one course — times across different courses aren’t comparable.'
-      : 'Most recent runs, across every course. Updates live as new runs are logged.';
     subscribeBoard();
   }
   modeRecentBtn.addEventListener('click', ()=>setBoardMode('recent'));

@@ -110,7 +110,7 @@
   .pin-box svg{ width:62%; height:62%; }
 
   /* ---------- layout ---------- */
-  main{ display:grid; grid-template-columns:1.5fr 1fr; gap:20px; align-items:start; }
+  main{ display:grid; grid-template-columns:1fr 1.5fr; gap:20px; align-items:start; }
   @media (max-width:720px){ main{ grid-template-columns:1fr; } }
 
   .panel{
@@ -224,21 +224,12 @@
   </header>
 
   <main>
-    <section class="panel" id="leaderboard-panel">
-      <h2>Leaderboard</h2>
-      <p class="hint">Top runs, ranked by pinfall. Updates live as new scores come in.</p>
-      <div id="board-status"></div>
-      <div id="board"></div>
-    </section>
-
     <section class="panel" id="submit-panel">
       <h2>Submit a score</h2>
-      <p class="hint" id="submit-hint">Scores only come in by scanning the QR code the game shows after a completed game &mdash; there's no manual entry, so every row on the board is a real result. You must be signed in to submit.</p>
 
       <!-- Members only -- gates the whole scan mechanism (camera + file fallback), not just the
            final submit step; defaults hidden in markup so it never flashes before auth resolves. -->
       <div id="scan-signin-required">
-        <p class="hint">Sign in to scan a QR code.</p>
         <button type="button" class="btn-primary" id="scan-signin-btn">Sign In</button>
       </div>
 
@@ -273,6 +264,12 @@
         <button class="btn-secondary" id="btn-back">Cancel</button>
         <div id="confirm-msg"></div>
       </div>
+    </section>
+
+    <section class="panel" id="leaderboard-panel">
+      <h2>Leaderboard</h2>
+      <div id="board-status"></div>
+      <div id="board"></div>
     </section>
   </main>
 
