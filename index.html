@@ -244,7 +244,7 @@
 
   footer{ text-align:center; color:var(--dim); font-size:11px; }
   footer a{ color:var(--accent2); }
-  #traffic-counter{ display:block; margin-top:6px; font-variant-numeric:tabular-nums; }
+  #traffic-counter{ text-align:center; color:var(--dim); font-size:11px; margin-top:6px; font-variant-numeric:tabular-nums; }
 </style>
 </head>
 <body>
@@ -314,11 +314,8 @@
     <div id="search-results" hidden></div>
   </div>
 
-  <footer>
-    NGPC homebrew hiscore boards &mdash; fed by an on-device QR code after every completed game.
-    <span id="traffic-counter"></span>
-    <br>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com
-  </footer>
+  <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com</footer>
+  <div id="traffic-counter"></div>
 </div>
 
 <script src="/auth.js"></script>
