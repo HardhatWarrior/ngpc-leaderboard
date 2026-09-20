@@ -214,7 +214,6 @@
      no banner at all. */
   .dev-banner{
     position:absolute; left:0; right:0; bottom:0;
-    background:rgba(0,0,0,.75);
     color:#fff;
     font-family:"Press Start 2P",monospace;
     font-size:9px;
@@ -223,6 +222,7 @@
     padding:7px 4px;
     pointer-events:none;
   }
+  .dev-banner.dev{ background:rgba(214,158,23,.85); }
   .dev-banner.beta{ background:rgba(92,143,214,.82); }
 
   /* NEW / UPDATED corner ribbon -- self-expires 30 days after being set (see buildTile()'s own
@@ -395,7 +395,7 @@
 
     if(data.devStatus === 'dev' || data.devStatus === 'beta'){
       const banner = document.createElement('div');
-      banner.className = 'dev-banner' + (data.devStatus==='beta' ? ' beta' : '');
+      banner.className = 'dev-banner ' + data.devStatus;
       banner.textContent = data.devStatus === 'beta' ? 'BETA' : 'IN DEVELOPMENT';
       art.appendChild(banner);
     }
