@@ -27,37 +27,36 @@
   #shell{ width:100%; max-width:960px; display:flex; flex-direction:column; gap:22px; }
   header{ background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--border); border-radius:14px; padding:22px 22px 18px; display:flex; flex-direction:column; gap:14px; position:relative; overflow:hidden; }
   header::before{ content:""; position:absolute; inset:0; background:radial-gradient(circle at 85% -10%, rgba(178,58,82,.35), transparent 55%); pointer-events:none; }
-  .wordmark{ position:relative; display:flex; flex-direction:row; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px; }
-  .wordmark .eyebrow{ font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase; }
-  .wordmark h1{ margin:0; font-size:clamp(20px,4.2vw,30px); line-height:1.4; color:var(--cream); }
-  .title-block{ display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+  .eyebrow{
+    position:relative; font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase;
+  }
+  /* Image left, title/creator/links right -- all one cluster, so on narrow screens the text
+     never has to wrap onto its own crowded row above the screenshot the way a wrapping flex
+     "wordmark" row used to. rom-link/play-link moved out of absolute positioning and into normal
+     flow here too, directly under created-by, so they're never floating disconnected from it. */
+  .header-row{ position:relative; display:flex; flex-direction:row; gap:16px; align-items:flex-start; }
+  .title-block{ display:flex; flex-direction:column; gap:5px; min-width:0; }
+  .title-block h1{
+    margin:0; font-size:clamp(18px,5vw,28px); line-height:1.2;
+    color:var(--cream); overflow-wrap:break-word;
+  }
   .created-by{ font-size:11px; color:var(--dim); }
   .created-by a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .created-by a:hover{ color:var(--accent2); }
-  /* Only shown to a signed-in visitor -- see the onAuthChange hookup near the bottom of the
-     script. Anonymous QR submission still works fine without ever seeing this. Tucked into the
-     header panel's own bottom-right corner (header has position:relative) as a plain small link,
-     not a button, so it reads as a quiet aside rather than a second call-to-action. */
-  .play-link{
-    position:absolute; right:16px; bottom:14px;
-    display:inline-flex; align-items:center; gap:5px;
-    color:var(--accent2); font-size:11.5px; font-weight:600;
-    text-decoration:underline; text-underline-offset:2px;
+  .rom-link, .play-link{
+    display:inline-flex; align-items:center; gap:5px; width:auto;
+    font-weight:600; text-decoration:underline; text-underline-offset:2px;
   }
+  .play-link{ color:var(--accent2); font-size:11.5px; margin-top:4px; }
   .play-link:hover{ color:var(--cream); }
   .play-link[hidden]{ display:none; }
-  .rom-link{
-    position:absolute; right:16px; bottom:37px;
-    display:inline-flex; align-items:center; gap:5px;
-    color:var(--dim); font-size:11px; font-weight:600;
-    text-decoration:underline; text-underline-offset:2px;
-  }
+  .rom-link{ color:var(--dim); font-size:11px; }
   .rom-link:hover{ color:var(--accent2); }
 
   /* decorative header art -- the same real title-screen capture the main page's own tile uses,
      not a redraw of it. */
   .header-art{
-    position:relative; width:160px; max-width:45%; aspect-ratio:160/152;
+    position:relative; width:130px; max-width:38%; flex:none; aspect-ratio:160/152;
     image-rendering:pixelated; border-radius:8px; border:1px solid var(--border);
     box-shadow:0 4px 14px rgba(0,0,0,.35);
   }
@@ -113,16 +112,16 @@
 
 <div id="shell">
   <header>
-    <div class="wordmark">
-      <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
+    <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
+    <div class="header-row">
+      <img src="/assets/yahtzee-title.png" alt="Neo Yahtzee title screen" class="header-art" width="160" height="152">
       <div class="title-block">
         <h1>NEO YAHTZEE</h1>
         <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
+        <a href="/play/yahtzee/yahtzee.ngp" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
+        <a href="/play/yahtzee/" class="play-link" id="play-link" hidden>&#127918; Play Neo Yahtzee in Browser</a>
       </div>
     </div>
-    <img src="/assets/yahtzee-title.png" alt="Neo Yahtzee title screen" class="header-art" width="160" height="152">
-    <a href="/play/yahtzee/yahtzee.ngp" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
-    <a href="/play/yahtzee/" class="play-link" id="play-link" hidden>&#127918; Play Neo Yahtzee in Browser</a>
   </header>
 
   <main>
