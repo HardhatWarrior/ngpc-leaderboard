@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>About</title>
+<meta name="description" content="Why NGPC-DEV.COM exists, how the QR-code leaderboard system works, and what's next for it.">
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{
+    margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+    padding-inline:20px; padding-block:28px; display:flex; justify-content:center;
+  }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; }
+  #shell{ width:100%; max-width:680px; display:flex; flex-direction:column; gap:22px; }
+
+  header{ text-align:center; display:flex; flex-direction:column; gap:8px; }
+  header .eyebrow{ font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase; }
+  header h1{ font-size:clamp(20px,4.5vw,28px); margin:0; letter-spacing:1px; color:var(--cream); }
+  header p{ margin:0; color:var(--dim); font-size:13.5px; }
+
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:20px 22px; }
+  .panel h2{ margin:0 0 12px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  .panel p{ margin:0 0 12px; line-height:1.65; font-size:13.5px; color:var(--cream); }
+  .panel p:last-child{ margin-bottom:0; }
+  .panel a{ color:var(--accent2); text-decoration:underline; text-underline-offset:2px; }
+  .panel a:hover{ color:var(--cream); }
+
+  /* TL;DR panel -- visually distinct (accent border) since it's meant to be read first/standalone,
+     not just another section in the scroll. */
+  #tldr{ border-color:var(--accent2); background:linear-gradient(180deg,var(--panel2),var(--panel)); }
+  #tldr p{ font-size:14px; }
+
+  .game-links{ display:flex; flex-wrap:wrap; gap:8px; margin-top:2px; }
+  .game-links a{
+    display:inline-block; background:var(--panel2); border:1px solid var(--border); border-radius:8px;
+    padding:7px 12px; font-size:12.5px; font-weight:600; text-decoration:none; color:var(--cream);
+  }
+  .game-links a:hover{ border-color:var(--accent2); color:var(--accent2); }
+
+  /* "Get a high score / Scan the code / ..." -- set apart as its own rhythmic callout rather than
+     just more paragraph text, since it reads as a beat, not prose. */
+  .tagline-steps{
+    list-style:none; margin:4px 0 0; padding:0; display:flex; flex-direction:column; gap:4px;
+    font-family:"Press Start 2P",monospace; font-size:10px; color:var(--accent2); letter-spacing:.02em;
+  }
+  .tagline-steps li::before{ content:"› "; color:var(--dim); }
+
+  footer{ text-align:center; color:var(--dim); font-size:11px; }
+  footer a{ color:var(--accent2); }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <span class="eyebrow">NGPC-DEV.COM</span>
+    <h1 class="px">ABOUT</h1>
+    <p>Live Leaderboards for the Neo Geo Pocket Color</p>
+  </header>
+
+  <section class="panel" id="tldr">
+    <h2>TL;DR</h2>
+    <p>I've been working on a live leaderboard system for Neo Geo Pocket Color games. Games can generate a QR code with your score and stats, you scan it with your phone, and your score gets submitted to NGPC-DEV.COM so you can compare it with other players. The site also lets you play the supported games on PC and mobile and submit scores there. It's still a work in progress, but other NGPC developers are already helping test it and work out the bugs.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Why I Built It</h2>
+    <p>I've been working on something that I think could be a fun addition to the Neo Geo Pocket Color homebrew community: live online leaderboards for NGPC games.</p>
+    <p>The idea originally came from wanting a way to keep track of high scores for the games I've been making, while also giving other players a way to compare their scores with everyone else.</p>
+    <p>Part of the fun of making games for an old system like the NGPC is figuring out how to do things the original hardware was never really designed to do. It obviously wasn't built with online leaderboards in mind &mdash; but with a little creativity, a QR code, and a website, we can add something like that while still keeping the original hardware at the center of the experience.</p>
+  </section>
+
+  <section class="panel">
+    <h2>How It Works</h2>
+    <p>The basic idea is pretty simple.</p>
+    <p>For games that support the leaderboard system, the Neo Geo Pocket Color can generate a QR code directly on the screen containing your high score and other game statistics.</p>
+    <p>You scan that QR code with your phone, and it takes you to the website where your score can be uploaded to the leaderboard. The QR code is essentially the bridge between the game and the website &mdash; the goal is to make uploading a score quick and easy while keeping the experience centered around the NGPC itself.</p>
+    <p>Once your score is submitted, you can see how you compare with other players.</p>
+    <ul class="tagline-steps">
+      <li>Get a high score.</li>
+      <li>Scan the code.</li>
+      <li>Upload it.</li>
+      <li>See where you rank.</li>
+      <li>Then try to beat it.</li>
+    </ul>
+  </section>
+
+  <section class="panel">
+    <h2>You Don't Need an NGPC to Try It</h2>
+    <p>One thing I've also added is the ability to play the games directly through the website. The games currently available on NGPC-DEV.COM can be played on PC and mobile, and scores can be submitted from there as well.</p>
+    <p>Obviously, playing on an actual Neo Geo Pocket Color is a big part of the fun, but having browser versions makes it easier for people to try the games, see what they're about, and participate in the leaderboards even if they don't have the hardware handy.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Creating an Account</h2>
+    <p>To submit scores to the leaderboards, you'll need to create an account on the site. I'm intentionally not requiring an email address to sign up &mdash; you just need an account and a username to participate.</p>
+    <p>The goal is to keep it simple and avoid making people jump through a bunch of hoops just to submit a high score.</p>
+  </section>
+
+  <section class="panel">
+    <h2>A Big Thanks to the Other Developers</h2>
+    <p>This project wouldn't be nearly as far along without some other NGPC developers jumping in to help. Other developers have already been participating, testing the system, finding issues, and helping me work through problems as I've been building it.</p>
+    <p>A special shoutout to <a href="/user/?u=ahchay">@AHCHAY</a>, creator of Gardenia, <a href="/user/?u=tixual">@TIXUAL</a>, creator of Over Rev, and <a href="/user/?u=napomex">@NAPOMEX</a>, creator of Xenon 2, for helping test things out and working through some of the issues with me.</p>
+    <p>Having other developers actually using the system has been really helpful. It's one thing to build something and test it yourself, but it's another thing entirely when someone else starts using it and finds the things you never thought about. Hopefully, more developers will get involved as the system continues to develop.</p>
+  </section>
+
+  <section class="panel">
+    <h2>What's on the Site?</h2>
+    <p>There are already several games included, with more being added as development continues, each with its own leaderboard.</p>
+    <div class="game-links">
+      <a href="/bw/">Neo Bowling</a>
+      <a href="/tt/">Tetris</a>
+      <a href="/yz/">Neo Yahtzee</a>
+      <a href="/fk/">Farkle</a>
+      <a href="/2k/">2048</a>
+      <a href="/overrev/">Over Rev</a>
+      <a href="/gd/">Gardenia</a>
+      <a href="/xn/">Xenon 2</a>
+    </div>
+    <p style="margin-top:14px">The games and the website are both very much a work in progress &mdash; I'm still developing the games, working on the leaderboard system, fixing things, and adding features when I have time. Each game moves at its own pace, so updates may not always happen on a regular schedule.</p>
+    <p>I'm also hoping to eventually extend the leaderboard system to other NGPC developers. If someone else is making a Neo Geo Pocket Color game and wants online high scores, I'd like to make it possible for them to use this system rather than everyone building their own leaderboard from scratch &mdash; see <a href="/dev/submit/">Submit a Game</a>.</p>
+  </section>
+
+  <section class="panel">
+    <h2>Some Future Ideas</h2>
+    <p>Tournaments are one possibility &mdash; it'd be fun to have an event where everyone plays the same game for a week or a weekend and competes for the highest score.</p>
+    <p>Online play is another possibility I'd like to explore at some point. That's obviously a much bigger project and more of a long-term goal, but it's something I'd like to experiment with eventually.</p>
+    <p>For now, though, I'm mainly focused on getting the games and basic leaderboard functionality working well.</p>
+  </section>
+
+  <section class="panel">
+    <p>I'm hoping NGPC-DEV.COM can eventually become a useful little resource for the NGPC homebrew community, not just for my own games but for other developers and players as well. Everything is still evolving, so there's definitely more to come.</p>
+    <p style="margin-top:14px">If you find any problems, have ideas, or are developing an NGPC game and are interested in the leaderboard system, I'd love to hear from you.</p>
+  </section>
+
+  <footer><a href="/">&larr; All games</a> &middot; &copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com</footer>
+</div>
+
+<script src="/auth.js"></script>
+</body>
+</html>
