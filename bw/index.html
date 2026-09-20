@@ -94,10 +94,15 @@
   /* decorative header art -- the same real title-screen capture the main page's own tile uses,
      not a redraw of it. */
   .header-art{
-    position:relative; width:130px; max-width:38%; flex:none; aspect-ratio:160/152;
+    position:relative; width:130px; max-width:38%; height:auto; flex:none; aspect-ratio:160/152;
     image-rendering:pixelated; border-radius:8px; border:1px solid var(--border);
     box-shadow:0 4px 14px rgba(0,0,0,.35);
   }
+  /* The <img> carries width/height="160"/"152" HTML attributes (real dimensions, a fallback
+     size if this CSS ever fails to load) -- those map to a low-priority presentational height
+     that otherwise wins over aspect-ratio's own auto-height computation, so height:auto above
+     has to be explicit or the box stays a fixed 152px tall while width shrinks to 130px,
+     squishing the image instead of scaling it proportionally. */
   .pin-box svg{ width:62%; height:62%; }
 
   /* ---------- layout ---------- */
