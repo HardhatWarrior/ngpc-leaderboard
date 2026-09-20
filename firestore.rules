@@ -59,7 +59,8 @@ service cloud.firestore {
           && d.usernameLower == d.username.lower()
           && d.approved is bool
           && (!('avatar' in d) || (d.avatar is list && d.avatar.size() == 1024))
-          && (!('wantsDev' in d) || d.wantsDev is bool);
+          && (!('wantsDev' in d) || d.wantsDev is bool)
+          && (!('isDeveloper' in d) || d.isDeveloper is bool);
       }
 
       // New accounts always start unapproved (approved:false) -- nobody can self-approve at
@@ -67,8 +68,12 @@ service cloud.firestore {
       // the account can still sign in and submit scores (scores/{scoreId}'s own submitterApproved
       // check is what actually keeps those submissions off the public boards, not this).
       // `wantsDev` is a self-reported "I'd like to submit games" checkbox at signup -- purely
-      // informational for the admin dashboard, grants nothing on its own (an actual developer
-      // still needs games/{slug}.developerUid set by the admin, same as before this existed).
+      // informational for the admin dashboard, grants nothing on its own. `isDeveloper` is the
+      // real, admin-granted yes/no gate: not tied to any specific game, just "can this account
+      // use /dev/submit/ at all" -- gameSubmissions/{id}'s own allow create checks it. A game's
+      // developerUid still only ever gets set from a submission's own submitterUid at approval
+      // time (or by the admin by hand) -- isDeveloper is the gate to get there, not the
+      // assignment itself.
       allow create: if request.auth != null && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved', 'wantsDev'])
         && request.resource.data.createdAt is int
@@ -76,19 +81,22 @@ service cloud.firestore {
         && isWellFormedProfile(request.resource.data);
 
       // Two distinct update paths, kept mutually exclusive by field scope:
-      //  - the owner can change username/avatar (account page) but never their own `approved` bit
-      //  - the admin can flip `approved` and/or `wantsDev` on any account (the latter so the admin
-      //    can clear a stray/mis-clicked dev-interest flag), never touch anything else about it
+      //  - the owner can change username/avatar (account page) but never their own `approved` or
+      //    `isDeveloper` bits
+      //  - the admin can flip `approved`/`wantsDev`/`isDeveloper` on any account, never touch
+      //    anything else about it
       allow update: if request.auth != null && (
         (request.auth.uid == uid
-          && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved', 'wantsDev'])
+          && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved', 'wantsDev', 'isDeveloper'])
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.approved == resource.data.approved
+          && request.resource.data.get('isDeveloper', false) == resource.data.get('isDeveloper', false)
           && isWellFormedProfile(request.resource.data))
         || (isAdmin()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved', 'wantsDev'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved', 'wantsDev', 'isDeveloper'])
           && request.resource.data.approved is bool
-          && (!('wantsDev' in request.resource.data) || request.resource.data.wantsDev is bool))
+          && (!('wantsDev' in request.resource.data) || request.resource.data.wantsDev is bool)
+          && (!('isDeveloper' in request.resource.data) || request.resource.data.isDeveloper is bool))
       );
 
       allow delete: if false;
@@ -122,10 +130,17 @@ service cloud.firestore {
       // what actually keeps a non-compliant doc from ever being fetched. A pre-sign-in-required
       // score with no uid at all (from before that policy) has no submitter to gate on, so it
       // stays visible as-is (backfilled with approved:true -- see backfill-score-approved.js).
-      // The submitter can always read their own score regardless of approved -- account/index.html's
-      // "Your Submissions" list needs to show a still-pending account's own scores back to them.
-      allow read: if !('uid' in resource.data) || resource.data.approved == true
-        || (request.auth != null && request.auth.uid == resource.data.uid);
+      // Deliberately does NOT also add an "owner can always read their own" clause here even
+      // though that seems like an obvious addition (account/index.html's "Your Submissions" list
+      // wanting to show a still-pending account's own scores back to them) -- mixing a
+      // request.auth-comparison into this OR breaks the "provably filterable" property list()
+      // queries need: confirmed in production, admin/index.html's approve/revoke fan-out
+      // (.where('uid','==',uid).get(), run by the admin, uid far from ever being request.auth.uid)
+      // started throwing a flat permission-denied for the WHOLE query the moment that clause was
+      // added, not just excluding non-matching docs the way a pure resource.data-field rule does.
+      // "Your Submissions" showing a still-pending score is a known, pre-existing gap, not
+      // something this rule can safely fix without breaking something else that already works.
+      allow read: if !('uid' in resource.data) || resource.data.approved == true;
 
       // A score's uid/username pair is required (anonymous QR submission was retired) and can't
       // be spoofed: uid must match the actual signed-in caller, and username is shape-checked even
@@ -291,11 +306,9 @@ service cloud.firestore {
       // Sudoku: game, difficulty (E/M/H), time (seconds, 1-5 digits per the submission's own
       // spec), misses (3-digit zero-padded mistake count), source, submittedAt, required
       // uid/username -- no initials field, unlike every other game here; Sudoku's own high-score
-      // flow doesn't collect device-typed initials (see sd/index.html's own comment for the
-      // submitted payload's other quirk: it doesn't repeat the "SD" game code the way every other
-      // game's payload text does). Sorted ascending by time (faster wins), scoped to one
-      // difficulty at a time -- approved via /dev/submit/ -> admin/index.html's submission review,
-      // same path any future developer submission goes through.
+      // flow doesn't collect device-typed initials. Sorted ascending by time (faster wins),
+      // scoped to one difficulty at a time -- approved via /dev/submit/ -> admin/index.html's
+      // submission review, same path any future developer submission goes through.
       function isSudokuScore(d) {
         return d.game == 'SD'
           && d.keys().hasOnly(['game', 'difficulty', 'time', 'misses', 'source', 'submittedAt', 'uid', 'username', 'approved'])
@@ -363,8 +376,12 @@ service cloud.firestore {
       allow read: if request.auth != null
         && (request.auth.uid == resource.data.submitterUid || isAdmin());
 
+      // Gated behind users/{uid}.isDeveloper -- the account-level yes/no the admin grants from
+      // the Players table, not tied to any specific game (see users/{uid}'s own comment). One
+      // get() here is fine; it's a create, not a list() query.
       allow create: if request.auth != null
         && request.resource.data.submitterUid == request.auth.uid
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('isDeveloper', false) == true
         && request.resource.data.status == 'pending'
         && request.resource.data.keys().hasOnly([
              'submitterUid', 'submitterUsername', 'proposedName', 'proposedCode',

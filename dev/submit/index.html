@@ -233,6 +233,11 @@
       deniedEl.textContent = 'Sign in to submit a game.';
       return;
     }
+    if(!user.isDeveloper){
+      deniedEl.hidden = false;
+      deniedEl.textContent = 'You need to be flagged as a developer before you can submit a game -- ask the site admin.';
+      return;
+    }
     formPanel.hidden = false;
     const db = NGPC_AUTH.db;
 

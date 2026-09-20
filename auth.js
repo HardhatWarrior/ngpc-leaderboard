@@ -525,6 +525,10 @@ window.NGPC_AUTH = (function(){
       // as approved (grandfathered in), same stance the one-time backfill script takes so a
       // pre-existing player's history doesn't vanish from the boards.
       approved: data.approved === undefined ? true : !!data.approved,
+      // Admin-granted yes/no, not tied to any specific game -- gates /dev/submit/ (see
+      // firestore.rules' gameSubmissions allow create). Defaults false; nobody grants this to
+      // themselves.
+      isDeveloper: !!data.isDeveloper,
     };
     listeners.forEach(cb=>cb(currentUser));
   }

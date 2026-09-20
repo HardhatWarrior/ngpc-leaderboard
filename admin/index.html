@@ -67,8 +67,6 @@
   .badge.wants-dev{ background:rgba(122,162,247,.18); color:var(--accent2,#7aa2f7); margin-left:6px; }
   .badge.is-developer{ background:rgba(226,160,60,.18); color:#e2a03c; margin-left:6px; }
   .badge.promote-dev{ background:rgba(226,160,60,.12); color:#e2a03c; border:1px dashed rgba(226,160,60,.5); margin-left:6px; text-transform:none; letter-spacing:0; }
-  .promote-picker{ display:flex; gap:6px; align-items:center; margin-left:6px; }
-  .promote-picker select{ font:inherit; font-size:11px; background:var(--navy); color:var(--cream); border:1px solid var(--border); border-radius:5px; padding:3px 6px; }
   button{
     font:inherit; border:none; border-radius:7px; padding:7px 12px; cursor:pointer;
     font-weight:600; font-size:11.5px; width:auto;
@@ -195,9 +193,6 @@
   const submissionsContentEl = el('submissions-content');
   const submissionsStatusEl = el('submissions-status');
   const submissionsListEl = el('submissions-list');
-  // Populated in boot() from loadAndRenderGames()'s return value -- the Players table's own
-  // Promote control needs the full {slug,name} list to offer a game picker.
-  let gamesList = [];
 
   // Each panel's header toggles its own .panel-body -- independent of the section's own
   // `hidden` (that one gates "hasn't finished loading yet", set once by boot() below; this is
@@ -239,6 +234,7 @@
         createdAt: d.createdAt || null,
         approved: d.approved === undefined ? true : !!d.approved,
         wantsDev: !!d.wantsDev,
+        isDeveloper: !!d.isDeveloper,
         disabled: !!d.disabled,
         avatar: Array.isArray(d.avatar) ? d.avatar : null,
         email: null,
@@ -280,13 +276,13 @@
       ? '<span class="badge approved">Approved</span>'
       : '<span class="badge pending">Pending</span>')
       + (u.disabled ? '<span class="badge disabled">Disabled</span>' : '')
-      // Actually assigned as a game's developer (Games panel below, which stays read-only and
-      // always reflects the original submission-approval assignment) -- a stronger, admin-set
-      // signal than the self-reported wantsDev checkbox. Promoting/demoting both happen here,
-      // not there: the Games panel just displays whatever developerUid currently is.
+      // Account-level yes/no, not tied to any specific game -- once set, the account can use
+      // /dev/submit/ (see firestore.rules' gameSubmissions allow create). A game's developerUid
+      // still only ever gets set from a submission's own submitterUid at approval time, or by the
+      // admin by hand in the Games panel -- this flag is just the gate to get there.
       + (u.isDeveloper
-          ? '<button type="button" class="badge is-developer" data-action="demote-dev" data-uid="'+u.uid+'" title="Assigned as a developer on: '+escapeHtml((u.developerGameSlugs||[]).join(', '))+' -- click to remove">Developer &times;</button>'
-          : '<button type="button" class="badge promote-dev" data-action="promote-dev" data-uid="'+u.uid+'" title="Assign as a game\'s developer">+ Developer</button>')
+          ? '<button type="button" class="badge is-developer" data-action="demote-dev" data-uid="'+u.uid+'" title="Can submit a game via /dev/submit/ -- click to remove">Developer &times;</button>'
+          : '<button type="button" class="badge promote-dev" data-action="promote-dev" data-uid="'+u.uid+'" title="Let this account submit a game via /dev/submit/">+ Developer</button>')
       + (u.wantsDev ? '<button type="button" class="badge wants-dev" data-action="clear-dev" data-uid="'+u.uid+'" title="Checked &quot;Developer&quot; at signup -- click to clear (e.g. if mis-clicked)">Wants Dev &times;</button>' : '');
   }
 
@@ -332,57 +328,13 @@
         }
         return;
       }
-      if(action === 'demote-dev'){
-        const slugs = u.developerGameSlugs || [];
-        if(!slugs.length) return;
-        if(!confirm('Remove '+u.username+' as developer of '+slugs.join(', ')+'?')) return;
+      if(action === 'demote-dev' || action === 'promote-dev'){
+        const next = action === 'promote-dev';
         btn.disabled = true;
         try{
-          const batch = db.batch();
-          slugs.forEach(slug=>batch.update(db.collection('games').doc(slug), {developerUid: null}));
-          await batch.commit();
-          u.developerGameSlugs = [];
-          u.isDeveloper = false;
+          await db.collection('users').doc(uid).update({isDeveloper: next});
+          u.isDeveloper = next;
           if(row) row.querySelector('td:nth-child(4)').innerHTML = renderStatusCell(u);
-        }catch(err){
-          statusEl.innerHTML = '<div class="msg err">Update failed: '+escapeHtml(err.message||'unknown')+'</div>';
-          btn.disabled = false;
-        }
-        return;
-      }
-      if(action === 'promote-dev'){
-        if(!row) return;
-        const cell = row.querySelector('td:nth-child(4)');
-        if(!gamesList.length){
-          statusEl.innerHTML = '<div class="msg err">No games loaded to assign -- reload the page and try again.</div>';
-          return;
-        }
-        const options = gamesList.map(g=>'<option value="'+escapeHtml(g.slug)+'">'+escapeHtml(g.name||g.slug)+'</option>').join('');
-        cell.innerHTML = renderStatusCell(u)
-          + '<div class="promote-picker"><select data-uid="'+uid+'">'+options+'</select>'
-          + '<button type="button" class="btn-save" data-action="confirm-promote-dev" data-uid="'+uid+'">Save</button>'
-          + '<button type="button" class="btn-revoke" data-action="cancel-promote-dev" data-uid="'+uid+'">Cancel</button></div>';
-        return;
-      }
-      if(action === 'cancel-promote-dev'){
-        if(row) row.querySelector('td:nth-child(4)').innerHTML = renderStatusCell(u);
-        return;
-      }
-      if(action === 'confirm-promote-dev'){
-        if(!row) return;
-        const cell = row.querySelector('td:nth-child(4)');
-        const select = cell.querySelector('.promote-picker select');
-        const slug = select && select.value;
-        if(!slug) return;
-        const game = gamesList.find(g=>g.slug===slug);
-        btn.disabled = true;
-        statusEl.innerHTML = '';
-        try{
-          await db.collection('games').doc(slug).update({developerUid: uid});
-          u.developerGameSlugs = (u.developerGameSlugs||[]).concat(slug);
-          u.isDeveloper = true;
-          if(game) game.developerUid = uid;
-          cell.innerHTML = renderStatusCell(u);
         }catch(err){
           statusEl.innerHTML = '<div class="msg err">Update failed: '+escapeHtml(err.message||'unknown')+'</div>';
           btn.disabled = false;
@@ -394,18 +346,6 @@
       btn.disabled = true;
       try{
         await db.collection('users').doc(uid).update({approved: approve});
-        // Every score doc denormalizes its submitter's approved status (see firestore.rules'
-        // scores match block -- a get() to another doc can't reliably filter a list() query, so
-        // each board query filters on scores/{id}.approved directly instead). Flipping the
-        // account here has to fan out to all of that uid's existing scores too, or their board
-        // visibility would stay stuck at whatever it was when each score was originally submitted.
-        const scoresSnap = await db.collection('scores').where('uid','==',uid).get();
-        for(let i=0; i<scoresSnap.docs.length; i+=500){
-          const chunk = scoresSnap.docs.slice(i, i+500);
-          const scoreBatch = db.batch();
-          chunk.forEach(d=>scoreBatch.update(d.ref, {approved: approve}));
-          await scoreBatch.commit();
-        }
         u.approved = approve;
         if(row){
           row.querySelector('td:nth-child(4)').innerHTML = renderStatusCell(u);
@@ -417,6 +357,24 @@
       }catch(e){
         statusEl.innerHTML = '<div class="msg err">Update failed: '+escapeHtml(e.message||'unknown')+'</div>';
         btn.disabled = false;
+        return;
+      }
+      // Every score doc denormalizes its submitter's approved status (see firestore.rules' scores
+      // match block), so flipping the account also has to fan out to all of that uid's existing
+      // scores, or their board visibility stays stuck at whatever it was when each was submitted.
+      // Kept in its own try/catch, after the account update already succeeded and re-rendered --
+      // a failure here (e.g. an un-deployed rules change) shouldn't look like the whole approve
+      // action failed when the part the admin actually asked for just did.
+      try{
+        const scoresSnap = await db.collection('scores').where('uid','==',uid).get();
+        for(let i=0; i<scoresSnap.docs.length; i+=500){
+          const chunk = scoresSnap.docs.slice(i, i+500);
+          const scoreBatch = db.batch();
+          chunk.forEach(d=>scoreBatch.update(d.ref, {approved: approve}));
+          await scoreBatch.commit();
+        }
+      }catch(e){
+        statusEl.innerHTML = '<div class="msg err">Player '+(approve?'approved':'revoked')+', but syncing their existing scores failed: '+escapeHtml(e.message||'unknown')+'</div>';
       }
     }
     // Delegated on the table body itself, not per-button -- rows get their innerHTML replaced
@@ -584,18 +542,10 @@
         +'. If you just added account approval, make sure the updated firestore.rules has been'
         +' published to Firebase Console (and the approval backfill script run first).</div>';
     }
-    // assignedDevUids drives the "Developer" badge in the Players table below -- these are
-    // accounts actually assigned as a game's developerUid (Games panel), which is a different,
-    // stronger signal than the self-reported wantsDev checkbox from signup.
-    let devSlugsByUid = {};
     try{
       const uidToUsername = {};
       users.forEach(u=>{ uidToUsername[u.uid] = u.username; });
-      const games = await loadAndRenderGames(NGPC_AUTH.db, uidToUsername);
-      gamesList = games || [];
-      gamesList.filter(g=>g.developerUid).forEach(g=>{
-        (devSlugsByUid[g.developerUid] = devSlugsByUid[g.developerUid] || []).push(g.slug);
-      });
+      await loadAndRenderGames(NGPC_AUTH.db, uidToUsername);
     }catch(e){
       gamesContentEl.hidden = false;
       gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t load games: '+escapeHtml((e&&e.message)||'unknown error')
@@ -603,7 +553,6 @@
         +' and run NGPC-Admin-Scripts/seed-games.js --apply first.</div>';
     }
     if(users.length){
-      users.forEach(u=>{ u.developerGameSlugs = devSlugsByUid[u.uid] || []; u.isDeveloper = u.developerGameSlugs.length > 0; });
       renderStats(users);
       renderRows(users, NGPC_AUTH.db);
     }
