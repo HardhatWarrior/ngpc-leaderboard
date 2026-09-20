@@ -370,7 +370,9 @@
     a.className = 'tile';
     a.href = data.leaderboardPath || ('/'+slug+'/');
     a.dataset.game = data.code || '';
-    a.dataset.added = String(data.romUpdatedAt || data.addedAt || 0);
+    // applySort()'s comparator parses this with new Date(string) -- an ISO string, not the raw
+    // millis number, since new Date("1789870802000") is Invalid Date (NaN), not that timestamp.
+    a.dataset.added = new Date(data.romUpdatedAt || data.addedAt || 0).toISOString();
 
     const art = document.createElement('div');
     art.className = 'tile-art';
