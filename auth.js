@@ -40,6 +40,35 @@ window.NGPC_AUTH = (function(){
   const auth = firebase.auth();
   const db = firebase.firestore();
 
+  // ---- page-view tracking -- fires once per page load, on every page that loads this file
+  // (every game leaderboard, the homepage, account/admin/user pages, everything). Two docs per
+  // view: pageViews/{pathKey} holds a running total for the "top pages" list, pageViewsDaily/
+  // {pathKey_YYYYMMDD} holds one day's count so admin/index.html's Site Stats panel can total
+  // "today" and "last 7 days" without reading every view doc ever written. Both are plain
+  // FieldValue.increment() writes -- see firestore.rules' pageViews/pageViewsDaily match blocks,
+  // which only allow a create at exactly 1 or an update that increments by exactly 1, nothing else.
+  function pathKeyFromLocation(){
+    const raw = (location.pathname || '/').replace(/^\/+|\/+$/g, '');
+    return (raw ? raw.replace(/\//g, '_') : 'home').toLowerCase();
+  }
+  function dateKeyFromDate(d){
+    return d.getFullYear() + String(d.getMonth()+1).padStart(2,'0') + String(d.getDate()).padStart(2,'0');
+  }
+  function trackPageView(){
+    try{
+      const pathKey = pathKeyFromLocation();
+      const dateKey = dateKeyFromDate(new Date());
+      const inc = firebase.firestore.FieldValue.increment(1);
+      db.collection('pageViews').doc(pathKey).set(
+        { path: pathKey, total: inc, lastViewedAt: Date.now() }, { merge: true }
+      ).catch(()=>{}); // non-critical -- a blocked/offline write should never affect the page itself
+      db.collection('pageViewsDaily').doc(pathKey+'_'+dateKey).set(
+        { path: pathKey, date: dateKey, count: inc }, { merge: true }
+      ).catch(()=>{});
+    }catch(e){ /* non-critical */ }
+  }
+  trackPageView();
+
   const EMAIL_DOMAIN = 'users.ngpc-dev.com';
   const USERNAME_RE = /^[A-Za-z0-9_]{3,16}$/;
 

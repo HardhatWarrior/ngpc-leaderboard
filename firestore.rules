@@ -458,6 +458,37 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // pageViews/{pathKey} + pageViewsDaily/{pathKey_YYYYMMDD} -- site-wide per-page traffic,
+    // written by auth.js's trackPageView() on every page load (every game board, the homepage,
+    // account/admin/user pages), read only by admin/index.html's own Site Stats panel. Separate
+    // from meta/siteStats above (index.html's own single-number visible counter, pre-seeded by
+    // hand) -- these are self-service documents instead, since new pages/days appear over time and
+    // pre-seeding one by hand for each isn't practical. Same FieldValue.increment()-resolves-
+    // before-rules-evaluate trick as meta/siteStats keeps a client from setting either counter to
+    // an arbitrary value: a create must start at exactly 1, and an update may only step the count
+    // field by exactly +1, touching no other field.
+    match /pageViews/{pathKey} {
+      allow read: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(['path', 'total', 'lastViewedAt'])
+        && request.resource.data.path is string
+        && request.resource.data.total == 1
+        && request.resource.data.lastViewedAt is int;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['total', 'lastViewedAt'])
+        && request.resource.data.total == resource.data.total + 1
+        && request.resource.data.lastViewedAt is int;
+      allow delete: if false;
+    }
+    match /pageViewsDaily/{docId} {
+      allow read: if isAdmin();
+      allow create: if request.resource.data.keys().hasOnly(['path', 'date', 'count'])
+        && request.resource.data.path is string
+        && request.resource.data.date is string
+        && request.resource.data.count == 1;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count'])
+        && request.resource.data.count == resource.data.count + 1;
+      allow delete: if false;
+    }
+
     // Default-deny for every other collection -- Firestore denies unmatched
     // paths by default anyway, but this makes the intent explicit as the
     // schema grows (Phase 3 comments/, etc).
