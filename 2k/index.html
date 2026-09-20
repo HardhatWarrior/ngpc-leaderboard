@@ -46,6 +46,13 @@
   }
   .play-link:hover{ color:var(--cream); }
   .play-link[hidden]{ display:none; }
+  .rom-link{
+    position:absolute; right:16px; bottom:37px;
+    display:inline-flex; align-items:center; gap:5px;
+    color:var(--dim); font-size:11px; font-weight:600;
+    text-decoration:underline; text-underline-offset:2px;
+  }
+  .rom-link:hover{ color:var(--accent2); }
 
   /* decorative header art -- the same real title-screen capture the main page's own tile uses,
      not a redraw of it. */
@@ -112,6 +119,7 @@
         <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
       </div>
     </div>
+    <a href="/play/2048/2048.ngp" class="rom-link" download>&#128190; Download ROM (.ngp)</a>
     <a href="/play/2048/" class="play-link" id="play-link" hidden>&#127918; Play 2048 in Browser</a>
     <img src="/assets/2048-title.png" alt="2048 title screen" class="header-art" width="160" height="152">
   </header>
