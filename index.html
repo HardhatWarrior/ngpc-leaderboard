@@ -189,6 +189,11 @@
   a.tile{ transition:border-color .15s, transform .15s; }
   a.tile:hover, a.tile:focus-visible{ border-color:var(--accent2); transform:translateY(-2px); }
   a.tile:focus-visible{ outline:2px solid var(--accent2); outline-offset:2px; }
+  /* Coming-soon tiles render as this same <a> (so they still lay out/sort identically), just
+     with no href -- cursor/pointer-events here are the visible half of that; the actual "can't
+     navigate" comes from buildTile() never setting href at all, not from CSS alone. */
+  a.tile.disabled{ cursor:default; }
+  a.tile.disabled:hover, a.tile.disabled:focus-visible{ border-color:var(--border); transform:none; }
 
   .tile-art{
     background:#000;
@@ -397,7 +402,17 @@
   function buildTile(slug, data){
     const a = document.createElement('a');
     a.className = 'tile';
-    a.href = data.leaderboardPath || ('/'+slug+'/');
+    const isComingSoon = data.devStatus === 'coming-soon';
+    if(isComingSoon){
+      // No href at all -- an <a> with no href isn't a link (not focusable via Tab, no navigation
+      // on click/Enter), which is what actually makes this unclickable. The 'disabled' class is
+      // just the visual half (see its CSS): removing href alone wouldn't look any different
+      // without it, and adding the class alone wouldn't stop navigation without this.
+      a.classList.add('disabled');
+      a.setAttribute('aria-disabled', 'true');
+    } else {
+      a.href = data.leaderboardPath || ('/'+slug+'/');
+    }
     a.dataset.game = data.code || '';
     // applySort()'s comparator parses this with new Date(string) -- an ISO string, not the raw
     // millis number, since new Date("1789870802000") is Invalid Date (NaN), not that timestamp.
