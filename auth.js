@@ -575,8 +575,9 @@ window.NGPC_AUTH = (function(){
       color:var(--cream); border-radius:7px; padding:9px 10px; font:inherit; font-size:13px; box-sizing:border-box;
     }
     #auth-form input:focus{ outline:none; border-color:var(--accent2); }
-    .auth-checkbox-label{ display:flex !important; align-items:center; gap:7px; }
-    .auth-checkbox-label input{ display:inline; width:auto; margin:0; }
+    .auth-checkbox-label:not([hidden]){ display:flex; align-items:flex-start; gap:7px; font-size:11px; line-height:1.4; width:100%; box-sizing:border-box; }
+    .auth-checkbox-label input{ display:inline; width:auto; margin:2px 0 0; flex:none; }
+    .auth-checkbox-label span{ flex:1; min-width:0; }
   `;
 
   const MODAL_HTML = `
@@ -591,7 +592,7 @@ window.NGPC_AUTH = (function(){
           <label>Username<input id="auth-username" autocomplete="username" required maxlength="16"></label>
           <label>Password<input id="auth-password" type="password" autocomplete="current-password" required minlength="6"></label>
           <label id="auth-email-label" hidden>Recovery email (optional)<input id="auth-email" type="email" autocomplete="email"></label>
-          <label id="auth-dev-label" class="auth-checkbox-label" hidden><input id="auth-wants-dev" type="checkbox"> I'd like to submit a game as a developer</label>
+          <label id="auth-dev-label" class="auth-checkbox-label" hidden><input id="auth-wants-dev" type="checkbox"> <span>Interested in submitting a game</span></label>
           <button type="submit" class="btn-primary" id="auth-submit">Sign In</button>
           <div id="auth-msg"></div>
         </form>
