@@ -73,7 +73,7 @@
      "wordmark" row used to. rom-link/play-link moved out of absolute positioning and into normal
      flow here too, directly under created-by, so they're never floating disconnected from it. */
   .header-row{ position:relative; display:flex; flex-direction:row; gap:16px; align-items:flex-start; }
-  .title-block{ display:flex; flex-direction:column; gap:5px; min-width:0; }
+  .title-block{ display:flex; flex-direction:column; align-items:flex-end; text-align:right; gap:5px; min-width:0; }
   .title-block h1{
     margin:0; font-size:clamp(18px,5vw,28px); line-height:1.2;
     color:var(--cream); overflow-wrap:break-word;
@@ -101,8 +101,7 @@
   .pin-box svg{ width:62%; height:62%; }
 
   /* ---------- layout ---------- */
-  main{ display:grid; grid-template-columns:1fr 1.5fr; gap:20px; align-items:start; }
-  @media (max-width:720px){ main{ grid-template-columns:1fr; } }
+  main{ display:grid; grid-template-columns:1fr; gap:20px; align-items:start; }
 
   .panel{
     background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px;
