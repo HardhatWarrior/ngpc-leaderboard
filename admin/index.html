@@ -194,7 +194,7 @@
       <div style="overflow-x:auto">
         <table>
           <thead>
-            <tr><th>Game</th><th>Status</th><th>Developer</th><th></th></tr>
+            <tr><th>Game</th><th>Status</th><th>Developer</th><th>New Badge</th><th></th></tr>
           </thead>
           <tbody id="games-rows"></tbody>
         </table>
@@ -536,15 +536,43 @@
     // below, which stamps it from the submission's own submitterUid) and should always reflect
     // that original assignment. Demoting a developer is done from the Players table instead (see
     // renderStatusCell / onActionClick's 'demote-dev' handler) -- this table never writes.
+    function newBadgeCell(g){
+      const active = g.newUntil && g.newUntil > Date.now();
+      return '<button type="button" class="badge '+(active?'pending':'promote-dev')+'" data-action="toggle-new" data-slug="'+encodeURIComponent(g.slug)+'" style="cursor:pointer;border:none">'
+        + (active ? 'NEW &times;' : '+ New') + '</button>';
+    }
     gamesRowsEl.innerHTML = games.map(g=>{
       const currentDevName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '—';
-      return '<tr>'+
+      return '<tr data-game-row="'+encodeURIComponent(g.slug)+'">'+
         '<td>'+escapeHtml(g.name||g.slug)+'</td>'+
         '<td>'+statusLabel(g.devStatus)+'</td>'+
         '<td>'+escapeHtml(currentDevName)+'</td>'+
+        '<td>'+newBadgeCell(g)+'</td>'+
         '<td><a href="/admin/game/?slug='+encodeURIComponent(g.slug)+'">Manage</a></td>'+
       '</tr>';
     }).join('');
+
+    // Manual on/off admin override -- separate from the automatic newUntil set at approval time
+    // (or reset when a developer leaves "coming soon", see games/{slug}'s own rules comment).
+    // isAdmin() already has unrestricted write access to games/{slug} (only a game's own assigned
+    // developer is field/value-restricted), so no firestore.rules change is needed for this.
+    gamesRowsEl.addEventListener('click', async (e)=>{
+      const btn = e.target.closest('button[data-action="toggle-new"]');
+      if(!btn) return;
+      const slug = decodeURIComponent(btn.dataset.slug);
+      const g = games.find(x=>x.slug===slug);
+      const active = g.newUntil && g.newUntil > Date.now();
+      const next = active ? null : (Date.now() + 30*24*60*60*1000);
+      btn.disabled = true;
+      try{
+        await db.collection('games').doc(slug).update({newUntil: next});
+        g.newUntil = next;
+        btn.outerHTML = newBadgeCell(g);
+      }catch(err){
+        gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t update NEW badge: '+escapeHtml(err.message||'unknown error')+'</div>';
+        btn.disabled = false;
+      }
+    });
 
     return games;
   }
