@@ -486,7 +486,7 @@
     const counts = {};
     await Promise.all(Object.keys(GAME_ROUTES).map(async (code)=>{
       try{
-        let q = db.collection('scores').where('game','==',code);
+        let q = db.collection('scores').where('game','==',code).where('approved','==',true);
         if(period === 'week') q = q.where('submittedAt','>=',weekAgo);
         const snap = await q.get();
         counts[code] = snap.size;
@@ -819,7 +819,7 @@
   function connectTicker(){
     const db = window.NGPC_AUTH ? NGPC_AUTH.db : null;
     if(!db) return;
-    db.collection('scores').orderBy('submittedAt','desc').limit(10).onSnapshot(
+    db.collection('scores').where('approved','==',true).orderBy('submittedAt','desc').limit(10).onSnapshot(
       (snap)=>{ renderTicker(snap.docs); },
       (err)=>{ /* ticker is decorative -- a live-query failure just leaves it as-is, no error UI */ }
     );

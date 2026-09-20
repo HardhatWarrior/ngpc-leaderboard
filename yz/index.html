@@ -318,7 +318,7 @@
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).orderBy('score','desc').limit(25);
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('score','desc').limit(25);
     unsubscribeBoard = q.onSnapshot(
       (snap)=>{ renderBoard(snap.docs); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
@@ -527,6 +527,7 @@
       submittedAt: Date.now(),
       uid: authedUser.uid,
       username: authedUser.username,
+      approved: !!authedUser.approved,
     };
     try{
       const res = await writeScore(record);

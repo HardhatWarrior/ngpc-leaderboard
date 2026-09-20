@@ -364,11 +364,11 @@
       // descending "high score" order). Scoped by game + course; the kit's README also flags
       // car/tune/difficulty/transmission as part of a fully "fair" comparison group, but course
       // is the dominant axis and the only one filtered here for now -- the rest show per-row.
-      q = db.collection('scores').where('game','==',QR_GAME_CODE).where('course','==',courseIdx).orderBy('ticks','asc').limit(25);
+      q = db.collection('scores').where('game','==',QR_GAME_CODE).where('course','==',courseIdx).where('approved','==',true).orderBy('ticks','asc').limit(25);
     } else {
       // Default view: the 10 most recent runs across every course, same spirit as the main
       // page's own recent-activity ticker -- doesn't force a course pick before showing anything.
-      q = db.collection('scores').where('game','==',QR_GAME_CODE).orderBy('submittedAt','desc').limit(10);
+      q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('submittedAt','desc').limit(10);
     }
     unsubscribeBoard = q.onSnapshot(
       (snap)=>{ renderBoard(snap.docs); },
@@ -591,6 +591,7 @@
     const record = OverRevSiteAdapter.toScore(pending.raw, Date.now());
     record.uid = authedUser.uid;
     record.username = authedUser.username;
+    record.approved = !!authedUser.approved;
     try{
       const res = await writeScore(record);
       btn.disabled = false;

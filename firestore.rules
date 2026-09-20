@@ -108,37 +108,45 @@ service cloud.firestore {
     }
 
     match /scores/{scoreId} {
-      // A score is only publicly visible once its submitter's account is approved -- checked
-      // per-document (both get() and list() evaluate this per matched doc, silently dropping any
-      // that fail rather than denying the whole query, which is exactly "stays hidden until
-      // approved" rather than "breaks the board"). A pre-sign-in-required score with no uid at all
-      // (from before that policy) has no submitter to gate on, so it stays visible as-is. The
-      // extra get() costs one additional document read per matched score -- acceptable at this
-      // project's scale, and far simpler than denormalizing/re-syncing an approved flag onto every
-      // score doc whenever an account's status changes.
-      function submitterApproved(d) {
-        return !('uid' in d)
-          || (exists(/databases/$(database)/documents/users/$(d.uid))
-              && get(/databases/$(database)/documents/users/$(d.uid)).data.approved == true);
-      }
-      allow read: if submitterApproved(resource.data);
+      // A score is only publicly visible once its submitter's account is approved. IMPORTANT:
+      // Firestore security rules can VALIDATE a write, but cannot reliably FILTER a list()/query
+      // result based on a get() to a different document -- a get()-based check here only works
+      // for a single-document read, not for the actual board queries every game page runs. (An
+      // earlier version of this rule assumed otherwise; verified wrong in production -- an
+      // unapproved account's score was publicly visible on the real board query.) So `approved`
+      // is denormalized directly onto the score doc itself at write time (see hasValidIdentity),
+      // kept in sync by admin/index.html's approve/revoke action batch-updating every score by
+      // that uid, and the read rule below is a plain field check -- provably filterable by
+      // Firestore for list() queries, which is exactly why every game's board query itself also
+      // has an explicit `.where('approved','==',true)`; the rule is the backstop, the query is
+      // what actually keeps a non-compliant doc from ever being fetched. A pre-sign-in-required
+      // score with no uid at all (from before that policy) has no submitter to gate on, so it
+      // stays visible as-is (backfilled with approved:true -- see backfill-score-approved.js).
+      // The submitter can always read their own score regardless of approved -- account/index.html's
+      // "Your Submissions" list needs to show a still-pending account's own scores back to them.
+      allow read: if !('uid' in resource.data) || resource.data.approved == true
+        || (request.auth != null && request.auth.uid == resource.data.uid);
 
       // A score's uid/username pair is required (anonymous QR submission was retired) and can't
       // be spoofed: uid must match the actual signed-in caller, and username is shape-checked even
       // though it's just a denormalized copy of users/{uid}.username (not re-verified against that
       // doc -- acceptable here since it can only ever be set to request.auth's OWN uid, so at
-      // worst a stale username after a future rename, not another user's identity).
+      // worst a stale username after a future rename, not another user's identity). `approved`
+      // MUST match the submitter's actual current users/{uid}.approved at write time -- this one
+      // get() is fine because it's a single-document read on a create, not a list() query.
       function hasValidIdentity(d) {
-        return ('uid' in d) && ('username' in d)
+        return ('uid' in d) && ('username' in d) && ('approved' in d)
           && request.auth != null && request.auth.uid == d.uid
-          && d.username is string && d.username.matches('^[A-Za-z0-9_]{3,16}$');
+          && d.username is string && d.username.matches('^[A-Za-z0-9_]{3,16}$')
+          && d.approved is bool
+          && d.approved == get(/databases/$(database)/documents/users/$(d.uid)).data.approved;
       }
 
       // Matches the object lb/index.html's writeScore() builds (game, initials, score, weight,
       // rolls, source, submittedAt, plus required uid/username from auth.js).
       function isBowlingScore(d) {
         return d.game == 'BW'
-          && d.keys().hasOnly(['game', 'initials', 'score', 'weight', 'rolls', 'source', 'submittedAt', 'uid', 'username'])
+          && d.keys().hasOnly(['game', 'initials', 'score', 'weight', 'rolls', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.score is int && d.score >= 0 && d.score <= 300
           && d.weight is int && d.weight >= 1 && d.weight <= 99
@@ -156,7 +164,7 @@ service cloud.firestore {
       // Tetris's main.c qr_build_payload()).
       function isTetrisScore(d) {
         return d.game == 'TT'
-          && d.keys().hasOnly(['game', 'initials', 'score', 'lines', 'level', 'source', 'submittedAt', 'uid', 'username'])
+          && d.keys().hasOnly(['game', 'initials', 'score', 'lines', 'level', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.score is int && d.score >= 0 && d.score <= 99999999
           && d.lines is int && d.lines >= 0 && d.lines <= 99999
@@ -172,7 +180,7 @@ service cloud.firestore {
       // required uid/username.
       function isYahtzeeScore(d) {
         return d.game == 'YZ'
-          && d.keys().hasOnly(['game', 'initials', 'score', 'categoryScores', 'source', 'submittedAt', 'uid', 'username'])
+          && d.keys().hasOnly(['game', 'initials', 'score', 'categoryScores', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.score is int && d.score >= 0 && d.score <= 9999
           && d.categoryScores is list && d.categoryScores.size() == 13
@@ -200,7 +208,7 @@ service cloud.firestore {
       // source, submittedAt, required uid/username.
       function isFarkleScore(d) {
         return d.game == 'FK'
-          && d.keys().hasOnly(['game', 'initials', 'score', 'rounds', 'opened', 'farkles', 'resultChar', 'resultDisplay', 'source', 'submittedAt', 'uid', 'username'])
+          && d.keys().hasOnly(['game', 'initials', 'score', 'rounds', 'opened', 'farkles', 'resultChar', 'resultDisplay', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.score is int && d.score >= 0 && d.score <= 65535
           && d.rounds is int && d.rounds >= 0 && d.rounds <= 999
@@ -220,7 +228,7 @@ service cloud.firestore {
       // 4-digit moves; see 2048's main.c qr_build_payload()).
       function is2048Score(d) {
         return d.game == '2K'
-          && d.keys().hasOnly(['game', 'initials', 'score', 'moves', 'source', 'submittedAt', 'uid', 'username'])
+          && d.keys().hasOnly(['game', 'initials', 'score', 'moves', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.score is int && d.score >= 0 && d.score <= 65535
           && d.moves is int && d.moves >= 0 && d.moves <= 9999
@@ -239,7 +247,7 @@ service cloud.firestore {
       // overrev-leaderboard-kit/README.md for why that's a client-side-only guarantee.
       function isOverRevScore(d) {
         return d.game == 'OV'
-          && d.keys().hasOnly(['game', 'initials', 'rules', 'course', 'car', 'tune', 'mode', 'difficulty', 'transmission', 'ticks', 'won', 'localRecord', 'event', 'sequence', 'raw', 'source', 'submittedAt', 'uid', 'username'])
+          && d.keys().hasOnly(['game', 'initials', 'rules', 'course', 'car', 'tune', 'mode', 'difficulty', 'transmission', 'ticks', 'won', 'localRecord', 'event', 'sequence', 'raw', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.initials is string && d.initials.matches('^[A-Z0-9]{1,8}$')
           && d.rules is int && d.rules == 1
           && d.course is int && d.course >= 0 && d.course < 10
@@ -267,7 +275,7 @@ service cloud.firestore {
       // by score, scoped to one mode at a time -- see gardenia/index.html's own board query.
       function isGardeniaScore(d) {
         return d.game == 'GD'
-          && d.keys().hasOnly(['game', 'mode', 'initials', 'score', 'startLevel', 'levelReached', 'source', 'submittedAt', 'uid', 'username'])
+          && d.keys().hasOnly(['game', 'mode', 'initials', 'score', 'startLevel', 'levelReached', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.mode is int && d.mode >= 1 && d.mode <= 3
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.score is int && d.score >= 0 && d.score <= 99999
@@ -282,7 +290,12 @@ service cloud.firestore {
 
       allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data);
 
-      allow update: if false;
+      // Only the admin, and only the `approved` field -- fans out an account approve/revoke
+      // (admin/index.html) to every score that account already submitted, so a toggle's effect on
+      // board visibility is immediate for past scores too, not just ones submitted from then on.
+      allow update: if isAdmin()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved'])
+        && request.resource.data.approved is bool;
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --
       // anonymous QR submissions have no uid at all, so resource.data.uid == request.auth.uid is
       // false for them (never true against a signed-in caller's uid), and they stay undeletable

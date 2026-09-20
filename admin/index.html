@@ -394,6 +394,18 @@
       btn.disabled = true;
       try{
         await db.collection('users').doc(uid).update({approved: approve});
+        // Every score doc denormalizes its submitter's approved status (see firestore.rules'
+        // scores match block -- a get() to another doc can't reliably filter a list() query, so
+        // each board query filters on scores/{id}.approved directly instead). Flipping the
+        // account here has to fan out to all of that uid's existing scores too, or their board
+        // visibility would stay stuck at whatever it was when each score was originally submitted.
+        const scoresSnap = await db.collection('scores').where('uid','==',uid).get();
+        for(let i=0; i<scoresSnap.docs.length; i+=500){
+          const chunk = scoresSnap.docs.slice(i, i+500);
+          const scoreBatch = db.batch();
+          chunk.forEach(d=>scoreBatch.update(d.ref, {approved: approve}));
+          await scoreBatch.commit();
+        }
         u.approved = approve;
         if(row){
           row.querySelector('td:nth-child(4)').innerHTML = renderStatusCell(u);
