@@ -816,7 +816,11 @@
       const gameName = GAME_NAMES[data.game] || data.game || '?';
       const isOV = data.game === 'OV';
       const gameLine = isOV ? (gameName+' · '+(OV_COURSES[data.course]||'?')) : gameName;
-      const scoreDisplay = isOV ? (data.ticks!=null?formatOvTicks(data.ticks):'-') : (data.score!=null?data.score:'-');
+      // Sudoku (time, not score) and Farkle (rounds, not score) don't fit the plain "data.score"
+      // case this used to hardcode -- NGPC_AUTH.scoreValueDisplay() already knows every game's own
+      // display field (see auth.js), same source every leaderboard page and the account/admin
+      // "Your Submissions" lists already use, so this can't drift out of sync with them again.
+      const scoreDisplay = window.NGPC_AUTH ? NGPC_AUTH.scoreValueDisplay(data) : (data.score!=null?data.score:'-');
       const who = data.username
         ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>')
         : escapeHtml(data.initials||'???');
