@@ -208,6 +208,22 @@
     padding:16px;
   }
 
+  /* "In Development" banner -- a pure-CSS overlay on every game tile's screenshot, not baked
+     into the images themselves, so it can be removed later by deleting just this one rule (no
+     screenshot regeneration, no per-tile markup to touch). Remove this block when ready. */
+  .tile-art::after{
+    content:"IN DEVELOPMENT";
+    position:absolute; left:0; right:0; bottom:0;
+    background:rgba(0,0,0,.75);
+    color:#fff;
+    font-family:"Press Start 2P",monospace;
+    font-size:9px;
+    letter-spacing:.06em;
+    text-align:center;
+    padding:7px 4px;
+    pointer-events:none;
+  }
+
   .tile-body{ padding:14px 16px 16px; display:flex; flex-direction:column; gap:4px; }
   .tile-name{ font-size:13.5px; font-weight:700; color:var(--cream); }
   .tile.disabled .tile-name{ color:var(--dim); opacity:.7; }
