@@ -387,11 +387,18 @@ service cloud.firestore {
       }
 
       allow create: if isAdmin();
+      // 'coming-soon' is a devStatus a game's own developer can opt into at their own discretion
+      // (see admin/game/index.html's status buttons), right from the moment their submission is
+      // approved -- the main page shows a bottom banner and suppresses the NEW/UPDATED corner
+      // ribbon entirely while set. newUntil is included here alongside devStatus because leaving
+      // coming-soon resets it to a fresh 30-day window (that's the moment NEW should actually
+      // start counting down, not back at approval time) -- same trust level already granted for
+      // updatedUntil below, only ever a cosmetic ribbon either way.
       allow update: if request.auth != null && (
         isAdmin()
         || (isAssignedDev(resource.data)
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil'])
-            && request.resource.data.devStatus in ['dev', 'beta', 'final'])
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil'])
+            && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final'])
       );
       allow delete: if isAdmin();
     }
@@ -449,12 +456,22 @@ service cloud.firestore {
     // to exactly a same-field +1 per write: FieldValue.increment() resolves before rules
     // evaluate, so request.resource.data.pageViews already reflects the post-increment value here
     // -- a client still can't ever set it to an arbitrary/negative number or touch any other key.
+    // meta/siteSettings -- admin-only site config, currently just hideGamesGrid (a testing switch
+    // that hides the homepage's whole games grid for every visitor, admin included, so the admin
+    // can see exactly what the public sees while it's on). Unlike siteStats above, this one IS
+    // self-service-creatable (by the admin only) since there's only one admin and no meaningful
+    // "wrong starting value" risk the way an anonymous-writable counter has.
     match /meta/{docId} {
       allow read: if true;
-      allow create: if false;
-      allow update: if docId == 'siteStats'
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pageViews'])
-        && request.resource.data.pageViews == resource.data.pageViews + 1;
+      allow create: if docId == 'siteSettings' && isAdmin()
+        && request.resource.data.keys().hasOnly(['hideGamesGrid'])
+        && request.resource.data.hideGamesGrid is bool;
+      allow update: if (docId == 'siteStats'
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['pageViews'])
+          && request.resource.data.pageViews == resource.data.pageViews + 1)
+        || (docId == 'siteSettings' && isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hideGamesGrid'])
+          && request.resource.data.hideGamesGrid is bool);
       allow delete: if false;
     }
 
@@ -487,6 +504,27 @@ service cloud.firestore {
       allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['count'])
         && request.resource.data.count == resource.data.count + 1;
       allow delete: if false;
+    }
+
+    // mail/{id} -- watched by the Firebase "Trigger Email" extension (Admin SDK only; installed
+    // separately from the Firebase Console), which turns each doc into a real email and then
+    // writes delivery status back onto it. Written by auth.js's notifyAdmin() on a new signup and
+    // by dev/submit/index.html on a new game submission. The recipient is hardcoded to a single
+    // literal address here -- NOT just trusted from the client -- so nothing a client sends can
+    // redirect a notification to an arbitrary inbox; this is a fixed admin alert channel, not a
+    // general mailer. No read/update/delete for any client: only the extension's own Admin SDK
+    // (which bypasses rules entirely) ever touches a doc after creation.
+    match /mail/{id} {
+      allow read, update, delete: if false;
+      allow create: if request.auth != null
+        && request.resource.data.keys().hasOnly(['to', 'message'])
+        && request.resource.data.to is list
+        && request.resource.data.to.size() == 1
+        && request.resource.data.to[0] == 'darekdavis@gmail.com'
+        && request.resource.data.message is map
+        && request.resource.data.message.keys().hasOnly(['subject', 'text'])
+        && request.resource.data.message.subject is string
+        && request.resource.data.message.text is string;
     }
 
     // Default-deny for every other collection -- Firestore denies unmatched

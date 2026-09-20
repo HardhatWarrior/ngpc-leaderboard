@@ -40,6 +40,22 @@ window.NGPC_AUTH = (function(){
   const auth = firebase.auth();
   const db = firebase.firestore();
 
+  // ---- admin email notifications -- writes a doc to mail/{id}, which the Firebase "Trigger
+  // Email" extension (installed separately from the Firebase Console, requires the Blaze plan)
+  // watches and turns into a real email. The recipient is hardcoded here AND in firestore.rules'
+  // own mail/{id} match block -- rules re-check it so a client can never redirect a notification
+  // to an arbitrary address, this constant alone isn't a security boundary. Fire-and-forget: a
+  // failed notification write should never block the signup/submission it's reporting on.
+  const ADMIN_NOTIFY_EMAIL = 'darekdavis@gmail.com';
+  function notifyAdmin(subject, text){
+    try{
+      db.collection('mail').add({
+        to: [ADMIN_NOTIFY_EMAIL],
+        message: { subject, text },
+      }).catch(()=>{});
+    }catch(e){ /* non-critical */ }
+  }
+
   // ---- page-view tracking -- fires once per page load, on every page that loads this file
   // (every game leaderboard, the homepage, account/admin/user pages, everything). Two docs per
   // view: pageViews/{pathKey} holds a running total for the "top pages" list, pageViewsDaily/
@@ -136,6 +152,13 @@ window.NGPC_AUTH = (function(){
       }
       throw e;
     }
+    notifyAdmin(
+      'New NGPC Hiscores signup: ' + username,
+      'Username: ' + username + '\nSigned up: ' + new Date().toLocaleString()
+        + (recoveryEmail ? '\nRecovery email: ' + recoveryEmail : '')
+        + (wantsDev ? '\nChecked "I\'d like to submit a game" at signup.' : '')
+        + '\n\nApprove at https://ngpc-dev.com/admin/'
+    );
     return cred.user;
   }
 
@@ -829,7 +852,7 @@ window.NGPC_AUTH = (function(){
     packColor, unpackColor, css255FromWord, renderAvatarToCanvas, drawAvatarCell,
     TRANSPARENT, isTransparent,
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,
-    friendlyAuthError, escapeHtml,
+    friendlyAuthError, escapeHtml, notifyAdmin,
     scoreHasDetail, scoreDetailHTML, scoreInlineMeta, scoreValueDisplay,
     authReady, openSignInModal,
     get currentUser(){ return currentUser; }

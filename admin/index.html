@@ -138,6 +138,12 @@
   .sub-empty{ color:var(--dim); font-size:12.5px; padding:12px 4px; }
   .sub-detail{ padding:2px 4px 14px; }
 
+  .settings-row{
+    display:flex; align-items:center; gap:8px; margin-bottom:12px;
+    font-size:12.5px; color:var(--dim); cursor:pointer;
+  }
+  .settings-row input[type=checkbox]{ width:auto; margin:0; flex:none; }
+
   .stats-row{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
   .stat-tile{ background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:10px 16px; min-width:110px; }
   .stat-tile .n{ font-family:"Press Start 2P",monospace; font-size:16px; color:var(--cream); }
@@ -179,6 +185,11 @@
     </div>
     <div class="panel-body" id="games-body">
       <p class="hint">Developer is set automatically when a game submission is approved (below) -- whoever manages that game's dev status and ROM from <a href="/admin/game/">/admin/game/</a>, without ever touching this repo.</p>
+      <label class="settings-row">
+        <input type="checkbox" id="hide-grid-toggle">
+        Hide games grid on homepage (testing) -- applies to every visitor, including you
+      </label>
+      <div id="hide-grid-msg"></div>
       <div id="games-status"></div>
       <div style="overflow-x:auto">
         <table>
@@ -485,8 +496,31 @@
     rowsEl.addEventListener('click', onActionClick);
   }
 
+  const hideGridToggleEl = el('hide-grid-toggle');
+  const hideGridMsgEl = el('hide-grid-msg');
+  async function initHideGridToggle(db){
+    const ref = db.collection('meta').doc('siteSettings');
+    try{
+      const snap = await ref.get();
+      hideGridToggleEl.checked = !!(snap.exists && snap.data().hideGamesGrid);
+    }catch(e){ /* leave unchecked if this read fails -- not critical to the rest of the page */ }
+    hideGridToggleEl.addEventListener('change', async ()=>{
+      const next = hideGridToggleEl.checked;
+      hideGridToggleEl.disabled = true;
+      hideGridMsgEl.innerHTML = '';
+      try{
+        await ref.set({hideGamesGrid: next}, {merge: true});
+      }catch(err){
+        hideGridToggleEl.checked = !next;
+        hideGridMsgEl.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(err.message||'unknown error')+'</div>';
+      }finally{
+        hideGridToggleEl.disabled = false;
+      }
+    });
+  }
+
   function statusLabel(s){
-    return s==='beta' ? 'Beta' : s==='final' ? 'Final' : 'In Development';
+    return s==='coming-soon' ? 'Coming Soon' : s==='beta' ? 'Beta' : s==='final' ? 'Final' : 'In Development';
   }
 
   async function loadAndRenderGames(db, uidToUsername){
@@ -821,6 +855,11 @@
       gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t load games: '+escapeHtml((e&&e.message)||'unknown error')
         +'. If you just added this feature, make sure the updated firestore.rules has been published,'
         +' and run NGPC-Admin-Scripts/seed-games.js --apply first.</div>';
+    }
+    try{
+      await initHideGridToggle(NGPC_AUTH.db);
+    }catch(e){
+      hideGridMsgEl.innerHTML = '<div class="msg err">Couldn’t load the homepage grid setting: '+escapeHtml((e&&e.message)||'unknown error')+'</div>';
     }
     if(users.length){
       renderStats(users);

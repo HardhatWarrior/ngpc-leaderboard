@@ -125,6 +125,7 @@
     <p class="hint">Dev status controls the banner shown on this game's tile on the main page. Uploading a new ROM here also bumps it to the top of "Most Recent" automatically.</p>
 
     <div class="status-row" id="status-row">
+      <button type="button" class="status-btn" data-status="coming-soon">Coming Soon<span class="desc">Bottom banner, no NEW/UPDATED badge</span></button>
       <button type="button" class="status-btn" data-status="dev">In Development<span class="desc">Shows a banner</span></button>
       <button type="button" class="status-btn" data-status="beta">Beta<span class="desc">Shows a banner</span></button>
       <button type="button" class="status-btn" data-status="final">Final<span class="desc">No banner</span></button>
@@ -207,7 +208,7 @@
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
   function statusLabel(s){
-    return s==='beta' ? 'Beta' : s==='final' ? 'Final' : 'In Development';
+    return s==='coming-soon' ? 'Coming Soon' : s==='beta' ? 'Beta' : s==='final' ? 'Final' : 'In Development';
   }
 
   /* ---------- static payload reference, keyed by slug -----------------------------------------
@@ -517,10 +518,19 @@
         statusMsg.innerHTML = '';
         btn.disabled = true;
         try{
-          await docRef.update({devStatus: next});
+          const update = {devStatus: next};
+          // Leaving "coming soon" for a real status is the moment this game actually becomes
+          // visible/playable -- that's when the NEW ribbon should start its 30-day countdown,
+          // not back at whatever moment the admin originally approved the submission.
+          if(currentStatus === 'coming-soon' && next !== 'coming-soon'){
+            update.newUntil = Date.now() + 30*24*60*60*1000;
+          }
+          await docRef.update(update);
           currentStatus = next;
           paintStatusButtons();
-          statusMsg.innerHTML = '<div class="msg ok">Saved — the main page will show this on next load.</div>';
+          statusMsg.innerHTML = next === 'coming-soon'
+            ? '<div class="msg ok">Saved — the main page will show a "Coming Soon" banner with no NEW/UPDATED badge until you change this again.</div>'
+            : '<div class="msg ok">Saved — the main page will show this on next load.</div>';
         }catch(e){
           statusMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
         }finally{

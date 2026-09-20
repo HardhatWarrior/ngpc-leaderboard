@@ -225,6 +225,7 @@
   }
   .dev-banner.dev{ background:rgba(214,158,23,.85); }
   .dev-banner.beta{ background:rgba(92,143,214,.82); }
+  .dev-banner.coming-soon{ background:rgba(55,66,110,.9); }
 
   /* NEW / UPDATED corner ribbon -- self-expires 30 days after being set (see buildTile()'s own
      now-vs-*Until check); never persists past that on its own, no cleanup job needed. Position/
@@ -386,6 +387,7 @@
   const sortButtons = [el('sort-recent'), el('sort-active'), el('sort-alpha')];
   const periodToggleEl = el('period-toggle');
   const periodButtons = [el('period-week'), el('period-all')];
+  const gridHeadingRowEl = document.querySelector('.grid-heading-row');
   let tileEls = [];
 
   // Builds one tile <a> exactly matching the markup every game page used to hand-write, from a
@@ -409,28 +411,38 @@
     img.width = 160; img.height = 152;
     art.appendChild(img);
 
-    if(data.devStatus === 'dev' || data.devStatus === 'beta'){
+    if(data.devStatus === 'coming-soon'){
+      const banner = document.createElement('div');
+      banner.className = 'dev-banner coming-soon';
+      banner.textContent = 'COMING SOON';
+      art.appendChild(banner);
+    } else if(data.devStatus === 'dev' || data.devStatus === 'beta'){
       const banner = document.createElement('div');
       banner.className = 'dev-banner ' + data.devStatus;
       banner.textContent = data.devStatus === 'beta' ? 'BETA' : 'IN DEVELOPMENT';
       art.appendChild(banner);
     }
 
-    // NEW (admin-only, set at approval time) beats UPDATED (auto-set whenever a developer
-    // uploads a ROM) if somehow both windows are open at once -- NEW is the rarer, more
-    // significant event. Both self-expire client-side; the underlying *Until fields never need
-    // a cleanup job, an expired one just stops matching this check on the next page load.
+    // NEW (admin-only, set at approval time -- or reset fresh whenever a developer leaves
+    // "coming soon" for a real status, see admin/game/index.html) beats UPDATED (auto-set
+    // whenever a developer uploads a ROM) if somehow both windows are open at once -- NEW is the
+    // rarer, more significant event. Both self-expire client-side; the underlying *Until fields
+    // never need a cleanup job, an expired one just stops matching this check on the next page
+    // load. Neither ribbon ever shows on a "coming soon" tile, regardless of *Until -- the bottom
+    // banner above is the only badge a not-yet-visible game gets.
     const now = Date.now();
-    if(data.newUntil && data.newUntil > now){
-      const ribbon = document.createElement('div');
-      ribbon.className = 'corner-badge new';
-      ribbon.textContent = 'NEW';
-      art.appendChild(ribbon);
-    } else if(data.updatedUntil && data.updatedUntil > now){
-      const ribbon = document.createElement('div');
-      ribbon.className = 'corner-badge updated';
-      ribbon.textContent = 'UPDATED';
-      art.appendChild(ribbon);
+    if(data.devStatus !== 'coming-soon'){
+      if(data.newUntil && data.newUntil > now){
+        const ribbon = document.createElement('div');
+        ribbon.className = 'corner-badge new';
+        ribbon.textContent = 'NEW';
+        art.appendChild(ribbon);
+      } else if(data.updatedUntil && data.updatedUntil > now){
+        const ribbon = document.createElement('div');
+        ribbon.className = 'corner-badge updated';
+        ribbon.textContent = 'UPDATED';
+        art.appendChild(ribbon);
+      }
     }
 
     const body = document.createElement('div');
@@ -828,7 +840,30 @@
     );
   }
   connectTicker();
-  loadGames().then(()=> applySort(sortMode));
+
+  // Admin-only testing switch (meta/siteSettings.hideGamesGrid, toggled from admin/index.html) --
+  // hides the whole games grid section, for every visitor including the admin themselves, so
+  // "what does the public actually see" can be checked directly rather than guessed at. Reads
+  // once at load: this is a manual testing toggle, not something that needs to react live if
+  // flipped in another tab.
+  (async function initGamesGrid(){
+    const db = window.NGPC_AUTH ? NGPC_AUTH.db : null;
+    let hideGrid = false;
+    if(db){
+      try{
+        const snap = await db.collection('meta').doc('siteSettings').get();
+        hideGrid = !!(snap.exists && snap.data().hideGamesGrid);
+      }catch(e){ /* default to showing the grid if this read fails */ }
+    }
+    if(hideGrid){
+      if(gridHeadingRowEl) gridHeadingRowEl.hidden = true;
+      periodToggleEl.hidden = true;
+      gridStatusEl.hidden = true;
+      gridEl.hidden = true;
+      return;
+    }
+    loadGames().then(()=> applySort(sortMode));
+  })();
 
   /* ---------- player search -- typeahead over the usernames/{lower} reservation collection.
      Its document ID *is* the lowercased username (see auth.js's signUp/updateUsername), so a

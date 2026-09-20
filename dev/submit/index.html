@@ -290,6 +290,11 @@
           reviewedAt: null,
           reviewNote: null,
         });
+        if(window.NGPC_AUTH) NGPC_AUTH.notifyAdmin(
+          'New game submission: ' + name,
+          'Game: ' + name + ' [' + code + ']\nSubmitted by: ' + (user.username||user.uid)
+            + '\n\nReview at https://ngpc-dev.com/admin/'
+        );
         submitMsg.innerHTML = '<div class="msg ok">Submitted — the site admin will review it and follow up.</div>';
         renderMine(db, user);
       }catch(e){
