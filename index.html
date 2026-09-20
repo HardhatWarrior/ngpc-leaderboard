@@ -279,7 +279,7 @@
          the default "Most Recent" sort, which a static site with no backend can't compute from
          real git history at page-load time. -->
 
-    <a class="tile" href="/lb/" data-game="BW" data-added="2026-09-16T13:50:07-07:00">
+    <a class="tile" href="/bw/" data-game="BW" data-added="2026-09-16T13:50:07-07:00">
       <div class="tile-art">
         <img src="/assets/bowling-title.png" alt="Neo Bowling title screen" width="160" height="152">
       </div>
@@ -288,7 +288,7 @@
       </div>
     </a>
 
-    <a class="tile" href="/tetris/" data-game="TT" data-added="2026-09-16T17:06:13-07:00">
+    <a class="tile" href="/tt/" data-game="TT" data-added="2026-09-16T17:06:13-07:00">
       <div class="tile-art">
         <img src="/assets/tetris-title.png" alt="Tetris title screen" width="160" height="152">
       </div>
@@ -306,7 +306,7 @@
       </div>
     </a>
 
-    <a class="tile" href="/farkle/" data-game="FK" data-added="2026-09-17T14:09:30-07:00">
+    <a class="tile" href="/fk/" data-game="FK" data-added="2026-09-17T14:09:30-07:00">
       <div class="tile-art">
         <img src="/assets/farkle-title.png" alt="Farkle title screen" width="160" height="152">
       </div>
@@ -315,7 +315,7 @@
       </div>
     </a>
 
-    <a class="tile" href="/2048/" data-game="2K" data-added="2026-09-18T09:24:05-07:00">
+    <a class="tile" href="/2k/" data-game="2K" data-added="2026-09-18T09:24:05-07:00">
       <div class="tile-art">
         <img src="/assets/2048-title.png" alt="2048 title screen" width="160" height="152">
       </div>
@@ -367,7 +367,7 @@
   // done HERE (rather than on a game's own page, or via a device camera app tapping the QR's own
   // URL) hands back raw decoded text with no path to read a folder name out of. Add one entry per
   // game; nothing else on this page needs to change.
-  const GAME_ROUTES = { BW: 'lb', TT: 'tetris', YZ: 'yz', FK: 'farkle', '2K': '2048', OV: 'overrev', GD: 'gardenia' };
+  const GAME_ROUTES = { BW: 'bw', TT: 'tt', YZ: 'yz', FK: 'fk', '2K': '2k', OV: 'overrev', GD: 'gardenia' };
   const GAME_NAMES = { BW: 'Neo Bowling', TT: 'Tetris', YZ: 'Neo Yahtzee', FK: 'Farkle', '2K': '2048', OV: 'Over Rev', GD: 'Gardenia' };
   // Over Rev's own scores/{doc} has no generic `score` field (ticks + course instead, see
   // overrev/index.html and overrev-leaderboard-kit/README.md) -- the ticker needs its own small

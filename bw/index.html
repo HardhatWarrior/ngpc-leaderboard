@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Neo Bowling Hiscores</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/inlined/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a;
+    --panel:#181f3a;
+    --panel2:#212a4d;
+    --border:#37426e;
+    --cream:#f4eedd;
+    --dim:#93a0c9;
+    --accent:#b23a52;      /* maroon, from the in-game NEO BOWLING logo */
+    --accent-ink:#fbeef1;
+    --accent2:#5c8fd6;      /* mid-blue, from the same logo */
+    --good:#4fbf8b;
+    --danger:#e5615a;
+    --pin-cream:#f4eedd;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:auto; }
+  body{
+    margin:0;
+    background:var(--navy);
+    color:var(--cream);
+    font-family:"IBM Plex Sans",system-ui,sans-serif;
+    padding-inline:20px;
+    padding-block:28px;
+    display:flex;
+    justify-content:center;
+  }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; }
+  .tnum{ font-variant-numeric:tabular-nums; font-feature-settings:"tnum" 1; }
+
+  #shell{ width:100%; max-width:960px; display:flex; flex-direction:column; gap:22px; }
+
+  /* ---------- header ---------- */
+  header{
+    background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:22px 22px 18px;
+    display:flex;
+    flex-direction:column;
+    gap:14px;
+    position:relative;
+    overflow:hidden;
+  }
+  header::before{
+    content:"";
+    position:absolute; inset:0;
+    background:radial-gradient(circle at 85% -10%, rgba(178,58,82,.35), transparent 55%);
+    pointer-events:none;
+  }
+  .wordmark{ position:relative; display:flex; flex-direction:row; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  .wordmark .eyebrow{
+    font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase;
+  }
+  .wordmark h1{
+    margin:0; font-size:clamp(20px,4.2vw,30px); line-height:1.4;
+    color:var(--cream);
+  }
+  .title-block{ display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+  .created-by{ font-size:11px; color:var(--dim); }
+  .created-by a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
+  .created-by a:hover{ color:var(--accent2); }
+  /* Only shown to a signed-in visitor -- see the onAuthChange hookup near the bottom of the
+     script. Anonymous QR submission still works fine without ever seeing this. Tucked into the
+     header panel's own bottom-right corner (header has position:relative) as a plain small link,
+     not a button, so it reads as a quiet aside rather than a second call-to-action. */
+  .play-link{
+    position:absolute; right:16px; bottom:14px;
+    display:inline-flex; align-items:center; gap:5px;
+    color:var(--accent2); font-size:11.5px; font-weight:600;
+    text-decoration:underline; text-underline-offset:2px;
+  }
+  .play-link:hover{ color:var(--cream); }
+  .play-link[hidden]{ display:none; }
+
+  /* decorative header art -- the same real title-screen capture the main page's own tile uses,
+     not a redraw of it. */
+  .header-art{
+    position:relative; width:160px; max-width:45%; aspect-ratio:160/152;
+    image-rendering:pixelated; border-radius:8px; border:1px solid var(--border);
+    box-shadow:0 4px 14px rgba(0,0,0,.35);
+  }
+  .pin-box svg{ width:62%; height:62%; }
+
+  /* ---------- layout ---------- */
+  main{ display:grid; grid-template-columns:1.5fr 1fr; gap:20px; align-items:start; }
+  @media (max-width:720px){ main{ grid-template-columns:1fr; } }
+
+  .panel{
+    background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px;
+  }
+  .panel h2{
+    margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2);
+  }
+  .panel .hint{ margin:0 0 16px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+
+  /* ---------- leaderboard ---------- */
+  #board-status{ font-size:12px; color:var(--dim); margin-bottom:10px; min-height:1.4em; }
+  .row{
+    display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:12px;
+    padding:10px 8px; border-radius:8px;
+  }
+  /* general sibling (~), not adjacent (+): a row-detail panel can sit between two .row
+     elements once a scorecard is present, which would otherwise break the adjacent match */
+  .row ~ .row{ border-top:1px solid var(--border); }
+  .rank{
+    font-family:"Press Start 2P",monospace; font-size:11px; color:var(--dim); text-align:center;
+  }
+  .row.top1 .rank{ color:var(--accent); }
+  .row.top1{ background:rgba(178,58,82,.10); }
+  .initials{
+    font-family:"Press Start 2P",monospace; font-size:14px; letter-spacing:.06em; color:var(--cream);
+    display:flex; align-items:center; gap:8px;
+  }
+  .row-avatar{
+    width:48px; height:48px; border-radius:4px; border:1px solid var(--border);
+    image-rendering:pixelated; flex:none;
+  }
+  .score-col{ display:flex; flex-direction:column; align-items:flex-end; }
+  .score-val{
+    font-family:"Press Start 2P",monospace; font-size:15px; color:var(--good);
+  }
+  .row-meta{ font-size:10.5px; color:var(--dim); margin-top:2px; white-space:nowrap; }
+  .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
+  .row-meta a:hover{ color:var(--accent2); }
+  .pin-icon{ width:14px; height:20px; flex:none; }
+  .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
+  .row.has-detail{ cursor:pointer; }
+  .row.has-detail:hover{ background:rgba(92,143,214,.08); }
+  .row-detail{ padding:2px 8px 14px; }
+
+  /* real per-game scorecard grid -- used in the confirm step and expanded leaderboard rows */
+  .scorecard-grid{ display:grid; grid-template-columns:repeat(10,1fr); gap:3px; margin:14px 0; }
+  .sc-frame{
+    background:var(--navy); border:1px solid var(--border); border-radius:4px;
+    padding:3px 1px 4px; text-align:center; min-width:0;
+  }
+  .sc-marks{
+    display:flex; justify-content:center; gap:2px; min-height:11px;
+    font-family:"IBM Plex Mono",monospace; font-size:9px; font-weight:600; color:var(--accent2);
+  }
+  .sc-marks span{ min-width:7px; }
+  .sc-total{ font-size:9.5px; margin-top:3px; color:var(--cream); font-weight:600; }
+
+  /* ---------- QR scan ---------- */
+  .scan-video-wrap{
+    position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden;
+    background:#000; margin-bottom:10px;
+  }
+  #scan-video{ width:100%; height:100%; object-fit:cover; display:block; }
+  .scan-frame{
+    position:absolute; inset:14%; border:2px solid var(--accent2); border-radius:12px;
+    box-shadow:0 0 0 999px rgba(0,0,0,.4); pointer-events:none;
+  }
+  .file-btn{ display:block; text-align:center; cursor:pointer; }
+
+  /* ---------- submit flow ---------- */
+  button{
+    font:inherit; border:none; border-radius:8px; padding:12px 16px; cursor:pointer;
+    font-weight:600; font-size:13.5px; width:100%;
+  }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); }
+  .btn-primary:hover:not(:disabled){ background:#c14259; }
+  .btn-secondary{ background:transparent; border:1px solid var(--border); color:var(--cream); margin-top:8px; }
+  .btn-secondary:hover:not(:disabled){ border-color:var(--accent2); }
+
+  #confirm-view{ display:none; }
+  #confirm-view.show{ display:block; }
+  #idle-view.hide{ display:none; }
+  .confirm-score{ text-align:center; padding:18px 0 20px; }
+  .confirm-score .who{ font-family:"Press Start 2P",monospace; font-size:22px; letter-spacing:.08em; color:var(--cream); }
+  .confirm-score .what{ font-family:"Press Start 2P",monospace; font-size:34px; color:var(--good); margin-top:10px; }
+  .confirm-score .src{ margin-top:10px; font-size:11px; color:var(--dim); }
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; margin-top:12px; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+  .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
+
+  footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
+</style>
+</head>
+<body>
+
+<div id="shell">
+
+  <header>
+    <div class="wordmark">
+      <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
+      <div class="title-block">
+        <h1>NEO BOWLING</h1>
+        <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
+      </div>
+    </div>
+    <img src="/assets/bowling-title.png" alt="Neo Bowling title screen" class="header-art" width="160" height="152">
+    <a href="/play/bowling/" class="play-link" id="play-link" hidden>&#127918; Play Neo Bowling in Browser</a>
+  </header>
+
+  <main>
+    <section class="panel" id="leaderboard-panel">
+      <h2>Leaderboard</h2>
+      <p class="hint">Top runs, ranked by pinfall. Updates live as new scores come in.</p>
+      <div id="board-status"></div>
+      <div id="board"></div>
+    </section>
+
+    <section class="panel" id="submit-panel">
+      <h2>Submit a score</h2>
+      <p class="hint" id="submit-hint">Scores only come in by scanning the QR code the game shows after a completed game &mdash; there's no manual entry, so every row on the board is a real result. You must be signed in to submit.</p>
+
+      <div id="idle-view">
+        <button class="btn-primary" id="btn-scan">Scan QR Code</button>
+
+        <div id="scan-live" hidden>
+          <div class="scan-video-wrap">
+            <video id="scan-video" playsinline muted></video>
+            <div class="scan-frame" aria-hidden="true"></div>
+          </div>
+          <button class="btn-secondary" id="btn-cancel-scan">Cancel</button>
+        </div>
+
+        <div id="scan-fallback" hidden>
+          <label class="btn-primary file-btn" for="scan-file">Take / choose a photo</label>
+          <input type="file" accept="image/*" id="scan-file" hidden>
+          <button class="btn-secondary" id="btn-cancel-fallback">Cancel</button>
+        </div>
+
+        <div id="form-msg"></div>
+      </div>
+
+      <div id="confirm-view">
+        <div class="confirm-score">
+          <div class="who" id="confirm-initials">AAA</div>
+          <div class="what" id="confirm-score">000</div>
+          <div class="src" id="confirm-src">From a scanned QR code</div>
+        </div>
+        <div id="confirm-scorecard"></div>
+        <button class="btn-primary" id="btn-confirm">Submit score</button>
+        <button class="btn-secondary" id="btn-back">Cancel</button>
+        <div id="confirm-msg"></div>
+      </div>
+    </section>
+  </main>
+
+  <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com</footer>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  // The 2-char routing prefix the on-device QR encoder writes (ngpc_qr.c's QR_GAME_CODE) --
+  // used both to recognize a Bowling scan and as this collection's own `game` field value, so
+  // there's one canonical code for this game rather than two different strings for the same thing.
+  const QR_GAME_CODE = "BW";
+  const MAX_SCORE = 300;
+  const SCORE_MAX_FRAMES = 10;
+  // Deliberately blocky at source resolution rather than smoothed away.
+  const ROW_AVATAR_PX = 48;
+  const ROW_AVATAR_CELL_PX = ROW_AVATAR_PX / (window.NGPC_AUTH ? NGPC_AUTH.AVATAR_SIZE : 32);
+
+  // Firebase init + auth (sign-in state, username lookup) is shared across every page -- see
+  // auth.js, loaded just before this script tag. NGPC_AUTH is null if firebase-app-compat.js
+  // itself failed to load, same failure this page already had to handle before auth.js existed.
+  const db = window.NGPC_AUTH ? NGPC_AUTH.db : null;
+
+  const el = (id)=>document.getElementById(id);
+  const boardEl = el('board');
+  const boardStatusEl = el('board-status');
+  const idleView = el('idle-view');
+  const confirmView = el('confirm-view');
+  const formMsg = el('form-msg');
+  const confirmMsg = el('confirm-msg');
+  const btnScan = el('btn-scan');
+  const scanLive = el('scan-live');
+  const scanFallback = el('scan-fallback');
+  const scanVideo = el('scan-video');
+  const scanFile = el('scan-file');
+
+  let pending = null; // {initials, weight, rolls, score}
+
+  function validScore(n){ return Number.isInteger(n) && n>=0 && n<=MAX_SCORE; }
+
+  /* ---------- scoring engine -- ported from Bowling's own src/game/score.c, same shape
+     (rolls[] + a per-frame scan with strike/spare lookahead) so this stays a straight port,
+     not a reinvention. See score_compute()/score_frame_marks() there for the reference. ---------- */
+  function computeScores(rolls){
+    const scores = new Array(SCORE_MAX_FRAMES).fill(null);
+    let ri = 0, running = 0, lastDone = -1;
+    for(let frame=0; frame<SCORE_MAX_FRAMES; frame++){
+      if(frame < 9){
+        if(ri >= rolls.length) break; // frame not started yet
+        if(rolls[ri] === 10){
+          if(ri+2 >= rolls.length) break;
+          running += 10 + rolls[ri+1] + rolls[ri+2];
+          ri += 1;
+        } else {
+          if(ri+1 >= rolls.length) break; // mid-frame
+          if(rolls[ri] + rolls[ri+1] === 10){
+            if(ri+2 >= rolls.length) break;
+            running += 10 + rolls[ri+2];
+          } else {
+            running += rolls[ri] + rolls[ri+1];
+          }
+          ri += 2;
+        }
+      } else {
+        const remaining = rolls.length - ri;
+        if(remaining < 2) break;
+        const needThree = rolls[ri]===10 || (rolls[ri]+rolls[ri+1]===10);
+        if(needThree && remaining < 3) break;
+        let frameTotal = rolls[ri] + rolls[ri+1];
+        if(needThree) frameTotal += rolls[ri+2];
+        running += frameTotal;
+        ri += needThree ? 3 : 2;
+      }
+      scores[frame] = running;
+      lastDone = frame;
+    }
+    return {scores, lastDone};
+  }
+
+  function markChar(pins){
+    if(pins===10) return 'X';
+    if(pins===0) return '-';
+    return String(pins);
+  }
+
+  function frameMarks(rolls){
+    const marks = Array.from({length:SCORE_MAX_FRAMES}, ()=>[]);
+    let ri = 0;
+    for(let frame=0; frame<SCORE_MAX_FRAMES; frame++){
+      if(ri >= rolls.length) break;
+      if(frame < 9){
+        const r1 = rolls[ri];
+        if(r1 === 10){ marks[frame]=['X']; ri+=1; continue; }
+        const m1 = markChar(r1);
+        if(ri+1 >= rolls.length){ marks[frame]=[m1]; break; }
+        const r2 = rolls[ri+1];
+        marks[frame] = [m1, (r1+r2===10)?'/':markChar(r2)];
+        ri += 2;
+      } else {
+        const r1 = rolls[ri];
+        const m1 = markChar(r1);
+        if(ri+1 >= rolls.length){ marks[frame]=[m1]; break; }
+        const r2 = rolls[ri+1];
+        let m2, needThird;
+        if(r1===10){ m2=markChar(r2); needThird=true; }
+        else if(r1+r2===10){ m2='/'; needThird=true; }
+        else { m2=markChar(r2); needThird=false; }
+        marks[frame] = [m1, m2];
+        if(!needThird) break;
+        if(ri+2 >= rolls.length) break;
+        marks[frame].push(markChar(rolls[ri+2]));
+        break; // 10th frame is always last
+      }
+    }
+    return marks;
+  }
+
+  function renderScorecardHTML(rolls){
+    const {scores} = computeScores(rolls);
+    const marks = frameMarks(rolls);
+    let html = '<div class="scorecard-grid">';
+    for(let f=0; f<SCORE_MAX_FRAMES; f++){
+      const m = marks[f] || [];
+      html += '<div class="sc-frame">'+
+        '<div class="sc-marks">'+m.map(c=>'<span>'+escapeHtml(c)+'</span>').join('')+'</div>'+
+        '<div class="sc-total tnum">'+(scores[f]!=null ? scores[f] : '')+'</div>'+
+      '</div>';
+    }
+    return html + '</div>';
+  }
+
+  /* The on-device QR now encodes a full URL (e.g. https://www.ngpc-dev.com/lb/BWBOB...), not just
+     the bare payload -- a link tap lands on payloadFromEntry() below, which reads the payload
+     back out of location.hash (see its own comment for why). But this page's own in-page
+     decoders (zbar-wasm/BarcodeDetector/jsQR) read the QR's raw content, prefix and all, so that
+     text needs the same "last non-empty '/'-segment" treatment before parsePayload() ever sees it,
+     or a URL's "https:" pair gets misread as a 2-char game code. Works unchanged for a bare
+     payload with no slashes at all (single segment = the whole string). */
+  function lastPathSegment(text){
+    const parts = String(text||'').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length-1] : '';
+  }
+
+  /* ---------- QR payload parser -- <2-char game code><3-char initials><2-digit weight lbs>
+     <2-digit roll count><one char per roll: 0-9 pins, A=strike/10>, matching ngpc_qr.c exactly. ---------- */
+  function parsePayload(text){
+    text = (text||'').trim().toUpperCase();
+    if(text.length < 9) return {error:"That code is too short to be a valid score."};
+    const gameCode = text.slice(0,2);
+    if(gameCode !== QR_GAME_CODE){
+      return {error:'This code is for a different game ("'+gameCode+'") — open that game’s own hiscores page instead.'};
+    }
+    const initials = text.slice(2,5);
+    const weightStr = text.slice(5,7);
+    const rollCountStr = text.slice(7,9);
+    if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
+    if(!/^\d{2}$/.test(weightStr) || !/^\d{2}$/.test(rollCountStr)) return {error:"That code's header didn't look right."};
+    const weight = parseInt(weightStr,10);
+    const rollCount = parseInt(rollCountStr,10);
+    if(rollCount < 12 || rollCount > 21) return {error:"That code has an impossible roll count."};
+    const rollChars = text.slice(9, 9+rollCount);
+    if(rollChars.length !== rollCount){
+      return {error:"That code looks cut off — rescan with the whole code in frame."};
+    }
+    const rolls = [];
+    for(let i=0;i<rollChars.length;i++){
+      const c = rollChars[i];
+      if(c === 'A') rolls.push(10);
+      else if(c >= '0' && c <= '9') rolls.push(Number(c));
+      else return {error:"That code has an unreadable roll value."};
+    }
+    return {initials, weight, rolls};
+  }
+
+  function pinIconSVG(){
+    return '<svg class="pin-icon" viewBox="0 0 14 20" xmlns="http://www.w3.org/2000/svg">'+
+      '<ellipse cx="7" cy="17.5" rx="5" ry="2" fill="'+'#93a0c9'+'" opacity=".35"/>'+
+      '<path d="M7 1c-1.4 0-2.2 1.6-1.6 2.9.5 1 .3 1.7-.3 2.6C3.6 8.6 3 10.3 3 12.5c0 3 1.7 5.5 4 5.5s4-2.5 4-5.5c0-2.2-.6-3.9-2.1-6C8.3 5.6 8.1 4.9 8.6 3.9 9.2 2.6 8.4 1 7 1z" fill="'+'#f4eedd'+'" stroke="'+'#37426e'+'" stroke-width=".6"/>'+
+      '<rect x="4.6" y="10.3" width="4.8" height="1.4" rx=".5" fill="'+'#b23a52'+'"/>'+
+      '</svg>';
+  }
+
+  function fmtWhen(ts){
+    if(!ts) return '';
+    const d = new Date(ts);
+    return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
+  }
+
+  async function renderBoard(docs){
+    if(!docs.length){
+      boardEl.innerHTML = '<div class="empty-state">No scores yet &mdash; be the first on the board.</div>';
+      return;
+    }
+    // Avatars aren't denormalized onto the score doc (they'd go stale the moment someone repaints
+    // their avatar after submitting) -- fetched fresh per render instead, one batched query for
+    // every uid on the visible board rather than one read per row.
+    const uids = docs.map(d=>d.data().uid).filter(Boolean);
+    const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
+    boardEl.innerHTML = docs.map((d,i)=>{
+      const data = d.data();
+      const rank = i+1;
+      const hasDetail = Array.isArray(data.rolls) && data.rolls.length>0;
+      const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
+      const scoreMeta = [fmtWhen(data.submittedAt), data.weight?(data.weight+' lb ball'):null].filter(Boolean).join(' · ');
+      const hasAvatar = data.uid && avatars[data.uid];
+      const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
+      const rowHtml = '<div class="row'+(rank===1?' top1':'')+(hasDetail?' has-detail':'')+'"'+(hasDetail?' data-detail="d'+i+'"':'')+'>'+
+        '<div class="rank">'+(rank===1?pinIconSVG():('#'+rank))+'</div>'+
+        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
+          (usernameLine ? '<div class="row-meta">'+usernameLine+'</div>' : '')+'</div>'+
+        '<div class="score-col"><div class="score-val tnum">'+(data.score!=null?data.score:'-')+'</div>'+
+          (scoreMeta ? '<div class="row-meta">'+scoreMeta+'</div>' : '')+'</div>'+
+      '</div>';
+      const detailHtml = hasDetail ? '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data.rolls)+'</div>' : '';
+      return rowHtml + detailHtml;
+    }).join('');
+    // <canvas> content can't come in through innerHTML -- draw each one in after insertion.
+    docs.forEach((d,i)=>{
+      const data = d.data();
+      if(!data.uid || !avatars[data.uid]) return;
+      const canvasEl = boardEl.querySelector('[data-avatar-row="'+i+'"]');
+      if(canvasEl) NGPC_AUTH.renderAvatarToCanvas(canvasEl, avatars[data.uid], ROW_AVATAR_CELL_PX);
+    });
+  }
+
+  boardEl.addEventListener('click', (e)=>{
+    const row = e.target.closest('.row.has-detail');
+    if(!row) return;
+    const detail = el(row.dataset.detail);
+    if(detail) detail.hidden = !detail.hidden;
+  });
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // Firestore's own error codes (hyphenated), not the Artifact db capability's custom set this
+  // used to switch on -- different backend, different vocabulary.
+  function friendlyDbError(e){
+    const code = e && e.code;
+    switch(code){
+      case 'permission-denied': return "The leaderboard's access rules rejected that — try again later.";
+      case 'resource-exhausted': return "Too many requests right now — wait a moment and try again.";
+      case 'unauthenticated': return "You need to be signed in to do that.";
+      case 'invalid-argument': return "That score didn't look valid — double check the initials and score.";
+      case 'unavailable': return "Couldn't reach the leaderboard right now. Try again in a bit.";
+      default: return "Couldn't reach the leaderboard right now. Try again in a bit.";
+    }
+  }
+
+  function connectDb(){
+    if(!db){
+      boardStatusEl.textContent = 'Live leaderboard is unavailable right now (Firebase failed to load).';
+      formMsg.innerHTML = '<div class="msg err">Submitting a score isn’t possible until the page reloads correctly.</div>';
+      return;
+    }
+    boardStatusEl.textContent = '';
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).orderBy('score','desc').limit(25);
+    q.onSnapshot(
+      (snap)=>{ boardStatusEl.textContent = ''; renderBoard(snap.docs); },
+      (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
+    );
+  }
+
+  async function writeScore(data, retried){
+    try{
+      await db.collection('scores').add(data);
+      return {ok:true};
+    }catch(e){
+      if(e && e.code==='unavailable' && !retried){
+        await new Promise(r=>setTimeout(r, 400+Math.random()*400));
+        return writeScore(data, true);
+      }
+      return {ok:false, error:e};
+    }
+  }
+
+  function showStage(stage){
+    idleView.classList.toggle('hide', stage!=='idle');
+    confirmView.classList.toggle('show', stage==='confirm');
+  }
+
+  function openConfirm(initials, weight, rolls, score){
+    pending = {initials, weight, rolls, score};
+    el('confirm-initials').textContent = initials;
+    el('confirm-score').textContent = String(score).padStart(3,'0');
+    el('confirm-src').textContent = weight + ' lb ball — from a scanned QR code';
+    el('confirm-scorecard').innerHTML = renderScorecardHTML(rolls);
+    confirmMsg.innerHTML = '';
+    showStage('confirm');
+  }
+
+  function totalFromRolls(rolls){
+    const {scores} = computeScores(rolls);
+    for(let i=SCORE_MAX_FRAMES-1; i>=0; i--){ if(scores[i]!=null) return scores[i]; }
+    return null;
+  }
+
+  function handleScanResult(text){
+    formMsg.innerHTML = '';
+    const result = parsePayload(lastPathSegment(text));
+    if(result.error){
+      formMsg.innerHTML = '<div class="msg err">'+escapeHtml(result.error)+'</div>';
+      return;
+    }
+    const total = totalFromRolls(result.rolls);
+    if(total==null || !validScore(total)){
+      formMsg.innerHTML = '<div class="msg err">That code doesn’t look like a finished game — try scanning again.</div>';
+      return;
+    }
+    resetScanUI();
+    openConfirm(result.initials, result.weight, result.rolls, total);
+  }
+
+  // The on-device QR encodes a full URL (e.g. https://www.ngpc-dev.com/lb/<payload>), so a
+  // phone's own camera app opens it directly and nothing here needs to scan anything. That URL
+  // always 404s first (no real file matches a payload-bearing path), so 404.html's own dispatcher
+  // does the actual routing -- see its comment for why -- and lands here with the payload in the
+  // URL HASH (/lb/#<payload>), not a path segment, so a page landed on this way is always a
+  // normal 200 straight to this file with no extra 404 round-trip. location.pathname is still
+  // checked as a fallback for anyone hand-typing/bookmarking a payload-bearing path directly.
+  // Case-insensitive on purpose either way: QR alphanumeric mode is uppercase-only, so this
+  // necessarily arrives here as ALL-CAPS text, which parsePayload already upper-cases internally
+  // anyway. Still works standalone via this page's own camera/photo scan (below, which runs the
+  // same decoded text through lastPathSegment() too) for any older/bare-payload QR with no URL
+  // involved.
+  function payloadFromEntry(){
+    const raw = location.hash ? location.hash.slice(1) : lastPathSegment(location.pathname);
+    const last = decodeURIComponent(lastPathSegment(raw));
+    if(last.length < 9) return null;
+    const result = parsePayload(last);
+    return result.error ? null : result;
+  }
+
+  /* ---------- camera scan (getUserMedia + jsQR), falling back to a native camera/file
+     picker if a live in-page camera stream isn't available -- getUserMedia failing outright is a
+     real possibility on some browsers/platforms, not just a permission-denied edge case. ---------- */
+  let cameraStream = null;
+  let scanRAF = null;
+  const scanCanvas = document.createElement('canvas');
+  const scanCtx = scanCanvas.getContext('2d', {willReadFrequently:true});
+
+  function resetScanUI(){
+    if(scanRAF){ cancelAnimationFrame(scanRAF); scanRAF = null; }
+    if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+    scanLive.hidden = true;
+    scanFallback.hidden = true;
+    btnScan.hidden = false;
+  }
+
+  function showFallback(msg){
+    if(scanRAF){ cancelAnimationFrame(scanRAF); scanRAF = null; }
+    if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+    scanLive.hidden = true;
+    btnScan.hidden = true;
+    scanFallback.hidden = false;
+    if(msg) formMsg.innerHTML = '<div class="msg err">'+escapeHtml(msg)+'</div>';
+  }
+
+  async function startLiveScan(){
+    formMsg.innerHTML = '';
+    if(noDecoderAvailable()){
+      formMsg.innerHTML = '<div class="msg err">'+libraryMissingMsg()+'</div>';
+      return;
+    }
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      showFallback('Live camera preview isn’t supported in this browser/view (no camera API present).');
+      return;
+    }
+    try{
+      cameraStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false });
+    }catch(e){
+      // Surface WHY, not just that it failed -- NotAllowedError usually means the visitor (or their
+      // browser) declined the permission prompt; NotFoundError means no camera; either way the
+      // photo fallback below still works regardless of the reason.
+      const name = (e && e.name) || 'Error';
+      showFallback('Live camera preview isn’t available here (' + name + ') — take a photo of the QR code instead.');
+      return;
+    }
+    scanVideo.srcObject = cameraStream;
+    try{ await scanVideo.play(); }catch(e){ /* some browsers auto-play on metadata; ignore */ }
+    btnScan.hidden = true;
+    scanFallback.hidden = true;
+    scanLive.hidden = false;
+    scanLoop();
+  }
+
+  // A missing/failed-to-load decoder must be a LOUD, distinct error, not silently treated as "no
+  // code found" -- that exact silent-failure shape (a 404'd CDN URL, window.jsQR ? ... : null)
+  // is what made every scan fail invisibly before this was caught.
+  function libraryMissingMsg(){
+    return "QR scanning isn’t available right now (a required library failed to load) — try reloading the page.";
+  }
+
+  // ---- decoders, tried in this order, each a fallback for the one before ----
+  //
+  // 1. zbar-wasm (libzbar compiled to WebAssembly, WASM inlined in the JS -- no separate runtime
+  //    fetch, so no CSP concern). THE reliable one: verified directly against a real device photo
+  //    that both jsQR AND the browser's own BarcodeDetector-shaped native decoders (and OpenCV,
+  //    and @zxing/library) all failed to read at every resolution tried -- zbar-wasm decoded it
+  //    correctly and fast (under 60ms) from 300px up to 1600px. This isn't a guess: an independent
+  //    Python zbar run first proved the underlying image WAS decodable at those sizes, then this
+  //    exact WASM build was confirmed to reproduce that same result client-side before shipping it.
+  // 2. The platform's native BarcodeDetector (Shape Detection API), if zbar-wasm didn't load for
+  //    some reason -- no CDN dependency at all where the browser has it.
+  // 3. jsQR, last resort -- proven LESS reliable than the two above on real photos in this same
+  //    investigation (failed on the exact image zbar-wasm decoded, at every one of ~15 resolutions
+  //    tried), but still better than nothing if neither of the above is available.
+  let barcodeDetector; // undefined = not checked yet, null = unavailable, else the instance
+  function getBarcodeDetector(){
+    if(barcodeDetector !== undefined) return barcodeDetector;
+    if(!('BarcodeDetector' in window)){ barcodeDetector = null; return null; }
+    try{ barcodeDetector = new window.BarcodeDetector({formats:['qr_code']}); }
+    catch(e){ barcodeDetector = null; }
+    return barcodeDetector;
+  }
+  function noDecoderAvailable(){ return !window.zbarWasm && !getBarcodeDetector() && !window.jsQR; }
+
+  // zbar-wasm reliably covered 300-1600px on the one real photo this was actually tested against,
+  // so one reasonable size in the middle of that range is enough -- no need for jsQR's multi-scale
+  // sweep shape here.
+  async function decodeViaZbarWasm(source, w0, h0){
+    if(!window.zbarWasm || !w0 || !h0) return null;
+    const target = 1000;
+    const scale = Math.min(1, target/Math.max(w0,h0));
+    const w = Math.round(w0*scale), h = Math.round(h0*scale);
+    scanCanvas.width = w; scanCanvas.height = h;
+    scanCtx.drawImage(source, 0, 0, w, h);
+    const imageData = scanCtx.getImageData(0, 0, w, h);
+    try{
+      const symbols = await window.zbarWasm.scanImageData(imageData);
+      if(symbols && symbols.length) return symbols[0].decode();
+    }catch(e){ /* fall through */ }
+    return null;
+  }
+
+  // jsQR fallback resolution sweep -- deliberately NOT escalating to huge sizes. Verified against
+  // a real device photo with Python's independent zbar decoder: it read the code correctly at
+  // 300-900px on the long side and FAILED above ~1200px, so bigger was actively counterproductive,
+  // not just wasted work.
+  function jsqrFallback(source, w0, h0, scales){
+    if(!window.jsQR || !w0 || !h0) return null;
+    for(const target of scales){
+      const scale = Math.min(1, target/Math.max(w0,h0));
+      const w = Math.round(w0*scale), h = Math.round(h0*scale);
+      scanCanvas.width = w; scanCanvas.height = h;
+      scanCtx.drawImage(source, 0, 0, w, h);
+      const frame = scanCtx.getImageData(0, 0, w, h);
+      const code = window.jsQR(frame.data, w, h, {inversionAttempts:'attemptBoth'});
+      if(code && code.data) return code.data;
+    }
+    return null;
+  }
+
+  async function decodeSource(source, w0, h0, jsqrScales){
+    const viaZbar = await decodeViaZbarWasm(source, w0, h0);
+    if(viaZbar) return viaZbar;
+    const bd = getBarcodeDetector();
+    if(bd){
+      try{
+        const results = await bd.detect(source);
+        if(results && results.length && results[0].rawValue) return results[0].rawValue;
+      }catch(e){ /* fall through to jsQR */ }
+    }
+    return jsqrFallback(source, w0, h0, jsqrScales);
+  }
+
+  const LIVE_SCALES = [500, 900];
+  let liveBusy = false;
+  async function scanLoop(){
+    if(noDecoderAvailable()){
+      resetScanUI();
+      formMsg.innerHTML = '<div class="msg err">'+libraryMissingMsg()+'</div>';
+      return;
+    }
+    scanRAF = requestAnimationFrame(scanLoop);
+    if(scanVideo.readyState !== scanVideo.HAVE_ENOUGH_DATA) return;
+    if(liveBusy) return;
+    const w = scanVideo.videoWidth, h = scanVideo.videoHeight;
+    if(!w || !h) return;
+    liveBusy = true;
+    try{
+      const value = await decodeSource(scanVideo, w, h, LIVE_SCALES);
+      if(value) handleScanResult(value);
+    } finally { liveBusy = false; }
+  }
+
+  function loadViaImageElement(file){
+    return new Promise((resolve,reject)=>{
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = ()=>{ URL.revokeObjectURL(url); resolve(img); };
+      img.onerror = ()=>{ URL.revokeObjectURL(url); reject(new Error('img element failed to decode "'+file.type+'"')); };
+      img.src = url;
+    });
+  }
+
+  // createImageBitmap is tried first (fast, works off-main-thread), but some browsers' decoder
+  // behind it doesn't cover every format a phone can hand back (HEIC/HEIF stills, in particular,
+  // on iOS) even though the SAME format displays fine in a plain <img> tag via the OS's own
+  // image codecs -- so a createImageBitmap failure falls through to that instead of giving up.
+  async function loadImage(file){
+    if(window.createImageBitmap){
+      try{ return await createImageBitmap(file); }
+      catch(e){ /* fall through */ }
+    }
+    return loadViaImageElement(file);
+  }
+
+  // Wider sweep than the live loop since this only runs once per photo, not every video frame --
+  // covers the empirically-good 300-900px range plus a bit of headroom either side.
+  const FILE_SCALES = [350, 500, 700, 900, 1200];
+
+  async function scanFromFile(file){
+    if(noDecoderAvailable()){
+      formMsg.innerHTML = '<div class="msg err">'+libraryMissingMsg()+'</div>';
+      return;
+    }
+    formMsg.innerHTML = '<div class="msg ok">Reading code&hellip;</div>';
+    let img;
+    try{ img = await loadImage(file); }
+    catch(e){
+      const type = file.type || 'unknown type';
+      formMsg.innerHTML = '<div class="msg err">Couldn’t read that photo (' + escapeHtml(type) + ') — try again, or use a JPG/PNG if your phone saved it as something else.</div>';
+      return;
+    }
+    if(!img.width || !img.height){
+      formMsg.innerHTML = '<div class="msg err">That photo came back empty — try again.</div>';
+      return;
+    }
+    const value = await decodeSource(img, img.width, img.height, FILE_SCALES);
+    if(value){
+      handleScanResult(value);
+    } else {
+      formMsg.innerHTML = '<div class="msg err">No QR code found in that photo (read as ' + img.width + '×' + img.height + ') — make sure the whole code is in frame, hold the console steady and avoid glare, then try again.</div>';
+    }
+  }
+
+  btnScan.addEventListener('click', startLiveScan);
+  el('btn-cancel-scan').addEventListener('click', resetScanUI);
+  el('btn-cancel-fallback').addEventListener('click', resetScanUI);
+  scanFile.addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    e.target.value = '';
+    if(file) scanFromFile(file);
+  });
+
+  el('btn-back').addEventListener('click', ()=>{
+    pending = null;
+    showStage('idle');
+  });
+
+  el('btn-confirm').addEventListener('click', async ()=>{
+    if(!pending) return;
+    if(!db){
+      confirmMsg.innerHTML = '<div class="msg err">'+friendlyDbError()+'</div>';
+      return;
+    }
+    // Sign-in is required to submit (anonymous submission was retired) -- wait for auth to
+    // actually settle first, since a QR-scan deep link opens straight into this confirm screen
+    // and a fast click can otherwise race the still-resolving sign-in check.
+    if(window.NGPC_AUTH) await NGPC_AUTH.authReady;
+    const authedUser = window.NGPC_AUTH && NGPC_AUTH.currentUser;
+    if(!authedUser || !authedUser.username){
+      confirmMsg.innerHTML = '<div class="msg err">Sign in to submit a score.'
+        +' <button type="button" class="btn-secondary" id="confirm-signin-btn" style="width:auto;display:inline;margin:0 0 0 6px;padding:4px 10px">Sign In</button></div>';
+      const signinBtn = el('confirm-signin-btn');
+      if(signinBtn) signinBtn.addEventListener('click', ()=>{ if(window.NGPC_AUTH) NGPC_AUTH.openSignInModal('signin'); });
+      return;
+    }
+    const btn = el('btn-confirm');
+    btn.disabled = true;
+    confirmMsg.innerHTML = '';
+    const scoreDoc = {
+      game: QR_GAME_CODE,
+      initials: pending.initials,
+      score: pending.score,
+      weight: pending.weight,
+      rolls: pending.rolls,
+      source: 'qr',
+      submittedAt: Date.now(),
+      uid: authedUser.uid,
+      username: authedUser.username,
+    };
+    const res = await writeScore(scoreDoc);
+    btn.disabled = false;
+    if(res.ok){
+      // Straight to the live board, not a "submitted!" interstitial requiring another click --
+      // the whole point of scanning was to see where this score landed. The toast below gets
+      // naturally overwritten within a moment anyway, once the live query (this client is already
+      // subscribed to it) picks up the write it just made and re-renders the board.
+      const toastText = pending.initials + ' — ' + pending.score + ' submitted!';
+      pending = null;
+      showStage('idle');
+      boardStatusEl.innerHTML = '<div class="msg ok">'+escapeHtml(toastText)+'</div>';
+    } else {
+      confirmMsg.innerHTML = '<div class="msg err">'+friendlyDbError(res.error)+'</div>';
+    }
+  });
+
+  // ---- boot ----
+  function boot(){
+    renderBoard([]); // real empty state as the floor -- never leave the board blank while db connects
+    connectDb();
+    const fromEntry = payloadFromEntry();
+    if(fromEntry){
+      const total = totalFromRolls(fromEntry.rolls);
+      if(total!=null && validScore(total)){
+        openConfirm(fromEntry.initials, fromEntry.weight, fromEntry.rolls, total);
+        // Strip back to the clean /lb/ URL (hash included) so a refresh or a re-shared link
+        // can't replay the same scan as a fresh submission.
+        history.replaceState(null, '', '/lb/');
+      }
+    }
+  }
+  // The in-browser player is only offered to a signed-in visitor -- anonymous QR submission
+  // stays exactly as-is either way, this is purely about who sees the link.
+  if(window.NGPC_AUTH){
+    NGPC_AUTH.onAuthChange((user)=>{ el('play-link').hidden = !user; });
+  }
+
+  boot();
+})();
+</script>
+</body>
+</html>
