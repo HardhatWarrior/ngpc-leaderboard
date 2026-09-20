@@ -133,7 +133,7 @@
   // index.html's own scan flow uses, so a capture here routes correctly no matter which game's
   // code actually shows up (matters for shared/generic code like this, even though in practice
   // this particular page will only ever see this one game's own QR on screen).
-  const GAME_ROUTES = { BW: 'bw', TT: 'tt', YZ: 'yz', FK: 'fk', '2K': '2k', OV: 'overrev', GD: 'gardenia' };
+  const GAME_ROUTES = { BW: 'bw', TT: 'tt', YZ: 'yz', FK: 'fk', '2K': '2k', OV: 'overrev', GD: 'gd' };
   const el = (id)=>document.getElementById(id);
   const gateEl = el('signin-gate');
   const contentEl = el('player-content');
@@ -147,12 +147,12 @@
   async function loadEmulator(){
     if(emulatorRequested) return;
     emulatorRequested = true;
-    // Prefer a developer-uploaded build (games/gardenia.romPath, set from /admin/game/) over
+    // Prefer a developer-uploaded build (games/gd.romPath, set from /admin/game/) over
     // the static repo-committed ROM -- falls back to the static file on any lookup failure.
     let gameUrl = 'GARDENIA.ngp';
     try{
       if(window.NGPC_AUTH && NGPC_AUTH.db){
-        const doc = await NGPC_AUTH.db.collection('games').doc('gardenia').get();
+        const doc = await NGPC_AUTH.db.collection('games').doc('gd').get();
         if(doc.exists && doc.data().romPath) gameUrl = doc.data().romPath;
       }
     }catch(e){ /* keep the static fallback */ }

@@ -12,7 +12,7 @@ const PATH_TO_SLUG = {
   'play/2048/2048.ngp': '2k',
   'play/bowling/bowling.ngp': 'bw',
   'play/farkle/farkle.ngp': 'fk',
-  'play/gardenia/GARDENIA.ngp': 'gardenia',
+  'play/gardenia/GARDENIA.ngp': 'gd',
   'play/overrev/overrev.ngp': 'overrev',
   'play/tetris/tetris.ngp': 'tt',
   'play/yahtzee/yahtzee.ngp': 'yz',
