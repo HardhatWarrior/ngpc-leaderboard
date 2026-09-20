@@ -124,19 +124,7 @@
 
   async function loadUsers(db){
     statusEl.textContent = 'Loading…';
-    const [usersSnap, privateSnap] = await Promise.all([
-      db.collection('users').get(),
-      // collectionGroup('private') is gated by firestore.rules -- only readable here at all
-      // because this page only reaches this point once the signed-in caller IS the admin.
-      db.collectionGroup('private').get(),
-    ]);
-
-    const emailByUid = {};
-    privateSnap.forEach(doc=>{
-      const uid = doc.ref.parent.parent.id;
-      const data = doc.data();
-      if(data.recoveryEmail) emailByUid[uid] = data.recoveryEmail;
-    });
+    const usersSnap = await db.collection('users').get();
 
     const users = [];
     usersSnap.forEach(doc=>{
@@ -148,9 +136,21 @@
         approved: d.approved === undefined ? true : !!d.approved,
         disabled: !!d.disabled,
         avatar: Array.isArray(d.avatar) ? d.avatar : null,
-        email: emailByUid[doc.id] || null,
+        email: null,
       });
     });
+
+    // One get() per user's own private/contact doc rather than a collectionGroup('private')
+    // query -- a plain per-document get(), gated by the same owner-or-admin rule, is the most
+    // basic and reliable case; a fresh, possibly-still-empty collection group can behave
+    // inconsistently under security rules evaluation. Fine at this project's user count.
+    await Promise.all(users.map(async (u)=>{
+      try{
+        const snap = await db.collection('users').doc(u.uid).collection('private').doc('contact').get();
+        if(snap.exists && snap.data().recoveryEmail) u.email = snap.data().recoveryEmail;
+      }catch(e){ /* leave email null -- one user's read failing shouldn't break the whole list */ }
+    }));
+
     users.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
     statusEl.textContent = '';
     return users;
