@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sudoku Hiscores</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/inlined/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#5c8fd6;
+    --accent-ink:#081222; --accent2:#4fbf8b;
+    --good:#4fbf8b; --danger:#e5615a;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif; padding-inline:20px; padding-block:28px; display:flex; justify-content:center; }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; } .tnum{ font-variant-numeric:tabular-nums; }
+  #shell{ width:100%; max-width:960px; display:flex; flex-direction:column; gap:22px; }
+  header{ background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--border); border-radius:14px; padding:22px 22px 18px; display:flex; flex-direction:column; gap:14px; position:relative; overflow:hidden; }
+  header::before{ content:""; position:absolute; inset:0; background:radial-gradient(circle at 85% -10%, rgba(92,143,214,.28), transparent 55%); pointer-events:none; }
+  .wordmark{ position:relative; display:flex; flex-direction:row; align-items:baseline; justify-content:space-between; flex-wrap:wrap; gap:10px; }
+  .wordmark .eyebrow{ font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase; }
+  .wordmark h1{ margin:0; font-size:clamp(20px,4.2vw,30px); line-height:1.4; color:var(--cream); }
+  .title-block{ display:flex; flex-direction:column; align-items:flex-end; gap:2px; }
+  .created-by{ font-size:11px; color:var(--dim); }
+  .created-by a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
+  .created-by a:hover{ color:var(--accent2); }
+  .rom-link{
+    position:absolute; right:16px; bottom:14px;
+    display:inline-flex; align-items:center; gap:5px;
+    color:var(--dim); font-size:11px; font-weight:600;
+    text-decoration:underline; text-underline-offset:2px;
+  }
+  .rom-link:hover{ color:var(--accent2); }
+
+  .header-art{
+    position:relative; width:160px; max-width:45%; aspect-ratio:160/152;
+    image-rendering:pixelated; border-radius:8px; border:1px solid var(--border);
+    box-shadow:0 4px 14px rgba(0,0,0,.35); object-fit:cover;
+  }
+
+  main{ display:grid; grid-template-columns:1.5fr 1fr; gap:20px; align-items:start; }
+  @media (max-width:720px){ main{ grid-template-columns:1fr; } }
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  .panel .hint{ margin:0 0 16px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+
+  /* ---------- difficulty toggle -- times aren't comparable across difficulties (a fast Easy
+     solve isn't a "better" result than a slower Hard one), so this filters to one difficulty's
+     board at a time, same approach as Gardenia's own mode toggle. ---------- */
+  .mode-toggle{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .mode-btn{
+    width:auto; background:transparent; border:1px solid var(--border); color:var(--dim);
+    border-radius:8px; padding:8px 14px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer;
+  }
+  .mode-btn:hover{ border-color:var(--accent2); }
+  .mode-btn.active{ border-color:var(--accent); color:var(--cream); background:rgba(92,143,214,.14); }
+
+  #board-status{ font-size:12px; color:var(--dim); margin-bottom:10px; min-height:1.4em; }
+  .row{ display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:12px; padding:10px 8px; border-radius:8px; }
+  .row ~ .row{ border-top:1px solid var(--border); }
+  .rank{ font-family:"Press Start 2P",monospace; font-size:11px; color:var(--dim); text-align:center; }
+  .row.top1 .rank{ color:var(--accent); } .row.top1{ background:rgba(92,143,214,.10); }
+  .initials{ font-family:"Press Start 2P",monospace; font-size:14px; letter-spacing:.06em; color:var(--cream); display:flex; align-items:center; gap:8px; }
+  .row-avatar{ width:48px; height:48px; border-radius:4px; border:1px solid var(--border); image-rendering:pixelated; flex:none; }
+  .score-val{ font-family:"Press Start 2P",monospace; font-size:15px; color:var(--good); }
+  .row-meta{ font-size:10.5px; color:var(--dim); grid-column:2; margin-top:2px; }
+  .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
+  .row-meta a:hover{ color:var(--accent2); }
+  .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
+  .scan-video-wrap{ position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden; background:#000; margin-bottom:10px; }
+  #scan-video{ width:100%; height:100%; object-fit:cover; display:block; }
+  .scan-frame{ position:absolute; inset:14%; border:2px solid var(--accent2); border-radius:12px; box-shadow:0 0 0 999px rgba(0,0,0,.4); pointer-events:none; }
+  .file-btn{ display:block; text-align:center; cursor:pointer; }
+  button{ font:inherit; border:none; border-radius:8px; padding:12px 16px; cursor:pointer; font-weight:600; font-size:13.5px; width:100%; }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); } .btn-primary:hover:not(:disabled){ background:#7aa2f7; }
+  .btn-secondary{ background:transparent; border:1px solid var(--border); color:var(--cream); margin-top:8px; }
+  .btn-secondary:hover:not(:disabled){ border-color:var(--accent2); }
+  #confirm-view, #success-view{ display:none; }
+  #confirm-view.show, #success-view.show{ display:block; }
+  #idle-view.hide{ display:none; }
+  .confirm-score{ text-align:center; padding:18px 0 20px; }
+  .confirm-score .who{ font-family:"Press Start 2P",monospace; font-size:16px; letter-spacing:.04em; color:var(--cream); }
+  .confirm-score .what{ font-family:"Press Start 2P",monospace; font-size:34px; color:var(--good); margin-top:10px; }
+  .confirm-score .src{ margin-top:10px; font-size:11px; color:var(--dim); }
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; margin-top:12px; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+  .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
+  .success-icon{ text-align:center; font-size:40px; margin-bottom:6px; }
+  #success-view p{ text-align:center; color:var(--dim); font-size:13px; }
+  footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
+</style>
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <div class="wordmark">
+      <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
+      <div class="title-block">
+        <h1>SUDOKU</h1>
+        <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
+      </div>
+    </div>
+    <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
+    <img src="https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/submissions%2FL44BFbmiNkhi2vvLdrPUIxkvmfs2%2FmnlUsVhEIlVF5Sb5Se0j%2Fscreenshot.png?alt=media&token=91a8407b-7127-41cf-9e8e-e207bd61c716" alt="Sudoku title screen" class="header-art">
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Leaderboard</h2>
+      <p class="hint" id="board-hint">Fastest solves on Easy, ranked by time. Times aren't comparable across difficulties.</p>
+      <div class="mode-toggle">
+        <button type="button" class="mode-btn active" id="diff-E" data-diff="E">Easy</button>
+        <button type="button" class="mode-btn" id="diff-M" data-diff="M">Medium</button>
+        <button type="button" class="mode-btn" id="diff-H" data-diff="H">Hard</button>
+      </div>
+      <div id="board-status"></div>
+      <div id="board"></div>
+    </section>
+
+    <section class="panel">
+      <h2>Submit a score</h2>
+      <p class="hint">Scores only come in by scanning the QR code the game shows after a completed puzzle &mdash; there's no manual entry, so every row on the board is a real result. You must be signed in to submit.</p>
+
+      <!-- Members only -- gates the whole scan mechanism (camera + file fallback), not just the
+           final submit step; defaults hidden in markup so it never flashes before auth resolves. -->
+      <div id="scan-signin-required">
+        <p class="hint">Sign in to scan a QR code.</p>
+        <button type="button" class="btn-primary" id="scan-signin-btn">Sign In</button>
+      </div>
+
+      <div id="idle-view" hidden>
+        <button class="btn-primary" id="btn-scan">Scan QR Code</button>
+        <div id="scan-live" hidden>
+          <div class="scan-video-wrap">
+            <video id="scan-video" playsinline muted></video>
+            <div class="scan-frame" aria-hidden="true"></div>
+          </div>
+          <button class="btn-secondary" id="btn-cancel-scan">Cancel</button>
+        </div>
+        <div id="scan-fallback" hidden>
+          <label class="btn-primary file-btn" for="scan-file">Take / choose a photo</label>
+          <input type="file" accept="image/*" id="scan-file" hidden>
+          <button class="btn-secondary" id="btn-cancel-fallback">Cancel</button>
+        </div>
+        <div id="form-msg"></div>
+      </div>
+
+      <div id="confirm-view">
+        <div class="confirm-score">
+          <div class="who" id="confirm-initials">EASY</div>
+          <div class="what" id="confirm-score">0:00</div>
+          <div class="src" id="confirm-src">From a scanned QR code</div>
+        </div>
+        <div id="confirm-scorecard"></div>
+        <button class="btn-primary" id="btn-confirm">Submit score</button>
+        <button class="btn-secondary" id="btn-back">Cancel</button>
+        <div id="confirm-msg"></div>
+      </div>
+
+      <div id="success-view">
+        <div class="success-icon">&#127881;</div>
+        <p id="success-text">Score submitted to the leaderboard.</p>
+        <button class="btn-secondary" id="btn-again">Back to leaderboard</button>
+      </div>
+    </section>
+  </main>
+
+  <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com</footer>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  const QR_GAME_CODE = 'SD';
+  const DIFF_NAMES = {E:'Easy', M:'Medium', H:'Hard'};
+  let activeDiff = 'E';
+
+  const el = (id)=>document.getElementById(id);
+  const boardEl = el('board'), boardStatusEl = el('board-status'), boardHintEl = el('board-hint');
+  const idleView = el('idle-view'), confirmView = el('confirm-view'), successView = el('success-view');
+  const formMsg = el('form-msg'), confirmMsg = el('confirm-msg');
+  const btnScan = el('btn-scan'), scanLive = el('scan-live'), scanFallback = el('scan-fallback');
+  const scanVideo = el('scan-video'), scanFile = el('scan-file');
+  const diffButtons = [el('diff-E'), el('diff-M'), el('diff-H')];
+
+  let db = null, pending = null, unsubscribeBoard = null;
+
+  // Payload (per the submitted spec, NOT a fixed-width binary encoding like this site's other
+  // games): a space-separated "KEY-VALUE" list -- DIFF-<E/M/H>, TIME-<1-5 digit seconds>,
+  // MISS-<3-digit zero-padded mistake count>. No initials field -- unlike every other game here,
+  // Sudoku's own high-score flow doesn't collect device-typed initials, so the board identifies
+  // a run by the submitter's site account only. Example from the submission:
+  // "NGPC-DEV.COM/SD/DIFF-E TIME-123 MISS-02" -- note the payload segment itself does NOT repeat
+  // the "SD" game code the way every other game's does, so a code read via this site's OWN
+  // universal scanner (index.html / another game's in-browser player) won't auto-route here the
+  // way it does for other games -- only a direct scan landing on /sd/ (the real on-device
+  // QR_URL_PREFIX) works today. Flagged as a known gap, not fixed here.
+  function parseSudokuPayload(text){
+    const tokens = text.trim().split(/\s+/);
+    const fields = {};
+    for(const tok of tokens){
+      const dash = tok.indexOf('-');
+      if(dash < 0) continue;
+      fields[tok.slice(0,dash)] = tok.slice(dash+1);
+    }
+    const diff = fields.DIFF;
+    if(!diff || !(diff in DIFF_NAMES)) return {error:"That code has an unrecognized difficulty."};
+    if(!fields.TIME || !/^\d{1,5}$/.test(fields.TIME)) return {error:"That code has an unreadable time."};
+    if(!fields.MISS || !/^\d{3}$/.test(fields.MISS)) return {error:"That code has an unreadable miss count."};
+    return {
+      game: QR_GAME_CODE,
+      difficulty: diff,
+      time: parseInt(fields.TIME, 10),
+      misses: parseInt(fields.MISS, 10),
+    };
+  }
+
+  function parsePayload(text){
+    text = (text||'').trim();
+    if(!text) return {error:"That code is too short to be a valid score."};
+    return parseSudokuPayload(text.toUpperCase());
+  }
+
+  function lastPathSegment(text){
+    const parts = String(text||'').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length-1] : '';
+  }
+
+  function payloadFromEntry(){
+    const raw = location.hash ? location.hash.slice(1) : lastPathSegment(location.pathname);
+    const last = decodeURIComponent(lastPathSegment(raw));
+    if(!last) return null;
+    const result = parsePayload(last);
+    return result.error ? null : result;
+  }
+
+  function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+
+  function fmtTime(seconds){
+    const m = Math.floor(seconds/60), s = seconds%60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
+
+  function renderSudokuScorecardHTML(data){
+    const rows = '<tr><td>Difficulty</td><td class="gd-val">'+escapeHtml(DIFF_NAMES[data.difficulty]||'?')+'</td></tr>'+
+      '<tr><td>Time</td><td class="gd-val tnum">'+fmtTime(data.time)+'</td></tr>'+
+      '<tr><td>Mistakes</td><td class="gd-val tnum">'+data.misses+'</td></tr>';
+    return '<table class="gd-sheet" style="width:100%;border-collapse:collapse;margin:14px 0;font-size:11.5px">'+rows+'</table>';
+  }
+
+  async function renderBoard(docs){
+    if(!docs.length){ boardEl.innerHTML = '<div class="empty-state">No scores yet on '+escapeHtml(DIFF_NAMES[activeDiff])+' &mdash; be the first on the board.</div>'; return; }
+    const uids = docs.map(d=>d.data().uid).filter(Boolean);
+    const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
+    boardEl.innerHTML = docs.map((d,i)=>{
+      const data = d.data();
+      const rank = i+1;
+      const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
+      const meta = [fmtWhen(data.submittedAt), data.misses+' miss'+(data.misses===1?'':'es'), usernameLine].filter(Boolean).join(' · ');
+      const hasAvatar = data.uid && avatars[data.uid];
+      const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
+      return '<div class="row'+(rank===1?' top1':'')+'">'+
+        '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
+        '<div><div class="initials">'+avatarHtml+(data.username?escapeHtml(data.username.toUpperCase()):'?')+'</div>'+
+          '<div class="row-meta">'+meta+'</div></div>'+
+        '<div class="score-val tnum">'+(data.time!=null?fmtTime(data.time):'-')+'</div>'+
+      '</div>';
+    }).join('');
+    docs.forEach((d,i)=>{
+      const data = d.data();
+      if(!data.uid || !avatars[data.uid]) return;
+      const canvasEl = boardEl.querySelector('[data-avatar-row="'+i+'"]');
+      if(canvasEl && window.NGPC_AUTH) NGPC_AUTH.renderAvatarToCanvas(canvasEl, avatars[data.uid], 48/NGPC_AUTH.AVATAR_SIZE);
+    });
+  }
+
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+  function friendlyDbError(e){
+    const code = e && e.code;
+    switch(code){
+      case 'quota_exceeded': return "The scoreboard is full right now — ask the owner to clear some old entries.";
+      case 'resource_exhausted': return "Too many requests right now — wait a moment and try again.";
+      case 'unavailable': return "Leaderboard unavailable right now — try again in a moment.";
+      default: return "Couldn't reach the leaderboard right now. Try again in a bit.";
+    }
+  }
+
+  function subscribeBoard(){
+    if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
+    if(!db) return;
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('difficulty','==',activeDiff).where('approved','==',true).orderBy('time','asc').limit(25);
+    unsubscribeBoard = q.onSnapshot(
+      (snap)=>{ renderBoard(snap.docs); },
+      (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
+    );
+  }
+
+  function setDiff(diff){
+    if(activeDiff === diff) return;
+    activeDiff = diff;
+    diffButtons.forEach(btn=>btn.classList.toggle('active', btn.dataset.diff===diff));
+    boardHintEl.textContent = 'Fastest solves on '+DIFF_NAMES[diff]+', ranked by time. Times aren’t comparable across difficulties.';
+    subscribeBoard();
+  }
+  diffButtons.forEach(btn=>btn.addEventListener('click', ()=>setDiff(btn.dataset.diff)));
+
+  function initDb(){
+    if(!firebase){ boardStatusEl.innerHTML = '<div class="msg err">Firebase SDK failed to load</div>'; return; }
+    if(!firebase.firestore){ boardStatusEl.innerHTML = '<div class="msg err">Firestore module not available</div>'; return; }
+    try{
+      db = firebase.firestore();
+      boardStatusEl.textContent = '';
+      subscribeBoard();
+    }catch(e){
+      boardStatusEl.innerHTML = '<div class="msg err">Firestore init failed: '+escapeHtml(e.message)+'</div>';
+    }
+  }
+
+  async function writeScore(data){
+    if(!db) return {ok:false, error:new Error('db not initialized')};
+    try{
+      await db.collection('scores').add(data);
+      return {ok:true};
+    }catch(e){
+      return {ok:false, error:e};
+    }
+  }
+
+  function showStage(stage){
+    idleView.classList.toggle('hide', stage!=='idle');
+    confirmView.classList.toggle('show', stage==='confirm');
+    successView.classList.toggle('show', stage==='success');
+  }
+
+  function openConfirm(parsed){
+    pending = parsed;
+    el('confirm-initials').textContent = DIFF_NAMES[parsed.difficulty].toUpperCase();
+    el('confirm-score').textContent = fmtTime(parsed.time);
+    el('confirm-src').textContent = DIFF_NAMES[parsed.difficulty] + ' · From a scanned QR code';
+    el('confirm-scorecard').innerHTML = renderSudokuScorecardHTML(parsed);
+    confirmMsg.innerHTML = '';
+    showStage('confirm');
+  }
+
+  function handleScanResult(text){
+    formMsg.innerHTML = '';
+    const result = parsePayload(text);
+    if(result.error){
+      formMsg.innerHTML = '<div class="msg err">'+escapeHtml(result.error)+'</div>';
+      return;
+    }
+    resetScanUI();
+    openConfirm(result);
+  }
+
+  let cameraStream = null, scanRAF = null;
+  const scanCanvas = document.createElement('canvas'), scanCtx = scanCanvas.getContext('2d', {willReadFrequently:true});
+
+  function resetScanUI(){
+    if(scanRAF){ cancelAnimationFrame(scanRAF); scanRAF = null; }
+    if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+    scanLive.hidden = true; scanFallback.hidden = true; btnScan.hidden = false;
+  }
+
+  function showFallback(msg){
+    if(scanRAF){ cancelAnimationFrame(scanRAF); scanRAF = null; }
+    if(cameraStream){ cameraStream.getTracks().forEach(t=>t.stop()); cameraStream = null; }
+    scanLive.hidden = true; btnScan.hidden = true; scanFallback.hidden = false;
+    if(msg) formMsg.innerHTML = '<div class="msg err">'+escapeHtml(msg)+'</div>';
+  }
+
+  async function startLiveScan(){
+    formMsg.innerHTML = '';
+    if(!window.zbarWasm && !getBarcodeDetector() && !window.jsQR){
+      formMsg.innerHTML = '<div class="msg err">QR scanning library failed (zbar: '+!!window.zbarWasm+', barcode: '+!!getBarcodeDetector()+', jsqr: '+!!window.jsQR+')</div>';
+      return;
+    }
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+      showFallback('Live camera is not supported here.');
+      return;
+    }
+    try{ cameraStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false }); }
+    catch(e){
+      showFallback('Camera access denied: '+escapeHtml(e.message));
+      return;
+    }
+    scanVideo.srcObject = cameraStream;
+    try{ await scanVideo.play(); }catch(e){}
+    btnScan.hidden = true; scanFallback.hidden = true; scanLive.hidden = false;
+    scanLoop();
+  }
+
+  let barcodeDetector;
+  function getBarcodeDetector(){
+    if(barcodeDetector !== undefined) return barcodeDetector;
+    if(!('BarcodeDetector' in window)){ barcodeDetector = null; return null; }
+    try{ barcodeDetector = new window.BarcodeDetector({formats:['qr_code']}); }catch(e){ barcodeDetector = null; }
+    return barcodeDetector;
+  }
+
+  async function decodeViaZbarWasm(source, w0, h0){
+    if(!window.zbarWasm || !w0 || !h0) return null;
+    const scale = Math.min(1, 1000/Math.max(w0,h0));
+    const w = Math.round(w0*scale), h = Math.round(h0*scale);
+    scanCanvas.width = w; scanCanvas.height = h;
+    scanCtx.drawImage(source, 0, 0, w, h);
+    try{ const symbols = await window.zbarWasm.scanImageData(scanCtx.getImageData(0, 0, w, h)); if(symbols && symbols.length) return symbols[0].decode(); }catch(e){}
+    return null;
+  }
+
+  function jsqrFallback(source, w0, h0, scales){
+    if(!window.jsQR || !w0 || !h0) return null;
+    for(const target of scales){
+      const scale = Math.min(1, target/Math.max(w0,h0));
+      const w = Math.round(w0*scale), h = Math.round(h0*scale);
+      scanCanvas.width = w; scanCanvas.height = h;
+      scanCtx.drawImage(source, 0, 0, w, h);
+      const code = window.jsQR(scanCtx.getImageData(0, 0, w, h).data, w, h, {inversionAttempts:'attemptBoth'});
+      if(code && code.data) return code.data;
+    }
+    return null;
+  }
+
+  async function decodeSource(source, w0, h0, scales){
+    const viaZbar = await decodeViaZbarWasm(source, w0, h0);
+    if(viaZbar) return viaZbar;
+    const bd = getBarcodeDetector();
+    if(bd){ try{ const r = await bd.detect(source); if(r && r.length) return r[0].rawValue; }catch(e){} }
+    return jsqrFallback(source, w0, h0, scales);
+  }
+
+  const LIVE_SCALES = [500, 900];
+  let liveBusy = false;
+  async function scanLoop(){
+    scanRAF = requestAnimationFrame(scanLoop);
+    if(scanVideo.readyState !== scanVideo.HAVE_ENOUGH_DATA) return;
+    if(liveBusy) return;
+    const w = scanVideo.videoWidth, h = scanVideo.videoHeight;
+    if(!w || !h) return;
+    liveBusy = true;
+    try{ const v = await decodeSource(scanVideo, w, h, LIVE_SCALES); if(v) handleScanResult(v); }finally{ liveBusy = false; }
+  }
+
+  function loadViaImageElement(file){
+    return new Promise((r,x)=>{
+      const img = new Image();
+      const url = URL.createObjectURL(file);
+      img.onload = ()=>{ URL.revokeObjectURL(url); r(img); };
+      img.onerror = ()=>{ URL.revokeObjectURL(url); x(new Error('img failed')); };
+      img.src = url;
+    });
+  }
+
+  async function loadImage(file){
+    if(window.createImageBitmap){ try{ return await createImageBitmap(file); }catch(e){} }
+    return loadViaImageElement(file);
+  }
+
+  const FILE_SCALES = [350, 500, 700, 900, 1200];
+
+  async function scanFromFile(file){
+    formMsg.innerHTML = '<div class="msg ok">Reading code…</div>';
+    let img;
+    try{ img = await loadImage(file); }catch(e){
+      formMsg.innerHTML = '<div class="msg err">Could not read that photo — try again or use JPG/PNG.</div>';
+      return;
+    }
+    if(!img.width || !img.height){ formMsg.innerHTML = '<div class="msg err">That photo came back empty — try again.</div>'; return; }
+    const v = await decodeSource(img, img.width, img.height, FILE_SCALES);
+    if(v){ handleScanResult(v); }else{
+      formMsg.innerHTML = '<div class="msg err">No QR code found in that photo — make sure the whole code is in frame and try again.</div>';
+    }
+  }
+
+  btnScan.addEventListener('click', startLiveScan);
+  el('btn-cancel-scan').addEventListener('click', resetScanUI);
+  el('btn-cancel-fallback').addEventListener('click', resetScanUI);
+  scanFile.addEventListener('change', (e)=>{ const f = e.target.files[0]; e.target.value = ''; if(f) scanFromFile(f); });
+
+  el('btn-back').addEventListener('click', ()=>{ pending = null; showStage('idle'); });
+
+  el('btn-confirm').addEventListener('click', async ()=>{
+    if(!pending) return;
+    if(!db){ confirmMsg.innerHTML = '<div class="msg err">Database not initialized</div>'; return; }
+    // Sign-in is required to submit (anonymous submission was retired) -- wait for auth to
+    // actually settle first, since a QR-scan deep link opens straight into this confirm screen
+    // and a fast click can otherwise race the still-resolving sign-in check.
+    if(window.NGPC_AUTH) await NGPC_AUTH.authReady;
+    const authedUser = window.NGPC_AUTH && NGPC_AUTH.currentUser;
+    if(!authedUser || !authedUser.username){
+      confirmMsg.innerHTML = '<div class="msg err">Sign in to submit a score.'
+        +' <button type="button" class="btn-secondary" id="confirm-signin-btn" style="width:auto;display:inline;margin:0 0 0 6px;padding:4px 10px">Sign In</button></div>';
+      const signinBtn = el('confirm-signin-btn');
+      if(signinBtn) signinBtn.addEventListener('click', ()=>{ if(window.NGPC_AUTH) NGPC_AUTH.openSignInModal('signin'); });
+      return;
+    }
+    const btn = el('btn-confirm');
+    btn.disabled = true;
+    confirmMsg.innerHTML = '<div class="msg ok">Submitting…</div>';
+    const record = {
+      game: QR_GAME_CODE,
+      difficulty: pending.difficulty,
+      time: pending.time,
+      misses: pending.misses,
+      source: 'qr',
+      submittedAt: Date.now(),
+      uid: authedUser.uid,
+      username: authedUser.username,
+      approved: !!authedUser.approved,
+    };
+    try{
+      const res = await writeScore(record);
+      btn.disabled = false;
+      if(res.ok){
+        el('success-text').textContent = DIFF_NAMES[pending.difficulty] + ' — ' + fmtTime(pending.time) + ' submitted to the leaderboard.';
+        pending = null;
+        showStage('success');
+      } else {
+        confirmMsg.innerHTML = '<div class="msg err">Write failed: '+escapeHtml(res.error?.message || 'unknown')+'</div>';
+      }
+    }catch(e){
+      btn.disabled = false;
+      confirmMsg.innerHTML = '<div class="msg err">Submit error: '+escapeHtml(e.message)+'</div>';
+    }
+  });
+
+  el('btn-again').addEventListener('click', ()=>{ pending = null; showStage('idle'); });
+
+  if(window.NGPC_AUTH){
+    NGPC_AUTH.onAuthChange((user)=>{
+      // Members only -- gates the whole scan mechanism, not just the final submit step.
+      el('idle-view').hidden = !user;
+      el('scan-signin-required').hidden = !!user;
+      if(!user) resetScanUI();
+    });
+    el('scan-signin-btn').addEventListener('click', ()=>NGPC_AUTH.openSignInModal('signin'));
+
+    // Points the "Download ROM" link at the developer-uploaded build (games/sd.romPath) --
+    // there's no repo-committed static fallback for a submitted-not-built-in game like this one.
+    (function(){
+      var romLinkEl = el('rom-link');
+      if(!romLinkEl || !NGPC_AUTH.db) return;
+      NGPC_AUTH.db.collection('games').doc('sd').get().then(function(doc){
+        if(doc.exists && doc.data().romPath) romLinkEl.href = doc.data().romPath;
+        else romLinkEl.hidden = true;
+      }).catch(function(){ romLinkEl.hidden = true; });
+    })();
+  }
+
+  initDb();
+
+  const fromEntry = payloadFromEntry();
+  if(fromEntry){
+    setDiff(fromEntry.difficulty);
+    openConfirm(fromEntry);
+    history.replaceState(null, '', location.pathname);
+  }
+})();
+</script>
+
+</body>
+</html>

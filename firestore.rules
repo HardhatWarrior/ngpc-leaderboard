@@ -288,7 +288,28 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data);
+      // Sudoku: game, difficulty (E/M/H), time (seconds, 1-5 digits per the submission's own
+      // spec), misses (3-digit zero-padded mistake count), source, submittedAt, required
+      // uid/username -- no initials field, unlike every other game here; Sudoku's own high-score
+      // flow doesn't collect device-typed initials (see sd/index.html's own comment for the
+      // submitted payload's other quirk: it doesn't repeat the "SD" game code the way every other
+      // game's payload text does). Sorted ascending by time (faster wins), scoped to one
+      // difficulty at a time -- approved via /dev/submit/ -> admin/index.html's submission review,
+      // same path any future developer submission goes through.
+      function isSudokuScore(d) {
+        return d.game == 'SD'
+          && d.keys().hasOnly(['game', 'difficulty', 'time', 'misses', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.difficulty is string && d.difficulty in ['E', 'M', 'H']
+          && d.time is int && d.time >= 0 && d.time <= 99999
+          && d.misses is int && d.misses >= 0 && d.misses <= 999
+          && d.source is string && d.source == 'qr'
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
+      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data);
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
