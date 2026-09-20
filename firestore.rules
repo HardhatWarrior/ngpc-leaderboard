@@ -366,9 +366,10 @@ service cloud.firestore {
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --
       // anonymous QR submissions have no uid at all, so resource.data.uid == request.auth.uid is
       // false for them (never true against a signed-in caller's uid), and they stay undeletable
-      // by anyone.
+      // by anyone except the admin. isAdmin() also covers admin/index.html's own site-wide
+      // "All Submissions" panel, which needs to delete any score regardless of submitter.
       allow delete: if request.auth != null
-        && ('uid' in resource.data) && resource.data.uid == request.auth.uid;
+        && (('uid' in resource.data) && resource.data.uid == request.auth.uid || isAdmin());
     }
 
     // games/{slug} is the main page's authoritative tile data (name, dev status, ROM location,
