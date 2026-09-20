@@ -201,7 +201,7 @@
 
     <section class="panel" id="submit-panel">
       <h2>Submit a score</h2>
-      <p class="hint" id="submit-hint">Scores only come in by scanning the QR code the game shows after a completed game &mdash; there's no manual entry, so every row on the board is a real result.</p>
+      <p class="hint" id="submit-hint">Scores only come in by scanning the QR code the game shows after a completed game &mdash; there's no manual entry, so every row on the board is a real result. You must be signed in to submit.</p>
 
       <div id="idle-view">
         <button class="btn-primary" id="btn-scan">Scan QR Code</button>
@@ -630,6 +630,18 @@
       confirmMsg.innerHTML = '<div class="msg err">'+friendlyDbError()+'</div>';
       return;
     }
+    // Sign-in is required to submit (anonymous submission was retired) -- wait for auth to
+    // actually settle first, since a QR-scan deep link opens straight into this confirm screen
+    // and a fast click can otherwise race the still-resolving sign-in check.
+    if(window.NGPC_AUTH) await NGPC_AUTH.authReady;
+    const authedUser = window.NGPC_AUTH && NGPC_AUTH.currentUser;
+    if(!authedUser || !authedUser.username){
+      confirmMsg.innerHTML = '<div class="msg err">Sign in to submit a score.'
+        +' <button type="button" class="btn-secondary" id="confirm-signin-btn" style="width:auto;display:inline;margin:0 0 0 6px;padding:4px 10px">Sign In</button></div>';
+      const signinBtn = el('confirm-signin-btn');
+      if(signinBtn) signinBtn.addEventListener('click', ()=>{ if(window.NGPC_AUTH) NGPC_AUTH.openSignInModal('signin'); });
+      return;
+    }
     const btn = el('btn-confirm');
     btn.disabled = true;
     confirmMsg.innerHTML = '';
@@ -641,17 +653,9 @@
       level: pending.level,
       source: 'qr',
       submittedAt: Date.now(),
+      uid: authedUser.uid,
+      username: authedUser.username,
     };
-    // Attach who submitted this only if signed in -- anonymous QR submission (no account at all)
-    // keeps working exactly as before; username is purely additive.
-    // Wait for auth to actually settle first -- a QR-scan deep link opens straight into this
-    // confirm screen, and a fast submit can otherwise race the still-resolving sign-in check.
-    if(window.NGPC_AUTH) await NGPC_AUTH.authReady;
-    const authedUser = window.NGPC_AUTH && NGPC_AUTH.currentUser;
-    if(authedUser && authedUser.username){
-      scoreDoc.uid = authedUser.uid;
-      scoreDoc.username = authedUser.username;
-    }
     const res = await writeScore(scoreDoc);
     btn.disabled = false;
     if(res.ok){

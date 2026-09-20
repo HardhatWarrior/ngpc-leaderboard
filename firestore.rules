@@ -69,21 +69,20 @@ service cloud.firestore {
       // Public leaderboard -- anyone can read, signing in is never required to browse.
       allow read: if true;
 
-      // A score's uid/username pair is optional (anonymous QR submission keeps working exactly
-      // as before) but when present must be internally consistent and can't be spoofed: both
-      // fields travel together, uid must match the actual signed-in caller, and username is
-      // still shape-checked even though it's just a denormalized copy of users/{uid}.username
-      // (not re-verified against that doc -- acceptable here since it can only ever be set to
-      // request.auth's OWN uid, so at worst a stale username after a future rename, not another
-      // user's identity).
+      // Sign-in is required to submit a score (anonymous QR submission was retired) -- uid and
+      // username must both be present and can't be spoofed: uid must match the actual signed-in
+      // caller, and username is shape-checked even though it's just a denormalized copy of
+      // users/{uid}.username (not re-verified against that doc -- acceptable here since it can
+      // only ever be set to request.auth's OWN uid, so at worst a stale username after a future
+      // rename, not another user's identity).
       function hasValidIdentity(d) {
-        return (('uid' in d) == ('username' in d))
-          && (!('uid' in d) || (request.auth != null && request.auth.uid == d.uid))
-          && (!('username' in d) || (d.username is string && d.username.matches('^[A-Za-z0-9_]{3,16}$')));
+        return ('uid' in d) && ('username' in d)
+          && request.auth != null && request.auth.uid == d.uid
+          && d.username is string && d.username.matches('^[A-Za-z0-9_]{3,16}$');
       }
 
       // Matches the object lb/index.html's writeScore() builds (game, initials, score, weight,
-      // rolls, source, submittedAt, plus optional uid/username from auth.js).
+      // rolls, source, submittedAt, plus required uid/username from auth.js).
       function isBowlingScore(d) {
         return d.game == 'BW'
           && d.keys().hasOnly(['game', 'initials', 'score', 'weight', 'rolls', 'source', 'submittedAt', 'uid', 'username'])
@@ -99,7 +98,7 @@ service cloud.firestore {
       }
 
       // Matches tetris/index.html's writeScore() call (game, initials, score, lines, level,
-      // source, submittedAt, plus optional uid/username) -- field widths mirror the on-device QR
+      // source, submittedAt, plus required uid/username) -- field widths mirror the on-device QR
       // payload's own fixed-width digit fields (8-digit score, 5-digit lines, 3-digit level; see
       // Tetris's main.c qr_build_payload()).
       function isTetrisScore(d) {
@@ -117,7 +116,7 @@ service cloud.firestore {
       }
 
       // Yahtzee: game, initials, score, categoryScores (13 ints), source, submittedAt,
-      // optional uid/username.
+      // required uid/username.
       function isYahtzeeScore(d) {
         return d.game == 'YZ'
           && d.keys().hasOnly(['game', 'initials', 'score', 'categoryScores', 'source', 'submittedAt', 'uid', 'username'])
@@ -145,7 +144,7 @@ service cloud.firestore {
       }
 
       // Farkle: game, initials, score, rounds, opened, farkles, resultChar, resultDisplay,
-      // source, submittedAt, optional uid/username.
+      // source, submittedAt, required uid/username.
       function isFarkleScore(d) {
         return d.game == 'FK'
           && d.keys().hasOnly(['game', 'initials', 'score', 'rounds', 'opened', 'farkles', 'resultChar', 'resultDisplay', 'source', 'submittedAt', 'uid', 'username'])
@@ -163,7 +162,7 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      // 2048: game, initials, score, moves, source, submittedAt, optional uid/username -- field
+      // 2048: game, initials, score, moves, source, submittedAt, required uid/username -- field
       // widths mirror the on-device QR payload's own fixed-width digit fields (5-digit score,
       // 4-digit moves; see 2048's main.c qr_build_payload()).
       function is2048Score(d) {
@@ -181,7 +180,7 @@ service cloud.firestore {
 
       // Over Rev: game, initials (1-8 chars, not 3 -- this game's QR carries a free-typed name,
       // not fixed initials), rules/course/car/tune/mode/difficulty/transmission/ticks/won/
-      // localRecord/event/sequence/raw, source, submittedAt, optional uid/username. Sorted
+      // localRecord/event/sequence/raw, source, submittedAt, required uid/username. Sorted
       // ascending by ticks on the leaderboard (lower is better), unlike every other game here.
       // Shape/bounds only -- does not re-verify the OV1 Base32/CRC24 encoding itself; see
       // overrev-leaderboard-kit/README.md for why that's a client-side-only guarantee.
@@ -210,7 +209,7 @@ service cloud.firestore {
 
       // Gardenia: game, mode (1 Picnic/2 Gardener/3 Landscaper), initials, score,
       // startLevel/levelReached (info only, not re-derived or bounds-checked against each other),
-      // source, submittedAt, optional uid/username. Field widths mirror the author's own QR
+      // source, submittedAt, required uid/username. Field widths mirror the author's own QR
       // spec's fixed-width digit fields (5-digit score, 2-digit level fields). Sorted descending
       // by score, scoped to one mode at a time -- see gardenia/index.html's own board query.
       function isGardeniaScore(d) {

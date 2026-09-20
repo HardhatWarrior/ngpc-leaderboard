@@ -672,15 +672,29 @@ window.NGPC_AUTH = (function(){
     });
   }
 
+  // Captured by boot() once the modal exists -- boot() itself may run on a deferred
+  // DOMContentLoaded, so a page calling openSignInModal() in immediate response to a user action
+  // (e.g. "you must sign in to submit") needs a level of indirection rather than a direct
+  // reference grabbed before boot() has necessarily run. In practice boot() has always completed
+  // by the time any real user interaction fires (DOMContentLoaded is early), so this is a safety
+  // net, not a real race.
+  let s_modal = null;
   function boot(){
     injectStyle();
-    const modal = injectModal();
-    injectAccountBar(modal);
+    s_modal = injectModal();
+    injectAccountBar(s_modal);
   }
   if(document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', boot);
   } else {
     boot(); // #shell already parsed -- this file's own <script> tag is placed after it on every page
+  }
+
+  // Opens the same sign-in/sign-up modal the account bar's own button uses -- for any page that
+  // needs to require sign-in before an action (e.g. submitting a score now that anonymous
+  // submission has been retired; see each game page's own writeScore()/submit handler).
+  function openSignInModal(initialMode){
+    if(s_modal) s_modal.openModal(initialMode || 'signin');
   }
 
   return {
@@ -692,7 +706,7 @@ window.NGPC_AUTH = (function(){
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,
     friendlyAuthError, escapeHtml,
     scoreHasDetail, scoreDetailHTML, scoreInlineMeta, scoreValueDisplay,
-    authReady,
+    authReady, openSignInModal,
     get currentUser(){ return currentUser; }
   };
 })();
