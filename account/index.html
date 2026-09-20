@@ -217,7 +217,7 @@
   <div id="account-content" hidden>
     <section class="panel">
       <h2>Your Submissions</h2>
-      <p class="hint">Every score you've submitted while signed in, click one with a scorecard to expand it. Deleting one removes it from its game's leaderboard permanently.</p>
+      <p class="hint">Every score you've submitted while signed in, click one with a scorecard to expand it. Deleting one removes it from its game's leaderboard permanently. A score submitted before your account is approved won't show up here until it is.</p>
       <div class="sub-controls">
         <span class="sub-controls-label">Sort by</span>
         <button type="button" class="sub-sort-btn" data-sort="date">Date <span class="sort-arrow"></span></button>
@@ -422,10 +422,14 @@
     if(!user) return;
     subStatus.textContent = 'Loading…';
     try{
-      // No .orderBy() here on purpose -- pairing it with the .where('uid',...) filter needs a
+      // No .orderBy() here on purpose -- pairing it with the .where() filters below needs a
       // composite index Firestore won't build automatically, so this sorts client-side instead
       // (a signed-in user's own score count is small enough that this is cheap either way).
-      const snap = await A.db.collection('scores').where('uid','==',user.uid).get();
+      // approved:true is required, not optional -- firestore.rules' scores read rule has no
+      // "owner can read their own" clause (that shape of rule breaks list() queries entirely,
+      // see its own comment), so a still-pending score can't be fetched here at all yet; it'll
+      // show up as soon as the admin approves the account, not before.
+      const snap = await A.db.collection('scores').where('uid','==',user.uid).where('approved','==',true).get();
       allSubs = snap.docs.slice();
       sortSubs();
       subStatus.textContent = '';

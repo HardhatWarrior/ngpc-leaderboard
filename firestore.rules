@@ -130,17 +130,26 @@ service cloud.firestore {
       // what actually keeps a non-compliant doc from ever being fetched. A pre-sign-in-required
       // score with no uid at all (from before that policy) has no submitter to gate on, so it
       // stays visible as-is (backfilled with approved:true -- see backfill-score-approved.js).
-      // Deliberately does NOT also add an "owner can always read their own" clause here even
-      // though that seems like an obvious addition (account/index.html's "Your Submissions" list
-      // wanting to show a still-pending account's own scores back to them) -- mixing a
-      // request.auth-comparison into this OR breaks the "provably filterable" property list()
-      // queries need: confirmed in production, admin/index.html's approve/revoke fan-out
-      // (.where('uid','==',uid).get(), run by the admin, uid far from ever being request.auth.uid)
-      // started throwing a flat permission-denied for the WHOLE query the moment that clause was
-      // added, not just excluding non-matching docs the way a pure resource.data-field rule does.
-      // "Your Submissions" showing a still-pending score is a known, pre-existing gap, not
-      // something this rule can safely fix without breaking something else that already works.
-      allow read: if !('uid' in resource.data) || resource.data.approved == true;
+      // Deliberately does NOT add an "owner can always read their own" clause here even though
+      // that seems like an obvious addition (account/index.html's "Your Submissions" list wanting
+      // to show a still-pending account's own scores back to them) -- mixing a
+      // request.auth-uid-vs-resource.data-field comparison into this OR breaks the "provably
+      // filterable" property list() queries need: confirmed in production, a plain
+      // .where('uid','==',someUid).get() (no other filter) started throwing a flat
+      // permission-denied for the WHOLE query the moment that clause existed, for EVERY caller
+      // (not just cross-user queries) -- Firestore's query-safety check is evaluated statically
+      // against the rule text as a whole, not per specific query, so one unprovable OR-branch
+      // poisons list() access to the entire collection. isAdmin() does NOT have this problem --
+      // it depends only on request.auth, never on resource.data, so it stays a fixed true/false
+      // for a given caller across every document, which Firestore CAN prove safe (this is the
+      // same reason every other collection's isAdmin()-gated read/write in this file works fine
+      // for queries). That's what makes admin/index.html's approve/revoke fan-out
+      // (.where('uid','==',uid).get(), no approved filter, needs to see NOT-yet-approved docs to
+      // flip them) possible at all. "Your Submissions" still can't show a still-pending score --
+      // the account page isn't the admin -- so its own query adds an explicit
+      // .where('approved','==',true) instead, same pattern as every board query, trading
+      // "shows only approved" for "doesn't error."
+      allow read: if !('uid' in resource.data) || resource.data.approved == true || isAdmin();
 
       // A score's uid/username pair is required (anonymous QR submission was retired) and can't
       // be spoofed: uid must match the actual signed-in caller, and username is shape-checked even
