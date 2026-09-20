@@ -200,17 +200,19 @@
   let db = null, pending = null, unsubscribeBoard = null;
 
   // Payload (per the submitted spec, NOT a fixed-width binary encoding like this site's other
-  // games): a space-separated "KEY-VALUE" list -- DIFF-<E/M/H>, TIME-<1-5 digit seconds>,
-  // MISS-<3-digit zero-padded mistake count>. No initials field -- unlike every other game here,
-  // Sudoku's own high-score flow doesn't collect device-typed initials, so the board identifies
-  // a run by the submitter's site account only. Example from the submission:
-  // "NGPC-DEV.COM/SD/DIFF-E TIME-123 MISS-02" -- note the payload segment itself does NOT repeat
-  // the "SD" game code the way every other game's does, so a code read via this site's OWN
-  // universal scanner (index.html / another game's in-browser player) won't auto-route here the
-  // way it does for other games -- only a direct scan landing on /sd/ (the real on-device
-  // QR_URL_PREFIX) works today. Flagged as a known gap, not fixed here.
+  // games): 2-char game code immediately followed by a space-separated "KEY-VALUE" list --
+  // DIFF-<E/M/H>, TIME-<1-5 digit seconds>, MISS-<3-digit zero-padded mistake count>. No
+  // initials field -- unlike every other game here, Sudoku's own high-score flow doesn't collect
+  // device-typed initials, so the board identifies a run by the submitter's site account only.
+  // Real device output: "NGPC-DEV.COM/SD/SDDIFF-E TIME-123 MISS-002" -- the payload segment
+  // repeats "SD" right after the URL prefix, same convention as every other game's own QR (e.g.
+  // Tetris's own payload starts "TT..."), so this site's universal scanner (index.html / another
+  // game's in-browser player) can identify and route a Sudoku code the same way it does for any
+  // other game. An earlier device build left that repeat out, which broke exactly that; fixed in
+  // Sudoku's own main.c qr_build_payload(), not patched around here.
   function parseSudokuPayload(text){
-    const tokens = text.trim().split(/\s+/);
+    if(text.slice(0,2) !== QR_GAME_CODE) return {error:'Unknown game code "'+text.slice(0,2)+'".'};
+    const tokens = text.slice(2).trim().split(/\s+/);
     const fields = {};
     for(const tok of tokens){
       const dash = tok.indexOf('-');
