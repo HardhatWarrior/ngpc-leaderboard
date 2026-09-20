@@ -35,6 +35,14 @@
   .created-by{ font-size:11px; color:var(--dim); }
   .created-by a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .created-by a:hover{ color:var(--accent2); }
+  .play-link{
+    position:absolute; right:16px; bottom:37px;
+    display:inline-flex; align-items:center; gap:5px;
+    color:var(--accent2); font-size:11.5px; font-weight:600;
+    text-decoration:underline; text-underline-offset:2px;
+  }
+  .play-link:hover{ color:var(--cream); }
+  .play-link[hidden]{ display:none; }
   .rom-link{
     position:absolute; right:16px; bottom:14px;
     display:inline-flex; align-items:center; gap:5px;
@@ -114,6 +122,7 @@
       </div>
     </div>
     <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
+    <a href="/play/sd/" class="play-link" id="play-link" hidden>&#127918; Play Sudoku in Browser</a>
     <img src="https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/submissions%2FL44BFbmiNkhi2vvLdrPUIxkvmfs2%2FmnlUsVhEIlVF5Sb5Se0j%2Fscreenshot.png?alt=media&token=91a8407b-7127-41cf-9e8e-e207bd61c716" alt="Sudoku title screen" class="header-art">
   </header>
 
@@ -549,6 +558,7 @@
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();
+      el('play-link').hidden = !user;
     });
     el('scan-signin-btn').addEventListener('click', ()=>NGPC_AUTH.openSignInModal('signin'));
 
