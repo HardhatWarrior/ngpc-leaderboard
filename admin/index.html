@@ -64,6 +64,7 @@
   .badge.pending{ background:rgba(229,97,90,.18); color:var(--danger); }
   .badge.approved{ background:rgba(79,191,139,.18); color:var(--good); }
   .badge.disabled{ background:rgba(147,160,201,.18); color:var(--dim); margin-left:6px; }
+  .badge.wants-dev{ background:rgba(122,162,247,.18); color:var(--accent2,#7aa2f7); margin-left:6px; }
   button{
     font:inherit; border:none; border-radius:7px; padding:7px 12px; cursor:pointer;
     font-weight:600; font-size:11.5px; width:auto;
@@ -137,7 +138,7 @@
       <span class="chevron">&#9660;</span>
     </div>
     <div class="panel-body" id="games-body">
-      <p class="hint">Assign a developer (by username) to let them manage that game's dev status and ROM from <a href="/admin/game/">/admin/game/</a>, without ever touching this repo. Clearing the field removes their access.</p>
+      <p class="hint">Developer is set automatically when a game submission is approved (below) -- whoever manages that game's dev status and ROM from <a href="/admin/game/">/admin/game/</a>, without ever touching this repo.</p>
       <div id="games-status"></div>
       <div style="overflow-x:auto">
         <table>
@@ -230,6 +231,7 @@
         username: d.username || '(unknown)',
         createdAt: d.createdAt || null,
         approved: d.approved === undefined ? true : !!d.approved,
+        wantsDev: !!d.wantsDev,
         disabled: !!d.disabled,
         avatar: Array.isArray(d.avatar) ? d.avatar : null,
         email: null,
@@ -255,11 +257,21 @@
   function renderStats(users){
     const pending = users.filter(u=>!u.approved).length;
     const disabled = users.filter(u=>u.disabled).length;
+    const wantsDev = users.filter(u=>u.wantsDev).length;
     statsEl.innerHTML = [
       ['Total players', users.length],
       ['Pending approval', pending],
       ['Disabled', disabled],
+      ['Want to dev', wantsDev],
     ].map(([label,n])=>'<div class="stat-tile"><div class="n tnum">'+n+'</div><div class="l">'+label+'</div></div>').join('');
+  }
+
+  function renderStatusCell(u){
+    return (u.approved
+      ? '<span class="badge approved">Approved</span>'
+      : '<span class="badge pending">Pending</span>')
+      + (u.disabled ? '<span class="badge disabled">Disabled</span>' : '')
+      + (u.wantsDev ? '<button type="button" class="badge wants-dev" data-action="clear-dev" data-uid="'+u.uid+'" title="Checked &quot;I\'d like to submit a game&quot; at signup -- click to clear (e.g. if mis-clicked)">Wants Dev &times;</button>' : '');
   }
 
   function renderRows(users, db){
@@ -267,10 +279,6 @@
       const avatarHtml = u.avatar
         ? '<canvas class="row-avatar" data-avatar-uid="'+u.uid+'"></canvas>'
         : '<div class="row-avatar"></div>';
-      const statusBadge = u.approved
-        ? '<span class="badge approved">Approved</span>'
-        : '<span class="badge pending">Pending</span>';
-      const disabledBadge = u.disabled ? '<span class="badge disabled">Disabled</span>' : '';
       const actionBtn = u.approved
         ? '<button type="button" class="btn-revoke" data-action="revoke" data-uid="'+u.uid+'">Revoke</button>'
         : '<button type="button" class="btn-approve" data-action="approve" data-uid="'+u.uid+'">Approve</button>';
@@ -278,7 +286,7 @@
         '<td><div class="col-user">'+avatarHtml+'<span class="username"><a href="/user/?u='+encodeURIComponent(u.username)+'">'+escapeHtml(u.username)+'</a></span></div></td>'+
         '<td class="tnum">'+fmtWhen(u.createdAt)+'</td>'+
         '<td class="email-cell">'+(u.email ? escapeHtml(u.email) : '&mdash;')+'</td>'+
-        '<td>'+statusBadge+disabledBadge+'</td>'+
+        '<td>'+renderStatusCell(u)+'</td>'+
         '<td>'+actionBtn+'</td>'+
       '</tr>';
     }).join('');
@@ -289,32 +297,47 @@
     });
 
     async function onActionClick(e){
-      const btn = e.currentTarget;
+      const btn = e.target.closest('button[data-action]');
+      if(!btn || !rowsEl.contains(btn)) return;
       const uid = btn.dataset.uid;
-      const approve = btn.dataset.action === 'approve';
+      const action = btn.dataset.action;
+      const u = users.find(x=>x.uid===uid);
+      const row = rowsEl.querySelector('tr[data-row-uid="'+uid+'"]');
+      if(action === 'clear-dev'){
+        if(!confirm('Clear this player\'s dev-interest flag?')) return;
+        btn.disabled = true;
+        try{
+          await db.collection('users').doc(uid).update({wantsDev: false});
+          u.wantsDev = false;
+          if(row) row.querySelector('td:nth-child(4)').innerHTML = renderStatusCell(u);
+        }catch(err){
+          statusEl.innerHTML = '<div class="msg err">Update failed: '+escapeHtml(err.message||'unknown')+'</div>';
+          btn.disabled = false;
+        }
+        return;
+      }
+      const approve = action === 'approve';
       if(!approve && !confirm('Revoke approval for this player? Their scores will disappear from the public boards until re-approved.')) return;
       btn.disabled = true;
       try{
         await db.collection('users').doc(uid).update({approved: approve});
-        const row = rowsEl.querySelector('tr[data-row-uid="'+uid+'"]');
+        u.approved = approve;
         if(row){
-          row.querySelector('td:nth-child(4)').innerHTML = approve
-            ? '<span class="badge approved">Approved</span>'
-            : '<span class="badge pending">Pending</span>';
+          row.querySelector('td:nth-child(4)').innerHTML = renderStatusCell(u);
           const cell = row.querySelector('td:last-child');
           cell.innerHTML = approve
             ? '<button type="button" class="btn-revoke" data-action="revoke" data-uid="'+uid+'">Revoke</button>'
             : '<button type="button" class="btn-approve" data-action="approve" data-uid="'+uid+'">Approve</button>';
-          cell.querySelector('button').addEventListener('click', onActionClick);
         }
       }catch(e){
         statusEl.innerHTML = '<div class="msg err">Update failed: '+escapeHtml(e.message||'unknown')+'</div>';
         btn.disabled = false;
       }
     }
-    rowsEl.querySelectorAll('button[data-action]').forEach(btn=>{
-      btn.addEventListener('click', onActionClick);
-    });
+    // Delegated on the table body itself, not per-button -- rows get their innerHTML replaced
+    // wholesale on every action (status cell AND action cell), so per-button listeners would go
+    // stale the moment any button in a row is clicked.
+    rowsEl.addEventListener('click', onActionClick);
   }
 
   function statusLabel(s){
@@ -330,44 +353,18 @@
     games.sort((a,b)=>(a.name||a.slug).localeCompare(b.name||b.slug));
     gamesStatusEl.textContent = '';
 
-    async function onSaveClick(e){
-      const btn = e.currentTarget;
-      const slug = btn.dataset.slug;
-      const input = gamesRowsEl.querySelector('input[data-slug="'+slug+'"]');
-      const usernameRaw = input.value.trim();
-      btn.disabled = true;
-      gamesStatusEl.innerHTML = '';
-      try{
-        if(!usernameRaw){
-          await db.collection('games').doc(slug).update({developerUid: null});
-        } else {
-          const nameDoc = await db.collection('usernames').doc(usernameRaw.toLowerCase()).get();
-          if(!nameDoc.exists){
-            gamesStatusEl.innerHTML = '<div class="msg err">No user found with username "'+escapeHtml(usernameRaw)+'".</div>';
-            btn.disabled = false;
-            return;
-          }
-          await db.collection('games').doc(slug).update({developerUid: nameDoc.data().uid});
-        }
-        gamesStatusEl.innerHTML = '<div class="msg ok">Saved.</div>';
-      }catch(e){
-        gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml((e&&e.message)||'unknown error')+'</div>';
-      }finally{
-        btn.disabled = false;
-      }
-    }
-
+    // Read-only: developerUid is now always set the moment a submission is approved (see
+    // onApprove below, which stamps it from the submission's own submitterUid), so there's no
+    // longer a manual-assignment case for this table to support.
     gamesRowsEl.innerHTML = games.map(g=>{
-      const currentDevName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '';
+      const currentDevName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '—';
       return '<tr>'+
         '<td>'+escapeHtml(g.name||g.slug)+'</td>'+
         '<td>'+statusLabel(g.devStatus)+'</td>'+
-        '<td><div class="dev-cell"><input type="text" class="dev-input" data-slug="'+g.slug+'" placeholder="username" value="'+escapeHtml(currentDevName)+'">'+
-          '<button type="button" class="btn-save" data-slug="'+g.slug+'">Save</button></div></td>'+
+        '<td>'+escapeHtml(currentDevName)+'</td>'+
         '<td><a href="/admin/game/?slug='+encodeURIComponent(g.slug)+'">Manage</a></td>'+
       '</tr>';
     }).join('');
-    gamesRowsEl.querySelectorAll('button[data-slug]').forEach(btn=>btn.addEventListener('click', onSaveClick));
   }
 
   async function loadAndRenderSubmissions(db){

@@ -51,7 +51,7 @@ window.NGPC_AUTH = (function(){
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  async function signUp(usernameRaw, password, recoveryEmailRaw){
+  async function signUp(usernameRaw, password, recoveryEmailRaw, wantsDev){
     const username = (usernameRaw||'').trim();
     if(!USERNAME_RE.test(username)){
       throw {code:'invalid-username', message:'Usernames are 3-16 characters: letters, numbers, underscore only.'};
@@ -63,7 +63,9 @@ window.NGPC_AUTH = (function(){
     // approved:false always -- an account can sign in and submit scores right away, but stays
     // off the public boards until the admin approves it (see firestore.rules' submitterApproved()
     // on the scores collection). Only isAdmin() can ever flip this bit; a client can't self-approve.
-    const profile = { username, usernameLower, createdAt: Date.now(), avatar: DEFAULT_AVATAR, approved: false };
+    // wantsDev is just a self-reported "I'd like to submit a game" flag for the admin dashboard --
+    // it grants nothing by itself, see firestore.rules' comment on users/{uid}.
+    const profile = { username, usernameLower, createdAt: Date.now(), avatar: DEFAULT_AVATAR, approved: false, wantsDev: !!wantsDev };
     const recoveryEmail = (recoveryEmailRaw||'').trim();
     if(recoveryEmail) profile.recoveryEmail = recoveryEmail;
     try{
@@ -573,6 +575,8 @@ window.NGPC_AUTH = (function(){
       color:var(--cream); border-radius:7px; padding:9px 10px; font:inherit; font-size:13px; box-sizing:border-box;
     }
     #auth-form input:focus{ outline:none; border-color:var(--accent2); }
+    .auth-checkbox-label{ display:flex !important; align-items:center; gap:7px; }
+    .auth-checkbox-label input{ display:inline; width:auto; margin:0; }
   `;
 
   const MODAL_HTML = `
@@ -587,6 +591,7 @@ window.NGPC_AUTH = (function(){
           <label>Username<input id="auth-username" autocomplete="username" required maxlength="16"></label>
           <label>Password<input id="auth-password" type="password" autocomplete="current-password" required minlength="6"></label>
           <label id="auth-email-label" hidden>Recovery email (optional)<input id="auth-email" type="email" autocomplete="email"></label>
+          <label id="auth-dev-label" class="auth-checkbox-label" hidden><input id="auth-wants-dev" type="checkbox"> I'd like to submit a game as a developer</label>
           <button type="submit" class="btn-primary" id="auth-submit">Sign In</button>
           <div id="auth-msg"></div>
         </form>
@@ -606,6 +611,7 @@ window.NGPC_AUTH = (function(){
     const form = document.getElementById('auth-form');
     const tabs = Array.from(document.querySelectorAll('.auth-tab'));
     const emailLabel = document.getElementById('auth-email-label');
+    const devLabel = document.getElementById('auth-dev-label');
     const submitBtn = document.getElementById('auth-submit');
     const msg = document.getElementById('auth-msg');
     let mode = 'signin';
@@ -614,6 +620,7 @@ window.NGPC_AUTH = (function(){
       mode = m;
       tabs.forEach(t=>t.classList.toggle('active', t.dataset.mode===m));
       emailLabel.hidden = (m !== 'signup');
+      devLabel.hidden = (m !== 'signup');
       submitBtn.textContent = m==='signup' ? 'Sign Up' : 'Sign In';
       msg.innerHTML = '';
     }
@@ -634,11 +641,12 @@ window.NGPC_AUTH = (function(){
       const username = document.getElementById('auth-username').value;
       const password = document.getElementById('auth-password').value;
       const email = document.getElementById('auth-email').value;
+      const wantsDev = document.getElementById('auth-wants-dev').checked;
       submitBtn.disabled = true;
       msg.innerHTML = '';
       try{
         if(mode==='signup'){
-          await signUp(username, password, email);
+          await signUp(username, password, email, wantsDev);
         } else {
           await signIn(username, password);
         }

@@ -1,0 +1,47 @@
+name: Flag updated ROMs
+
+# Runs whenever a ROM under play/*/*.ngp changes on main, and bumps that game's
+# games/{slug}.romUpdatedAt / updatedUntil in Firestore -- the same fields admin/game/'s manual
+# "Upload ROM" button sets, so pushing a new ROM here now gets the UPDATED badge for free instead
+# of needing a separate manual re-upload through the admin page.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'play/**/*.ngp'
+
+jobs:
+  flag-updated:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install script dependencies
+        working-directory: .github/scripts
+        run: npm install --omit=dev
+
+      - name: Detect changed ROM files
+        id: changed
+        run: |
+          CHANGED=$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} -- 'play/**/*.ngp')
+          echo "Changed ROM paths:"
+          echo "$CHANGED"
+          {
+            echo 'paths<<EOF'
+            echo "$CHANGED"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Flag changed games as updated
+        if: steps.changed.outputs.paths != ''
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node .github/scripts/flag-rom-updated.js ${{ steps.changed.outputs.paths }}

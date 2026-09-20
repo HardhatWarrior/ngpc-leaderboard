@@ -58,31 +58,37 @@ service cloud.firestore {
           && d.username.matches('^[A-Za-z0-9_]{3,16}$')
           && d.usernameLower == d.username.lower()
           && d.approved is bool
-          && (!('avatar' in d) || (d.avatar is list && d.avatar.size() == 1024));
+          && (!('avatar' in d) || (d.avatar is list && d.avatar.size() == 1024))
+          && (!('wantsDev' in d) || d.wantsDev is bool);
       }
 
       // New accounts always start unapproved (approved:false) -- nobody can self-approve at
       // signup; only isAdmin() can ever flip it true (see allow update below). Until approved,
       // the account can still sign in and submit scores (scores/{scoreId}'s own submitterApproved
       // check is what actually keeps those submissions off the public boards, not this).
+      // `wantsDev` is a self-reported "I'd like to submit games" checkbox at signup -- purely
+      // informational for the admin dashboard, grants nothing on its own (an actual developer
+      // still needs games/{slug}.developerUid set by the admin, same as before this existed).
       allow create: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved'])
+        && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved', 'wantsDev'])
         && request.resource.data.createdAt is int
         && request.resource.data.approved == false
         && isWellFormedProfile(request.resource.data);
 
       // Two distinct update paths, kept mutually exclusive by field scope:
       //  - the owner can change username/avatar (account page) but never their own `approved` bit
-      //  - the admin can flip ONLY `approved` on any account, never touch anything else about it
+      //  - the admin can flip `approved` and/or `wantsDev` on any account (the latter so the admin
+      //    can clear a stray/mis-clicked dev-interest flag), never touch anything else about it
       allow update: if request.auth != null && (
         (request.auth.uid == uid
-          && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved'])
+          && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved', 'wantsDev'])
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.approved == resource.data.approved
           && isWellFormedProfile(request.resource.data))
         || (isAdmin()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved'])
-          && request.resource.data.approved is bool)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved', 'wantsDev'])
+          && request.resource.data.approved is bool
+          && (!('wantsDev' in request.resource.data) || request.resource.data.wantsDev is bool))
       );
 
       allow delete: if false;
