@@ -407,6 +407,32 @@
         {field:'misses', type:'int, 0–999'},
       ],
     },
+    xn: {
+      thirdParty: true,
+      urlPrefix: '(none — bare text, not a URL)',
+      urlNote: 'Unlike every other game here, the raw QR text is NOT a URL at all — no scheme, no domain, no game folder. It begins directly with the 2-char game code. A generic phone camera app can’t auto-open this leaderboard the way it can for every other game; only this site’s own scanner (or the in-browser player’s screen capture) reads it. Per the developer’s own submitted spec.',
+      fields: [
+        {name:'Game code', width:'2', format:'fixed', notes:'"XN"'},
+        {name:'Initials', width:'3', format:'A-Z', notes:''},
+        {name:'Score', width:'7', format:'numeric, zero-padded', notes:'final total, not reconstructed from raw inputs — see scorecard note'},
+        {name:'Money', width:'5', format:'numeric, zero-padded', notes:'0–65,535, unspent cash at run end'},
+        {name:'Checkpoint', width:'2', format:'numeric, zero-padded', notes:'0–7, how far the run got'},
+        {name:'Lives left', width:'1', format:'numeric', notes:'0–9; >0 only on a completed run (0 on every game over)'},
+      ],
+      totalLength: '2 + 3 + 7 + 5 + 2 + 1 = 20 chars, fixed, no delimiters',
+      sortField: 'score (descending)',
+      scorecard: 'Score is sent as a final total — a scrolling shooter has no short list of replayable raw inputs the way Bowling’s rolls or Yahtzee’s categories do (developer’s own rationale). Checkpoint/lives/money are plausibility anchors and detail-view fields, not derived from score or each other; lives > 0 shows a completion badge. God-mode runs never produce a QR at all (enforced on-device), and a code is only offered on placing in the local top 10.',
+      example: 'XNBCA000185000250000',
+      exampleIsReal: true,
+      firestore: [
+        {field:'game', type:'"XN" (fixed)'},
+        {field:'initials', type:'string, ^[A-Z]{3}$'},
+        {field:'score', type:'int, 0–9,999,999'},
+        {field:'money', type:'int, 0–65,535'},
+        {field:'checkpoint', type:'int, 0–7'},
+        {field:'livesLeft', type:'int, 0–9'},
+      ],
+    },
   };
 
   function renderPayloadSpec(slug){

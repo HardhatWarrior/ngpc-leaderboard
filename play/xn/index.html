@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Sudoku Web Player</title>
+<title>Xenon 2 Web Player</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
@@ -80,7 +80,7 @@
 
 <div id="shell">
   <header>
-    <h1 class="px">SUDOKU WEB PLAYER</h1>
+    <h1 class="px">XENON 2 WEB PLAYER</h1>
     <p>Play in the window below, then hit Submit Score once the in-game QR code is on screen.</p>
   </header>
 
@@ -121,13 +121,13 @@
   async function loadEmulator(){
     if(emulatorRequested) return;
     emulatorRequested = true;
-    // Unlike every repo-committed game, Sudoku has no static fallback ROM here -- it was
-    // approved straight from a /dev/submit/ submission, so games/sd.romPath (Firebase Storage)
+    // Unlike every repo-committed game, Xenon 2 has no static fallback ROM here -- it was
+    // approved straight from a /dev/submit/ submission, so games/xn.romPath (Firebase Storage)
     // is the only source there is. No romPath means nothing to play.
     let gameUrl = null;
     try{
       if(window.NGPC_AUTH && NGPC_AUTH.db){
-        const doc = await NGPC_AUTH.db.collection('games').doc('sd').get();
+        const doc = await NGPC_AUTH.db.collection('games').doc('xn').get();
         if(doc.exists && doc.data().romPath) gameUrl = doc.data().romPath;
       }
     }catch(e){ /* leave gameUrl null -- handled below */ }

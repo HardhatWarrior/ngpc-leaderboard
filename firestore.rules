@@ -331,7 +331,31 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data);
+      // Xenon 2: game, initials, score, money, checkpoint, livesLeft, source, submittedAt,
+      // required uid/username. Third-party (firmware not in this workspace) -- shape/bounds only,
+      // per the developer's own submitted spec (fixed-width, no delimiters, no URL: the raw QR
+      // text is bare "XN" + fields, unlike every other game's URL-prefixed payload -- see
+      // xn/index.html's own parser comment). Score is sent as a final total, not reconstructed
+      // from raw inputs (a scrolling shooter has no short list of replayable events the way
+      // Bowling's rolls or Yahtzee's categories do, per the submission's own scorecardFormula);
+      // checkpoint/livesLeft/money are plausibility anchors and detail-view fields, not derived
+      // from score or from each other.
+      function isXenon2Score(d) {
+        return d.game == 'XN'
+          && d.keys().hasOnly(['game', 'initials', 'score', 'money', 'checkpoint', 'livesLeft', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.score is int && d.score >= 0 && d.score <= 9999999
+          && d.money is int && d.money >= 0 && d.money <= 65535
+          && d.checkpoint is int && d.checkpoint >= 0 && d.checkpoint <= 7
+          && d.livesLeft is int && d.livesLeft >= 0 && d.livesLeft <= 9
+          && d.source is string && d.source == 'qr'
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
+      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data);
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
