@@ -99,6 +99,7 @@
   #player-content[hidden], #signin-gate[hidden]{ display:none; }
 
   footer{ text-align:center; color:var(--dim); font-size:11px; }
+  #play-count{ text-align:center; color:var(--dim); font-size:11px; margin-top:-6px; }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
@@ -112,6 +113,8 @@
     <p>Testing build &mdash; not linked from the site yet. Play in the window below, then hit
       Submit Score once the in-game QR code is on screen.</p>
   </header>
+
+  <div id="play-count"></div>
 
   <div id="signin-gate">&#128274; Sign in (top right) to use the in-browser player.</div>
 
@@ -138,6 +141,18 @@
   // this particular page will only ever see this one game's own QR on screen).
   const GAME_ROUTES = { BW: 'bw', TT: 'tt', YZ: 'yz', FK: 'fk', '2K': '2k', OV: 'overrev', GD: 'gd', SD: 'sd', XN: 'xn' };
   const el = (id)=>document.getElementById(id);
+  // Public "played N times" readout -- off the same pageViews/{pathKey} doc auth.js's own
+  // trackPageView() already increments on this page's own load (pathKeyFromLocation() derives
+  // the key from location.pathname, so this needs no per-game slug lookup, unlike
+  // admin/game/index.html's version of the same stat, which reads this from a different page).
+  (function(){
+    const countEl = el('play-count');
+    if(!countEl || !window.NGPC_AUTH || !NGPC_AUTH.db) return;
+    NGPC_AUTH.db.collection('pageViews').doc(NGPC_AUTH.pathKeyFromLocation()).get().then(doc=>{
+      const total = (doc.exists && doc.data().total) || 0;
+      countEl.textContent = 'Played ' + total.toLocaleString() + ' time' + (total===1?'':'s');
+    }).catch(()=>{ /* decorative -- leave blank on error */ });
+  })();
   const gateEl = el('signin-gate');
   const contentEl = el('player-content');
   const btnSubmit = el('btn-submit');

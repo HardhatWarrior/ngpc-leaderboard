@@ -623,6 +623,7 @@
     // falls back to whatever this page's own markup already has if the doc/field is missing.
     (function(){
       var romLinkEl = el('rom-link');
+      if(romLinkEl) romLinkEl.addEventListener('click', function(){ if(window.NGPC_AUTH) NGPC_AUTH.trackRomDownload('overrev'); });
       if(!romLinkEl || !NGPC_AUTH.db) return;
       NGPC_AUTH.db.collection('games').doc('overrev').get().then(function(doc){
         if(doc.exists && doc.data().romPath) romLinkEl.href = doc.data().romPath;

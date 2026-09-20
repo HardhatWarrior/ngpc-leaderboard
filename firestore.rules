@@ -394,12 +394,18 @@ service cloud.firestore {
       // coming-soon resets it to a fresh 30-day window (that's the moment NEW should actually
       // start counting down, not back at approval time) -- same trust level already granted for
       // updatedUntil below, only ever a cosmetic ribbon either way.
-      allow update: if request.auth != null && (
-        isAdmin()
-        || (isAssignedDev(resource.data)
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil'])
-            && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final'])
-      );
+      allow update: if (request.auth != null && (
+          isAdmin()
+          || (isAssignedDev(resource.data)
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil'])
+              && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final'])
+        ))
+        // romDownloads -- a public, anonymous-writable +1 counter (same shape as meta/siteStats'
+        // pageViews above), bumped by every leaderboard page's rom-link click handler. No sign-in
+        // requirement, same as a plain download link never required one; still can't be set to an
+        // arbitrary/negative value or touch any other field.
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['romDownloads'])
+            && request.resource.data.romDownloads == (('romDownloads' in resource.data) ? resource.data.romDownloads : 0) + 1);
       allow delete: if isAdmin();
     }
 
@@ -477,15 +483,19 @@ service cloud.firestore {
 
     // pageViews/{pathKey} + pageViewsDaily/{pathKey_YYYYMMDD} -- site-wide per-page traffic,
     // written by auth.js's trackPageView() on every page load (every game board, the homepage,
-    // account/admin/user pages), read only by admin/index.html's own Site Stats panel. Separate
-    // from meta/siteStats above (index.html's own single-number visible counter, pre-seeded by
-    // hand) -- these are self-service documents instead, since new pages/days appear over time and
+    // account/admin/user pages). pageViews (the running total) is publicly readable -- each
+    // play/{slug}/index.html page displays its own "played N times" count straight off this same
+    // doc, same non-sensitive aggregate-count precedent as index.html's own public traffic
+    // counter. pageViewsDaily stays admin-only (isAdmin()), it only ever feeds admin/index.html's
+    // Site Stats panel's today/last-7-days totals, nothing public reads it. Separate from
+    // meta/siteStats above (index.html's own single-number visible counter, pre-seeded by hand)
+    // -- these are self-service documents instead, since new pages/days appear over time and
     // pre-seeding one by hand for each isn't practical. Same FieldValue.increment()-resolves-
     // before-rules-evaluate trick as meta/siteStats keeps a client from setting either counter to
     // an arbitrary value: a create must start at exactly 1, and an update may only step the count
     // field by exactly +1, touching no other field.
     match /pageViews/{pathKey} {
-      allow read: if isAdmin();
+      allow read: if true;
       allow create: if request.resource.data.keys().hasOnly(['path', 'total', 'lastViewedAt'])
         && request.resource.data.path is string
         && request.resource.data.total == 1

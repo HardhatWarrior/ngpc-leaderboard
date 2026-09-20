@@ -558,6 +558,7 @@
     // (approved straight from a /dev/submit/ submission).
     (function(){
       var romLinkEl = el('rom-link');
+      if(romLinkEl) romLinkEl.addEventListener('click', function(){ if(window.NGPC_AUTH) NGPC_AUTH.trackRomDownload('xn'); });
       var headerArt = el('header-art');
       if(!NGPC_AUTH.db) return;
       NGPC_AUTH.db.collection('games').doc('xn').get().then(function(doc){

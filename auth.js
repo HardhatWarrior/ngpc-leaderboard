@@ -85,6 +85,19 @@ window.NGPC_AUTH = (function(){
   }
   trackPageView();
 
+  // Bumped by each leaderboard page's own rom-link click handler -- see firestore.rules' games/
+  // {slug} allow update, which carves out a public, anonymous +1-only exception for exactly this
+  // field, same shape as pageViews above. Colocated on the game doc itself (not a separate
+  // collection) so admin/game/index.html can show it right alongside everything else about that
+  // game with no extra read.
+  function trackRomDownload(slug){
+    try{
+      db.collection('games').doc(slug).set(
+        { romDownloads: firebase.firestore.FieldValue.increment(1) }, { merge: true }
+      ).catch(()=>{}); // non-critical -- a blocked/offline write should never affect the download itself
+    }catch(e){ /* non-critical */ }
+  }
+
   const EMAIL_DOMAIN = 'users.ngpc-dev.com';
   const USERNAME_RE = /^[A-Za-z0-9_]{3,16}$/;
 
@@ -852,7 +865,7 @@ window.NGPC_AUTH = (function(){
     packColor, unpackColor, css255FromWord, renderAvatarToCanvas, drawAvatarCell,
     TRANSPARENT, isTransparent,
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,
-    friendlyAuthError, escapeHtml, notifyAdmin,
+    friendlyAuthError, escapeHtml, notifyAdmin, trackRomDownload, pathKeyFromLocation,
     scoreHasDetail, scoreDetailHTML, scoreInlineMeta, scoreValueDisplay,
     authReady, openSignInModal,
     get currentUser(){ return currentUser; }

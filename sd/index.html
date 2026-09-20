@@ -577,6 +577,7 @@
     // there's no repo-committed static fallback for a submitted-not-built-in game like this one.
     (function(){
       var romLinkEl = el('rom-link');
+      if(romLinkEl) romLinkEl.addEventListener('click', function(){ if(window.NGPC_AUTH) NGPC_AUTH.trackRomDownload('sd'); });
       if(!romLinkEl || !NGPC_AUTH.db) return;
       NGPC_AUTH.db.collection('games').doc('sd').get().then(function(doc){
         if(doc.exists && doc.data().romPath) romLinkEl.href = doc.data().romPath;

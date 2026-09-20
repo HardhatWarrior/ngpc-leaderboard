@@ -132,6 +132,8 @@
     </div>
     <div id="status-msg"></div>
 
+    <div class="current-value" style="margin-top:16px" id="stats-line">Downloaded &mdash; times &middot; Played &mdash; times (in-browser)</div>
+
     <div style="margin-top:20px">
       <div class="current-value">Current ROM: <b id="rom-current">using the site's default build</b></div>
       <input type="file" id="rom-file" accept=".ngp,.ngc">
@@ -500,6 +502,28 @@
 
     el('page-title').textContent = (data.name||slug).toUpperCase();
     el('edit-title').textContent = data.name || slug;
+
+    // Downloads: a running total colocated on this same games/{slug} doc (see auth.js's
+    // trackRomDownload(), fired by every leaderboard page's own rom-link click). Plays: the
+    // in-browser player's own page view count, off pageViews/{pathKey} (the same site-wide
+    // per-page tracker every page already writes to via auth.js's trackPageView()) -- a play
+    // page's folder name doesn't always match this game's own slug (e.g. bw's is /play/bowling/,
+    // not /play/bw/), hence the lookup table rather than assuming 'play_'+slug.
+    const PLAY_FOLDER = { bw:'bowling', tt:'tetris', yz:'yahtzee', fk:'farkle', '2k':'2048', overrev:'overrev', gd:'gardenia', sd:'sd', xn:'xn' };
+    const downloads = data.romDownloads || 0;
+    const playFolder = PLAY_FOLDER[slug];
+    const statsLineEl = el('stats-line');
+    if(playFolder){
+      db.collection('pageViews').doc('play_'+playFolder).get().then(pvDoc=>{
+        const plays = (pvDoc.exists && pvDoc.data().total) || 0;
+        statsLineEl.innerHTML = 'Downloaded <b>'+downloads+'</b> time'+(downloads===1?'':'s')
+          +' &middot; Played <b>'+plays+'</b> time'+(plays===1?'':'s')+' (in-browser)';
+      }).catch(()=>{
+        statsLineEl.innerHTML = 'Downloaded <b>'+downloads+'</b> time'+(downloads===1?'':'s')+' &middot; Play count unavailable';
+      });
+    } else {
+      statsLineEl.innerHTML = 'Downloaded <b>'+downloads+'</b> time'+(downloads===1?'':'s')+' &middot; No in-browser player for this game';
+    }
     editPanel.hidden = false;
     renderPayloadSpec(slug);
 
