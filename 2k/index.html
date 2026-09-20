@@ -342,7 +342,7 @@
 
   function handleScanResult(text){
     formMsg.innerHTML = '';
-    const result = parsePayload(text);
+    const result = parsePayload(lastPathSegment(text));
     if(result.error){
       formMsg.innerHTML = '<div class="msg err">'+escapeHtml(result.error)+'</div>';
       return;
