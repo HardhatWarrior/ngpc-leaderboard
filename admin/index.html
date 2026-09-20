@@ -271,7 +271,7 @@
       ? '<span class="badge approved">Approved</span>'
       : '<span class="badge pending">Pending</span>')
       + (u.disabled ? '<span class="badge disabled">Disabled</span>' : '')
-      + (u.wantsDev ? '<button type="button" class="badge wants-dev" data-action="clear-dev" data-uid="'+u.uid+'" title="Checked &quot;Interested in submitting a game&quot; at signup -- click to clear (e.g. if mis-clicked)">Wants Dev &times;</button>' : '');
+      + (u.wantsDev ? '<button type="button" class="badge wants-dev" data-action="clear-dev" data-uid="'+u.uid+'" title="Checked &quot;Developer&quot; at signup -- click to clear (e.g. if mis-clicked)">Wants Dev &times;</button>' : '');
   }
 
   function renderRows(users, db){
