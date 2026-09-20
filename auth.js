@@ -465,15 +465,42 @@ window.NGPC_AUTH = (function(){
     return '<table class="ov-sheet">'+rows+'</table>';
   }
 
+  // Sudoku's own difficulty names (see sd/index.html's DIFF_NAMES) -- duplicated here rather than
+  // imported since every other game's small lookup tables (OV_COURSES etc.) follow the same
+  // each-page-keeps-its-own-copy convention.
+  const SD_DIFF_NAMES = {E:'Easy', M:'Medium', H:'Hard'};
+  function formatSdTime(seconds){
+    const m = Math.floor(seconds/60), s = seconds%60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
+  function renderSudokuScorecardHTML(data){
+    const rows = '<tr><td>Difficulty</td><td class="sd-val">'+escapeHtml(SD_DIFF_NAMES[data.difficulty]||'?')+'</td></tr>'+
+      '<tr><td>Time</td><td class="sd-val tnum">'+formatSdTime(data.time)+'</td></tr>'+
+      '<tr><td>Mistakes</td><td class="sd-val tnum">'+data.misses+'</td></tr>';
+    return '<table class="sd-sheet">'+rows+'</table>';
+  }
+
+  // Xenon 2's own detail fields -- money/checkpoint/livesLeft, same shape xn/index.html's own
+  // renderXenon2ScorecardHTML uses (duplicated per the same each-page-keeps-its-own-copy
+  // convention as every other game's table renderer here).
+  function renderXenon2ScorecardHTML(data){
+    const rows = '<tr><td>Money</td><td class="xn-val tnum">'+data.money+'</td></tr>'+
+      '<tr><td>Checkpoint</td><td class="xn-val tnum">'+data.checkpoint+' / 7</td></tr>'+
+      '<tr><td>Lives left</td><td class="xn-val tnum">'+data.livesLeft+(data.livesLeft>0?' <span class="completion-badge">&#10003; Completed</span>':'')+'</td></tr>';
+    return '<table class="xn-sheet">'+rows+'</table>';
+  }
+
   // True for a game whose row expands into a click-to-reveal detail (Bowling/Yahtzee/Farkle/
-  // 2048/Over Rev); false for Tetris, whose own leaderboard shows lines/level as plain inline
-  // meta text instead -- scoreInlineMeta() covers that case.
+  // 2048/Over Rev/Sudoku/Xenon 2); false for Tetris, whose own leaderboard shows lines/level as
+  // plain inline meta text instead -- scoreInlineMeta() covers that case.
   function scoreHasDetail(data){
     switch(data.game){
       case 'BW': return Array.isArray(data.rolls) && data.rolls.length>0;
       case 'YZ': return Array.isArray(data.categoryScores) && data.categoryScores.length===YZ_CATS.length;
       case 'FK': return data.resultDisplay !== undefined && data.rounds !== undefined;
       case '2K': return data.moves !== undefined;
+      case 'SD': return data.difficulty !== undefined && data.time !== undefined;
+      case 'XN': return data.money !== undefined && data.checkpoint !== undefined;
       case 'OV':
         // Same "skip rather than crash" stance overrev/index.html's own board rendering takes on
         // a corrupted/legacy stored doc -- OverRevProtocol comes from overrev/protocol.js, which
@@ -489,6 +516,8 @@ window.NGPC_AUTH = (function(){
       case 'YZ': return renderYahtzeeScorecardHTML(data.categoryScores);
       case 'FK': return renderFarkleScorecardHTML(data);
       case '2K': return render2048ScorecardHTML(data);
+      case 'SD': return renderSudokuScorecardHTML(data);
+      case 'XN': return renderXenon2ScorecardHTML(data);
       case 'OV':
         try{ return renderOverRevScorecardHTML(Object.assign({}, data, OverRevProtocol.decode(data.raw))); }
         catch(e){ return ''; }
@@ -516,10 +545,14 @@ window.NGPC_AUTH = (function(){
   // its score doc has no `score` field at all (ticks/course instead -- see index.html's own
   // recent-activity ticker, which hit this same gap first). Farkle has a `score` field, but its
   // own leaderboard (farkle/index.html) ranks and headlines `rounds` instead -- shown here too,
-  // so a Farkle run's "main" number matches what its own board actually shows for it.
+  // so a Farkle run's "main" number matches what its own board actually shows for it. Sudoku has
+  // no `score` field either -- it ranks by `time` (ascending), so that's its headline value; a
+  // missed case here is exactly what showed a bare "-" for every Sudoku row on the account page
+  // before this existed.
   function scoreValueDisplay(data){
     if(data.game === 'OV') return data.ticks!=null ? formatOvTicks(data.ticks) : '-';
     if(data.game === 'FK') return data.rounds!=null ? (data.rounds+' rounds') : '-';
+    if(data.game === 'SD') return data.time!=null ? formatSdTime(data.time) : '-';
     return data.score!=null ? data.score : '-';
   }
 
