@@ -211,7 +211,14 @@
       <h2>Submit a score</h2>
       <p class="hint" id="submit-hint">Scores only come in by scanning the QR code the game shows after a completed game &mdash; there's no manual entry, so every row on the board is a real result. You must be signed in to submit.</p>
 
-      <div id="idle-view">
+      <!-- Members only -- gates the whole scan mechanism (camera + file fallback), not just the
+           final submit step; defaults hidden in markup so it never flashes before auth resolves. -->
+      <div id="scan-signin-required">
+        <p class="hint">Sign in to scan a QR code.</p>
+        <button type="button" class="btn-primary" id="scan-signin-btn">Sign In</button>
+      </div>
+
+      <div id="idle-view" hidden>
         <button class="btn-primary" id="btn-scan">Scan QR Code</button>
 
         <div id="scan-live" hidden>
@@ -695,7 +702,14 @@
   // The in-browser player is only offered to a signed-in visitor -- anonymous QR submission
   // stays exactly as-is either way, this is purely about who sees the link.
   if(window.NGPC_AUTH){
-    NGPC_AUTH.onAuthChange((user)=>{ el('play-link').hidden = !user; });
+    NGPC_AUTH.onAuthChange((user)=>{
+      el('play-link').hidden = !user;
+      // Members only -- gates the whole scan mechanism, not just the final submit step.
+      el('idle-view').hidden = !user;
+      el('scan-signin-required').hidden = !!user;
+      if(!user) resetScanUI();
+    });
+    el('scan-signin-btn').addEventListener('click', ()=>NGPC_AUTH.openSignInModal('signin'));
 
     // Points the "Download ROM" link at a developer-uploaded build if one exists
     // (games/tt.romPath, set from /admin/game/) instead of the static repo-committed file --

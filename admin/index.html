@@ -83,6 +83,7 @@
   }
   .dev-input:focus{ outline:none; border-color:var(--accent2); }
   .dev-cell{ display:flex; gap:6px; align-items:center; }
+  .dev-cell-edit{ display:flex; gap:6px; align-items:center; }
 
   .sub-card{ background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
   .sub-card ~ .sub-card{ margin-top:12px; }
@@ -359,18 +360,88 @@
     games.sort((a,b)=>(a.name||a.slug).localeCompare(b.name||b.slug));
     gamesStatusEl.textContent = '';
 
-    // Read-only: developerUid is now always set the moment a submission is approved (see
-    // onApprove below, which stamps it from the submission's own submitterUid), so there's no
-    // longer a manual-assignment case for this table to support.
+    // developerUid is stamped automatically when a submission is approved (see onApprove below),
+    // so this table is read-only day-to-day -- but the admin still needs a way to promote someone
+    // to developer by hand (a game added outside the submission flow, e.g. via seed-games.js) or
+    // demote one (revoke access, hand a game to someone else). Both are explicit actions behind a
+    // button, not a standing editable field, so nothing here changes without a deliberate click.
+    function renderDevCell(g){
+      const currentDevName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '';
+      return currentDevName
+        ? escapeHtml(currentDevName)+' <button type="button" class="btn-revoke dev-action" data-action="demote-dev" data-slug="'+g.slug+'">Demote</button>'
+        : '<span style="color:var(--dim)">&mdash;</span> <button type="button" class="btn-save dev-action" data-action="promote-dev" data-slug="'+g.slug+'">Promote</button>';
+    }
+
     gamesRowsEl.innerHTML = games.map(g=>{
-      const currentDevName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '—';
-      return '<tr>'+
+      return '<tr data-game-slug="'+g.slug+'">'+
         '<td>'+escapeHtml(g.name||g.slug)+'</td>'+
         '<td>'+statusLabel(g.devStatus)+'</td>'+
-        '<td>'+escapeHtml(currentDevName)+'</td>'+
+        '<td class="dev-cell">'+renderDevCell(g)+'</td>'+
         '<td><a href="/admin/game/?slug='+encodeURIComponent(g.slug)+'">Manage</a></td>'+
       '</tr>';
     }).join('');
+
+    async function onGamesClick(e){
+      const btn = e.target.closest('button[data-action]');
+      if(!btn || !gamesRowsEl.contains(btn)) return;
+      const slug = btn.dataset.slug;
+      const g = games.find(x=>x.slug===slug);
+      const cell = gamesRowsEl.querySelector('tr[data-game-slug="'+slug+'"] .dev-cell');
+
+      if(btn.dataset.action === 'demote-dev'){
+        const currentName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '';
+        if(!confirm('Remove '+currentName+' as developer of '+(g.name||g.slug)+'?')) return;
+        btn.disabled = true;
+        try{
+          await db.collection('games').doc(slug).update({developerUid: null});
+          g.developerUid = null;
+          cell.innerHTML = renderDevCell(g);
+        }catch(err){
+          gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t demote: '+escapeHtml(err.message||'unknown error')+'</div>';
+          btn.disabled = false;
+        }
+        return;
+      }
+
+      if(btn.dataset.action === 'promote-dev'){
+        cell.innerHTML = '<div class="dev-cell-edit"><input type="text" class="dev-input" placeholder="username" data-slug="'+slug+'">'
+          +'<button type="button" class="btn-save" data-action="confirm-promote" data-slug="'+slug+'">Save</button>'
+          +'<button type="button" class="btn-revoke" data-action="cancel-promote" data-slug="'+slug+'">Cancel</button></div>';
+        cell.querySelector('input').focus();
+        return;
+      }
+
+      if(btn.dataset.action === 'cancel-promote'){
+        cell.innerHTML = renderDevCell(g);
+        return;
+      }
+
+      if(btn.dataset.action === 'confirm-promote'){
+        const input = cell.querySelector('input.dev-input');
+        const usernameRaw = input.value.trim();
+        if(!usernameRaw) return;
+        btn.disabled = true;
+        gamesStatusEl.innerHTML = '';
+        try{
+          const nameDoc = await db.collection('usernames').doc(usernameRaw.toLowerCase()).get();
+          if(!nameDoc.exists){
+            gamesStatusEl.innerHTML = '<div class="msg err">No user found with username "'+escapeHtml(usernameRaw)+'".</div>';
+            btn.disabled = false;
+            return;
+          }
+          const uid = nameDoc.data().uid;
+          await db.collection('games').doc(slug).update({developerUid: uid});
+          g.developerUid = uid;
+          uidToUsername[uid] = usernameRaw;
+          cell.innerHTML = renderDevCell(g);
+        }catch(err){
+          gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t promote: '+escapeHtml(err.message||'unknown error')+'</div>';
+          btn.disabled = false;
+        }
+      }
+    }
+    gamesRowsEl.addEventListener('click', onGamesClick);
+
     return games;
   }
 
