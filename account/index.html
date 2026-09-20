@@ -130,6 +130,8 @@
   #import-crop{ position:absolute; border:2px solid var(--accent); box-shadow:0 0 0 999px rgba(0,0,0,.45); cursor:move; }
 
   #signed-out-msg{ text-align:center; color:var(--dim); font-size:13px; }
+  #admin-links a{ color:var(--accent2); text-decoration:underline; text-underline-offset:2px; }
+  #admin-links a:hover{ color:var(--cream); }
 
   /* ---------- submissions list ---------- */
   .sub-controls{ display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
@@ -209,6 +211,8 @@
   </header>
 
   <div id="signed-out-msg" hidden>Sign in from the top-right of any page to manage your account.</div>
+
+  <div id="admin-links" hidden style="text-align:center;font-size:12.5px;margin-top:-10px"></div>
 
   <div id="account-content" hidden>
     <section class="panel">
@@ -895,13 +899,35 @@
     }
   }
 
+  const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
+  async function loadAdminLinks(user){
+    const adminLinksEl = el('admin-links');
+    const links = [];
+    if(user.uid === ADMIN_UID){
+      links.push('<a href="/admin/">Site Admin</a>');
+    }
+    try{
+      const snap = await A.db.collection('games').where('developerUid','==',user.uid).limit(1).get();
+      if(!snap.empty) links.push('<a href="/admin/game/">Manage Your Games</a>');
+    }catch(e){ /* not critical -- just skip the link if this lookup fails */ }
+    links.push('<a href="/dev/submit/">Propose a New Game</a>');
+    if(links.length){
+      adminLinksEl.innerHTML = links.join(' &middot; ');
+      adminLinksEl.hidden = false;
+    } else {
+      adminLinksEl.hidden = true;
+    }
+  }
+
   A.onAuthChange((user)=>{
     if(user){
       signedOutMsg.hidden = true;
       content.hidden = false;
       refreshFromProfile();
       loadSubmissions();
+      loadAdminLinks(user);
     } else {
+      el('admin-links').hidden = true;
       signedOutMsg.hidden = false;
       content.hidden = true;
     }

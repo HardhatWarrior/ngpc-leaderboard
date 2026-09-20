@@ -111,6 +111,11 @@
       <button type="button" class="action btn-primary" id="rom-upload" disabled>Upload ROM</button>
       <div id="rom-msg"></div>
     </div>
+
+    <div id="updated-badge-row" hidden style="margin-top:16px">
+      <div class="current-value">This game currently shows an <b>UPDATED</b> badge on the main page (expires automatically 30 days after upload).</div>
+      <button type="button" class="action" style="background:transparent;border:1px solid var(--border);color:var(--dim)" id="clear-updated">Turn off UPDATED badge now</button>
+    </div>
   </section>
 
   <footer><a href="/">&larr; All games</a></footer>
@@ -132,6 +137,8 @@
   const romFile = el('rom-file');
   const romUpload = el('rom-upload');
   const romMsg = el('rom-msg');
+  const updatedBadgeRow = el('updated-badge-row');
+  const clearUpdatedBtn = el('clear-updated');
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -204,6 +211,18 @@
     });
 
     romCurrent.textContent = data.romFileName || 'using the site’s default build';
+    updatedBadgeRow.hidden = !(data.updatedUntil && data.updatedUntil > Date.now());
+    clearUpdatedBtn.addEventListener('click', async ()=>{
+      clearUpdatedBtn.disabled = true;
+      try{
+        await docRef.update({updatedUntil: null});
+        updatedBadgeRow.hidden = true;
+      }catch(e){
+        romMsg.innerHTML = '<div class="msg err">Couldn’t clear: '+escapeHtml(e.message||'unknown error')+'</div>';
+      }finally{
+        clearUpdatedBtn.disabled = false;
+      }
+    });
 
     romFile.addEventListener('change', ()=>{ romUpload.disabled = !romFile.files.length; });
     romUpload.addEventListener('click', async ()=>{
@@ -222,9 +241,11 @@
         await ref.put(file);
         const url = await ref.getDownloadURL();
         const now = Date.now();
-        await docRef.update({ romPath: url, romFileName: file.name, romUpdatedAt: now });
+        const THIRTY_DAYS = 30*24*60*60*1000;
+        await docRef.update({ romPath: url, romFileName: file.name, romUpdatedAt: now, updatedUntil: now+THIRTY_DAYS });
         romCurrent.textContent = file.name;
-        romMsg.innerHTML = '<div class="msg ok">Uploaded — this game just moved to the top of "Most Recent".</div>';
+        updatedBadgeRow.hidden = false;
+        romMsg.innerHTML = '<div class="msg ok">Uploaded — this game just moved to the top of "Most Recent" and shows an UPDATED badge for 30 days.</div>';
       }catch(e){
         romMsg.innerHTML = '<div class="msg err">Upload failed: '+escapeHtml(e.message||'unknown error')
           +'. If this says the storage bucket doesn’t exist, Firebase Storage needs to be enabled'

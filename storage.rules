@@ -20,6 +20,19 @@ service firebase.storage {
             || firestore.get(/databases/(default)/documents/games/$(slug)).data.developerUid == request.auth.uid);
     }
 
+    // New-game submission files (ROM + title screenshot), one subfolder per submission --
+    // private to the submitter and the admin until reviewed (unlike roms/, these haven't been
+    // approved yet, so nothing here is meant to be publicly reachable). subId isn't cross-checked
+    // against a Firestore doc the way roms/{slug} is against developerUid -- a submission's OWN
+    // uid segment is the entire access boundary, which is sufficient since nothing else ever
+    // reads or writes into another uid's submissions/ folder.
+    match /submissions/{uid}/{subId}/{fileName} {
+      allow read: if request.auth != null
+        && (request.auth.uid == uid || request.auth.uid == 'L44BFbmiNkhi2vvLdrPUIxkvmfs2');
+      allow write: if request.auth != null && request.auth.uid == uid
+        && request.resource.size < 4 * 1024 * 1024;
+    }
+
     // Default-deny for every other path.
     match /{allPaths=**} {
       allow read, write: if false;

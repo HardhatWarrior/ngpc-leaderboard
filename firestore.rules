@@ -303,10 +303,52 @@ service cloud.firestore {
       allow update: if request.auth != null && (
         isAdmin()
         || (isAssignedDev(resource.data)
-            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt'])
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil'])
             && request.resource.data.devStatus in ['dev', 'beta', 'final'])
       );
       allow delete: if isAdmin();
+    }
+
+    // gameSubmissions/{id} -- a new-game proposal from a prospective developer: ROM + title
+    // screenshot (Storage paths, see storage.rules' submissions/{uid}/{subId}/ block) plus a
+    // structured payload spec (field layout, sort field, scorecard formula, example payloads --
+    // the same shape NGPC-QR-SDK/SUBMISSION_TEMPLATE.md asks a developer to fill out by hand,
+    // just captured as data here instead of chased down over chat). Private to the submitter and
+    // the admin -- an unreviewed submission was never meant to be public. Approving one is still
+    // a manual admin action elsewhere (creating the real games/{slug} doc, and -- outside this
+    // rules file entirely -- hand-building that game's own leaderboard page and score-shape
+    // validator, the same way every game here always has been); this collection only removes the
+    // "chase the developer for details" step, not that build step.
+    match /gameSubmissions/{id} {
+      allow read: if request.auth != null
+        && (request.auth.uid == resource.data.submitterUid || isAdmin());
+
+      allow create: if request.auth != null
+        && request.resource.data.submitterUid == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.keys().hasOnly([
+             'submitterUid', 'submitterUsername', 'proposedName', 'proposedCode',
+             'romPath', 'romFileName', 'screenshotPath', 'payloadFields', 'totalLength',
+             'sortField', 'sortDirection', 'scorecardFormula', 'examplePayloads', 'otherNotes',
+             'status', 'submittedAt', 'reviewedAt', 'reviewNote'
+           ])
+        && request.resource.data.proposedName is string
+        && request.resource.data.proposedCode is string && request.resource.data.proposedCode.matches('^[A-Z0-9]{2}$')
+        && request.resource.data.submittedAt is int;
+
+      // The submitter can still edit their own submission while it's pending (fix a typo before
+      // review); once the admin has reviewed it (approved or rejected), it's a permanent record --
+      // only the admin can touch a reviewed submission (e.g. to correct a reviewNote).
+      allow update: if request.auth != null && (
+        isAdmin()
+        || (request.auth.uid == resource.data.submitterUid
+            && resource.data.status == 'pending'
+            && request.resource.data.status == 'pending'
+            && request.resource.data.submitterUid == resource.data.submitterUid)
+      );
+
+      allow delete: if request.auth != null
+        && request.auth.uid == resource.data.submitterUid && resource.data.status == 'pending';
     }
 
     // Landing page's raw page-view counter (index.html only). meta/siteStats is pre-created by

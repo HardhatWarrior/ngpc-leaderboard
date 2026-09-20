@@ -70,6 +70,21 @@
   .dev-input:focus{ outline:none; border-color:var(--accent2); }
   .dev-cell{ display:flex; gap:6px; align-items:center; }
 
+  .sub-card{ background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:14px 16px; }
+  .sub-card ~ .sub-card{ margin-top:12px; }
+  .sub-card h3{ margin:0 0 2px; font-size:13.5px; color:var(--cream); }
+  .sub-card .sub-meta{ font-size:11px; color:var(--dim); margin-bottom:10px; }
+  .sub-card .sub-meta a{ color:var(--accent2); }
+  .sub-spec-table{ width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:10px; }
+  .sub-spec-table th{ text-align:left; color:var(--dim); font-size:10px; text-transform:uppercase; padding:3px 6px; }
+  .sub-spec-table td{ padding:3px 6px; border-bottom:1px solid var(--border); color:var(--cream); }
+  .sub-examples{ font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--dim); white-space:pre-wrap; background:var(--navy); border-radius:6px; padding:8px 10px; margin-bottom:10px; }
+  .sub-actions{ display:flex; gap:8px; align-items:center; }
+  .sub-actions input{
+    background:var(--navy); border:1px solid var(--border); color:var(--cream);
+    border-radius:6px; padding:7px 9px; font:inherit; font-size:12px; width:90px;
+  }
+
   .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; }
   .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
 
@@ -121,6 +136,13 @@
     </div>
   </section>
 
+  <section class="panel" id="submissions-content" hidden>
+    <h2>Pending Game Submissions</h2>
+    <p class="hint">New games proposed via <a href="/dev/submit/">/dev/submit/</a>. Approving creates the tile (games/{slug} doc, marked NEW for 30 days) with the submitter set as developer -- the leaderboard page itself and its score-shape rules still need to be hand-built from the spec shown here, same as every game so far.</p>
+    <div id="submissions-status"></div>
+    <div id="submissions-list"></div>
+  </section>
+
   <footer><a href="/">&larr; All games</a></footer>
 </div>
 
@@ -138,6 +160,9 @@
   const gamesContentEl = el('games-content');
   const gamesRowsEl = el('games-rows');
   const gamesStatusEl = el('games-status');
+  const submissionsContentEl = el('submissions-content');
+  const submissionsStatusEl = el('submissions-status');
+  const submissionsListEl = el('submissions-list');
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -299,6 +324,113 @@
     gamesRowsEl.querySelectorAll('button[data-slug]').forEach(btn=>btn.addEventListener('click', onSaveClick));
   }
 
+  async function loadAndRenderSubmissions(db){
+    submissionsContentEl.hidden = false;
+    submissionsStatusEl.textContent = 'Loading…';
+    const snap = await db.collection('gameSubmissions').where('status','==','pending').get();
+    const subs = [];
+    snap.forEach(doc=>subs.push(Object.assign({id:doc.id}, doc.data())));
+    subs.sort((a,b)=>(a.submittedAt||0)-(b.submittedAt||0));
+    submissionsStatusEl.textContent = '';
+
+    if(!subs.length){
+      submissionsListEl.innerHTML = '<p class="hint" style="margin:0">No pending submissions.</p>';
+      return;
+    }
+
+    async function onApprove(e){
+      const btn = e.currentTarget;
+      const subId = btn.dataset.subid;
+      const card = submissionsListEl.querySelector('[data-card="'+subId+'"]');
+      const slugInput = card.querySelector('.slug-input');
+      const slug = slugInput.value.trim().toLowerCase();
+      if(!/^[a-z0-9-]{2,20}$/.test(slug)){
+        card.querySelector('.sub-msg').innerHTML = '<div class="msg err">Slug must be lowercase letters/digits/hyphens only.</div>';
+        return;
+      }
+      const sub = subs.find(s=>s.id===subId);
+      btn.disabled = true;
+      try{
+        const existing = await db.collection('games').doc(slug).get();
+        if(existing.exists){
+          card.querySelector('.sub-msg').innerHTML = '<div class="msg err">A game already exists at that slug.</div>';
+          btn.disabled = false;
+          return;
+        }
+        const now = Date.now();
+        const THIRTY_DAYS = 30*24*60*60*1000;
+        await db.collection('games').doc(slug).set({
+          name: sub.proposedName,
+          code: sub.proposedCode,
+          titleImage: sub.screenshotPath,
+          leaderboardPath: '/'+slug+'/',
+          devStatus: 'dev',
+          addedAt: now,
+          romUpdatedAt: now,
+          romPath: sub.romPath,
+          romFileName: sub.romFileName,
+          developerUid: sub.submitterUid,
+          newUntil: now + THIRTY_DAYS,
+          updatedUntil: null,
+        });
+        await db.collection('gameSubmissions').doc(subId).update({
+          status: 'approved', reviewedAt: now,
+          reviewNote: 'Approved as games/'+slug,
+        });
+        card.remove();
+      }catch(err){
+        card.querySelector('.sub-msg').innerHTML = '<div class="msg err">Approve failed: '+escapeHtml(err.message||'unknown error')+'</div>';
+        btn.disabled = false;
+      }
+    }
+
+    async function onReject(e){
+      const btn = e.currentTarget;
+      const subId = btn.dataset.subid;
+      const card = submissionsListEl.querySelector('[data-card="'+subId+'"]');
+      const note = card.querySelector('.reject-note').value.trim();
+      btn.disabled = true;
+      try{
+        await db.collection('gameSubmissions').doc(subId).update({
+          status: 'rejected', reviewedAt: Date.now(), reviewNote: note || null,
+        });
+        card.remove();
+      }catch(err){
+        card.querySelector('.sub-msg').innerHTML = '<div class="msg err">Reject failed: '+escapeHtml(err.message||'unknown error')+'</div>';
+        btn.disabled = false;
+      }
+    }
+
+    submissionsListEl.innerHTML = subs.map(s=>{
+      const suggestedSlug = (s.proposedCode||'').toLowerCase();
+      const fieldsHtml = (s.payloadFields||[]).map(f=>
+        '<tr><td>'+escapeHtml(f.name)+'</td><td>'+escapeHtml(f.width)+'</td><td>'+escapeHtml(f.format)+'</td><td>'+escapeHtml(f.notes)+'</td></tr>'
+      ).join('');
+      const examplesHtml = (s.examplePayloads||[]).map(escapeHtml).join('\n') || '(none given)';
+      return '<div class="sub-card" data-card="'+s.id+'">'
+        +'<h3>'+escapeHtml(s.proposedName)+' <span class="tnum">['+escapeHtml(s.proposedCode)+']</span></h3>'
+        +'<div class="sub-meta">Submitted by '+escapeHtml(s.submitterUsername||s.submitterUid)+' on '+fmtWhen(s.submittedAt)
+          +' &middot; <a href="'+s.romPath+'" target="_blank" rel="noopener">ROM</a>'
+          +' &middot; <a href="'+s.screenshotPath+'" target="_blank" rel="noopener">Screenshot</a></div>'
+        +'<table class="sub-spec-table"><thead><tr><th>Field</th><th>Width</th><th>Format</th><th>Notes</th></tr></thead><tbody>'+fieldsHtml+'</tbody></table>'
+        +'<div class="sub-meta">Total length: '+escapeHtml(s.totalLength||'?')+' &middot; Sort: '+escapeHtml(s.sortField||'?')+' ('+escapeHtml(s.sortDirection||'desc')+')</div>'
+        +(s.scorecardFormula ? '<div class="sub-meta">Scorecard: '+escapeHtml(s.scorecardFormula)+'</div>' : '')
+        +(s.otherNotes ? '<div class="sub-meta">Notes: '+escapeHtml(s.otherNotes)+'</div>' : '')
+        +'<div class="sub-examples">'+examplesHtml+'</div>'
+        +'<div class="sub-actions">'
+          +'<label style="font-size:11px;color:var(--dim)">Slug: <input type="text" class="slug-input" value="'+escapeHtml(suggestedSlug)+'"></label>'
+          +'<button type="button" class="btn-approve" data-subid="'+s.id+'">Approve</button>'
+          +'<input type="text" class="reject-note" placeholder="rejection reason (optional)" style="width:220px">'
+          +'<button type="button" class="btn-revoke" data-subid="'+s.id+'">Reject</button>'
+        +'</div>'
+        +'<div class="sub-msg"></div>'
+      +'</div>';
+    }).join('');
+
+    submissionsListEl.querySelectorAll('.btn-approve').forEach(b=>b.addEventListener('click', onApprove));
+    submissionsListEl.querySelectorAll('.btn-revoke').forEach(b=>b.addEventListener('click', onReject));
+  }
+
   async function boot(){
     if(!window.NGPC_AUTH){
       deniedEl.hidden = false;
@@ -332,6 +464,12 @@
       gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t load games: '+escapeHtml((e&&e.message)||'unknown error')
         +'. If you just added this feature, make sure the updated firestore.rules has been published,'
         +' and run NGPC-Admin-Scripts/seed-games.js --apply first.</div>';
+    }
+    try{
+      await loadAndRenderSubmissions(NGPC_AUTH.db);
+    }catch(e){
+      submissionsContentEl.hidden = false;
+      submissionsStatusEl.innerHTML = '<div class="msg err">Couldn’t load submissions: '+escapeHtml((e&&e.message)||'unknown error')+'</div>';
     }
   }
   boot();

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Submit a Game</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{
+    margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+    padding-inline:20px; padding-block:28px; display:flex; justify-content:center;
+  }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; }
+  .tnum{ font-variant-numeric:tabular-nums; }
+  #shell{ width:100%; max-width:720px; display:flex; flex-direction:column; gap:22px; }
+
+  header{ text-align:center; display:flex; flex-direction:column; gap:6px; }
+  header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
+  header p{ margin:0; color:var(--dim); font-size:13px; }
+
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  .panel .hint{ margin:0 0 14px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+  .panel .hint a{ color:var(--accent2); }
+
+  #denied{ text-align:center; color:var(--dim); font-size:13.5px; padding:40px 0; }
+
+  label{ display:block; font-size:11.5px; color:var(--dim); margin-bottom:14px; }
+  label b{ display:block; margin-bottom:4px; color:var(--cream); font-weight:600; }
+  input[type=text], input[type=file], textarea, select{
+    display:block; width:100%; margin-top:2px; background:var(--navy); border:1px solid var(--border);
+    color:var(--cream); border-radius:7px; padding:9px 10px; font:inherit; font-size:13px; box-sizing:border-box;
+  }
+  textarea{ resize:vertical; min-height:70px; }
+  input:focus, textarea:focus, select:focus{ outline:none; border-color:var(--accent2); }
+
+  .field-table{ width:100%; border-collapse:collapse; margin-bottom:10px; }
+  .field-table th{ text-align:left; font-size:10px; color:var(--dim); text-transform:uppercase; padding:4px 6px; }
+  .field-table td{ padding:3px 6px; }
+  .field-table input{ margin:0; font-size:12px; padding:6px 8px; }
+  .field-table .rm{ width:auto; background:transparent; border:1px solid var(--border); color:var(--danger); border-radius:6px; padding:6px 9px; cursor:pointer; font-size:11px; }
+
+  button{
+    font:inherit; border:none; border-radius:8px; padding:11px 16px; cursor:pointer;
+    font-weight:600; font-size:13px; width:auto;
+  }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); }
+  .btn-primary:hover:not(:disabled){ background:#c14259; }
+  .btn-secondary{ background:transparent; border:1px solid var(--border); color:var(--cream); }
+  .btn-secondary:hover:not(:disabled){ border-color:var(--accent2); }
+  .row{ display:flex; gap:8px; flex-wrap:wrap; }
+
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; margin-top:10px; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+  .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
+
+  .sub-row{ padding:10px 4px; border-radius:6px; }
+  .sub-row ~ .sub-row{ border-top:1px solid var(--border); }
+  .sub-name{ font-weight:600; color:var(--cream); font-size:13px; }
+  .badge{ display:inline-block; font-size:10px; font-weight:700; letter-spacing:.04em; padding:2px 7px; border-radius:5px; text-transform:uppercase; margin-left:8px; }
+  .badge.pending{ background:rgba(229,97,90,.18); color:var(--danger); }
+  .badge.approved{ background:rgba(79,191,139,.18); color:var(--good); }
+  .badge.rejected{ background:rgba(147,160,201,.18); color:var(--dim); }
+  .sub-note{ font-size:11.5px; color:var(--dim); margin-top:4px; }
+
+  footer{ text-align:center; color:var(--dim); font-size:11px; }
+  footer a{ color:var(--accent2); }
+</style>
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <h1 class="px">SUBMIT A GAME</h1>
+    <p>Propose a new game for the leaderboard.</p>
+  </header>
+
+  <div id="denied" hidden></div>
+
+  <section class="panel" id="form-panel" hidden>
+    <h2>Game Details</h2>
+    <p class="hint">Ask the site admin for the QR SDK integration guide if you haven't built your game's on-device QR submission yet. This form captures the same spec that guide's submission template asks for -- fill it out from your own finalized payload design.</p>
+
+    <label><b>Game name</b><input type="text" id="f-name" maxlength="40" placeholder="e.g. Neo Bowling"></label>
+    <label><b>Proposed 2-character game code</b><input type="text" id="f-code" maxlength="2" placeholder="e.g. NB" style="text-transform:uppercase;max-width:100px"></label>
+
+    <label><b>ROM file (.ngp/.ngc)</b><input type="file" id="f-rom" accept=".ngp,.ngc"></label>
+    <label><b>Title screen screenshot (PNG)</b><input type="file" id="f-shot" accept=".png"></label>
+
+    <label><b>Payload field layout</b>
+      <table class="field-table" id="field-table">
+        <thead><tr><th>Field</th><th>Width</th><th>Format</th><th>Notes</th><th></th></tr></thead>
+        <tbody id="field-rows"></tbody>
+      </table>
+      <button type="button" class="btn-secondary" id="add-field">+ Add field</button>
+    </label>
+
+    <label><b>Total payload length (characters)</b><input type="text" id="f-total-length" placeholder="e.g. 44" style="max-width:120px"></label>
+
+    <div class="row">
+      <label style="flex:1"><b>Sort field</b><input type="text" id="f-sort-field" placeholder="e.g. score"></label>
+      <label style="flex:1"><b>Sort direction</b>
+        <select id="f-sort-dir">
+          <option value="desc">Higher is better (descending)</option>
+          <option value="asc">Lower is better (ascending)</option>
+        </select>
+      </label>
+    </div>
+
+    <label><b>Scorecard reconstruction (if applicable)</b><textarea id="f-formula" placeholder="How does the leaderboard derive a full scorecard/detail view from the raw fields above? Formula or pseudocode -- leave blank if your payload sends only a final score with nothing to reconstruct."></textarea></label>
+
+    <label><b>Example payloads</b><textarea id="f-examples" placeholder="One real decoded payload per line, from real (or realistic) gameplay."></textarea></label>
+
+    <label><b>Anything else unusual</b><textarea id="f-notes" placeholder="Multiple game modes, optional fields, non-numeric fields beyond initials, etc."></textarea></label>
+
+    <div class="row">
+      <button type="button" class="btn-primary" id="btn-submit">Submit for Review</button>
+    </div>
+    <div id="submit-msg"></div>
+  </section>
+
+  <section class="panel" id="mine-panel" hidden>
+    <h2>Your Submissions</h2>
+    <div id="mine-status"></div>
+    <div id="mine-rows"></div>
+  </section>
+
+  <footer><a href="/">&larr; All games</a></footer>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  const el = (id)=>document.getElementById(id);
+  const deniedEl = el('denied');
+  const formPanel = el('form-panel');
+  const minePanel = el('mine-panel');
+  const fieldRows = el('field-rows');
+  const submitMsg = el('submit-msg');
+  const mineStatus = el('mine-status');
+  const mineRows = el('mine-rows');
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function fmtWhen(ts){
+    if(!ts) return '';
+    return new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  }
+
+  function addFieldRow(name, width, format, notes){
+    const tr = document.createElement('tr');
+    tr.innerHTML = '<td><input type="text" class="f-field-name" value="'+escapeHtml(name||'')+'" placeholder="e.g. initials"></td>'
+      +'<td><input type="text" class="f-field-width" value="'+escapeHtml(width||'')+'" placeholder="3" style="width:50px"></td>'
+      +'<td><input type="text" class="f-field-format" value="'+escapeHtml(format||'')+'" placeholder="A-Z"></td>'
+      +'<td><input type="text" class="f-field-notes" value="'+escapeHtml(notes||'')+'" placeholder="optional"></td>'
+      +'<td><button type="button" class="rm">&times;</button></td>';
+    tr.querySelector('.rm').addEventListener('click', ()=>tr.remove());
+    fieldRows.appendChild(tr);
+  }
+  el('add-field').addEventListener('click', ()=>addFieldRow());
+  // Seed with the 2-char game code row, since every payload starts with one (see the SDK guide).
+  addFieldRow('Game code', '2', 'fixed', 'e.g. "'+'NB'+'" -- matches the code above');
+  addFieldRow('Initials', '3', 'A-Z', '');
+
+  function collectFields(){
+    return Array.from(fieldRows.querySelectorAll('tr')).map(tr=>({
+      name: tr.querySelector('.f-field-name').value.trim(),
+      width: tr.querySelector('.f-field-width').value.trim(),
+      format: tr.querySelector('.f-field-format').value.trim(),
+      notes: tr.querySelector('.f-field-notes').value.trim(),
+    })).filter(f=>f.name);
+  }
+
+  async function uploadSubmissionFile(uid, subId, file, name){
+    const storage = firebase.storage();
+    const ref = storage.ref().child('submissions/'+uid+'/'+subId+'/'+name);
+    await ref.put(file);
+    return ref.getDownloadURL();
+  }
+
+  async function renderMine(db, user){
+    minePanel.hidden = false;
+    mineStatus.textContent = 'Loading…';
+    const snap = await db.collection('gameSubmissions').where('submitterUid','==',user.uid).get();
+    const subs = [];
+    snap.forEach(doc=>subs.push(Object.assign({id:doc.id}, doc.data())));
+    subs.sort((a,b)=>(b.submittedAt||0)-(a.submittedAt||0));
+    mineStatus.textContent = '';
+    if(!subs.length){
+      mineRows.innerHTML = '<p class="hint" style="margin:0">No submissions yet.</p>';
+      return;
+    }
+    mineRows.innerHTML = subs.map(s=>{
+      const noteHtml = s.reviewNote ? '<div class="sub-note">'+escapeHtml(s.reviewNote)+'</div>' : '';
+      return '<div class="sub-row">'
+        +'<span class="sub-name">'+escapeHtml(s.proposedName)+'</span>'
+        +'<span class="badge '+s.status+'">'+s.status+'</span>'
+        +'<div class="sub-note">Submitted '+fmtWhen(s.submittedAt)+'</div>'
+        +noteHtml
+      +'</div>';
+    }).join('');
+  }
+
+  async function boot(){
+    if(!window.NGPC_AUTH){
+      deniedEl.hidden = false;
+      deniedEl.textContent = 'This page isn’t available right now (a required library failed to load).';
+      return;
+    }
+    await NGPC_AUTH.authReady;
+    const user = NGPC_AUTH.currentUser;
+    if(!user){
+      deniedEl.hidden = false;
+      deniedEl.textContent = 'Sign in to submit a game.';
+      return;
+    }
+    formPanel.hidden = false;
+    const db = NGPC_AUTH.db;
+
+    el('btn-submit').addEventListener('click', async ()=>{
+      const btn = el('btn-submit');
+      submitMsg.innerHTML = '';
+      const name = el('f-name').value.trim();
+      const code = el('f-code').value.trim().toUpperCase();
+      const romFile = el('f-rom').files[0];
+      const shotFile = el('f-shot').files[0];
+      const totalLength = el('f-total-length').value.trim();
+      const sortField = el('f-sort-field').value.trim();
+      const sortDirection = el('f-sort-dir').value;
+      const scorecardFormula = el('f-formula').value.trim();
+      const examplePayloads = el('f-examples').value.split('\n').map(s=>s.trim()).filter(Boolean);
+      const otherNotes = el('f-notes').value.trim();
+      const payloadFields = collectFields();
+
+      if(!name){ submitMsg.innerHTML = '<div class="msg err">Game name is required.</div>'; return; }
+      if(!/^[A-Z0-9]{2}$/.test(code)){ submitMsg.innerHTML = '<div class="msg err">Game code must be exactly 2 letters/digits.</div>'; return; }
+      if(!romFile){ submitMsg.innerHTML = '<div class="msg err">A ROM file is required.</div>'; return; }
+      if(!shotFile){ submitMsg.innerHTML = '<div class="msg err">A title screen screenshot is required.</div>'; return; }
+      if(!/\.(ngp|ngc)$/i.test(romFile.name)){ submitMsg.innerHTML = '<div class="msg err">ROM must be .ngp or .ngc.</div>'; return; }
+      if(!/\.png$/i.test(shotFile.name)){ submitMsg.innerHTML = '<div class="msg err">Screenshot must be a .png.</div>'; return; }
+      if(!payloadFields.length){ submitMsg.innerHTML = '<div class="msg err">Add at least one payload field.</div>'; return; }
+
+      btn.disabled = true;
+      submitMsg.innerHTML = '<div class="msg ok">Uploading…</div>';
+      try{
+        const subId = db.collection('gameSubmissions').doc().id;
+        const [romPath, screenshotPath] = await Promise.all([
+          uploadSubmissionFile(user.uid, subId, romFile, romFile.name),
+          uploadSubmissionFile(user.uid, subId, shotFile, 'screenshot.png'),
+        ]);
+        await db.collection('gameSubmissions').doc(subId).set({
+          submitterUid: user.uid,
+          submitterUsername: user.username || '',
+          proposedName: name,
+          proposedCode: code,
+          romPath, romFileName: romFile.name,
+          screenshotPath,
+          payloadFields, totalLength,
+          sortField, sortDirection,
+          scorecardFormula, examplePayloads, otherNotes,
+          status: 'pending',
+          submittedAt: Date.now(),
+          reviewedAt: null,
+          reviewNote: null,
+        });
+        submitMsg.innerHTML = '<div class="msg ok">Submitted — the site admin will review it and follow up.</div>';
+        renderMine(db, user);
+      }catch(e){
+        submitMsg.innerHTML = '<div class="msg err">Submit failed: '+escapeHtml(e.message||'unknown error')
+          +'. If this mentions the storage bucket, Firebase Storage may not be enabled yet -- contact the site admin.</div>';
+      }finally{
+        btn.disabled = false;
+      }
+    });
+
+    try{ await renderMine(db, user); }catch(e){ /* non-critical */ }
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
