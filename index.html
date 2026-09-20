@@ -226,12 +226,15 @@
   .dev-banner.beta{ background:rgba(92,143,214,.82); }
 
   /* NEW / UPDATED corner ribbon -- self-expires 30 days after being set (see buildTile()'s own
-     now-vs-*Until check); never persists past that on its own, no cleanup job needed. */
+     now-vs-*Until check); never persists past that on its own, no cleanup job needed. Position/
+     angle/size tuned against "UPDATED" (7 characters, the longer of the two labels) so it isn't
+     clipped by the tile's own overflow:hidden -- the original top:8px/left:-28px/rotate(-40deg)/
+     8.5px was only ever checked against "NEW" (3 characters) and cut "UPDATED" off mid-word. */
   .corner-badge{
-    position:absolute; top:8px; left:-28px;
-    transform:rotate(-40deg);
-    width:120px; text-align:center;
-    font-family:"Press Start 2P",monospace; font-size:8.5px; letter-spacing:.04em;
+    position:absolute; top:16px; left:-24px;
+    transform:rotate(-35deg);
+    width:140px; text-align:center;
+    font-family:"Press Start 2P",monospace; font-size:8px; letter-spacing:.02em;
     padding:4px 0;
     box-shadow:0 2px 6px rgba(0,0,0,.4);
   }
