@@ -67,15 +67,22 @@ window.NGPC_AUTH = (function(){
     // it grants nothing by itself, see firestore.rules' comment on users/{uid}.
     const profile = { username, usernameLower, createdAt: Date.now(), avatar: DEFAULT_AVATAR, approved: false, wantsDev: !!wantsDev };
     const recoveryEmail = (recoveryEmailRaw||'').trim();
-    if(recoveryEmail) profile.recoveryEmail = recoveryEmail;
     try{
       // One atomic batch, not a transaction -- there's no read to make a decision from here, the
       // uniqueness guarantee comes entirely from the security rules (a usernames/{uname} doc can
       // only ever be CREATEd, never updated, so a second claim on the same username is evaluated
       // as a denied update, which fails this whole batch and leaves nothing partially written).
+      // recoveryEmail does NOT belong on this profile doc -- firestore.rules only ever allows it
+      // on the separate private/contact subdoc (see updateRecoveryEmail below). Putting it here
+      // used to add an extra key hasOnly() rejects, failing the WHOLE batch with permission-denied
+      // whenever a signup included a recovery email -- which then got mislabeled below as
+      // "username already taken" for every username the person tried, since that's the only case
+      // this catch block ever checked for. Confirmed the actual cause in production via a user's
+      // own console: no rules or network issue, just this extra field.
       const batch = db.batch();
       batch.set(db.collection('usernames').doc(usernameLower), {uid});
       batch.set(db.collection('users').doc(uid), profile);
+      if(recoveryEmail) batch.set(db.collection('users').doc(uid).collection('private').doc('contact'), {recoveryEmail});
       await batch.commit();
     }catch(e){
       // The auth account exists at this point even though the profile/reservation didn't get
@@ -83,7 +90,20 @@ window.NGPC_AUTH = (function(){
       // would be permanently unreachable, since sign-in only ever looks accounts up by username).
       try{ await cred.user.delete(); }catch(_e){ /* best effort */ }
       if(e && e.code === 'permission-denied'){
-        throw {code:'username-taken', message:'That username is already taken.'};
+        // Don't assume permission-denied means the username was taken -- that was wrong once
+        // already (an extra disallowed field on this same batch produced the exact same error
+        // code and got mislabeled this way for every username a real user tried). Check the
+        // actual reservation doc first; usernames/{lower} is publicly readable, so this is safe
+        // even though the signup itself just failed.
+        let actuallyTaken = false;
+        try{
+          const nameDoc = await db.collection('usernames').doc(usernameLower).get();
+          actuallyTaken = nameDoc.exists;
+        }catch(_e){ /* if even this read fails, fall through to the generic message below */ }
+        if(actuallyTaken){
+          throw {code:'username-taken', message:'That username is already taken.'};
+        }
+        throw {code:'signup-rejected', message:'Couldn’t create your account (rejected by the site’s access rules) — try again in a moment.'};
       }
       throw e;
     }
@@ -255,6 +275,7 @@ window.NGPC_AUTH = (function(){
     switch(code){
       case 'invalid-username': return e.message;
       case 'username-taken': return e.message;
+      case 'signup-rejected': return e.message;
       case 'same-username': return e.message;
       case 'not-signed-in': return e.message;
       case 'invalid-avatar': return e.message;
