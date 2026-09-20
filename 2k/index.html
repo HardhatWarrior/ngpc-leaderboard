@@ -34,7 +34,7 @@
      never has to wrap onto its own crowded row above the screenshot the way a wrapping flex
      "wordmark" row used to. rom-link/play-link moved out of absolute positioning and into normal
      flow here too, directly under created-by, so they're never floating disconnected from it. */
-  .header-row{ position:relative; display:flex; flex-direction:row; gap:16px; align-items:flex-start; }
+  .header-row{ position:relative; display:flex; flex-direction:row; justify-content:space-between; gap:16px; align-items:flex-start; }
   .title-block{ display:flex; flex-direction:column; align-items:flex-end; text-align:right; gap:5px; min-width:0; }
   .title-block h1{
     margin:0; font-size:clamp(18px,5vw,28px); line-height:1.2;
