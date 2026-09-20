@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// Deployed by hand via the Firebase console (Storage > Rules), same as firestore.rules -- this
+// project has no Firebase CLI/service-account wired up, so this file is the version-controlled
+// source of truth, not something a deploy pushes automatically. Requires Firebase Storage to
+// actually be enabled for this project (the Blaze plan) -- see NGPC-Admin-Scripts/README.md.
+//
+// ROM files live at roms/{slug}/{fileName}, one slug per games/{slug} Firestore doc. Write access
+// is scoped per-slug to that game's own assigned developer (or the site admin) via a cross-service
+// read of the matching Firestore doc -- the SAME source of truth firestore.rules' games/{slug}
+// uses for developerUid, so a game's developer assignment only ever needs to be set in one place.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /roms/{slug}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && fileName.matches('.*[.](ngc|ngp)$')
+        && request.resource.size < 4 * 1024 * 1024
+        && (request.auth.uid == 'L44BFbmiNkhi2vvLdrPUIxkvmfs2'
+            || firestore.get(/databases/(default)/documents/games/$(slug)).data.developerUid == request.auth.uid);
+    }
+
+    // Default-deny for every other path.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

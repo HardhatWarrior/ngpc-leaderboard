@@ -285,6 +285,30 @@ service cloud.firestore {
         && ('uid' in resource.data) && resource.data.uid == request.auth.uid;
     }
 
+    // games/{slug} is the main page's authoritative tile data (name, dev status, ROM location,
+    // last-updated) -- index.html renders its grid FROM this collection instead of hardcoded
+    // HTML, so a game's own assigned developer can update their dev status and ROM without
+    // ever touching a file in this repo. Split-permission by field, same pattern as users/{uid}:
+    // the admin owns identity fields (name/code/titleImage/leaderboardPath/addedAt/developerUid
+    // -- adding a game or reassigning its developer is an admin action), while the assigned
+    // developer can only touch the fields describing their own build.
+    match /games/{slug} {
+      allow read: if true;
+
+      function isAssignedDev(d) {
+        return request.auth != null && ('developerUid' in d) && d.developerUid == request.auth.uid;
+      }
+
+      allow create: if isAdmin();
+      allow update: if request.auth != null && (
+        isAdmin()
+        || (isAssignedDev(resource.data)
+            && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt'])
+            && request.resource.data.devStatus in ['dev', 'beta', 'final'])
+      );
+      allow delete: if isAdmin();
+    }
+
     // Landing page's raw page-view counter (index.html only). meta/siteStats is pre-created by
     // hand via the console with just {pageViews: 0} -- allow create is deliberately false so a
     // client can never spoof its shape or seed an arbitrary starting value. Anonymous write is

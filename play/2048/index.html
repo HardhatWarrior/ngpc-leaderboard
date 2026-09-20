@@ -144,11 +144,20 @@
   // is confirmed. loader.js is only injected here, on first confirmed sign-in, rather than as a
   // static <script src> tag, so a signed-out visitor never triggers the multi-MB download at all.
   let emulatorRequested = false;
-  function loadEmulator(){
+  async function loadEmulator(){
     if(emulatorRequested) return;
     emulatorRequested = true;
+    // Prefer a developer-uploaded build (games/2k.romPath, set from /admin/game/) over
+    // the static repo-committed ROM -- falls back to the static file on any lookup failure.
+    let gameUrl = '2048.ngp';
+    try{
+      if(window.NGPC_AUTH && NGPC_AUTH.db){
+        const doc = await NGPC_AUTH.db.collection('games').doc('2k').get();
+        if(doc.exists && doc.data().romPath) gameUrl = doc.data().romPath;
+      }
+    }catch(e){ /* keep the static fallback */ }
     window.EJS_player = '#game';
-    window.EJS_gameUrl = '2048.ngp'; // Url to Game rom
+    window.EJS_gameUrl = gameUrl; // Url to Game rom
     window.EJS_pathtodata = '../emulatorjs/data/';
     window.EJS_core = 'ngp';
     const loaderScript = document.createElement('script');

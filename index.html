@@ -208,11 +208,11 @@
     padding:16px;
   }
 
-  /* "In Development" banner -- a pure-CSS overlay on every game tile's screenshot, not baked
-     into the images themselves, so it can be removed later by deleting just this one rule (no
-     screenshot regeneration, no per-tile markup to touch). Remove this block when ready. */
-  .tile-art::after{
-    content:"IN DEVELOPMENT";
+  /* Dev-status banner -- an overlay on a tile's screenshot, not baked into the image itself, so
+     it tracks games/{slug}.devStatus live instead of needing a screenshot regen or markup change
+     per game. Only rendered (see renderGrid() below) for devStatus 'dev' or 'beta'; 'final' gets
+     no banner at all. */
+  .dev-banner{
     position:absolute; left:0; right:0; bottom:0;
     background:rgba(0,0,0,.75);
     color:#fff;
@@ -223,6 +223,7 @@
     padding:7px 4px;
     pointer-events:none;
   }
+  .dev-banner.beta{ background:rgba(92,143,214,.82); }
 
   .tile-body{ padding:14px 16px 16px; display:flex; flex-direction:column; gap:4px; }
   .tile-name{ font-size:13.5px; font-weight:700; color:var(--cream); }
@@ -284,83 +285,13 @@
     <button type="button" class="sort-btn period-btn" id="period-all" data-period="all">All Time</button>
   </div>
 
+  <div id="grid-status" class="grid-heading" style="margin-top:-8px"></div>
   <div id="grid">
-    <!-- Live games and "coming soon" placeholders are both listed by hand here -- there's no
-         registry file shared with 404.html, which only needs to case-fix a path, not know
-         anything about a game's name or art. Add a new <a class="tile"> block per game.
-         data-game is that game's own QR routing code (see GAME_ROUTES below), used to look up
-         its weekly submission count for the "Most Active" sort. data-added drives the default
-         "Most Recent" sort -- bump it by hand to the current time whenever that game's ROM is
-         rebuilt/redeployed (not just on first launch), so an update actually surfaces the tile.
-         GitHub Pages doesn't expose a real per-file last-modified timestamp (every file on the
-         site reports the same value: the last deploy time for the whole repo, not that file's
-         own history), so there's no way to derive this automatically at page-load time -- this
-         is the practical stand-in. -->
-
-
-    <a class="tile" href="/bw/" data-game="BW" data-added="2026-09-16T13:50:07-07:00">
-      <div class="tile-art">
-        <img src="/assets/bowling-title.png" alt="Neo Bowling title screen" width="160" height="152">
-      </div>
-      <div class="tile-body">
-        <div class="tile-name">Neo Bowling</div>
-      </div>
-    </a>
-
-    <a class="tile" href="/tt/" data-game="TT" data-added="2026-09-16T17:06:13-07:00">
-      <div class="tile-art">
-        <img src="/assets/tetris-title.png" alt="Tetris title screen" width="160" height="152">
-      </div>
-      <div class="tile-body">
-        <div class="tile-name">Tetris</div>
-      </div>
-    </a>
-
-    <a class="tile" href="/yz/" data-game="YZ" data-added="2026-09-17T14:09:29-07:00">
-      <div class="tile-art">
-        <img src="/assets/yahtzee-title.png" alt="Neo Yahtzee title screen" width="160" height="152">
-      </div>
-      <div class="tile-body">
-        <div class="tile-name">Neo Yahtzee</div>
-      </div>
-    </a>
-
-    <a class="tile" href="/fk/" data-game="FK" data-added="2026-09-17T14:09:30-07:00">
-      <div class="tile-art">
-        <img src="/assets/farkle-title.png" alt="Farkle title screen" width="160" height="152">
-      </div>
-      <div class="tile-body">
-        <div class="tile-name">Farkle</div>
-      </div>
-    </a>
-
-    <a class="tile" href="/2k/" data-game="2K" data-added="2026-09-18T09:24:05-07:00">
-      <div class="tile-art">
-        <img src="/assets/2048-title.png" alt="2048 title screen" width="160" height="152">
-      </div>
-      <div class="tile-body">
-        <div class="tile-name">2048</div>
-      </div>
-    </a>
-
-    <a class="tile" href="/overrev/" data-game="OV" data-added="2026-09-19T19:20:01-07:00">
-      <div class="tile-art">
-        <img src="/assets/overrev-title.png" alt="Over Rev title screen" width="160" height="152">
-      </div>
-      <div class="tile-body">
-        <div class="tile-name">Over Rev</div>
-      </div>
-    </a>
-
-    <a class="tile" href="/gardenia/" data-game="GD" data-added="2026-09-19T19:20:02-07:00">
-      <div class="tile-art">
-        <img src="/assets/gardenia-title.png" alt="Gardenia title screen" width="160" height="152">
-      </div>
-      <div class="tile-body">
-        <div class="tile-name">Gardenia</div>
-      </div>
-    </a>
-
+    <!-- Populated live from the games/{slug} Firestore collection -- see renderGrid() below.
+         A game's own assigned developer can update its dev status and ROM from /admin/game/
+         without ever touching this file; index.html only needs a change here again for something
+         genuinely structural (a new game's initial listing is still an admin-side action, via
+         NGPC-Admin-Scripts/seed-games.js or a future "add game" admin control). -->
   </div>
 
   <div class="grid-heading">Or search for a player</div>
@@ -423,11 +354,70 @@
   let activePeriod = 'week'; // 'week' | 'all', only meaningful while sortMode === 'active'
   const countsCache = { week: null, all: null }; // {gameCode: count} per period, null until loaded
   const gridEl = el('grid');
+  const gridStatusEl = el('grid-status');
   const sortStatusEl = el('sort-status');
   const sortButtons = [el('sort-recent'), el('sort-active'), el('sort-alpha')];
   const periodToggleEl = el('period-toggle');
   const periodButtons = [el('period-week'), el('period-all')];
-  const tileEls = Array.from(gridEl.querySelectorAll('.tile'));
+  let tileEls = [];
+
+  // Builds one tile <a> exactly matching the markup every game page used to hand-write, from a
+  // games/{slug} doc -- see firestore.rules' own comment on why the admin owns identity fields
+  // (name/code/titleImage/leaderboardPath) while a game's assigned developer can only ever touch
+  // devStatus/romPath/romUpdatedAt (via /admin/game/), never rename or re-route their own tile.
+  function buildTile(slug, data){
+    const a = document.createElement('a');
+    a.className = 'tile';
+    a.href = data.leaderboardPath || ('/'+slug+'/');
+    a.dataset.game = data.code || '';
+    a.dataset.added = String(data.romUpdatedAt || data.addedAt || 0);
+
+    const art = document.createElement('div');
+    art.className = 'tile-art';
+    const img = document.createElement('img');
+    img.src = data.titleImage || '';
+    img.alt = (data.name||slug)+' title screen';
+    img.width = 160; img.height = 152;
+    art.appendChild(img);
+
+    if(data.devStatus === 'dev' || data.devStatus === 'beta'){
+      const banner = document.createElement('div');
+      banner.className = 'dev-banner' + (data.devStatus==='beta' ? ' beta' : '');
+      banner.textContent = data.devStatus === 'beta' ? 'BETA' : 'IN DEVELOPMENT';
+      art.appendChild(banner);
+    }
+
+    const body = document.createElement('div');
+    body.className = 'tile-body';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'tile-name';
+    nameEl.textContent = data.name || slug;
+    body.appendChild(nameEl);
+
+    a.appendChild(art);
+    a.appendChild(body);
+    return a;
+  }
+
+  function renderGrid(games){
+    gridEl.innerHTML = '';
+    tileEls = games.map(g=>buildTile(g.slug, g));
+    tileEls.forEach(t=>gridEl.appendChild(t));
+  }
+
+  async function loadGames(){
+    const db = window.NGPC_AUTH ? NGPC_AUTH.db : null;
+    if(!db){ gridStatusEl.textContent = 'Games list is unavailable right now.'; return; }
+    try{
+      const snap = await db.collection('games').get();
+      const games = [];
+      snap.forEach(doc=>games.push(Object.assign({slug:doc.id}, doc.data())));
+      renderGrid(games);
+      gridStatusEl.textContent = '';
+    }catch(e){
+      gridStatusEl.textContent = 'Couldn’t load the games list right now — try refreshing.';
+    }
+  }
 
   function applySort(mode){
     const counts = countsCache[activePeriod];
@@ -769,7 +759,7 @@
     );
   }
   connectTicker();
-  applySort(sortMode); // HTML source order is oldest-first, not "Most Recent"'s own newest-first
+  loadGames().then(()=> applySort(sortMode));
 
   /* ---------- player search -- typeahead over the usernames/{lower} reservation collection.
      Its document ID *is* the lowercased username (see auth.js's signUp/updateUsername), so a

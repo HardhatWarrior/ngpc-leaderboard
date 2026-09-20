@@ -61,6 +61,14 @@
   .btn-approve:hover:not(:disabled){ filter:brightness(1.1); }
   .btn-revoke{ background:transparent; border:1px solid var(--border); color:var(--dim); }
   .btn-revoke:hover:not(:disabled){ border-color:var(--danger); color:var(--danger); }
+  .btn-save{ background:var(--accent2); color:#0a1830; }
+  .btn-save:hover:not(:disabled){ filter:brightness(1.1); }
+  .dev-input{
+    background:var(--navy); border:1px solid var(--border); color:var(--cream);
+    border-radius:6px; padding:6px 8px; font:inherit; font-size:12px; width:130px;
+  }
+  .dev-input:focus{ outline:none; border-color:var(--accent2); }
+  .dev-cell{ display:flex; gap:6px; align-items:center; }
 
   .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; }
   .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
@@ -99,6 +107,20 @@
     </div>
   </section>
 
+  <section class="panel" id="games-content" hidden>
+    <h2>Games</h2>
+    <p class="hint">Assign a developer (by username) to let them manage that game's dev status and ROM from <a href="/admin/game/">/admin/game/</a>, without ever touching this repo. Clearing the field removes their access.</p>
+    <div id="games-status"></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr><th>Game</th><th>Status</th><th>Developer</th><th></th></tr>
+        </thead>
+        <tbody id="games-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
   <footer><a href="/">&larr; All games</a></footer>
 </div>
 
@@ -113,6 +135,9 @@
   const rowsEl = el('user-rows');
   const statsEl = el('stats-row');
   const statusEl = el('list-status');
+  const gamesContentEl = el('games-content');
+  const gamesRowsEl = el('games-rows');
+  const gamesStatusEl = el('games-status');
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -221,6 +246,59 @@
     });
   }
 
+  function statusLabel(s){
+    return s==='beta' ? 'Beta' : s==='final' ? 'Final' : 'In Development';
+  }
+
+  async function loadAndRenderGames(db, uidToUsername){
+    gamesContentEl.hidden = false;
+    gamesStatusEl.textContent = 'Loading…';
+    const snap = await db.collection('games').get();
+    const games = [];
+    snap.forEach(doc=>games.push(Object.assign({slug:doc.id}, doc.data())));
+    games.sort((a,b)=>(a.name||a.slug).localeCompare(b.name||b.slug));
+    gamesStatusEl.textContent = '';
+
+    async function onSaveClick(e){
+      const btn = e.currentTarget;
+      const slug = btn.dataset.slug;
+      const input = gamesRowsEl.querySelector('input[data-slug="'+slug+'"]');
+      const usernameRaw = input.value.trim();
+      btn.disabled = true;
+      gamesStatusEl.innerHTML = '';
+      try{
+        if(!usernameRaw){
+          await db.collection('games').doc(slug).update({developerUid: null});
+        } else {
+          const nameDoc = await db.collection('usernames').doc(usernameRaw.toLowerCase()).get();
+          if(!nameDoc.exists){
+            gamesStatusEl.innerHTML = '<div class="msg err">No user found with username "'+escapeHtml(usernameRaw)+'".</div>';
+            btn.disabled = false;
+            return;
+          }
+          await db.collection('games').doc(slug).update({developerUid: nameDoc.data().uid});
+        }
+        gamesStatusEl.innerHTML = '<div class="msg ok">Saved.</div>';
+      }catch(e){
+        gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml((e&&e.message)||'unknown error')+'</div>';
+      }finally{
+        btn.disabled = false;
+      }
+    }
+
+    gamesRowsEl.innerHTML = games.map(g=>{
+      const currentDevName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '';
+      return '<tr>'+
+        '<td>'+escapeHtml(g.name||g.slug)+'</td>'+
+        '<td>'+statusLabel(g.devStatus)+'</td>'+
+        '<td><div class="dev-cell"><input type="text" class="dev-input" data-slug="'+g.slug+'" placeholder="username" value="'+escapeHtml(currentDevName)+'">'+
+          '<button type="button" class="btn-save" data-slug="'+g.slug+'">Save</button></div></td>'+
+        '<td><a href="/admin/game/?slug='+encodeURIComponent(g.slug)+'">Manage</a></td>'+
+      '</tr>';
+    }).join('');
+    gamesRowsEl.querySelectorAll('button[data-slug]').forEach(btn=>btn.addEventListener('click', onSaveClick));
+  }
+
   async function boot(){
     if(!window.NGPC_AUTH){
       deniedEl.hidden = false;
@@ -235,14 +313,25 @@
       return;
     }
     contentEl.hidden = false;
+    let users = [];
     try{
-      const users = await loadUsers(NGPC_AUTH.db);
+      users = await loadUsers(NGPC_AUTH.db);
       renderStats(users);
       renderRows(users, NGPC_AUTH.db);
     }catch(e){
       statusEl.innerHTML = '<div class="msg err">Couldn’t load players: '+escapeHtml((e&&e.message)||'unknown error')
         +'. If you just added account approval, make sure the updated firestore.rules has been'
         +' published to Firebase Console (and the approval backfill script run first).</div>';
+    }
+    try{
+      const uidToUsername = {};
+      users.forEach(u=>{ uidToUsername[u.uid] = u.username; });
+      await loadAndRenderGames(NGPC_AUTH.db, uidToUsername);
+    }catch(e){
+      gamesContentEl.hidden = false;
+      gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t load games: '+escapeHtml((e&&e.message)||'unknown error')
+        +'. If you just added this feature, make sure the updated firestore.rules has been published,'
+        +' and run NGPC-Admin-Scripts/seed-games.js --apply first.</div>';
     }
   }
   boot();

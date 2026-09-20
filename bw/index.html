@@ -219,7 +219,7 @@
       </div>
     </div>
     <img src="/assets/bowling-title.png" alt="Neo Bowling title screen" class="header-art" width="160" height="152">
-    <a href="/play/bowling/bowling.ngp" class="rom-link" download>&#128190; Download ROM (.ngp)</a>
+    <a href="/play/bowling/bowling.ngp" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
     <a href="/play/bowling/" class="play-link" id="play-link" hidden>&#127918; Play Neo Bowling in Browser</a>
   </header>
 
@@ -887,6 +887,17 @@
   // stays exactly as-is either way, this is purely about who sees the link.
   if(window.NGPC_AUTH){
     NGPC_AUTH.onAuthChange((user)=>{ el('play-link').hidden = !user; });
+
+    // Points the "Download ROM" link at a developer-uploaded build if one exists
+    // (games/bw.romPath, set from /admin/game/) instead of the static repo-committed file --
+    // falls back to whatever this page's own markup already has if the doc/field is missing.
+    (function(){
+      var romLinkEl = el('rom-link');
+      if(!romLinkEl || !NGPC_AUTH.db) return;
+      NGPC_AUTH.db.collection('games').doc('bw').get().then(function(doc){
+        if(doc.exists && doc.data().romPath) romLinkEl.href = doc.data().romPath;
+      }).catch(function(){ /* keep the static fallback href */ });
+    })();
   }
 
   boot();

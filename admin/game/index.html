@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Manage Game</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{
+    margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+    padding-inline:20px; padding-block:28px; display:flex; justify-content:center;
+  }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; }
+  .tnum{ font-variant-numeric:tabular-nums; }
+  #shell{ width:100%; max-width:640px; display:flex; flex-direction:column; gap:22px; }
+
+  header{ text-align:center; display:flex; flex-direction:column; gap:6px; }
+  header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
+  header p{ margin:0; color:var(--dim); font-size:13px; }
+
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  .panel .hint{ margin:0 0 14px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+
+  #denied{ text-align:center; color:var(--dim); font-size:13.5px; padding:40px 0; }
+
+  .status-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px; }
+  .status-btn{
+    flex:1; min-width:110px; background:var(--navy); border:1px solid var(--border); color:var(--dim);
+    border-radius:8px; padding:12px 8px; font-size:11.5px; font-weight:600; cursor:pointer; font-family:inherit;
+  }
+  .status-btn.active{ border-color:var(--accent2); color:var(--cream); background:var(--panel2); }
+  .status-btn .desc{ display:block; font-size:10px; color:var(--dim); font-weight:400; margin-top:3px; }
+
+  .current-value{ font-size:12.5px; color:var(--dim); margin-bottom:10px; }
+  .current-value b{ color:var(--cream); }
+
+  input[type=file]{ display:block; width:100%; margin-top:4px; font-size:12.5px; color:var(--dim); }
+
+  button.action{
+    font:inherit; border:none; border-radius:8px; padding:11px 16px; cursor:pointer;
+    font-weight:600; font-size:13px; width:auto;
+  }
+  button.action:disabled{ opacity:.5; cursor:not-allowed; }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); }
+  .btn-primary:hover:not(:disabled){ background:#c14259; }
+
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; margin-top:10px; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+  .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
+
+  .game-list-row{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    padding:10px 4px; border-radius:6px; text-decoration:none; color:inherit;
+  }
+  .game-list-row:hover{ background:rgba(92,143,214,.08); }
+  .game-list-row ~ .game-list-row{ border-top:1px solid var(--border); }
+  .game-list-name{ font-weight:600; color:var(--cream); font-size:13px; }
+  .game-list-status{ font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; }
+
+  footer{ text-align:center; color:var(--dim); font-size:11px; }
+  footer a{ color:var(--accent2); }
+</style>
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <h1 class="px" id="page-title">MANAGE GAME</h1>
+    <p id="page-sub">Dev status and ROM file for your game.</p>
+  </header>
+
+  <div id="denied" hidden></div>
+
+  <section class="panel" id="list-panel" hidden>
+    <h2>Your Games</h2>
+    <p class="hint">Games you're assigned as developer on.</p>
+    <div id="game-list"></div>
+  </section>
+
+  <section class="panel" id="edit-panel" hidden>
+    <h2 id="edit-title">Game</h2>
+    <p class="hint">Dev status controls the banner shown on this game's tile on the main page. Uploading a new ROM here also bumps it to the top of "Most Recent" automatically.</p>
+
+    <div class="status-row" id="status-row">
+      <button type="button" class="status-btn" data-status="dev">In Development<span class="desc">Shows a banner</span></button>
+      <button type="button" class="status-btn" data-status="beta">Beta<span class="desc">Shows a banner</span></button>
+      <button type="button" class="status-btn" data-status="final">Final<span class="desc">No banner</span></button>
+    </div>
+    <div id="status-msg"></div>
+
+    <div style="margin-top:20px">
+      <div class="current-value">Current ROM: <b id="rom-current">using the site's default build</b></div>
+      <input type="file" id="rom-file" accept=".ngp,.ngc">
+      <div class="current-value" style="margin-top:8px">Uploads require Firebase Storage to be enabled on this project (ask the site admin if this fails).</div>
+      <button type="button" class="action btn-primary" id="rom-upload" disabled>Upload ROM</button>
+      <div id="rom-msg"></div>
+    </div>
+  </section>
+
+  <footer><a href="/">&larr; All games</a></footer>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
+  const el = (id)=>document.getElementById(id);
+  const deniedEl = el('denied');
+  const listPanel = el('list-panel');
+  const editPanel = el('edit-panel');
+  const gameListEl = el('game-list');
+  const statusRow = el('status-row');
+  const statusMsg = el('status-msg');
+  const romCurrent = el('rom-current');
+  const romFile = el('rom-file');
+  const romUpload = el('rom-upload');
+  const romMsg = el('rom-msg');
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function statusLabel(s){
+    return s==='beta' ? 'Beta' : s==='final' ? 'Final' : 'In Development';
+  }
+
+  async function renderList(db, user, isAdmin){
+    listPanel.hidden = false;
+    gameListEl.textContent = 'Loading…';
+    const snap = await db.collection('games').get();
+    const rows = [];
+    snap.forEach(doc=>{
+      const d = doc.data();
+      if(isAdmin || d.developerUid === user.uid){
+        rows.push('<a class="game-list-row" href="?slug='+encodeURIComponent(doc.id)+'">'
+          +'<span class="game-list-name">'+escapeHtml(d.name||doc.id)+'</span>'
+          +'<span class="game-list-status">'+statusLabel(d.devStatus)+'</span>'
+        +'</a>');
+      }
+    });
+    gameListEl.innerHTML = rows.length ? rows.join('') : '<p class="hint" style="margin:0">No games assigned to you yet. Ask the site admin to assign you as developer on one.</p>';
+  }
+
+  async function renderEditor(db, user, isAdmin, slug){
+    const docRef = db.collection('games').doc(slug);
+    const doc = await docRef.get();
+    if(!doc.exists){
+      deniedEl.hidden = false;
+      deniedEl.textContent = 'No game found for "'+slug+'".';
+      return;
+    }
+    const data = doc.data();
+    if(!isAdmin && data.developerUid !== user.uid){
+      deniedEl.hidden = false;
+      deniedEl.textContent = 'Not authorized to manage "'+(data.name||slug)+'".';
+      return;
+    }
+
+    el('page-title').textContent = (data.name||slug).toUpperCase();
+    el('edit-title').textContent = data.name || slug;
+    editPanel.hidden = false;
+
+    let currentStatus = data.devStatus || 'dev';
+    function paintStatusButtons(){
+      statusRow.querySelectorAll('.status-btn').forEach(btn=>{
+        btn.classList.toggle('active', btn.dataset.status === currentStatus);
+      });
+    }
+    paintStatusButtons();
+
+    statusRow.querySelectorAll('.status-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const next = btn.dataset.status;
+        if(next === currentStatus) return;
+        statusMsg.innerHTML = '';
+        btn.disabled = true;
+        try{
+          await docRef.update({devStatus: next});
+          currentStatus = next;
+          paintStatusButtons();
+          statusMsg.innerHTML = '<div class="msg ok">Saved — the main page will show this on next load.</div>';
+        }catch(e){
+          statusMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+        }finally{
+          btn.disabled = false;
+        }
+      });
+    });
+
+    romCurrent.textContent = data.romFileName || 'using the site’s default build';
+
+    romFile.addEventListener('change', ()=>{ romUpload.disabled = !romFile.files.length; });
+    romUpload.addEventListener('click', async ()=>{
+      const file = romFile.files[0];
+      if(!file) return;
+      if(!/\.(ngp|ngc)$/i.test(file.name)){
+        romMsg.innerHTML = '<div class="msg err">Only .ngp/.ngc files are accepted.</div>';
+        return;
+      }
+      romUpload.disabled = true;
+      romMsg.innerHTML = '<div class="msg ok">Uploading…</div>';
+      try{
+        if(!window.firebase.storage) throw new Error('Storage SDK failed to load');
+        const storage = firebase.storage();
+        const ref = storage.ref().child('roms/'+slug+'/'+file.name);
+        await ref.put(file);
+        const url = await ref.getDownloadURL();
+        const now = Date.now();
+        await docRef.update({ romPath: url, romFileName: file.name, romUpdatedAt: now });
+        romCurrent.textContent = file.name;
+        romMsg.innerHTML = '<div class="msg ok">Uploaded — this game just moved to the top of "Most Recent".</div>';
+      }catch(e){
+        romMsg.innerHTML = '<div class="msg err">Upload failed: '+escapeHtml(e.message||'unknown error')
+          +'. If this says the storage bucket doesn’t exist, Firebase Storage needs to be enabled'
+          +' for this project first (site admin only, from the Firebase Console — requires the Blaze plan).</div>';
+      }finally{
+        romUpload.disabled = false;
+      }
+    });
+  }
+
+  async function boot(){
+    if(!window.NGPC_AUTH){
+      deniedEl.hidden = false;
+      deniedEl.textContent = 'This page isn’t available right now (a required library failed to load).';
+      return;
+    }
+    await NGPC_AUTH.authReady;
+    const user = NGPC_AUTH.currentUser;
+    if(!user){
+      deniedEl.hidden = false;
+      deniedEl.textContent = 'Sign in to manage a game.';
+      return;
+    }
+    const isAdmin = user.uid === ADMIN_UID;
+    const params = new URLSearchParams(location.search);
+    const slug = params.get('slug');
+    if(slug){
+      await renderEditor(NGPC_AUTH.db, user, isAdmin, slug);
+    } else {
+      await renderList(NGPC_AUTH.db, user, isAdmin);
+    }
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

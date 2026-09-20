@@ -119,7 +119,7 @@
         <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
       </div>
     </div>
-    <a href="/play/2048/2048.ngp" class="rom-link" download>&#128190; Download ROM (.ngp)</a>
+    <a href="/play/2048/2048.ngp" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
     <a href="/play/2048/" class="play-link" id="play-link" hidden>&#127918; Play 2048 in Browser</a>
     <img src="/assets/2048-title.png" alt="2048 title screen" class="header-art" width="160" height="152">
   </header>
@@ -520,6 +520,17 @@
   // stays exactly as-is either way, this is purely about who sees the link.
   if(window.NGPC_AUTH){
     NGPC_AUTH.onAuthChange((user)=>{ el('play-link').hidden = !user; });
+
+    // Points the "Download ROM" link at a developer-uploaded build if one exists
+    // (games/2k.romPath, set from /admin/game/) instead of the static repo-committed file --
+    // falls back to whatever this page's own markup already has if the doc/field is missing.
+    (function(){
+      var romLinkEl = el('rom-link');
+      if(!romLinkEl || !NGPC_AUTH.db) return;
+      NGPC_AUTH.db.collection('games').doc('2k').get().then(function(doc){
+        if(doc.exists && doc.data().romPath) romLinkEl.href = doc.data().romPath;
+      }).catch(function(){ /* keep the static fallback href */ });
+    })();
   }
 
   initDb();
