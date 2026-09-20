@@ -65,6 +65,7 @@
   .badge.approved{ background:rgba(79,191,139,.18); color:var(--good); }
   .badge.disabled{ background:rgba(147,160,201,.18); color:var(--dim); margin-left:6px; }
   .badge.wants-dev{ background:rgba(122,162,247,.18); color:var(--accent2,#7aa2f7); margin-left:6px; }
+  .badge.is-developer{ background:rgba(226,160,60,.18); color:#e2a03c; margin-left:6px; }
   button{
     font:inherit; border:none; border-radius:7px; padding:7px 12px; cursor:pointer;
     font-weight:600; font-size:11.5px; width:auto;
@@ -258,10 +259,12 @@
     const pending = users.filter(u=>!u.approved).length;
     const disabled = users.filter(u=>u.disabled).length;
     const wantsDev = users.filter(u=>u.wantsDev).length;
+    const developers = users.filter(u=>u.isDeveloper).length;
     statsEl.innerHTML = [
       ['Total players', users.length],
       ['Pending approval', pending],
       ['Disabled', disabled],
+      ['Developers', developers],
       ['Want to dev', wantsDev],
     ].map(([label,n])=>'<div class="stat-tile"><div class="n tnum">'+n+'</div><div class="l">'+label+'</div></div>').join('');
   }
@@ -271,6 +274,9 @@
       ? '<span class="badge approved">Approved</span>'
       : '<span class="badge pending">Pending</span>')
       + (u.disabled ? '<span class="badge disabled">Disabled</span>' : '')
+      // Actually assigned as a game's developer (Games panel below) -- a stronger, admin-set
+      // signal than the self-reported wantsDev checkbox, so it gets its own distinct badge.
+      + (u.isDeveloper ? '<span class="badge is-developer" title="Assigned as a developer on at least one game — see the Games panel">Developer</span>' : '')
       + (u.wantsDev ? '<button type="button" class="badge wants-dev" data-action="clear-dev" data-uid="'+u.uid+'" title="Checked &quot;Developer&quot; at signup -- click to clear (e.g. if mis-clicked)">Wants Dev &times;</button>' : '');
   }
 
@@ -365,6 +371,7 @@
         '<td><a href="/admin/game/?slug='+encodeURIComponent(g.slug)+'">Manage</a></td>'+
       '</tr>';
     }).join('');
+    return games;
   }
 
   async function loadAndRenderSubmissions(db){
@@ -491,22 +498,30 @@
     let users = [];
     try{
       users = await loadUsers(NGPC_AUTH.db);
-      renderStats(users);
-      renderRows(users, NGPC_AUTH.db);
     }catch(e){
       statusEl.innerHTML = '<div class="msg err">Couldn’t load players: '+escapeHtml((e&&e.message)||'unknown error')
         +'. If you just added account approval, make sure the updated firestore.rules has been'
         +' published to Firebase Console (and the approval backfill script run first).</div>';
     }
+    // assignedDevUids drives the "Developer" badge in the Players table below -- these are
+    // accounts actually assigned as a game's developerUid (Games panel), which is a different,
+    // stronger signal than the self-reported wantsDev checkbox from signup.
+    let assignedDevUids = new Set();
     try{
       const uidToUsername = {};
       users.forEach(u=>{ uidToUsername[u.uid] = u.username; });
-      await loadAndRenderGames(NGPC_AUTH.db, uidToUsername);
+      const games = await loadAndRenderGames(NGPC_AUTH.db, uidToUsername);
+      assignedDevUids = new Set((games||[]).filter(g=>g.developerUid).map(g=>g.developerUid));
     }catch(e){
       gamesContentEl.hidden = false;
       gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t load games: '+escapeHtml((e&&e.message)||'unknown error')
         +'. If you just added this feature, make sure the updated firestore.rules has been published,'
         +' and run NGPC-Admin-Scripts/seed-games.js --apply first.</div>';
+    }
+    if(users.length){
+      users.forEach(u=>{ u.isDeveloper = assignedDevUids.has(u.uid); });
+      renderStats(users);
+      renderRows(users, NGPC_AUTH.db);
     }
     try{
       await loadAndRenderSubmissions(NGPC_AUTH.db);
