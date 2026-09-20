@@ -432,10 +432,13 @@
       }
 
       const payload = lastPathSegment(value).toUpperCase();
-      const code = payload.slice(0, 2);
-      const slug = GAME_ROUTES[code];
+      // Game codes are 2-6 characters -- longest-match against known codes, since there's no
+      // delimiter after a variable-length code in the payload itself.
+      const sortedCodes = Object.keys(GAME_ROUTES).sort((a,b)=>b.length-a.length);
+      const code = sortedCodes.find(c=>payload.startsWith(c)) || null;
+      const slug = code ? GAME_ROUTES[code] : null;
       if(!slug){
-        showMsg('err', 'Unrecognized game code ("'+escapeHtml(code)+'") — that leaderboard might not be set up yet.');
+        showMsg('err', 'Unrecognized game code — that leaderboard might not be set up yet.');
         setBusy(false);
         return;
       }

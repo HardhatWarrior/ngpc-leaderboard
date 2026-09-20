@@ -333,7 +333,7 @@ service cloud.firestore {
              'status', 'submittedAt', 'reviewedAt', 'reviewNote'
            ])
         && request.resource.data.proposedName is string
-        && request.resource.data.proposedCode is string && request.resource.data.proposedCode.matches('^[A-Z0-9]{2}$')
+        && request.resource.data.proposedCode is string && request.resource.data.proposedCode.matches('^[A-Z0-9]{2,6}$')
         && request.resource.data.submittedAt is int;
 
       // The submitter can still edit their own submission while it's pending (fix a typo before

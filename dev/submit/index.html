@@ -98,7 +98,7 @@
     <p class="hint">Ask the site admin for the QR SDK integration guide if you haven't built your game's on-device QR submission yet. This form captures the same spec that guide's submission template asks for -- fill it out from your own finalized payload design.</p>
 
     <label><b>Game name</b><input type="text" id="f-name" maxlength="40" placeholder="e.g. Neo Bowling"></label>
-    <label><b>Proposed 2-character game code</b><input type="text" id="f-code" maxlength="2" placeholder="e.g. NB" style="text-transform:uppercase;max-width:100px"></label>
+    <label><b>Proposed game code (2-6 characters)</b><input type="text" id="f-code" maxlength="6" placeholder="e.g. NB" style="text-transform:uppercase;max-width:140px"></label>
 
     <label><b>ROM file (.ngp/.ngc)</b><input type="file" id="f-rom" accept=".ngp,.ngc"></label>
     <label><b>Title screen screenshot (PNG)</b><input type="file" id="f-shot" accept=".png"></label>
@@ -176,8 +176,9 @@
     fieldRows.appendChild(tr);
   }
   el('add-field').addEventListener('click', ()=>addFieldRow());
-  // Seed with the 2-char game code row, since every payload starts with one (see the SDK guide).
-  addFieldRow('Game code', '2', 'fixed', 'e.g. "'+'NB'+'" -- matches the code above');
+  // Seed with the game code row, since every payload starts with one (see the SDK guide) --
+  // width left blank since it's now 2-6 chars depending on what's entered above, not always 2.
+  addFieldRow('Game code', '', 'fixed', 'matches the code entered above');
   addFieldRow('Initials', '3', 'A-Z', '');
 
   function collectFields(){
@@ -251,7 +252,7 @@
       const payloadFields = collectFields();
 
       if(!name){ submitMsg.innerHTML = '<div class="msg err">Game name is required.</div>'; return; }
-      if(!/^[A-Z0-9]{2}$/.test(code)){ submitMsg.innerHTML = '<div class="msg err">Game code must be exactly 2 letters/digits.</div>'; return; }
+      if(!/^[A-Z0-9]{2,6}$/.test(code)){ submitMsg.innerHTML = '<div class="msg err">Game code must be 2-6 letters/digits.</div>'; return; }
       if(!romFile){ submitMsg.innerHTML = '<div class="msg err">A ROM file is required.</div>'; return; }
       if(!shotFile){ submitMsg.innerHTML = '<div class="msg err">A title screen screenshot is required.</div>'; return; }
       if(!/\.(ngp|ngc)$/i.test(romFile.name)){ submitMsg.innerHTML = '<div class="msg err">ROM must be .ngp or .ngc.</div>'; return; }

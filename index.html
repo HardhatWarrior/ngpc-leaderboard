@@ -513,12 +513,22 @@
     return parts.length ? parts[parts.length-1] : '';
   }
 
+  // Game codes are 2-6 characters (not always 2) -- a payload has no delimiter after its code,
+  // so the only way to find where it ends is to check known codes longest-first against the
+  // payload's own start. A code that happens to prefix a longer one (e.g. "BW" vs a hypothetical
+  // "BWX") still resolves correctly this way, since the longer candidate is tried first.
+  function resolveGameCode(payload, routes){
+    const codes = Object.keys(routes).sort((a,b)=>b.length-a.length);
+    for(const code of codes){ if(payload.startsWith(code)) return code; }
+    return null;
+  }
+
   function routeToGame(text){
     const payload = lastPathSegment(text).toUpperCase();
-    const code = payload.slice(0,2).toUpperCase();
-    const slug = GAME_ROUTES[code];
+    const code = resolveGameCode(payload, GAME_ROUTES);
+    const slug = code ? GAME_ROUTES[code] : null;
     if(!slug){
-      formMsg.innerHTML = '<div class="msg err">Unrecognized game code ("'+escapeHtml(code)+'") &mdash; that leaderboard might not be set up yet.</div>';
+      formMsg.innerHTML = '<div class="msg err">Unrecognized game code &mdash; that leaderboard might not be set up yet.</div>';
       return;
     }
     // A real navigation, not a fetch -- lands on that game's own page, which reads the payload
