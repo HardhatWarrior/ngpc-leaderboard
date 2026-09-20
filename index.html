@@ -289,11 +289,14 @@
          registry file shared with 404.html, which only needs to case-fix a path, not know
          anything about a game's name or art. Add a new <a class="tile"> block per game.
          data-game is that game's own QR routing code (see GAME_ROUTES below), used to look up
-         its weekly submission count for the "Most Active" sort. data-added is when this game
-         was added to the site (bump it by hand on a meaningful relaunch/rebuild, same spirit as
-         everything else on this page that's hand-maintained rather than derived) -- it drives
-         the default "Most Recent" sort, which a static site with no backend can't compute from
-         real git history at page-load time. -->
+         its weekly submission count for the "Most Active" sort. data-added drives the default
+         "Most Recent" sort -- bump it by hand to the current time whenever that game's ROM is
+         rebuilt/redeployed (not just on first launch), so an update actually surfaces the tile.
+         GitHub Pages doesn't expose a real per-file last-modified timestamp (every file on the
+         site reports the same value: the last deploy time for the whole repo, not that file's
+         own history), so there's no way to derive this automatically at page-load time -- this
+         is the practical stand-in. -->
+
 
     <a class="tile" href="/bw/" data-game="BW" data-added="2026-09-16T13:50:07-07:00">
       <div class="tile-art">
@@ -340,7 +343,7 @@
       </div>
     </a>
 
-    <a class="tile" href="/overrev/" data-game="OV" data-added="2026-09-18T13:33:36-07:00">
+    <a class="tile" href="/overrev/" data-game="OV" data-added="2026-09-19T19:20:01-07:00">
       <div class="tile-art">
         <img src="/assets/overrev-title.png" alt="Over Rev title screen" width="160" height="152">
       </div>
@@ -349,7 +352,7 @@
       </div>
     </a>
 
-    <a class="tile" href="/gardenia/" data-game="GD" data-added="2026-09-19T09:05:59-07:00">
+    <a class="tile" href="/gardenia/" data-game="GD" data-added="2026-09-19T19:20:02-07:00">
       <div class="tile-art">
         <img src="/assets/gardenia-title.png" alt="Gardenia title screen" width="160" height="152">
       </div>
