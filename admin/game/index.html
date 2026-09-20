@@ -221,8 +221,8 @@
      Base32, not plain digits) -- exampleIsReal says which. */
   const PAYLOAD_SPECS = {
     bw: {
-      urlPrefix: 'HTTPS://WWW.NGPC-DEV.COM/BW/',
-      urlNote: 'Full scheme + "WWW." -- unlike Yahtzee/Farkle below, Bowling’s device firmware hasn’t been shortened to the bare-apex-domain form yet.',
+      urlPrefix: 'NGPC-DEV.COM/BW/',
+      urlNote: 'Scheme- and "WWW."-less, same convention as Yahtzee/Farkle/Tetris’s own QR_URL_PREFIX (shortened from the old "HTTPS://WWW.NGPC-DEV.COM/BW/" form).',
       fields: [
         {name:'Game code', width:'2', format:'fixed', notes:'"BW"'},
         {name:'Initials', width:'3', format:'A-Z', notes:''},
@@ -230,11 +230,11 @@
         {name:'Roll count', width:'2', format:'numeric, zero-padded', notes:'12-21'},
         {name:'Rolls', width:'1 × roll count', format:'0-9 or A', notes:'A = strike (10 pins); variable length'},
       ],
-      totalLength: '29 (prefix) + 2 + 3 + 2 + 2 + roll count = 38 + roll count = 50–59 chars, variable',
+      totalLength: '16 (prefix) + 2 + 3 + 2 + 2 + roll count = 25 + roll count = 37–46 chars, variable',
       sortField: 'score (descending)',
       scorecard: 'The 300-point total is NOT sent raw — the leaderboard reconstructs it client-side from the roll history alone, using the same strike/spare lookahead as score.c (see lb/index.html’s computeScores()/frameMarks()). Frame-by-frame marks (X, /, -) are derived the same way for the expandable scorecard.',
-      example: 'BW' + 'DJD' + '14' + '12' + '[12–21 roll chars]',
-      exampleIsReal: false,
+      example: 'NGPC-DEV.COM/BW/BWDBG1412AAAAAAAAAAAA',
+      exampleIsReal: true,
       firestore: [
         {field:'game', type:'"BW" (fixed)'},
         {field:'initials', type:'string, ^[A-Z]{3}$'},
@@ -244,8 +244,8 @@
       ],
     },
     tt: {
-      urlPrefix: 'HTTPS://WWW.NGPC-DEV.COM/TT/',
-      urlNote: 'Full scheme + "WWW." — same not-yet-shortened situation as Bowling.',
+      urlPrefix: 'NGPC-DEV.COM/TT/',
+      urlNote: 'Scheme- and "WWW."-less, same convention as Yahtzee/Farkle/Bowling’s own QR_URL_PREFIX (shortened from the old "HTTPS://WWW.NGPC-DEV.COM/TT/" form).',
       fields: [
         {name:'Game code', width:'2', format:'fixed', notes:'"TT"'},
         {name:'Initials', width:'3', format:'A-Z', notes:''},
@@ -253,11 +253,11 @@
         {name:'Lines', width:'5', format:'numeric, zero-padded', notes:''},
         {name:'Level', width:'3', format:'numeric, zero-padded', notes:''},
       ],
-      totalLength: '29 (prefix) + 2 + 3 + 8 + 5 + 3 = 50 chars, fixed',
+      totalLength: '16 (prefix) + 2 + 3 + 8 + 5 + 3 = 37 chars, fixed',
       sortField: 'score (descending)',
       scorecard: 'Score/lines/level are sent as final raw totals — no reconstruction needed, the leaderboard just prints them.',
-      example: 'TT' + 'DJD' + '00014020' + '00089' + '007',
-      exampleIsReal: false,
+      example: 'NGPC-DEV.COM/TT/TTDBG0001402000089007',
+      exampleIsReal: true,
       firestore: [
         {field:'game', type:'"TT" (fixed)'},
         {field:'initials', type:'string, ^[A-Z]{3}$'},
