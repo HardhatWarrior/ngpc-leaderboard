@@ -16,6 +16,13 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Single hardcoded admin uid (hardhatwarrior) -- there is exactly one site owner and no
+    // multi-admin need, so a role field/collection would be pure overhead. Used to gate the
+    // account-approval toggle and reading anyone else's private/ subcollection (recovery email).
+    function isAdmin() {
+      return request.auth != null && request.auth.uid == 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
+    }
+
     // ---- username/password auth (see auth.js) ----
     //
     // usernames/{usernameLower} exists purely as a uniqueness reservation
@@ -36,10 +43,13 @@ service cloud.firestore {
       allow update: if false;
     }
 
-    // users/{uid} is the public profile (username, optional recovery email -- never read back by
-    // any page today, collected for a future recovery flow -- and an optional 32x32 avatar, a
-    // flat list of 1024 RGB444 words packed r|g<<4|b<<8 same as the tile editor's own hexWord()).
-    // Public read because a username/avatar is shown on the leaderboard next to a score.
+    // users/{uid} is the public profile (username, `approved` status, and an optional 32x32
+    // avatar -- a flat list of 1024 RGB444 words packed r|g<<4|b<<8 same as the tile editor's own
+    // hexWord()). Public read because a username/avatar/approval status is shown on the
+    // leaderboard and account/admin pages. Recovery email lives in a SEPARATE private/ subdoc
+    // below -- keeping it off this document is the whole point (a publicly-readable doc can never
+    // selectively hide one field from a direct query, so anything sensitive has to live somewhere
+    // else entirely).
     match /users/{uid} {
       allow read: if true;
 
@@ -47,34 +57,71 @@ service cloud.firestore {
         return d.username is string
           && d.username.matches('^[A-Za-z0-9_]{3,16}$')
           && d.usernameLower == d.username.lower()
-          && (!('recoveryEmail' in d) || d.recoveryEmail is string)
+          && d.approved is bool
           && (!('avatar' in d) || (d.avatar is list && d.avatar.size() == 1024));
       }
 
+      // New accounts always start unapproved (approved:false) -- nobody can self-approve at
+      // signup; only isAdmin() can ever flip it true (see allow update below). Until approved,
+      // the account can still sign in and submit scores (scores/{scoreId}'s own submitterApproved
+      // check is what actually keeps those submissions off the public boards, not this).
       allow create: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'recoveryEmail', 'createdAt', 'avatar'])
+        && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved'])
         && request.resource.data.createdAt is int
+        && request.resource.data.approved == false
         && isWellFormedProfile(request.resource.data);
 
-      // Account page: username/email/avatar can change, createdAt cannot.
-      allow update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'recoveryEmail', 'createdAt', 'avatar'])
-        && request.resource.data.createdAt == resource.data.createdAt
-        && isWellFormedProfile(request.resource.data);
+      // Two distinct update paths, kept mutually exclusive by field scope:
+      //  - the owner can change username/avatar (account page) but never their own `approved` bit
+      //  - the admin can flip ONLY `approved` on any account, never touch anything else about it
+      allow update: if request.auth != null && (
+        (request.auth.uid == uid
+          && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved'])
+          && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.approved == resource.data.approved
+          && isWellFormedProfile(request.resource.data))
+        || (isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved'])
+          && request.resource.data.approved is bool)
+      );
 
       allow delete: if false;
+
+      // Recovery email, split out from the parent doc specifically so it's never exposed by the
+      // parent's own public `allow read: if true`. Only the owner and the admin can ever read or
+      // write it. auth.js's updateRecoveryEmail() targets this doc (fixed id 'contact') instead of
+      // the parent profile now.
+      match /private/{docId} {
+        allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+        allow write: if request.auth != null && request.auth.uid == uid
+          && docId == 'contact'
+          && request.resource.data.keys().hasOnly(['recoveryEmail'])
+          && (!('recoveryEmail' in request.resource.data) || request.resource.data.recoveryEmail is string);
+        allow delete: if request.auth != null && request.auth.uid == uid && docId == 'contact';
+      }
     }
 
     match /scores/{scoreId} {
-      // Public leaderboard -- anyone can read, signing in is never required to browse.
-      allow read: if true;
+      // A score is only publicly visible once its submitter's account is approved -- checked
+      // per-document (both get() and list() evaluate this per matched doc, silently dropping any
+      // that fail rather than denying the whole query, which is exactly "stays hidden until
+      // approved" rather than "breaks the board"). A pre-sign-in-required score with no uid at all
+      // (from before that policy) has no submitter to gate on, so it stays visible as-is. The
+      // extra get() costs one additional document read per matched score -- acceptable at this
+      // project's scale, and far simpler than denormalizing/re-syncing an approved flag onto every
+      // score doc whenever an account's status changes.
+      function submitterApproved(d) {
+        return !('uid' in d)
+          || (exists(/databases/$(database)/documents/users/$(d.uid))
+              && get(/databases/$(database)/documents/users/$(d.uid)).data.approved == true);
+      }
+      allow read: if submitterApproved(resource.data);
 
-      // Sign-in is required to submit a score (anonymous QR submission was retired) -- uid and
-      // username must both be present and can't be spoofed: uid must match the actual signed-in
-      // caller, and username is shape-checked even though it's just a denormalized copy of
-      // users/{uid}.username (not re-verified against that doc -- acceptable here since it can
-      // only ever be set to request.auth's OWN uid, so at worst a stale username after a future
-      // rename, not another user's identity).
+      // A score's uid/username pair is required (anonymous QR submission was retired) and can't
+      // be spoofed: uid must match the actual signed-in caller, and username is shape-checked even
+      // though it's just a denormalized copy of users/{uid}.username (not re-verified against that
+      // doc -- acceptable here since it can only ever be set to request.auth's OWN uid, so at
+      // worst a stale username after a future rename, not another user's identity).
       function hasValidIdentity(d) {
         return ('uid' in d) && ('username' in d)
           && request.auth != null && request.auth.uid == d.uid

@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Admin</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{
+    margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+    padding-inline:20px; padding-block:28px; display:flex; justify-content:center;
+  }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; }
+  .tnum{ font-variant-numeric:tabular-nums; }
+  #shell{ width:100%; max-width:960px; display:flex; flex-direction:column; gap:22px; }
+
+  header{ text-align:center; display:flex; flex-direction:column; gap:6px; }
+  header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
+  header p{ margin:0; color:var(--dim); font-size:13px; }
+
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  .panel .hint{ margin:0 0 14px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+
+  #denied{ text-align:center; color:var(--dim); font-size:13.5px; padding:40px 0; }
+
+  table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  th{ text-align:left; color:var(--dim); font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; padding:8px 10px; border-bottom:1px solid var(--border); }
+  td{ padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
+  tr:last-child td{ border-bottom:none; }
+  .col-user{ display:flex; align-items:center; gap:8px; }
+  .row-avatar{ width:26px; height:26px; border-radius:4px; border:1px solid var(--border); image-rendering:pixelated; flex:none; }
+  .username{ font-weight:600; color:var(--cream); }
+  .username a{ color:inherit; text-decoration:none; }
+  .username a:hover{ text-decoration:underline; }
+  .email-cell{ color:var(--dim); font-family:"IBM Plex Mono",monospace; font-size:11.5px; }
+  .badge{ display:inline-block; font-size:10px; font-weight:700; letter-spacing:.04em; padding:3px 8px; border-radius:5px; text-transform:uppercase; }
+  .badge.pending{ background:rgba(229,97,90,.18); color:var(--danger); }
+  .badge.approved{ background:rgba(79,191,139,.18); color:var(--good); }
+  .badge.disabled{ background:rgba(147,160,201,.18); color:var(--dim); margin-left:6px; }
+  button{
+    font:inherit; border:none; border-radius:7px; padding:7px 12px; cursor:pointer;
+    font-weight:600; font-size:11.5px; width:auto;
+  }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+  .btn-approve{ background:var(--good); color:#0a1f16; }
+  .btn-approve:hover:not(:disabled){ filter:brightness(1.1); }
+  .btn-revoke{ background:transparent; border:1px solid var(--border); color:var(--dim); }
+  .btn-revoke:hover:not(:disabled){ border-color:var(--danger); color:var(--danger); }
+
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+
+  .stats-row{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:16px; }
+  .stat-tile{ background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:10px 16px; min-width:110px; }
+  .stat-tile .n{ font-family:"Press Start 2P",monospace; font-size:16px; color:var(--cream); }
+  .stat-tile .l{ font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; margin-top:4px; }
+
+  footer{ text-align:center; color:var(--dim); font-size:11px; }
+  footer a{ color:var(--accent2); }
+</style>
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <h1 class="px">ADMIN</h1>
+    <p>Player accounts &mdash; approval, contact info, status.</p>
+  </header>
+
+  <div id="denied" hidden></div>
+
+  <section class="panel" id="content" hidden>
+    <h2>Players</h2>
+    <p class="hint">New accounts start unapproved &mdash; they can sign in and submit scores right away, but those scores stay off the public boards until you approve the account here. Disabling a login isn't done from this page (it needs the Admin SDK); run <code>disable-user.js</code> / <code>enable-user.js</code> locally instead &mdash; see NGPC-Admin-Scripts/README.md.</p>
+    <div class="stats-row" id="stats-row"></div>
+    <div id="list-status"></div>
+    <div style="overflow-x:auto">
+      <table>
+        <thead>
+          <tr><th>Player</th><th>Created</th><th>Email</th><th>Status</th><th></th></tr>
+        </thead>
+        <tbody id="user-rows"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer><a href="/">&larr; All games</a></footer>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
+  const el = (id)=>document.getElementById(id);
+  const deniedEl = el('denied');
+  const contentEl = el('content');
+  const rowsEl = el('user-rows');
+  const statsEl = el('stats-row');
+  const statusEl = el('list-status');
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function fmtWhen(ts){
+    if(!ts) return '';
+    return new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+  }
+
+  async function loadUsers(db){
+    statusEl.textContent = 'Loading…';
+    const [usersSnap, privateSnap] = await Promise.all([
+      db.collection('users').get(),
+      // collectionGroup('private') is gated by firestore.rules -- only readable here at all
+      // because this page only reaches this point once the signed-in caller IS the admin.
+      db.collectionGroup('private').get(),
+    ]);
+
+    const emailByUid = {};
+    privateSnap.forEach(doc=>{
+      const uid = doc.ref.parent.parent.id;
+      const data = doc.data();
+      if(data.recoveryEmail) emailByUid[uid] = data.recoveryEmail;
+    });
+
+    const users = [];
+    usersSnap.forEach(doc=>{
+      const d = doc.data();
+      users.push({
+        uid: doc.id,
+        username: d.username || '(unknown)',
+        createdAt: d.createdAt || null,
+        approved: d.approved === undefined ? true : !!d.approved,
+        disabled: !!d.disabled,
+        avatar: Array.isArray(d.avatar) ? d.avatar : null,
+        email: emailByUid[doc.id] || null,
+      });
+    });
+    users.sort((a,b)=>(b.createdAt||0)-(a.createdAt||0));
+    statusEl.textContent = '';
+    return users;
+  }
+
+  function renderStats(users){
+    const pending = users.filter(u=>!u.approved).length;
+    const disabled = users.filter(u=>u.disabled).length;
+    statsEl.innerHTML = [
+      ['Total players', users.length],
+      ['Pending approval', pending],
+      ['Disabled', disabled],
+    ].map(([label,n])=>'<div class="stat-tile"><div class="n tnum">'+n+'</div><div class="l">'+label+'</div></div>').join('');
+  }
+
+  function renderRows(users, db){
+    rowsEl.innerHTML = users.map(u=>{
+      const avatarHtml = u.avatar
+        ? '<canvas class="row-avatar" data-avatar-uid="'+u.uid+'"></canvas>'
+        : '<div class="row-avatar"></div>';
+      const statusBadge = u.approved
+        ? '<span class="badge approved">Approved</span>'
+        : '<span class="badge pending">Pending</span>';
+      const disabledBadge = u.disabled ? '<span class="badge disabled">Disabled</span>' : '';
+      const actionBtn = u.approved
+        ? '<button type="button" class="btn-revoke" data-action="revoke" data-uid="'+u.uid+'">Revoke</button>'
+        : '<button type="button" class="btn-approve" data-action="approve" data-uid="'+u.uid+'">Approve</button>';
+      return '<tr data-row-uid="'+u.uid+'">'+
+        '<td><div class="col-user">'+avatarHtml+'<span class="username"><a href="/user/?u='+encodeURIComponent(u.username)+'">'+escapeHtml(u.username)+'</a></span></div></td>'+
+        '<td class="tnum">'+fmtWhen(u.createdAt)+'</td>'+
+        '<td class="email-cell">'+(u.email ? escapeHtml(u.email) : '&mdash;')+'</td>'+
+        '<td>'+statusBadge+disabledBadge+'</td>'+
+        '<td>'+actionBtn+'</td>'+
+      '</tr>';
+    }).join('');
+    users.forEach(u=>{
+      if(!u.avatar) return;
+      const canvasEl = rowsEl.querySelector('[data-avatar-uid="'+u.uid+'"]');
+      if(canvasEl && window.NGPC_AUTH) NGPC_AUTH.renderAvatarToCanvas(canvasEl, u.avatar, 26/NGPC_AUTH.AVATAR_SIZE);
+    });
+
+    async function onActionClick(e){
+      const btn = e.currentTarget;
+      const uid = btn.dataset.uid;
+      const approve = btn.dataset.action === 'approve';
+      if(!approve && !confirm('Revoke approval for this player? Their scores will disappear from the public boards until re-approved.')) return;
+      btn.disabled = true;
+      try{
+        await db.collection('users').doc(uid).update({approved: approve});
+        const row = rowsEl.querySelector('tr[data-row-uid="'+uid+'"]');
+        if(row){
+          row.querySelector('td:nth-child(4)').innerHTML = approve
+            ? '<span class="badge approved">Approved</span>'
+            : '<span class="badge pending">Pending</span>';
+          const cell = row.querySelector('td:last-child');
+          cell.innerHTML = approve
+            ? '<button type="button" class="btn-revoke" data-action="revoke" data-uid="'+uid+'">Revoke</button>'
+            : '<button type="button" class="btn-approve" data-action="approve" data-uid="'+uid+'">Approve</button>';
+          cell.querySelector('button').addEventListener('click', onActionClick);
+        }
+      }catch(e){
+        statusEl.innerHTML = '<div class="msg err">Update failed: '+escapeHtml(e.message||'unknown')+'</div>';
+        btn.disabled = false;
+      }
+    }
+    rowsEl.querySelectorAll('button[data-action]').forEach(btn=>{
+      btn.addEventListener('click', onActionClick);
+    });
+  }
+
+  async function boot(){
+    if(!window.NGPC_AUTH){
+      deniedEl.hidden = false;
+      deniedEl.textContent = 'Admin page isn’t available right now (a required library failed to load).';
+      return;
+    }
+    await NGPC_AUTH.authReady;
+    const user = NGPC_AUTH.currentUser;
+    if(!user || user.uid !== ADMIN_UID){
+      deniedEl.hidden = false;
+      deniedEl.textContent = 'Not authorized. Sign in as the site admin to view this page.';
+      return;
+    }
+    contentEl.hidden = false;
+    const users = await loadUsers(NGPC_AUTH.db);
+    renderStats(users);
+    renderRows(users, NGPC_AUTH.db);
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

@@ -60,7 +60,10 @@ window.NGPC_AUTH = (function(){
     const email = usernameToEmail(usernameLower);
     const cred = await auth.createUserWithEmailAndPassword(email, password);
     const uid = cred.user.uid;
-    const profile = { username, usernameLower, createdAt: Date.now(), avatar: DEFAULT_AVATAR };
+    // approved:false always -- an account can sign in and submit scores right away, but stays
+    // off the public boards until the admin approves it (see firestore.rules' submitterApproved()
+    // on the scores collection). Only isAdmin() can ever flip this bit; a client can't self-approve.
+    const profile = { username, usernameLower, createdAt: Date.now(), avatar: DEFAULT_AVATAR, approved: false };
     const recoveryEmail = (recoveryEmailRaw||'').trim();
     if(recoveryEmail) profile.recoveryEmail = recoveryEmail;
     try{
@@ -124,14 +127,31 @@ window.NGPC_AUTH = (function(){
     }
   }
 
+  // Lives at users/{uid}/private/contact, NOT on the public profile doc -- see firestore.rules'
+  // own comment on why recovery email has to be split out into a separately-gated location
+  // (only the owner and the admin can ever read it; the parent users/{uid} doc is public).
   async function updateRecoveryEmail(emailRaw){
     const user = auth.currentUser;
     if(!user) throw {code:'not-signed-in', message:'Sign in first.'};
     const email = (emailRaw||'').trim();
     // Firestore rejects `undefined`, and there's no user-facing way to fully clear a field via
-    // .update() with a plain value -- FieldValue.delete() is the documented way to remove one.
+    // .set()/merge with a plain value -- FieldValue.delete() is the documented way to remove one.
     const value = email ? email : firebase.firestore.FieldValue.delete();
-    await db.collection('users').doc(user.uid).update({recoveryEmail: value});
+    await db.collection('users').doc(user.uid).collection('private').doc('contact')
+      .set({recoveryEmail: value}, {merge:true});
+  }
+
+  // Reads the signed-in user's OWN recovery email (only they, or the admin, can read this at
+  // all -- see firestore.rules). Separate from loadProfile() below, which only ever reads the
+  // public profile doc, since folding this into every profile load would mean every leaderboard
+  // page attempts a read that's denied for anyone browsing someone else's stats.
+  async function fetchOwnRecoveryEmail(){
+    const user = auth.currentUser;
+    if(!user) return null;
+    try{
+      const snap = await db.collection('users').doc(user.uid).collection('private').doc('contact').get();
+      return snap.exists ? (snap.data().recoveryEmail || null) : null;
+    }catch(e){ return null; }
   }
 
   const AVATAR_SIZE = 32;
@@ -490,12 +510,19 @@ window.NGPC_AUTH = (function(){
       const snap = await db.collection('users').doc(uid).get();
       if(snap.exists) data = snap.data();
     }catch(e){ /* leave defaults -- bar shows a generic signed-in state */ }
+    // recoveryEmail no longer lives on this doc (see firestore.rules) -- a separate read against
+    // the caller's own private/contact subdoc, which only they (or the admin) can read.
+    const recoveryEmail = await fetchOwnRecoveryEmail();
     currentUser = {
       uid,
       username: data.username || null,
       usernameLower: data.usernameLower || null,
-      recoveryEmail: data.recoveryEmail || null,
+      recoveryEmail,
       avatar: Array.isArray(data.avatar) ? data.avatar : null,
+      // Accounts created before this field existed have no `approved` key at all -- treat that
+      // as approved (grandfathered in), same stance the one-time backfill script takes so a
+      // pre-existing player's history doesn't vanish from the boards.
+      approved: data.approved === undefined ? true : !!data.approved,
     };
     listeners.forEach(cb=>cb(currentUser));
   }
