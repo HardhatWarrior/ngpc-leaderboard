@@ -496,6 +496,12 @@
         GAME_ROUTES[g.code] = g.slug;
         GAME_NAMES[g.code] = g.name || g.slug;
       });
+      // The ticker (connectTicker(), below) subscribes independently and starts immediately at
+      // load -- its first snapshot can easily arrive before this fetch resolves, rendering with
+      // GAME_NAMES still empty (falls back to the raw code, e.g. "2K" instead of "2048"). Re-run
+      // it against whatever it last received once names are actually populated, so that first
+      // paint self-corrects instead of staying wrong until the next live update happens to land.
+      if(lastTickerDocs) renderTicker(lastTickerDocs);
       renderGrid(games);
       gridStatusEl.textContent = '';
     }catch(e){
@@ -861,11 +867,15 @@
     });
   }
 
+  // Cached so loadGames() can re-render the ticker once GAME_NAMES is actually populated --
+  // see its own comment. null until the first snapshot arrives.
+  let lastTickerDocs = null;
+
   function connectTicker(){
     const db = window.NGPC_AUTH ? NGPC_AUTH.db : null;
     if(!db) return;
     db.collection('scores').where('approved','==',true).orderBy('submittedAt','desc').limit(10).onSnapshot(
-      (snap)=>{ renderTicker(snap.docs); },
+      (snap)=>{ lastTickerDocs = snap.docs; renderTicker(snap.docs); },
       (err)=>{ /* ticker is decorative -- a live-query failure just leaves it as-is, no error UI */ }
     );
   }
