@@ -230,13 +230,11 @@
   }
   .dev-banner.dev{ background:rgba(214,158,23,.85); }
   .dev-banner.beta{ background:rgba(92,143,214,.82); }
-  .dev-banner.coming-soon{ background:rgba(55,66,110,.9); }
 
-  /* NEW / UPDATED corner ribbon -- self-expires 30 days after being set (see buildTile()'s own
-     now-vs-*Until check); never persists past that on its own, no cleanup job needed. Position/
-     angle/size tuned against "UPDATED" (7 characters, the longer of the two labels) so it isn't
-     clipped by the tile's own overflow:hidden -- the original top:8px/left:-28px/rotate(-40deg)/
-     8.5px was only ever checked against "NEW" (3 characters) and cut "UPDATED" off mid-word. */
+  /* Corner ribbon -- Coming Soon / NEW / UPDATED are mutually exclusive (see buildTile()'s single
+     if/else-if chain), so all three share one top-left corner instead of fighting for space.
+     Size/angle tuned against "COMING SOON" (the longest of the three) so it isn't clipped by the
+     tile's own overflow:hidden. */
   .corner-badge{
     position:absolute; top:16px; left:-24px;
     transform:rotate(-35deg);
@@ -245,6 +243,7 @@
     padding:4px 0;
     box-shadow:0 2px 6px rgba(0,0,0,.4);
   }
+  .corner-badge.coming-soon{ background:rgba(55,66,110,.92); color:#fff; font-size:7px; }
   .corner-badge.new{ background:var(--accent); color:var(--accent-ink); }
   .corner-badge.updated{ background:var(--good); color:#0a1f16; }
 
@@ -426,38 +425,36 @@
     img.width = 160; img.height = 152;
     art.appendChild(img);
 
-    if(data.devStatus === 'coming-soon'){
-      const banner = document.createElement('div');
-      banner.className = 'dev-banner coming-soon';
-      banner.textContent = 'COMING SOON';
-      art.appendChild(banner);
-    } else if(data.devStatus === 'dev' || data.devStatus === 'beta'){
+    // "In Development"/"Beta" stay a bottom banner. Coming Soon / NEW / UPDATED are mutually
+    // exclusive with EACH OTHER (never more than one at a time) and all live in the same top-left
+    // corner ribbon -- Coming Soon takes priority while it's set (it's a devStatus, not a
+    // timed flag, so it doesn't expire on its own the way NEW/UPDATED do); once a developer
+    // leaves "coming soon" the game goes straight to a fresh NEW ribbon instead (see
+    // admin/game/index.html's own status-change handler, which sets newUntil at that same
+    // moment), so this chain never actually needs to fall through past Coming Soon in practice.
+    if(data.devStatus === 'dev' || data.devStatus === 'beta'){
       const banner = document.createElement('div');
       banner.className = 'dev-banner ' + data.devStatus;
       banner.textContent = data.devStatus === 'beta' ? 'BETA' : 'IN DEVELOPMENT';
       art.appendChild(banner);
     }
 
-    // NEW (admin-only, set at approval time -- or reset fresh whenever a developer leaves
-    // "coming soon" for a real status, see admin/game/index.html) beats UPDATED (auto-set
-    // whenever a developer uploads a ROM) if somehow both windows are open at once -- NEW is the
-    // rarer, more significant event. Both self-expire client-side; the underlying *Until fields
-    // never need a cleanup job, an expired one just stops matching this check on the next page
-    // load. Neither ribbon ever shows on a "coming soon" tile, regardless of *Until -- the bottom
-    // banner above is the only badge a not-yet-visible game gets.
     const now = Date.now();
-    if(data.devStatus !== 'coming-soon'){
-      if(data.newUntil && data.newUntil > now){
-        const ribbon = document.createElement('div');
-        ribbon.className = 'corner-badge new';
-        ribbon.textContent = 'NEW';
-        art.appendChild(ribbon);
-      } else if(data.updatedUntil && data.updatedUntil > now){
-        const ribbon = document.createElement('div');
-        ribbon.className = 'corner-badge updated';
-        ribbon.textContent = 'UPDATED';
-        art.appendChild(ribbon);
-      }
+    if(data.devStatus === 'coming-soon'){
+      const ribbon = document.createElement('div');
+      ribbon.className = 'corner-badge coming-soon';
+      ribbon.textContent = 'COMING SOON';
+      art.appendChild(ribbon);
+    } else if(data.newUntil && data.newUntil > now){
+      const ribbon = document.createElement('div');
+      ribbon.className = 'corner-badge new';
+      ribbon.textContent = 'NEW';
+      art.appendChild(ribbon);
+    } else if(data.updatedUntil && data.updatedUntil > now){
+      const ribbon = document.createElement('div');
+      ribbon.className = 'corner-badge updated';
+      ribbon.textContent = 'UPDATED';
+      art.appendChild(ribbon);
     }
 
     const body = document.createElement('div');
