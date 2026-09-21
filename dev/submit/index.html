@@ -105,13 +105,26 @@
 
     <label><b>ROM file (.ngp/.ngc)</b><input type="file" id="f-rom" accept=".ngp,.ngc"></label>
     <label><b>Title screen screenshot (PNG)</b><input type="file" id="f-shot" accept=".png"></label>
+    <label><b>Extra screenshot/GIF #1 (optional)</b><input type="file" id="f-shot2" accept=".png,.gif"></label>
+    <label><b>Extra screenshot/GIF #2 (optional)</b><input type="file" id="f-shot3" accept=".png,.gif"></label>
+    <p class="hint" style="margin-top:-8px">The two extras are just extra art for your game's own leaderboard page later (a title screenshot, gameplay GIF, etc.) -- not shown on the main grid tile, and not built into a page automatically (see the note below).</p>
 
     <label><b>Payload field layout</b>
+      <p class="hint" style="margin:2px 0 10px">
+        <a href="/dev/submit/submission-template.json" download>Download a blank template</a> --
+        fill it out by hand, then use Import below to load it straight into this form instead of
+        typing everything here.
+      </p>
       <table class="field-table" id="field-table">
         <thead><tr><th>Field</th><th>Width</th><th>Format</th><th>Notes</th><th></th></tr></thead>
         <tbody id="field-rows"></tbody>
       </table>
-      <button type="button" class="btn-secondary" id="add-field">+ Add field</button>
+      <div class="row" style="margin-top:6px">
+        <button type="button" class="btn-secondary" id="add-field">+ Add field</button>
+        <label class="btn-secondary" for="f-import" style="display:inline-flex;align-items:center;margin:0;padding:11px 16px;font-weight:600;font-size:13px;cursor:pointer">Import from file&hellip;</label>
+        <input type="file" id="f-import" accept=".json" hidden>
+      </div>
+      <div id="import-msg"></div>
     </label>
 
     <label><b>Total payload length (characters)</b><input type="text" id="f-total-length" placeholder="e.g. 44" style="max-width:120px"></label>
@@ -193,6 +206,41 @@
     })).filter(f=>f.name);
   }
 
+  // Loads a filled-out submission-template.json (see that file's own _instructions) straight into
+  // the form -- every key is optional and anything unrecognized is ignored, so a developer editing
+  // the template by hand can't break this by leaving _instructions in or dropping a field.
+  el('f-import').addEventListener('change', (e)=>{
+    const file = e.target.files[0];
+    e.target.value = '';
+    if(!file) return;
+    const importMsgEl = el('import-msg');
+    importMsgEl.innerHTML = '';
+    const reader = new FileReader();
+    reader.onload = ()=>{
+      let data;
+      try{ data = JSON.parse(reader.result); }
+      catch(err){ importMsgEl.innerHTML = '<div class="msg err">That file isn’t valid JSON.</div>'; return; }
+      if(typeof data.gameName === 'string') el('f-name').value = data.gameName;
+      if(typeof data.gameCode === 'string') el('f-code').value = data.gameCode.toUpperCase();
+      if(typeof data.totalLength === 'string' || typeof data.totalLength === 'number') el('f-total-length').value = data.totalLength;
+      if(typeof data.sortField === 'string') el('f-sort-field').value = data.sortField;
+      if(data.sortDirection === 'asc' || data.sortDirection === 'desc') el('f-sort-dir').value = data.sortDirection;
+      if(typeof data.scorecardFormula === 'string') el('f-formula').value = data.scorecardFormula;
+      if(typeof data.otherNotes === 'string') el('f-notes').value = data.otherNotes;
+      if(Array.isArray(data.examplePayloads)) el('f-examples').value = data.examplePayloads.filter(Boolean).join('\n');
+      if(Array.isArray(data.payloadFields)){
+        fieldRows.innerHTML = '';
+        data.payloadFields.forEach(f=>{
+          if(f && typeof f === 'object') addFieldRow(f.name, f.width, f.format, f.notes);
+        });
+        if(!fieldRows.children.length){ addFieldRow('Game code', '', 'fixed', 'matches the code entered above'); addFieldRow('Initials', '3', 'A-Z', ''); }
+      }
+      importMsgEl.innerHTML = '<div class="msg ok">Imported — review the fields below, then attach your ROM/screenshots and submit.</div>';
+    };
+    reader.onerror = ()=>{ importMsgEl.innerHTML = '<div class="msg err">Couldn’t read that file.</div>'; };
+    reader.readAsText(file);
+  });
+
   async function uploadSubmissionFile(uid, subId, file, name){
     const storage = firebase.storage();
     const ref = storage.ref().child('submissions/'+uid+'/'+subId+'/'+name);
@@ -251,6 +299,8 @@
       const code = el('f-code').value.trim().toUpperCase();
       const romFile = el('f-rom').files[0];
       const shotFile = el('f-shot').files[0];
+      const shot2File = el('f-shot2').files[0];
+      const shot3File = el('f-shot3').files[0];
       const totalLength = el('f-total-length').value.trim();
       const sortField = el('f-sort-field').value.trim();
       const sortDirection = el('f-sort-dir').value;
@@ -265,16 +315,21 @@
       if(!shotFile){ submitMsg.innerHTML = '<div class="msg err">A title screen screenshot is required.</div>'; return; }
       if(!/\.(ngp|ngc)$/i.test(romFile.name)){ submitMsg.innerHTML = '<div class="msg err">ROM must be .ngp or .ngc.</div>'; return; }
       if(!/\.png$/i.test(shotFile.name)){ submitMsg.innerHTML = '<div class="msg err">Screenshot must be a .png.</div>'; return; }
+      if(shot2File && !/\.(png|gif)$/i.test(shot2File.name)){ submitMsg.innerHTML = '<div class="msg err">Extra screenshot #1 must be a .png or .gif.</div>'; return; }
+      if(shot3File && !/\.(png|gif)$/i.test(shot3File.name)){ submitMsg.innerHTML = '<div class="msg err">Extra screenshot #2 must be a .png or .gif.</div>'; return; }
       if(!payloadFields.length){ submitMsg.innerHTML = '<div class="msg err">Add at least one payload field.</div>'; return; }
 
       btn.disabled = true;
       submitMsg.innerHTML = '<div class="msg ok">Uploading…</div>';
       try{
         const subId = db.collection('gameSubmissions').doc().id;
-        const [romPath, screenshotPath] = await Promise.all([
+        const uploads = [
           uploadSubmissionFile(user.uid, subId, romFile, romFile.name),
           uploadSubmissionFile(user.uid, subId, shotFile, 'screenshot.png'),
-        ]);
+          shot2File ? uploadSubmissionFile(user.uid, subId, shot2File, 'extra1'+shot2File.name.slice(shot2File.name.lastIndexOf('.'))) : Promise.resolve(null),
+          shot3File ? uploadSubmissionFile(user.uid, subId, shot3File, 'extra2'+shot3File.name.slice(shot3File.name.lastIndexOf('.'))) : Promise.resolve(null),
+        ];
+        const [romPath, screenshotPath, extraScreenshot1Path, extraScreenshot2Path] = await Promise.all(uploads);
         await db.collection('gameSubmissions').doc(subId).set({
           submitterUid: user.uid,
           submitterUsername: user.username || '',
@@ -282,6 +337,8 @@
           proposedCode: code,
           romPath, romFileName: romFile.name,
           screenshotPath,
+          extraScreenshot1Path: extraScreenshot1Path || null,
+          extraScreenshot2Path: extraScreenshot2Path || null,
           payloadFields, totalLength,
           sortField, sortDirection,
           scorecardFormula, examplePayloads, otherNotes,

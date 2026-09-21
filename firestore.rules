@@ -414,10 +414,12 @@ service cloud.firestore {
     }
 
     // gameSubmissions/{id} -- a new-game proposal from a prospective developer: ROM + title
-    // screenshot (Storage paths, see storage.rules' submissions/{uid}/{subId}/ block) plus a
+    // screenshot, plus up to two optional extra screenshots/GIFs for that game's own leaderboard
+    // page later (Storage paths, see storage.rules' submissions/{uid}/{subId}/ block) plus a
     // structured payload spec (field layout, sort field, scorecard formula, example payloads --
-    // the same shape NGPC-QR-SDK/SUBMISSION_TEMPLATE.md asks a developer to fill out by hand,
-    // just captured as data here instead of chased down over chat). Private to the submitter and
+    // the same shape dev/submit/submission-template.json / NGPC-QR-SDK/SUBMISSION_TEMPLATE.md
+    // asks a developer to fill out by hand, just captured as data here instead of chased down
+    // over chat). Private to the submitter and
     // the admin -- an unreviewed submission was never meant to be public. Approving one is still
     // a manual admin action elsewhere (creating the real games/{slug} doc, and -- outside this
     // rules file entirely -- hand-building that game's own leaderboard page and score-shape
@@ -436,7 +438,9 @@ service cloud.firestore {
         && request.resource.data.status == 'pending'
         && request.resource.data.keys().hasOnly([
              'submitterUid', 'submitterUsername', 'proposedName', 'proposedCode',
-             'romPath', 'romFileName', 'screenshotPath', 'payloadFields', 'totalLength',
+             'romPath', 'romFileName', 'screenshotPath',
+             'extraScreenshot1Path', 'extraScreenshot2Path',
+             'payloadFields', 'totalLength',
              'sortField', 'sortDirection', 'scorecardFormula', 'examplePayloads', 'otherNotes',
              'status', 'submittedAt', 'reviewedAt', 'reviewNote'
            ])

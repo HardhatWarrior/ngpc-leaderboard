@@ -1,0 +1,25 @@
+{
+  "_instructions": [
+    "Fill in the fields below to describe your game's on-device QR payload, save this file, then use the 'Import from file' button on /dev/submit/ to load it straight into the form.",
+    "This file only carries the payload spec (text fields) -- your ROM, title screenshot, and any extra screenshots/GIFs still need to be attached separately in the form itself, since a JSON file isn't a great way to carry binary attachments.",
+    "Delete this _instructions block or leave it in -- the form ignores any field it doesn't recognize."
+  ],
+
+  "gameName": "",
+  "gameCode": "",
+
+  "payloadFields": [
+    { "name": "Game code", "width": "", "format": "fixed", "notes": "matches the code entered above" },
+    { "name": "Initials", "width": "3", "format": "A-Z", "notes": "" }
+  ],
+
+  "totalLength": "",
+  "sortField": "score",
+  "sortDirection": "desc",
+
+  "scorecardFormula": "",
+  "examplePayloads": [
+    ""
+  ],
+  "otherNotes": ""
+}

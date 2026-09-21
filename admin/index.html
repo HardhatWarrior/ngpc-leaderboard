@@ -611,19 +611,23 @@
           return;
         }
         const now = Date.now();
-        const THIRTY_DAYS = 30*24*60*60*1000;
+        // Every accepted submission starts as "Coming Soon" -- its corner ribbon takes priority
+        // over NEW/UPDATED while set (see index.html's buildTile()), so there's no point pre-
+        // arming newUntil here; admin/game/index.html's own status-change handler stamps a fresh
+        // 30-day newUntil the moment the developer leaves "coming soon" for a real status, which
+        // is the actual "just went live" moment this ribbon is meant to mark.
         await db.collection('games').doc(slug).set({
           name: sub.proposedName,
           code: sub.proposedCode,
           titleImage: sub.screenshotPath,
           leaderboardPath: '/'+slug+'/',
-          devStatus: 'dev',
+          devStatus: 'coming-soon',
           addedAt: now,
           romUpdatedAt: now,
           romPath: sub.romPath,
           romFileName: sub.romFileName,
           developerUid: sub.submitterUid,
-          newUntil: now + THIRTY_DAYS,
+          newUntil: null,
           updatedUntil: null,
         });
         await db.collection('gameSubmissions').doc(subId).update({
@@ -664,7 +668,10 @@
         +'<h3>'+escapeHtml(s.proposedName)+' <span class="tnum">['+escapeHtml(s.proposedCode)+']</span></h3>'
         +'<div class="sub-meta">Submitted by '+escapeHtml(s.submitterUsername||s.submitterUid)+' on '+fmtWhen(s.submittedAt)
           +' &middot; <a href="'+s.romPath+'" target="_blank" rel="noopener">ROM</a>'
-          +' &middot; <a href="'+s.screenshotPath+'" target="_blank" rel="noopener">Screenshot</a></div>'
+          +' &middot; <a href="'+s.screenshotPath+'" target="_blank" rel="noopener">Screenshot</a>'
+          +(s.extraScreenshot1Path ? ' &middot; <a href="'+s.extraScreenshot1Path+'" target="_blank" rel="noopener">Extra 1</a>' : '')
+          +(s.extraScreenshot2Path ? ' &middot; <a href="'+s.extraScreenshot2Path+'" target="_blank" rel="noopener">Extra 2</a>' : '')
+          +'</div>'
         +'<table class="sub-spec-table"><thead><tr><th>Field</th><th>Width</th><th>Format</th><th>Notes</th></tr></thead><tbody>'+fieldsHtml+'</tbody></table>'
         +'<div class="sub-meta">Total length: '+escapeHtml(s.totalLength||'?')+' &middot; Sort: '+escapeHtml(s.sortField||'?')+' ('+escapeHtml(s.sortDirection||'desc')+')</div>'
         +(s.scorecardFormula ? '<div class="sub-meta">Scorecard: '+escapeHtml(s.scorecardFormula)+'</div>' : '')

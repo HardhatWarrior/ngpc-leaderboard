@@ -20,17 +20,20 @@ service firebase.storage {
             || firestore.get(/databases/(default)/documents/games/$(slug)).data.developerUid == request.auth.uid);
     }
 
-    // New-game submission files (ROM + title screenshot), one subfolder per submission --
-    // private to the submitter and the admin until reviewed (unlike roms/, these haven't been
-    // approved yet, so nothing here is meant to be publicly reachable). subId isn't cross-checked
-    // against a Firestore doc the way roms/{slug} is against developerUid -- a submission's OWN
-    // uid segment is the entire access boundary, which is sufficient since nothing else ever
-    // reads or writes into another uid's submissions/ folder.
+    // New-game submission files (ROM + title screenshot, plus up to two optional extra
+    // screenshots/GIFs for that game's own leaderboard page later -- see dev/submit/index.html),
+    // one subfolder per submission -- private to the submitter and the admin until reviewed
+    // (unlike roms/, these haven't been approved yet, so nothing here is meant to be publicly
+    // reachable). subId isn't cross-checked against a Firestore doc the way roms/{slug} is
+    // against developerUid -- a submission's OWN uid segment is the entire access boundary, which
+    // is sufficient since nothing else ever reads or writes into another uid's submissions/
+    // folder. Size cap is 8MB here (vs. roms/'s 4MB) specifically to give a gameplay GIF room --
+    // a ROM/PNG screenshot never gets close to either limit in practice.
     match /submissions/{uid}/{subId}/{fileName} {
       allow read: if request.auth != null
         && (request.auth.uid == uid || request.auth.uid == 'L44BFbmiNkhi2vvLdrPUIxkvmfs2');
       allow write: if request.auth != null && request.auth.uid == uid
-        && request.resource.size < 4 * 1024 * 1024;
+        && request.resource.size < 8 * 1024 * 1024;
     }
 
     // Default-deny for every other path.
