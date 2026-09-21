@@ -55,6 +55,9 @@
   .initials{ font-family:"Press Start 2P",monospace; font-size:14px; letter-spacing:.06em; color:var(--cream); display:flex; align-items:center; gap:8px; }
   .row-avatar{ width:48px; height:48px; border-radius:4px; border:1px solid var(--border); image-rendering:pixelated; flex:none; }
   .score-val{ font-family:"Press Start 2P",monospace; font-size:15px; color:var(--good); }
+  /* Per the submission's own "scorecard reconstruction" note: "Please make the score RED if the
+     player used the secrets." (secretUsed -- the OPTION->OPTION debug menu). */
+  .score-val.secret-used{ color:var(--danger); }
   .row-meta{ font-size:10.5px; color:var(--dim); grid-column:2; margin-top:2px; }
   .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .row-meta a:hover{ color:var(--accent2); }
@@ -64,6 +67,7 @@
   .tk-sheet{ width:100%; border-collapse:collapse; margin:14px 0; font-size:11.5px; }
   .tk-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
   .tk-sheet td.tk-val{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
+  .tk-sheet td.tk-val.secret-used{ color:var(--danger); }
   .scan-video-wrap{ position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden; background:#000; margin-bottom:10px; }
   #scan-video{ width:100%; height:100%; object-fit:cover; display:block; }
   .scan-frame{ position:absolute; inset:14%; border:2px solid var(--accent2); border-radius:12px; box-shadow:0 0 0 999px rgba(0,0,0,.4); pointer-events:none; }
@@ -79,6 +83,7 @@
   .confirm-score{ text-align:center; padding:18px 0 20px; }
   .confirm-score .who{ font-family:"Press Start 2P",monospace; font-size:22px; letter-spacing:.08em; color:var(--cream); }
   .confirm-score .what{ font-family:"Press Start 2P",monospace; font-size:34px; color:var(--good); margin-top:10px; }
+  .confirm-score .what.secret-used{ color:var(--danger); }
   .confirm-score .src{ margin-top:10px; font-size:11px; color:var(--dim); }
   .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; margin-top:12px; }
   .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
@@ -221,15 +226,20 @@
 
   function formatDisplayValue(o){ return String(o.score).padStart(5,'0'); }
 
+  // Per the submission's own "scorecard reconstruction" note: "Please make the score RED if the
+  // player used the secrets." Applied everywhere a score is shown -- the leaderboard row
+  // (renderBoard, below), the scorecard detail table (here), and the post-submit confirm screen
+  // (openConfirm) -- via the shared .secret-used CSS class rather than three separate color rules.
   const SCORECARD_ENUM_LABELS = {
-    difficulty: {"0":"slow","1":"normal","2":"fast"}
+    difficulty: {"0":"Slow","1":"Normal","2":"Fast"}
   };
   function renderScorecardHTML(data){
-    const rows = '<tr><td>Score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
-      '<tr><td>Level start</td><td class="tk-val tnum">'+data.levelStart+'</td></tr>'+
-      '<tr><td>Level finish</td><td class="tk-val tnum">'+data.levelFinish+'</td></tr>'+
+    const scoreClass = data.secretUsed ? ' secret-used' : '';
+    const rows = '<tr><td>Score</td><td class="tk-val tnum'+scoreClass+'">'+data.score+'</td></tr>'+
+      '<tr><td>Level Start</td><td class="tk-val tnum">'+data.levelStart+'</td></tr>'+
+      '<tr><td>Level Finish</td><td class="tk-val tnum">'+data.levelFinish+'</td></tr>'+
       '<tr><td>Difficulty</td><td class="tk-val tnum">'+(SCORECARD_ENUM_LABELS.difficulty[data.difficulty] || data.difficulty)+'</td></tr>'+
-      '<tr><td>Secret used</td><td class="tk-val tnum">'+data.secretUsed+'</td></tr>';
+      '<tr><td>Secret Used</td><td class="tk-val tnum">'+data.secretUsed+'</td></tr>';
     return '<table class="tk-sheet">'+rows+'</table>';
   }
 
@@ -248,7 +258,7 @@
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.score!=null?String(data.score):'-')+'</div>'+
+        '<div class="score-val tnum'+(data.secretUsed?' secret-used':'')+'">'+(data.score!=null?String(data.score):'-')+'</div>'+
       '</div>';
       const detailHtml = '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data)+'</div>';
       return rowHtml + detailHtml;
@@ -317,6 +327,7 @@
     pending = parsed;
     el('confirm-initials').textContent = parsed.initials || '';
     el('confirm-score').textContent = formatDisplayValue(parsed);
+    el('confirm-score').classList.toggle('secret-used', !!parsed.secretUsed);
     el('confirm-src').textContent = 'From a scanned QR code';
     el('confirm-scorecard').innerHTML = renderScorecardHTML(parsed);
     confirmMsg.innerHTML = '';
