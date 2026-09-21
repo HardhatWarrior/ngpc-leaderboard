@@ -221,11 +221,14 @@
 
   function formatDisplayValue(o){ return String(o.score).padStart(5,'0'); }
 
+  const SCORECARD_ENUM_LABELS = {
+    difficulty: {"0":"slow","1":"normal","2":"fast"}
+  };
   function renderScorecardHTML(data){
     const rows = '<tr><td>Score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
       '<tr><td>Level start</td><td class="tk-val tnum">'+data.levelStart+'</td></tr>'+
       '<tr><td>Level finish</td><td class="tk-val tnum">'+data.levelFinish+'</td></tr>'+
-      '<tr><td>Difficulty</td><td class="tk-val tnum">'+data.difficulty+'</td></tr>'+
+      '<tr><td>Difficulty</td><td class="tk-val tnum">'+(SCORECARD_ENUM_LABELS.difficulty[data.difficulty] || data.difficulty)+'</td></tr>'+
       '<tr><td>Secret used</td><td class="tk-val tnum">'+data.secretUsed+'</td></tr>';
     return '<table class="tk-sheet">'+rows+'</table>';
   }
