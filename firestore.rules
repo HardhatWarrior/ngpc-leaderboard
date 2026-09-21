@@ -392,17 +392,23 @@ service cloud.firestore {
 
       allow create: if isAdmin();
       // 'coming-soon' is a devStatus a game's own developer can opt into at their own discretion
-      // (see admin/game/index.html's status buttons), right from the moment their submission is
-      // approved -- the main page shows a bottom banner and suppresses the NEW/UPDATED corner
-      // ribbon entirely while set. newUntil is included here alongside devStatus because leaving
-      // coming-soon resets it to a fresh 30-day window (that's the moment NEW should actually
-      // start counting down, not back at approval time) -- same trust level already granted for
-      // updatedUntil below, only ever a cosmetic ribbon either way.
+      // (see admin/game/index.html's status buttons), and is also every accepted submission's own
+      // starting status. It shares index.html's single top-left corner ribbon with NEW/UPDATED
+      // (mutually exclusive, coming-soon wins while set -- see buildTile()). newUntil is included
+      // here alongside devStatus because leaving coming-soon resets it to a fresh 30-day window
+      // (that's the moment NEW should actually start counting down, not back at approval time) --
+      // same trust level already granted for updatedUntil below, only ever a cosmetic ribbon
+      // either way. leaderboardBuilt/rulesBuilt are plain admin/developer-ticked checkboxes (see
+      // admin/game/index.html's own build-checklist panel) -- purely informational, nothing reads
+      // them to gate behavior; they exist only so "did I actually finish going live" isn't tracked
+      // in someone's head.
       allow update: if (request.auth != null && (
           isAdmin()
           || (isAssignedDev(resource.data)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil'])
-              && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final'])
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'leaderboardBuilt', 'rulesBuilt'])
+              && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final']
+              && (!('leaderboardBuilt' in request.resource.data) || request.resource.data.leaderboardBuilt is bool)
+              && (!('rulesBuilt' in request.resource.data) || request.resource.data.rulesBuilt is bool))
         ))
         // romDownloads -- a public, anonymous-writable +1 counter (same shape as meta/siteStats'
         // pageViews above), bumped by every leaderboard page's rom-link click handler. No sign-in

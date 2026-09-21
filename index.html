@@ -343,14 +343,20 @@
 <script>
 (function(){
   "use strict";
-  // Every game's on-device QR encodes a full URL whose payload's first 2 characters are that
+  // Every game's on-device QR encodes a full URL whose payload's first 2-6 characters are that
   // game's own routing code (see e.g. Bowling's ngpc_qr.c QR_GAME_CODE / Tetris's main.c
   // QR_GAME_CODE) -- this is the one place that code has to be mapped to a folder, since a scan
   // done HERE (rather than on a game's own page, or via a device camera app tapping the QR's own
-  // URL) hands back raw decoded text with no path to read a folder name out of. Add one entry per
-  // game; nothing else on this page needs to change.
-  const GAME_ROUTES = { BW: 'bw', TT: 'tt', YZ: 'yz', FK: 'fk', '2K': '2k', OV: 'overrev', GD: 'gd', SD: 'sd', XN: 'xn' };
-  const GAME_NAMES = { BW: 'Neo Bowling', TT: 'Tetris', YZ: 'Neo Yahtzee', FK: 'Farkle', '2K': '2048', OV: 'Over Rev', GD: 'Gardenia', SD: 'Sudoku', XN: 'Xenon 2' };
+  // URL) hands back raw decoded text with no path to read a folder name out of. Built from the
+  // same games/ fetch loadGames() already does for the tile grid (code -> slug/name) instead of a
+  // hardcoded table, so a new game's routing works the moment its games/{slug} doc exists --
+  // approving a submission is enough, no code edit/deploy needed for THIS part of going live
+  // (the leaderboard page, play page, and score-rules validator still are -- see
+  // admin/game/index.html's own build-checklist panel). Empty until loadGames() resolves; every
+  // caller below only ever runs from a user action (a scan, or clicking "Most Active"), by which
+  // point the games fetch that boot() kicks off first has always long since finished.
+  let GAME_ROUTES = {};
+  let GAME_NAMES = {};
   // Over Rev's own scores/{doc} has no generic `score` field (ticks + course instead, see
   // overrev/index.html and overrev-leaderboard-kit/README.md) -- the ticker needs its own small
   // course-name lookup and tick-to-time formatter to show something meaningful for it, matching
@@ -482,6 +488,14 @@
       const snap = await db.collection('games').get();
       const games = [];
       snap.forEach(doc=>games.push(Object.assign({slug:doc.id}, doc.data())));
+      // See GAME_ROUTES/GAME_NAMES's own comment -- built from this same fetch instead of a
+      // hardcoded table. `code` is only missing on a game that predates games/{slug} entirely
+      // (shouldn't happen post-migration), so it's skipped rather than routed under 'undefined'.
+      games.forEach(g=>{
+        if(!g.code) return;
+        GAME_ROUTES[g.code] = g.slug;
+        GAME_NAMES[g.code] = g.name || g.slug;
+      });
       renderGrid(games);
       gridStatusEl.textContent = '';
     }catch(e){

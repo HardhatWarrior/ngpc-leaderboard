@@ -135,11 +135,25 @@
 <script>
 (function(){
   "use strict";
-  // Every game's QR encodes its own 2-char routing code first -- this table is the same one
-  // index.html's own scan flow uses, so a capture here routes correctly no matter which game's
-  // code actually shows up (matters for shared/generic code like this, even though in practice
-  // this particular page will only ever see this one game's own QR on screen).
-  const GAME_ROUTES = { BW: 'bw', TT: 'tt', YZ: 'yz', FK: 'fk', '2K': '2k', OV: 'overrev', GD: 'gd', SD: 'sd', XN: 'xn' };
+  // Every game's QR encodes its own routing code first -- fetched lazily from the games/
+  // collection on first capture attempt instead of a hardcoded table (see index.html's own
+  // GAME_ROUTES comment), so a new game's routing works the instant its games/{slug} doc exists,
+  // no code edit needed here. Cached after the first successful fetch for the rest of this page
+  // view (matters for shared/generic code like this, even though in practice this particular
+  // page will only ever see this one game's own QR on screen).
+  let GAME_ROUTES = null;
+  async function getGameRoutes(){
+    if(GAME_ROUTES) return GAME_ROUTES;
+    const routes = {};
+    try{
+      if(window.NGPC_AUTH && NGPC_AUTH.db){
+        const snap = await NGPC_AUTH.db.collection('games').get();
+        snap.forEach(doc=>{ const d = doc.data(); if(d.code) routes[d.code] = doc.id; });
+      }
+    }catch(e){ /* leave whatever was found -- a partial/empty table just fails routing below */ }
+    GAME_ROUTES = routes;
+    return routes;
+  }
   const el = (id)=>document.getElementById(id);
   // Public "played N times" readout -- off the same pageViews/{pathKey} doc auth.js's own
   // trackPageView() already increments on this page's own load (pathKeyFromLocation() derives
@@ -452,9 +466,10 @@
       const payload = lastPathSegment(value).toUpperCase();
       // Game codes are 2-6 characters -- longest-match against known codes, since there's no
       // delimiter after a variable-length code in the payload itself.
-      const sortedCodes = Object.keys(GAME_ROUTES).sort((a,b)=>b.length-a.length);
+      const routes = await getGameRoutes();
+      const sortedCodes = Object.keys(routes).sort((a,b)=>b.length-a.length);
       const code = sortedCodes.find(c=>payload.startsWith(c)) || null;
-      const slug = code ? GAME_ROUTES[code] : null;
+      const slug = code ? routes[code] : null;
       if(!slug){
         showMsg('err', 'Unrecognized game code — that leaderboard might not be set up yet.');
         setBusy(false);

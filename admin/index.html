@@ -194,7 +194,7 @@
       <div style="overflow-x:auto">
         <table>
           <thead>
-            <tr><th>Game</th><th>Status</th><th>Developer</th><th>New Badge</th><th></th></tr>
+            <tr><th>Game</th><th>Status</th><th>Developer</th><th>New Badge</th><th>Live?</th><th></th></tr>
           </thead>
           <tbody id="games-rows"></tbody>
         </table>
@@ -541,6 +541,14 @@
       return '<button type="button" class="badge '+(active?'pending':'promote-dev')+'" data-action="toggle-new" data-slug="'+encodeURIComponent(g.slug)+'" style="cursor:pointer;border:none">'
         + (active ? 'NEW &times;' : '+ New') + '</button>';
     }
+    // "Live?" mirrors admin/game/index.html's own build-checklist checkboxes (leaderboardBuilt/
+    // rulesBuilt) -- purely informational either place, nothing reads these to gate behavior.
+    function liveCell(g){
+      const built = !!g.leaderboardBuilt && !!g.rulesBuilt;
+      return built
+        ? '<span class="badge approved">Built</span>'
+        : '<span class="badge pending" title="Leaderboard page and/or score rules not marked built yet -- see this game\'s own Manage page">Not yet</span>';
+    }
     gamesRowsEl.innerHTML = games.map(g=>{
       const currentDevName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '—';
       return '<tr data-game-row="'+encodeURIComponent(g.slug)+'">'+
@@ -548,6 +556,7 @@
         '<td>'+statusLabel(g.devStatus)+'</td>'+
         '<td>'+escapeHtml(currentDevName)+'</td>'+
         '<td>'+newBadgeCell(g)+'</td>'+
+        '<td>'+liveCell(g)+'</td>'+
         '<td><a href="/admin/game/?slug='+encodeURIComponent(g.slug)+'">Manage</a></td>'+
       '</tr>';
     }).join('');

@@ -52,6 +52,10 @@
 
   input[type=file]{ display:block; width:100%; margin-top:4px; font-size:12.5px; color:var(--dim); }
 
+  .chk-row{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--dim); cursor:pointer; margin-bottom:8px; }
+  .chk-row input{ width:auto; margin:0; flex:none; }
+  .chk-row code{ font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--cream); }
+
   button.action{
     font:inherit; border:none; border-radius:8px; padding:11px 16px; cursor:pointer;
     font-weight:600; font-size:13px; width:auto;
@@ -134,7 +138,7 @@
     <p class="hint">Dev status controls the banner shown on this game's tile on the main page. Uploading a new ROM here also bumps it to the top of "Most Recent" automatically.</p>
 
     <div class="status-row" id="status-row">
-      <button type="button" class="status-btn" data-status="coming-soon">Coming Soon<span class="desc">Bottom banner, no NEW/UPDATED badge</span></button>
+      <button type="button" class="status-btn" data-status="coming-soon">Coming Soon<span class="desc">Corner ribbon, no NEW/UPDATED badge</span></button>
       <button type="button" class="status-btn" data-status="dev">In Development<span class="desc">Shows a banner</span></button>
       <button type="button" class="status-btn" data-status="beta">Beta<span class="desc">Shows a banner</span></button>
       <button type="button" class="status-btn" data-status="final">Final<span class="desc">No banner</span></button>
@@ -155,6 +159,18 @@
     <div id="updated-badge-row" hidden style="margin-top:16px">
       <div class="current-value">This game currently shows an <b>UPDATED</b> badge on the main page (expires automatically 30 days after upload).</div>
       <button type="button" class="action" style="background:transparent;border:1px solid var(--border);color:var(--dim)" id="clear-updated">Turn off UPDATED badge now</button>
+    </div>
+
+    <!-- Purely informational -- nothing reads these to gate behavior. Approving a submission only
+         ever creates this games/{slug} doc; the leaderboard page, in-browser player, and score
+         rules validator still need a human to build/paste them (optionally starting from
+         NGPC-Admin-Scripts/scaffold-game.js's own draft). These checkboxes are just so that step
+         isn't tracked in someone's head between approval and actually going live. -->
+    <div class="build-checklist" style="margin-top:20px">
+      <div class="current-value" style="margin-bottom:8px">Going-live checklist</div>
+      <label class="chk-row"><input type="checkbox" id="chk-leaderboard-built"> Leaderboard page built (<code id="chk-lb-path">/&hellip;/</code>)</label>
+      <label class="chk-row"><input type="checkbox" id="chk-rules-built"> Score validator pasted into firestore.rules &amp; published</label>
+      <div id="checklist-msg"></div>
     </div>
   </section>
 
@@ -199,6 +215,10 @@
   const romMsg = el('rom-msg');
   const updatedBadgeRow = el('updated-badge-row');
   const clearUpdatedBtn = el('clear-updated');
+  const chkLeaderboardBuilt = el('chk-leaderboard-built');
+  const chkRulesBuilt = el('chk-rules-built');
+  const chkLbPathEl = el('chk-lb-path');
+  const checklistMsg = el('checklist-msg');
   const payloadPanel = el('payload-panel');
   const payloadMissingPanel = el('payload-missing-panel');
   const payloadContentEl = el('payload-content');
@@ -671,6 +691,27 @@
 
     romCurrent.textContent = data.romFileName || 'using the site’s default build';
     updatedBadgeRow.hidden = !(data.updatedUntil && data.updatedUntil > Date.now());
+
+    chkLbPathEl.textContent = data.leaderboardPath || ('/'+slug+'/');
+    chkLeaderboardBuilt.checked = !!data.leaderboardBuilt;
+    chkRulesBuilt.checked = !!data.rulesBuilt;
+    function wireChecklistBox(inputEl, field){
+      inputEl.addEventListener('change', async ()=>{
+        const next = inputEl.checked;
+        inputEl.disabled = true;
+        checklistMsg.innerHTML = '';
+        try{
+          await docRef.update({[field]: next});
+        }catch(e){
+          inputEl.checked = !next;
+          checklistMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+        }finally{
+          inputEl.disabled = false;
+        }
+      });
+    }
+    wireChecklistBox(chkLeaderboardBuilt, 'leaderboardBuilt');
+    wireChecklistBox(chkRulesBuilt, 'rulesBuilt');
     clearUpdatedBtn.addEventListener('click', async ()=>{
       clearUpdatedBtn.disabled = true;
       try{
