@@ -193,6 +193,12 @@
 (function(){
   "use strict";
   const QR_GAME_CODE = 'XN';
+  // Which mechanism produced the payload about to be submitted: a real camera/photo scan (the
+  // default, including the on-device QR's own deep link) vs the in-browser player's Screen
+  // Capture API flow (play/xn/index.html's captureAndSubmit(), which redirects here with
+  // ?src=capture before boot() strips the query string via history.replaceState()). Read once at
+  // load, before that happens -- see admin/game/index.html's scan-source breakdown.
+  const SUBMIT_SOURCE = new URLSearchParams(location.search).get('src') === 'capture' ? 'capture' : 'qr';
 
   const el = (id)=>document.getElementById(id);
   const boardEl = el('board'), boardStatusEl = el('board-status');
@@ -523,7 +529,7 @@
       money: pending.money,
       checkpoint: pending.checkpoint,
       livesLeft: pending.livesLeft,
-      source: 'qr',
+      source: SUBMIT_SOURCE,
       submittedAt: Date.now(),
       uid: authedUser.uid,
       username: authedUser.username,

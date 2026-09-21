@@ -224,6 +224,13 @@
 (function(){
   "use strict";
   const QR_GAME_CODE = 'OV';
+  // Which mechanism produced the payload about to be submitted: a real camera/photo scan (the
+  // default) vs the in-browser player's Screen Capture API flow (play/overrev/index.html's
+  // captureAndSubmit(), which redirects here with ?src=capture before boot() strips the query
+  // string via history.replaceState()). Read once at load, before that happens -- overridden onto
+  // OverRevSiteAdapter.toScore()'s own hardcoded 'qr' below. See admin/game/index.html's
+  // scan-source breakdown.
+  const SUBMIT_SOURCE = new URLSearchParams(location.search).get('src') === 'capture' ? 'capture' : 'qr';
 
   // Catalog data mirrors overrev-leaderboard-kit/catalog.json (rules revision 1) --
   // embedded directly rather than fetched, same convention every other game page uses for its
@@ -589,6 +596,7 @@
     // difficulty/transmission/ticks/won/localRecord/event/sequence/raw/source/submittedAt) -- see
     // overrev-leaderboard-kit/README.md for why this isn't reimplemented by hand here.
     const record = OverRevSiteAdapter.toScore(pending.raw, Date.now());
+    record.source = SUBMIT_SOURCE;
     record.uid = authedUser.uid;
     record.username = authedUser.username;
     record.approved = !!authedUser.approved;

@@ -211,6 +211,12 @@
 (function(){
   "use strict";
   const QR_GAME_CODE = 'SD';
+  // Which mechanism produced the payload about to be submitted: a real camera/photo scan (the
+  // default, including the on-device QR's own deep link) vs the in-browser player's Screen
+  // Capture API flow (play/sd/index.html's captureAndSubmit(), which redirects here with
+  // ?src=capture before boot() strips the query string via history.replaceState()). Read once at
+  // load, before that happens -- see admin/game/index.html's scan-source breakdown.
+  const SUBMIT_SOURCE = new URLSearchParams(location.search).get('src') === 'capture' ? 'capture' : 'qr';
   const DIFF_NAMES = {E:'Easy', M:'Medium', H:'Hard'};
   let activeDiff = 'E';
 
@@ -543,7 +549,7 @@
       difficulty: pending.difficulty,
       time: pending.time,
       misses: pending.misses,
-      source: 'qr',
+      source: SUBMIT_SOURCE,
       submittedAt: Date.now(),
       uid: authedUser.uid,
       username: authedUser.username,

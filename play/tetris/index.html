@@ -464,8 +464,11 @@
       showMsg('ok', 'Found it — opening the leaderboard…');
       // Same "?v=" cache-buster + hash handoff the main page's own scan uses, so the target
       // leaderboard always fetches fresh code and reads the payload back out via its own
-      // existing payloadFromEntry().
-      location.href = '/'+slug+'/?v='+Date.now()+'#'+payload;
+      // existing payloadFromEntry(). "src=capture" marks this as a Screen Capture API submission
+      // (vs a real camera/photo scan) -- read once by the leaderboard page's own SUBMIT_SOURCE
+      // before its boot() strips the query string, and stored on the score doc for
+      // admin/game/index.html's scan-source breakdown.
+      location.href = '/'+slug+'/?v='+Date.now()+'&src=capture#'+payload;
     }catch(e){
       showMsg('err', 'Capture failed: '+escapeHtml(e.message||'unknown error'));
       setBusy(false);

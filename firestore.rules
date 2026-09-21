@@ -167,7 +167,11 @@ service cloud.firestore {
       }
 
       // Matches the object lb/index.html's writeScore() builds (game, initials, score, weight,
-      // rolls, source, submittedAt, plus required uid/username from auth.js).
+      // rolls, source, submittedAt, plus required uid/username from auth.js). source is 'qr' for
+      // a real camera/photo scan (incl. the on-device QR's own deep link) or 'capture' for the
+      // in-browser player's Screen Capture API flow (play/<game>/index.html's captureAndSubmit(),
+      // which hands off via a "?src=capture" query param) -- see admin/game/index.html's
+      // scan-source breakdown, the only place this distinction is surfaced.
       function isBowlingScore(d) {
         return d.game == 'BW'
           && d.keys().hasOnly(['game', 'initials', 'score', 'weight', 'rolls', 'source', 'submittedAt', 'uid', 'username', 'approved'])
@@ -175,7 +179,7 @@ service cloud.firestore {
           && d.score is int && d.score >= 0 && d.score <= 300
           && d.weight is int && d.weight >= 1 && d.weight <= 99
           && d.rolls is list && d.rolls.size() >= 12 && d.rolls.size() <= 21
-          && d.source is string && d.source == 'qr'
+          && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
           && d.submittedAt >= request.time.toMillis() - 300000
@@ -193,7 +197,7 @@ service cloud.firestore {
           && d.score is int && d.score >= 0 && d.score <= 99999999
           && d.lines is int && d.lines >= 0 && d.lines <= 99999
           && d.level is int && d.level >= 0 && d.level <= 999
-          && d.source is string && d.source == 'qr'
+          && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
           && d.submittedAt >= request.time.toMillis() - 300000
@@ -221,7 +225,7 @@ service cloud.firestore {
           && d.categoryScores[10] is int && d.categoryScores[10] >= 0 && d.categoryScores[10] <= 40  // large straight
           && d.categoryScores[11] is int && d.categoryScores[11] >= 0 && d.categoryScores[11] <= 50  // yahtzee
           && d.categoryScores[12] is int && d.categoryScores[12] >= 0 && d.categoryScores[12] <= 30  // chance
-          && d.source is string && d.source == 'qr'
+          && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
           && d.submittedAt >= request.time.toMillis() - 300000
@@ -240,7 +244,7 @@ service cloud.firestore {
           && d.farkles is int && d.farkles >= 0 && d.farkles <= 999
           && d.resultChar is string && d.resultChar.matches('^[1WLD]$')
           && d.resultDisplay is string && d.resultDisplay.matches('^(SOLO|WIN|LOSS|DRAW)$')
-          && d.source is string && d.source == 'qr'
+          && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
           && d.submittedAt >= request.time.toMillis() - 300000
@@ -256,7 +260,7 @@ service cloud.firestore {
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.score is int && d.score >= 0 && d.score <= 65535
           && d.moves is int && d.moves >= 0 && d.moves <= 9999
-          && d.source is string && d.source == 'qr'
+          && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
           && d.submittedAt >= request.time.toMillis() - 300000
@@ -285,7 +289,7 @@ service cloud.firestore {
           && d.event is int && d.event == 0
           && d.sequence is int && d.sequence >= 0 && d.sequence <= 65535
           && d.raw is string && d.raw.matches('^OV1:[A-Z0-9]{1,8}:[A-Z2-7]{24}$')
-          && d.source is string && d.source == 'qr'
+          && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
           && d.submittedAt >= request.time.toMillis() - 300000
@@ -305,7 +309,7 @@ service cloud.firestore {
           && d.score is int && d.score >= 0 && d.score <= 99999
           && d.startLevel is int && d.startLevel >= 0 && d.startLevel <= 99
           && d.levelReached is int && d.levelReached >= 0 && d.levelReached <= 99
-          && d.source is string && d.source == 'qr'
+          && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
           && d.submittedAt >= request.time.toMillis() - 300000
@@ -324,7 +328,7 @@ service cloud.firestore {
           && d.difficulty is string && d.difficulty in ['E', 'M', 'H']
           && d.time is int && d.time >= 0 && d.time <= 99999
           && d.misses is int && d.misses >= 0 && d.misses <= 999
-          && d.source is string && d.source == 'qr'
+          && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
           && d.submittedAt >= request.time.toMillis() - 300000
@@ -348,7 +352,7 @@ service cloud.firestore {
           && d.money is int && d.money >= 0 && d.money <= 65535
           && d.checkpoint is int && d.checkpoint >= 0 && d.checkpoint <= 7
           && d.livesLeft is int && d.livesLeft >= 0 && d.livesLeft <= 9
-          && d.source is string && d.source == 'qr'
+          && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
           && d.submittedAt >= request.time.toMillis() - 300000

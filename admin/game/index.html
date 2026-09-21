@@ -133,6 +133,7 @@
     <div id="status-msg"></div>
 
     <div class="current-value" style="margin-top:16px" id="stats-line">Downloaded &mdash; times &middot; Played &mdash; times (in-browser)</div>
+    <div class="current-value" id="scan-source-line">Loading scan-source breakdown&hellip;</div>
 
     <div style="margin-top:20px">
       <div class="current-value">Current ROM: <b id="rom-current">using the site's default build</b></div>
@@ -524,6 +525,30 @@
     } else {
       statsLineEl.innerHTML = 'Downloaded <b>'+downloads+'</b> time'+(downloads===1?'':'s')+' &middot; No in-browser player for this game';
     }
+
+    // Scan-source breakdown: 'qr' is a real camera/photo scan (incl. the on-device QR's own deep
+    // link), 'capture' is the in-browser player's Screen Capture API flow (play/<game>/index.html
+    // reading the QR straight off the emulator canvas instead of a camera). Only counts scores
+    // this viewer can actually read -- firestore.rules' scores/{scoreId} only allows a non-admin
+    // to read their OWN approved scores, so a developer (not the site admin) sees an
+    // approved-only breakdown here, never a full one.
+    const scanSourceLineEl = el('scan-source-line');
+    const gameCode = data.code || slug.toUpperCase();
+    db.collection('scores').where('game', '==', gameCode).get().then(snap=>{
+      let qrCount = 0, captureCount = 0;
+      snap.forEach(doc=>{
+        if(doc.data().source === 'capture') captureCount++; else qrCount++;
+      });
+      const total = qrCount + captureCount;
+      scanSourceLineEl.innerHTML = total
+        ? 'Of '+total+' visible submission'+(total===1?'':'s')+': <b>'+qrCount+'</b> camera/photo scan'+(qrCount===1?'':'s')
+          +' &middot; <b>'+captureCount+'</b> in-browser screen capture'+(captureCount===1?'':'s')
+          +(isAdmin ? '' : ' <span class="spec-note">(approved only)</span>')
+        : 'No submissions yet.';
+    }).catch(()=>{
+      scanSourceLineEl.textContent = 'Scan-source breakdown unavailable.';
+    });
+
     editPanel.hidden = false;
     renderPayloadSpec(slug);
 
