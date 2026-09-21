@@ -401,9 +401,12 @@ service cloud.firestore {
     // last-updated) -- index.html renders its grid FROM this collection instead of hardcoded
     // HTML, so a game's own assigned developer can update their dev status and ROM without
     // ever touching a file in this repo. Split-permission by field, same pattern as users/{uid}:
-    // the admin owns identity fields (name/code/titleImage/leaderboardPath/addedAt/developerUid
-    // -- adding a game or reassigning its developer is an admin action), while the assigned
-    // developer can only touch the fields describing their own build.
+    // the admin owns pure identity fields (name/code/leaderboardPath/addedAt/developerUid --
+    // adding a game or reassigning its developer is an admin action), while the assigned
+    // developer can touch the fields describing their own build, INCLUDING the game's art
+    // (titleImage/extraScreenshot1Path/extraScreenshot2Path -- see admin/game/index.html's own
+    // art-upload panel) -- a developer replacing their own game's screenshots is the same trust
+    // level as them uploading their own ROM below, not an identity change.
     match /games/{slug} {
       allow read: if true;
 
@@ -419,17 +422,12 @@ service cloud.firestore {
       // here alongside devStatus because leaving coming-soon resets it to a fresh 30-day window
       // (that's the moment NEW should actually start counting down, not back at approval time) --
       // same trust level already granted for updatedUntil below, only ever a cosmetic ribbon
-      // either way. leaderboardBuilt/rulesBuilt are plain admin/developer-ticked checkboxes (see
-      // admin/game/index.html's own build-checklist panel) -- purely informational, nothing reads
-      // them to gate behavior; they exist only so "did I actually finish going live" isn't tracked
-      // in someone's head.
+      // either way.
       allow update: if (request.auth != null && (
           isAdmin()
           || (isAssignedDev(resource.data)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'leaderboardBuilt', 'rulesBuilt'])
-              && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final']
-              && (!('leaderboardBuilt' in request.resource.data) || request.resource.data.leaderboardBuilt is bool)
-              && (!('rulesBuilt' in request.resource.data) || request.resource.data.rulesBuilt is bool))
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path'])
+              && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final'])
         ))
         // romDownloads -- a public, anonymous-writable +1 counter (same shape as meta/siteStats'
         // pageViews above), bumped by every leaderboard page's rom-link click handler. No sign-in

@@ -52,9 +52,16 @@
 
   input[type=file]{ display:block; width:100%; margin-top:4px; font-size:12.5px; color:var(--dim); }
 
-  .chk-row{ display:flex; align-items:center; gap:8px; font-size:12.5px; color:var(--dim); cursor:pointer; margin-bottom:8px; }
-  .chk-row input{ width:auto; margin:0; flex:none; }
-  .chk-row code{ font-family:"IBM Plex Mono",monospace; font-size:11.5px; color:var(--cream); }
+  .art-grid{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:14px; }
+  .art-slot{ display:flex; flex-direction:column; gap:6px; }
+  .art-slot-label{ font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; }
+  .art-preview{
+    width:100%; aspect-ratio:160/152; object-fit:contain; background:#000;
+    border:1px solid var(--border); border-radius:8px;
+  }
+  .art-preview.empty{ visibility:hidden; }
+  .art-slot input[type=file]{ font-size:11px; margin-top:0; }
+  .art-upload-btn{ font-size:12px; padding:8px 12px; }
 
   button.action{
     font:inherit; border:none; border-radius:8px; padding:11px 16px; cursor:pointer;
@@ -161,16 +168,37 @@
       <button type="button" class="action" style="background:transparent;border:1px solid var(--border);color:var(--dim)" id="clear-updated">Turn off UPDATED badge now</button>
     </div>
 
-    <!-- Purely informational -- nothing reads these to gate behavior. Approving a submission only
-         ever creates this games/{slug} doc; the leaderboard page, in-browser player, and score
-         rules validator still need a human to build/paste them (optionally starting from
-         NGPC-Admin-Scripts/scaffold-game.js's own draft). These checkboxes are just so that step
-         isn't tracked in someone's head between approval and actually going live. -->
-    <div class="build-checklist" style="margin-top:20px">
-      <div class="current-value" style="margin-bottom:8px">Going-live checklist</div>
-      <label class="chk-row"><input type="checkbox" id="chk-leaderboard-built"> Leaderboard page built (<code id="chk-lb-path">/&hellip;/</code>)</label>
-      <label class="chk-row"><input type="checkbox" id="chk-rules-built"> Score validator pasted into firestore.rules &amp; published</label>
-      <div id="checklist-msg"></div>
+    <!-- Title screen + up to two extra screenshots/GIFs, stored on this same games/{slug} doc
+         (titleImage/extraScreenshot1Path/extraScreenshot2Path) -- titleImage also doubles as the
+         main page's own tile art. Replacing one here uploads to Storage under game-art/{slug}/
+         and immediately updates the live doc; the game's own leaderboard page (see
+         NGPC-Admin-Scripts/scaffold-game.js's template) shows all three side by side next to the
+         title screen. -->
+    <div class="art-panel" style="margin-top:20px">
+      <div class="current-value" style="margin-bottom:10px">Screenshots</div>
+      <div class="art-grid">
+        <div class="art-slot">
+          <div class="art-slot-label">Title Screen</div>
+          <img class="art-preview" id="art-preview-title" alt="Title screen preview">
+          <input type="file" id="art-file-title" accept=".png,.gif">
+          <button type="button" class="action btn-primary art-upload-btn" id="art-upload-title" disabled>Replace</button>
+          <div id="art-msg-title"></div>
+        </div>
+        <div class="art-slot">
+          <div class="art-slot-label">Extra Screenshot 1</div>
+          <img class="art-preview" id="art-preview-extra1" alt="Extra screenshot 1 preview">
+          <input type="file" id="art-file-extra1" accept=".png,.gif">
+          <button type="button" class="action btn-primary art-upload-btn" id="art-upload-extra1" disabled>Replace</button>
+          <div id="art-msg-extra1"></div>
+        </div>
+        <div class="art-slot">
+          <div class="art-slot-label">Extra Screenshot 2</div>
+          <img class="art-preview" id="art-preview-extra2" alt="Extra screenshot 2 preview">
+          <input type="file" id="art-file-extra2" accept=".png,.gif">
+          <button type="button" class="action btn-primary art-upload-btn" id="art-upload-extra2" disabled>Replace</button>
+          <div id="art-msg-extra2"></div>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -215,10 +243,11 @@
   const romMsg = el('rom-msg');
   const updatedBadgeRow = el('updated-badge-row');
   const clearUpdatedBtn = el('clear-updated');
-  const chkLeaderboardBuilt = el('chk-leaderboard-built');
-  const chkRulesBuilt = el('chk-rules-built');
-  const chkLbPathEl = el('chk-lb-path');
-  const checklistMsg = el('checklist-msg');
+  const ART_SLOTS = {
+    title: { field: 'titleImage', preview: el('art-preview-title'), file: el('art-file-title'), btn: el('art-upload-title'), msg: el('art-msg-title') },
+    extra1: { field: 'extraScreenshot1Path', preview: el('art-preview-extra1'), file: el('art-file-extra1'), btn: el('art-upload-extra1'), msg: el('art-msg-extra1') },
+    extra2: { field: 'extraScreenshot2Path', preview: el('art-preview-extra2'), file: el('art-file-extra2'), btn: el('art-upload-extra2'), msg: el('art-msg-extra2') },
+  };
   const payloadPanel = el('payload-panel');
   const payloadMissingPanel = el('payload-missing-panel');
   const payloadContentEl = el('payload-content');
@@ -692,26 +721,44 @@
     romCurrent.textContent = data.romFileName || 'using the site’s default build';
     updatedBadgeRow.hidden = !(data.updatedUntil && data.updatedUntil > Date.now());
 
-    chkLbPathEl.textContent = data.leaderboardPath || ('/'+slug+'/');
-    chkLeaderboardBuilt.checked = !!data.leaderboardBuilt;
-    chkRulesBuilt.checked = !!data.rulesBuilt;
-    function wireChecklistBox(inputEl, field){
-      inputEl.addEventListener('change', async ()=>{
-        const next = inputEl.checked;
-        inputEl.disabled = true;
-        checklistMsg.innerHTML = '';
+    // Title screen + up to two extra screenshots, each independently replaceable. titleImage
+    // also doubles as the main page's own tile art (buildTile() in index.html), so replacing it
+    // here changes the tile too, not just this game's own leaderboard page.
+    Object.entries(ART_SLOTS).forEach(([key, slot])=>{
+      const current = data[slot.field];
+      slot.preview.src = current || '';
+      slot.preview.classList.toggle('empty', !current);
+      slot.file.addEventListener('change', ()=>{ slot.btn.disabled = !slot.file.files.length; });
+      slot.btn.addEventListener('click', async ()=>{
+        const file = slot.file.files[0];
+        if(!file) return;
+        if(!/\.(png|gif)$/i.test(file.name)){
+          slot.msg.innerHTML = '<div class="msg err">Only .png/.gif files are accepted.</div>';
+          return;
+        }
+        slot.btn.disabled = true;
+        slot.msg.innerHTML = '<div class="msg ok">Uploading…</div>';
         try{
-          await docRef.update({[field]: next});
+          if(!window.firebase.storage) throw new Error('Storage SDK failed to load');
+          const storage = firebase.storage();
+          const ext = file.name.slice(file.name.lastIndexOf('.'));
+          const ref = storage.ref().child('game-art/'+slug+'/'+key+ext);
+          await ref.put(file);
+          const url = await ref.getDownloadURL();
+          await docRef.update({ [slot.field]: url });
+          slot.preview.src = url;
+          slot.preview.classList.remove('empty');
+          slot.msg.innerHTML = '<div class="msg ok">Uploaded.</div>';
         }catch(e){
-          inputEl.checked = !next;
-          checklistMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+          slot.msg.innerHTML = '<div class="msg err">Upload failed: '+escapeHtml(e.message||'unknown error')
+            +'. If this says the storage bucket doesn’t exist, Firebase Storage needs to be enabled'
+            +' for this project first (site admin only, from the Firebase Console — requires the Blaze plan).</div>';
         }finally{
-          inputEl.disabled = false;
+          slot.btn.disabled = false;
         }
       });
-    }
-    wireChecklistBox(chkLeaderboardBuilt, 'leaderboardBuilt');
-    wireChecklistBox(chkRulesBuilt, 'rulesBuilt');
+    });
+
     clearUpdatedBtn.addEventListener('click', async ()=>{
       clearUpdatedBtn.disabled = true;
       try{
