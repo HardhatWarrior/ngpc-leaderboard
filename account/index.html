@@ -69,6 +69,21 @@
   .panel .hint a{ color:var(--accent2); }
   .panel .hint a:hover{ text-decoration:none; }
 
+  /* ---------- collapsible panels, same pattern as admin/index.html and admin/game/index.html
+     -- every panel here defaults collapsed (see account-content's boot-time class below), since
+     a first-time visitor to this page most likely just wants to see whether they're signed in,
+     not four panels of controls at once. ---------- */
+  .panel-header{
+    display:flex; align-items:center; justify-content:space-between; gap:10px;
+    cursor:pointer; user-select:none; margin:0 0 4px;
+  }
+  .panel-header .chevron{ flex:none; color:var(--dim); font-size:10px; transition:transform .15s; }
+  .panel-header.collapsed .chevron{ transform:rotate(-90deg); }
+  .panel-header:focus-visible{ outline:2px solid var(--accent2); outline-offset:3px; border-radius:4px; }
+  .panel-header h2{ margin:0; }
+  .panel-body{ margin-top:10px; }
+  .panel-body[hidden]{ display:none; }
+
   label{ display:block; font-size:11.5px; color:var(--dim); margin-bottom:12px; }
   input[type=text], input[type=email], input[type=password]{
     display:block; width:100%; margin-top:4px; background:var(--navy); border:1px solid var(--border);
@@ -223,7 +238,11 @@
 
   <div id="account-content" hidden>
     <section class="panel">
-      <h2>Your Submissions</h2>
+      <div class="panel-header collapsed" data-toggle="sub-body" role="button" tabindex="0" aria-expanded="false">
+        <h2>Your Submissions</h2>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="panel-body" id="sub-body" hidden>
       <p class="hint">Every score you've submitted while signed in, click one with a scorecard to expand it. Deleting one removes it from its game's leaderboard permanently. A score submitted before your account is approved won't show up here until it is.</p>
       <div class="sub-controls">
         <span class="sub-controls-label">Sort by</span>
@@ -237,10 +256,15 @@
         <span class="sub-page-label" id="sub-page-label"></span>
         <button class="btn-secondary" id="sub-next">Next &rarr;</button>
       </div>
+      </div>
     </section>
 
     <section class="panel">
-      <h2>Avatar</h2>
+      <div class="panel-header collapsed" data-toggle="avatar-body" role="button" tabindex="0" aria-expanded="false">
+        <h2>Avatar</h2>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="panel-body" id="avatar-body" hidden>
       <p class="hint">A 32&times;32 icon, same RGB444 color model as the <a href="/tile_editor/" target="_blank" rel="noopener">NGPC Tile Editor</a> (4096 colors) &mdash; every pixel picks independently, no shared per-tile palette limit. Prefer designing there? Open the Tile Editor in a new tab, then use &ldquo;Import from Tile Editor&rdquo; below to bring your project in.</p>
       <div id="tool-row">
         <button type="button" class="tool-btn active" id="tool-pencil" data-tool="pencil" title="Pencil (B)">&#9998;</button>
@@ -273,20 +297,30 @@
           <div id="avatar-msg"></div>
         </div>
       </div>
+      </div>
     </section>
 
     <section class="panel">
-      <h2>Username</h2>
+      <div class="panel-header collapsed" data-toggle="username-body" role="button" tabindex="0" aria-expanded="false">
+        <h2>Username</h2>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="panel-body" id="username-body" hidden>
       <div class="current-value">Currently <b id="username-current">&mdash;</b></div>
       <label>New username<input type="text" id="username-input" maxlength="16" autocomplete="username"></label>
       <div class="row">
         <button class="btn-primary" id="username-save">Save username</button>
       </div>
       <div id="username-msg"></div>
+      </div>
     </section>
 
     <section class="panel">
-      <h2>Recovery Email</h2>
+      <div class="panel-header collapsed" data-toggle="email-body" role="button" tabindex="0" aria-expanded="false">
+        <h2>Recovery Email</h2>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="panel-body" id="email-body" hidden>
       <p class="hint">Optional. Stored on your account, but not currently wired up to send any reset email automatically.</p>
       <div class="current-value">Currently <b id="email-current">not set</b></div>
       <label>Recovery email<input type="email" id="email-input" autocomplete="email"></label>
@@ -295,6 +329,7 @@
         <button class="btn-secondary" id="email-clear">Clear</button>
       </div>
       <div id="email-msg"></div>
+      </div>
     </section>
   </div>
 
@@ -334,6 +369,21 @@
   const content = el('account-content');
   const GAME_NAMES = { BW: 'Neo Bowling', TT: 'Tetris', YZ: 'Neo Yahtzee', FK: 'Farkle', '2K': '2048', OV: 'Over Rev', GD: 'Gardenia', SD: 'Sudoku', XN: 'Xenon 2' };
   const SUB_PAGE_SIZE = 10;
+
+  // Every panel here defaults collapsed (see the "collapsed" class + hidden body already on each
+  // one in the markup) -- same toggle pattern as admin/index.html and admin/game/index.html.
+  document.querySelectorAll('.panel-header[data-toggle]').forEach(header=>{
+    const body = el(header.dataset.toggle);
+    if(!body) return;
+    function toggle(){
+      const collapsing = !body.hidden;
+      body.hidden = collapsing;
+      header.classList.toggle('collapsed', collapsing);
+      header.setAttribute('aria-expanded', String(!collapsing));
+    }
+    header.addEventListener('click', toggle);
+    header.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggle(); } });
+  });
 
   // ---- your submissions ----
   const subStatus = el('sub-status');

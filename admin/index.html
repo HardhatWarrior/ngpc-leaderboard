@@ -179,11 +179,11 @@
   </section>
 
   <section class="panel" id="games-content" hidden>
-    <div class="panel-header" data-toggle="games-body" role="button" tabindex="0" aria-expanded="true">
+    <div class="panel-header collapsed" data-toggle="games-body" role="button" tabindex="0" aria-expanded="false">
       <h2>Games</h2>
       <span class="chevron">&#9660;</span>
     </div>
-    <div class="panel-body" id="games-body">
+    <div class="panel-body" id="games-body" hidden>
       <p class="hint">Developer is set automatically when a game submission is approved (below) -- whoever manages that game's dev status and ROM from <a href="/admin/game/">/admin/game/</a>, without ever touching this repo.</p>
       <label class="settings-row">
         <input type="checkbox" id="hide-grid-toggle">
@@ -203,11 +203,11 @@
   </section>
 
   <section class="panel" id="content" hidden>
-    <div class="panel-header" data-toggle="players-body" role="button" tabindex="0" aria-expanded="true">
+    <div class="panel-header collapsed" data-toggle="players-body" role="button" tabindex="0" aria-expanded="false">
       <h2>Players</h2>
       <span class="chevron">&#9660;</span>
     </div>
-    <div class="panel-body" id="players-body">
+    <div class="panel-body" id="players-body" hidden>
       <p class="hint">New accounts start unapproved &mdash; they can sign in and submit scores right away, but those scores stay off the public boards until you approve the account here. Disabling a login isn't done from this page (it needs the Admin SDK); run <code>disable-user.js</code> / <code>enable-user.js</code> locally instead &mdash; see NGPC-Admin-Scripts/README.md.</p>
       <div class="stats-row" id="stats-row"></div>
       <div id="list-status"></div>
@@ -223,11 +223,11 @@
   </section>
 
   <section class="panel" id="all-subs-content" hidden>
-    <div class="panel-header" data-toggle="all-subs-body" role="button" tabindex="0" aria-expanded="true">
+    <div class="panel-header collapsed" data-toggle="all-subs-body" role="button" tabindex="0" aria-expanded="false">
       <h2>All Submissions</h2>
       <span class="chevron">&#9660;</span>
     </div>
-    <div class="panel-body" id="all-subs-body">
+    <div class="panel-body" id="all-subs-body" hidden>
       <p class="hint">Every score submitted site-wide, newest first. Click one with a scorecard to expand it. Deleting one removes it from its game's leaderboard permanently.</p>
       <div class="sub-controls">
         <span class="sub-controls-label">Sort by</span>

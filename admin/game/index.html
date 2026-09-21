@@ -73,6 +73,15 @@
   .game-list-name{ font-weight:600; color:var(--cream); font-size:13px; }
   .game-list-status{ font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; }
 
+  /* ---------- admin-only "Your Games" grouping -- one collapsible bucket per developer
+     username, your own (ADMIN_UID) games first and expanded by default, everyone else's
+     collapsed. Reuses .panel-header/.panel-body/.chevron's existing collapse mechanics. ---------- */
+  .dev-group{ margin-bottom:6px; }
+  .dev-group ~ .dev-group{ border-top:1px solid var(--border); padding-top:6px; }
+  .dev-group-header{ padding:8px 4px; }
+  .dev-group-name{ margin:0; font-size:12.5px; font-weight:600; color:var(--cream); }
+  .dev-group-body{ margin-top:0; padding-left:6px; }
+
   /* ---------- payload reference panel -- information only, no inputs. Static per-game data
      (see PAYLOAD_SPECS below), not read from Firestore -- there's nowhere that stores this for
      the 7 already-shipped games, and it's meant as a read-only technical reference for whoever's
@@ -469,21 +478,93 @@
         + '<table class="spec-table"><tbody>'+firestoreHtml+'</tbody></table></div>';
   }
 
+  function gameRowHtml(g, slug){
+    return '<a class="game-list-row" href="?slug='+encodeURIComponent(slug)+'">'
+      +'<span class="game-list-name">'+escapeHtml(g.name||slug)+'</span>'
+      +'<span class="game-list-status">'+statusLabel(g.devStatus)+'</span>'
+    +'</a>';
+  }
+
+  function wireCollapseToggles(root){
+    root.querySelectorAll('.panel-header[data-toggle]').forEach(header=>{
+      const body = el(header.dataset.toggle);
+      if(!body) return;
+      function toggle(){
+        const collapsing = !body.hidden;
+        body.hidden = collapsing;
+        header.classList.toggle('collapsed', collapsing);
+        header.setAttribute('aria-expanded', String(!collapsing));
+      }
+      header.addEventListener('click', toggle);
+      header.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggle(); } });
+    });
+  }
+
   async function renderList(db, user, isAdmin){
     listPanel.hidden = false;
     gameListEl.textContent = 'Loading…';
     const snap = await db.collection('games').get();
-    const rows = [];
+    const games = [];
     snap.forEach(doc=>{
       const d = doc.data();
-      if(isAdmin || d.developerUid === user.uid){
-        rows.push('<a class="game-list-row" href="?slug='+encodeURIComponent(doc.id)+'">'
-          +'<span class="game-list-name">'+escapeHtml(d.name||doc.id)+'</span>'
-          +'<span class="game-list-status">'+statusLabel(d.devStatus)+'</span>'
-        +'</a>');
-      }
+      if(isAdmin || d.developerUid === user.uid) games.push(Object.assign({slug:doc.id}, d));
     });
-    gameListEl.innerHTML = rows.length ? rows.join('') : '<p class="hint" style="margin:0">No games assigned to you yet. Ask the site admin to assign you as developer on one.</p>';
+
+    if(!isAdmin){
+      // A non-admin developer only ever sees their own games (the filter above already
+      // guarantees that), so there's nothing to group by developer -- a flat list is just as
+      // useful and skips fetching every user's username for a single-bucket label.
+      gameListEl.innerHTML = games.length
+        ? games.map(g=>gameRowHtml(g, g.slug)).join('')
+        : '<p class="hint" style="margin:0">No games assigned to you yet. Ask the site admin to assign you as developer on one.</p>';
+      return;
+    }
+
+    if(!games.length){
+      gameListEl.innerHTML = '<p class="hint" style="margin:0">No games yet.</p>';
+      return;
+    }
+
+    // Admin view only: bucket by developer, your own games first and expanded, everyone else's
+    // collapsed underneath by username, unassigned games last. games/{slug} only stores
+    // developerUid, so this needs a uid->username lookup -- same one-time users/ fetch
+    // admin/index.html's own Games panel already does (users/{uid} is publicly readable).
+    const usersSnap = await db.collection('users').get();
+    const uidToUsername = {};
+    usersSnap.forEach(doc=>{ uidToUsername[doc.id] = doc.data().username || doc.id; });
+
+    const groups = new Map(); // developerUid (or '' for unassigned) -> {label, games:[]}
+    games.forEach(g=>{
+      const uid = g.developerUid || '';
+      if(!groups.has(uid)){
+        groups.set(uid, { uid, label: uid ? (uidToUsername[uid] || uid) : 'Unassigned', games: [] });
+      }
+      groups.get(uid).games.push(g);
+    });
+    const groupList = Array.from(groups.values());
+    groupList.sort((a,b)=>{
+      if(a.uid === ADMIN_UID) return -1;
+      if(b.uid === ADMIN_UID) return 1;
+      if(!a.uid) return 1;   // unassigned last
+      if(!b.uid) return -1;
+      return a.label.localeCompare(b.label);
+    });
+    groupList.forEach(g=> g.games.sort((a,b)=>(a.name||a.slug).localeCompare(b.name||b.slug)));
+
+    gameListEl.innerHTML = groupList.map((g,i)=>{
+      const bodyId = 'dev-group-'+i;
+      const expanded = g.uid === ADMIN_UID; // your own games open by default, everyone else's collapsed
+      const rowsHtml = g.games.map(gm=>gameRowHtml(gm, gm.slug)).join('');
+      return '<div class="dev-group">'
+        +'<div class="panel-header dev-group-header'+(expanded?'':' collapsed')+'" data-toggle="'+bodyId+'" role="button" tabindex="0" aria-expanded="'+expanded+'">'
+          +'<h3 class="dev-group-name">'+escapeHtml(g.label)+'</h3>'
+          +'<span class="chevron">&#9660;</span>'
+        +'</div>'
+        +'<div class="panel-body dev-group-body" id="'+bodyId+'"'+(expanded?'':' hidden')+'>'+rowsHtml+'</div>'
+      +'</div>';
+    }).join('');
+
+    wireCollapseToggles(gameListEl);
   }
 
   async function renderEditor(db, user, isAdmin, slug){
