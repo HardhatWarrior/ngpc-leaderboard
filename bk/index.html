@@ -46,8 +46,11 @@
   /* Up to two extra screenshots/GIFs (games/{slug}.extraScreenshot1Path/2Path, set from
      admin/game/index.html's own art panel) shown right next to the title screen -- hidden
      entirely (see the [hidden] rule already in the shared reset) until JS finds one set. */
-  .art-strip{ display:flex; gap:8px; flex:none; }
-  .extra-art{ width:60px; max-width:18%; height:auto; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); background:#000; object-fit:contain; }
+  /* align-items:flex-start (not the flex default of stretch) is required here -- without it, a
+     shorter sibling (extra-art, 60px) gets its height stretched to match the tallest one
+     (header-art, 130px) while width stays put, which reads as a horizontal squish. */
+  .art-strip{ display:flex; align-items:flex-start; gap:8px; flex:none; }
+  .extra-art{ width:60px; max-width:18%; height:auto; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); background:#000; object-fit:contain; flex:none; }
   main{ display:grid; grid-template-columns:1fr; gap:20px; align-items:start; }
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
   #access-gate{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px 20px; }
