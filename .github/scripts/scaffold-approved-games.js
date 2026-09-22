@@ -11,7 +11,7 @@
 const admin = require('firebase-admin');
 const fs = require('fs');
 const path = require('path');
-const { generateAndWrite } = require('./scaffold-game-lib.js');
+const { generateAndWrite, checkScoreIndexAndNotify } = require('./scaffold-game-lib.js');
 
 const REPO_ROOT = path.join(__dirname, '..', '..');
 
@@ -53,6 +53,13 @@ async function main() {
         console.log('  wrote ' + result.rulesSnippetPath);
         if (result.manualFields.length) console.log('  NEEDS HAND-EDITING: ' + result.manualFields.join(', '));
         if (result.hasScorecardNote) console.log('  NEEDS HAND-EDITING: scorecardFormula TODO left in ' + slug + '/index.html');
+
+        const indexCheck = await checkScoreIndexAndNotify(db, sub, slug);
+        if (!indexCheck.ok) {
+          console.log(indexCheck.notified
+            ? '  Firestore index missing -- emailed the create-index link to the admin.'
+            : '  Firestore index check failed: ' + (indexCheck.error || indexCheck.mailError || 'unknown'));
+        }
       }
     } catch (e) {
       console.error('  failed: ' + e.message);

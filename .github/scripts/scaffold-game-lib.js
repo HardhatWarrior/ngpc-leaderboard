@@ -1158,10 +1158,52 @@ function playPageTemplate(sub, slug) {
 `;
 }
 
+// A freshly-scaffolded game's board query (games/{slug}'s own sortField/sortDirection, filtered
+// on game+approved) almost always needs its own Firestore composite index the very first time --
+// confirmed the hard way with Minesweeper's own launch, where the leaderboard just showed a
+// generic "couldn't reach the leaderboard right now" until the index was created by hand from the
+// Firebase Console. Firestore's own error for this (FAILED_PRECONDITION) always embeds a
+// pre-filled console link that creates EXACTLY the missing index in one click -- this runs the
+// same query the live page will run (via Admin SDK, so it sees the same FAILED_PRECONDITION a
+// browser would) immediately after scaffolding, and if it's missing, emails that link to the site
+// admin (via the 'mail' collection the Firebase Trigger Email extension already watches -- same
+// mechanism as auth.js's own notifyAdmin()) so it can be created with one tap, from anywhere,
+// instead of only being discovered later when someone actually tries to submit a score.
+async function checkScoreIndexAndNotify(db, sub, slug) {
+  const code = sub.proposedCode;
+  const sortField = camelCase(sub.sortField || 'score');
+  const sortDir = sub.sortDirection === 'asc' ? 'asc' : 'desc';
+  try {
+    await db.collection('scores').where('game', '==', code).where('approved', '==', true).orderBy(sortField, sortDir).limit(1).get();
+    return { ok: true };
+  } catch (e) {
+    const m = /https:\/\/console\.firebase\.google\.com\S+/.exec(e.message || '');
+    if (!m) return { ok: false, notified: false, error: e.message };
+    const link = m[0];
+    try {
+      await db.collection('mail').add({
+        to: ['darekdavis@gmail.com'],
+        message: {
+          subject: sub.proposedName + ' needs a one-time Firestore index before its leaderboard will load',
+          text: 'The scaffolded leaderboard for "' + sub.proposedName + '" (/' + slug + '/) can\'t query its scores yet --'
+            + ' Firestore needs a composite index for game="' + code + '" + approved==true, sorted by '
+            + sortField + ' (' + sortDir + ').\n\n'
+            + 'Tap to create it (pre-filled, one tap, works from your phone):\n' + link + '\n\n'
+            + 'It takes a minute or two to finish building after you tap Create Index. Until then the'
+            + ' leaderboard shows "Couldn\'t reach the leaderboard right now."',
+        },
+      });
+      return { ok: false, notified: true, link };
+    } catch (mailErr) {
+      return { ok: false, notified: false, link, mailError: mailErr.message };
+    }
+  }
+}
+
 // Exported for scaffold-game.test.js -- lets the generator logic be exercised with a synthetic
 // submission object, no live Firestore/service-account needed, since main() below is the only
 // part that actually touches the network.
-module.exports = { camelCase, pascalCase, planFields, generateParseFunction, generateScorecardTable, generateRulesSnippet, leaderboardTemplate, playPageTemplate, generateAndWrite, printScaffoldNextSteps, findSubmissionAndSlug };
+module.exports = { camelCase, pascalCase, planFields, generateParseFunction, generateScorecardTable, generateRulesSnippet, leaderboardTemplate, playPageTemplate, generateAndWrite, printScaffoldNextSteps, findSubmissionAndSlug, checkScoreIndexAndNotify };
 
 // Looks up the submission + slug from EITHER a gameSubmissions doc id OR a games/{slug} slug --
 // reset-game.js and approve-submission.js both key off a slug, so accepting one here too avoids
