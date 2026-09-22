@@ -262,10 +262,15 @@
     }
     mineRows.innerHTML = subs.map(s=>{
       const noteHtml = s.reviewNote ? '<div class="sub-note">'+escapeHtml(s.reviewNote)+'</div>' : '';
+      // reviewedAt is stamped by admin/index.html's onApprove()/onReject() the moment a
+      // submission leaves 'pending' -- still null for anything awaiting review, same as
+      // reviewNote often is.
+      const reviewedHtml = s.reviewedAt ? '<div class="sub-note">'+(s.status==='approved'?'Approved':'Reviewed')+' '+fmtWhen(s.reviewedAt)+'</div>' : '';
       return '<div class="sub-row">'
         +'<span class="sub-name">'+escapeHtml(s.proposedName)+'</span>'
         +'<span class="badge '+s.status+'">'+s.status+'</span>'
         +'<div class="sub-note">Submitted '+fmtWhen(s.submittedAt)+'</div>'
+        +reviewedHtml
         +noteHtml
       +'</div>';
     }).join('');
