@@ -429,6 +429,12 @@
     // applySort()'s comparator parses this with new Date(string) -- an ISO string, not the raw
     // millis number, since new Date("1789870802000") is Invalid Date (NaN), not that timestamp.
     a.dataset.added = new Date(data.romUpdatedAt || data.addedAt || 0).toISOString();
+    // Admin-only "Pin to top of Recent" (admin/game/index.html's own pin toggle) -- overrides the
+    // normal romUpdatedAt/addedAt ordering entirely, e.g. so a ROM build pushed to an unrelated
+    // game doesn't bump something the admin specifically wants to stay first. pinnedAt (not a
+    // plain boolean) lets multiple pinned games still sort sensibly among themselves, by most
+    // recently pinned.
+    a.dataset.pinnedAt = data.pinnedAt ? new Date(data.pinnedAt).toISOString() : '';
 
     const art = document.createElement('div');
     art.className = 'tile-art';
@@ -525,6 +531,17 @@
     const sorted = tileEls.slice().sort((a, b)=>{
       if(mode === 'alpha'){
         return a.querySelector('.tile-name').textContent.localeCompare(b.querySelector('.tile-name').textContent);
+      }
+      // Pinned tiles always float to the top of "Recent" specifically -- "Most Active" is a real
+      // popularity ranking an admin pin shouldn't distort, and "A-Z" is about identity, not
+      // priority, so both are deliberately exempt.
+      if(mode === 'recent'){
+        const aPinned = !!a.dataset.pinnedAt, bPinned = !!b.dataset.pinnedAt;
+        if(aPinned !== bPinned) return aPinned ? -1 : 1;
+        if(aPinned && bPinned){
+          const diff = new Date(b.dataset.pinnedAt) - new Date(a.dataset.pinnedAt);
+          if(diff !== 0) return diff;
+        }
       }
       if(mode === 'active' && counts){
         const diff = (counts[b.dataset.game]||0) - (counts[a.dataset.game]||0);

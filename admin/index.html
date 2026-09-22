@@ -194,7 +194,7 @@
       <div style="overflow-x:auto">
         <table>
           <thead>
-            <tr><th>Game</th><th>Status</th><th>Active</th><th>Developer</th><th>New Badge</th><th></th></tr>
+            <tr><th>Game</th><th>Status</th><th>Active</th><th>Pinned</th><th>Developer</th><th>New Badge</th><th></th></tr>
           </thead>
           <tbody id="games-rows"></tbody>
         </table>
@@ -570,12 +570,21 @@
       return '<button type="button" class="badge '+(isActive?'promote-dev':'pending')+'" data-action="toggle-active" data-slug="'+encodeURIComponent(g.slug)+'" style="cursor:pointer;border:none">'
         + (isActive ? 'Active' : 'Inactive') + '</button>';
     }
+    // Overrides "Most Recent" sort on the main page entirely -- see index.html's own applySort()
+    // comment. Same admin-only trust level as this toggle already has, since it's only reachable
+    // from this admin-only page.
+    function pinCell(g){
+      const isPinned = !!g.pinnedAt;
+      return '<button type="button" class="badge '+(isPinned?'pending':'promote-dev')+'" data-action="toggle-pin" data-slug="'+encodeURIComponent(g.slug)+'" style="cursor:pointer;border:none">'
+        + (isPinned ? 'Pinned' : '+ Pin') + '</button>';
+    }
     gamesRowsEl.innerHTML = games.map(g=>{
       const currentDevName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '—';
       return '<tr data-game-row="'+encodeURIComponent(g.slug)+'">'+
         '<td>'+escapeHtml(g.name||g.slug)+'</td>'+
         '<td>'+statusLabel(g.devStatus)+'</td>'+
         '<td>'+activeCell(g)+'</td>'+
+        '<td>'+pinCell(g)+'</td>'+
         '<td>'+escapeHtml(currentDevName)+'</td>'+
         '<td>'+newBadgeCell(g)+'</td>'+
         '<td><a href="/admin/game/?slug='+encodeURIComponent(g.slug)+'">Manage</a></td>'+
@@ -618,6 +627,24 @@
         }catch(err){
           gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t update active state: '+escapeHtml(err.message||'unknown error')+'</div>';
           activeBtn.disabled = false;
+        }
+        return;
+      }
+
+      const pinBtn = e.target.closest('button[data-action="toggle-pin"]');
+      if(pinBtn){
+        const slug = decodeURIComponent(pinBtn.dataset.slug);
+        const g = games.find(x=>x.slug===slug);
+        const next = !g.pinnedAt;
+        pinBtn.disabled = true;
+        try{
+          const pinnedAt = next ? Date.now() : null;
+          await db.collection('games').doc(slug).update({pinnedAt});
+          g.pinnedAt = pinnedAt;
+          pinBtn.outerHTML = pinCell(g);
+        }catch(err){
+          gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t update pin state: '+escapeHtml(err.message||'unknown error')+'</div>';
+          pinBtn.disabled = false;
         }
       }
     });

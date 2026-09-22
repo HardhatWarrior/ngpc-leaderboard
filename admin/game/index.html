@@ -176,6 +176,17 @@
     </div>
     <div id="active-msg"></div>
 
+    <!-- Admin only. Overrides "Most Recent" sort entirely -- a ROM build pushed to some OTHER
+         game shouldn't be able to bump this one down, e.g. while running a promotion. Does not
+         affect "Most Active" or "A-Z" sort; see index.html's own applySort() comment. -->
+    <div id="pin-panel" hidden style="margin-top:10px">
+      <div class="status-row" id="pin-row" style="margin-bottom:0">
+        <button type="button" class="status-btn" data-pinned="false">Not Pinned<span class="desc">Normal "Most Recent" order</span></button>
+        <button type="button" class="status-btn" data-pinned="true">Pinned<span class="desc">Stays at the top of "Most Recent"</span></button>
+      </div>
+      <div id="pin-msg"></div>
+    </div>
+
     <div class="current-value" style="margin-top:16px" id="stats-line">Downloaded &mdash; times &middot; Played &mdash; times (in-browser)</div>
     <div class="current-value" id="scan-source-line">Loading scan-source breakdown&hellip;</div>
 
@@ -987,6 +998,43 @@
         }
       });
     });
+
+    // Pin to top of "Most Recent" -- admin only (unlike Active above, which a game's own assigned
+    // developer can also toggle). pinnedAt is a timestamp, not a plain boolean, so multiple pinned
+    // games still sort sensibly among themselves (most recently pinned first) -- see index.html's
+    // own applySort().
+    if(isAdmin){
+      el('pin-panel').hidden = false;
+      let currentPinned = !!data.pinnedAt;
+      const pinRow = el('pin-row');
+      function paintPinButtons(){
+        pinRow.querySelectorAll('.status-btn').forEach(btn=>{
+          btn.classList.toggle('active', (btn.dataset.pinned === 'true') === currentPinned);
+        });
+      }
+      paintPinButtons();
+      const pinMsg = el('pin-msg');
+      pinRow.querySelectorAll('.status-btn').forEach(btn=>{
+        btn.addEventListener('click', async ()=>{
+          const next = btn.dataset.pinned === 'true';
+          if(next === currentPinned) return;
+          pinMsg.innerHTML = '';
+          btn.disabled = true;
+          try{
+            await docRef.update({pinnedAt: next ? Date.now() : null});
+            currentPinned = next;
+            paintPinButtons();
+            pinMsg.innerHTML = next
+              ? '<div class="msg ok">Saved — this game now stays at the top of "Most Recent" until unpinned.</div>'
+              : '<div class="msg ok">Saved — back to normal "Most Recent" order.</div>';
+          }catch(e){
+            pinMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+          }finally{
+            btn.disabled = false;
+          }
+        });
+      });
+    }
 
     // Description + site link, shown on this game's own leaderboard page under its screenshots
     // (see bk/index.html's .game-desc/.game-site) -- both optional, saved together on demand
