@@ -50,3 +50,4 @@ This is a generated DRAFT -- read it before flipping devStatus off
 *-rules-snippet.txt alongside it still needs to be reviewed and
 pasted into firestore.rules by hand."
           git push
+
