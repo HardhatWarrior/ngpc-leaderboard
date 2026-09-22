@@ -303,6 +303,7 @@ function leaderboardTemplate(sub, plan, slug) {
   main{ display:grid; grid-template-columns:1fr; gap:20px; align-items:start; }
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
   #access-gate{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px 20px; }
+  #page-content{ display:flex; flex-direction:column; gap:22px; }
   .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
   .panel .hint{ margin:0 0 16px; color:var(--dim); font-size:12.5px; line-height:1.5; }
   #board-status{ font-size:12px; color:var(--dim); margin-bottom:10px; min-height:1.4em; }
