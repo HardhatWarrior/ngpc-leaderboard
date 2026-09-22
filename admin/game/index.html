@@ -36,6 +36,8 @@
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
   .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
   .panel .hint{ margin:0 0 14px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+  .panel .hint a{ color:var(--accent2); text-decoration:underline; text-underline-offset:2px; }
+  .panel .hint a:hover{ color:var(--cream); }
 
   #denied{ text-align:center; color:var(--dim); font-size:13.5px; padding:40px 0; }
 
@@ -143,6 +145,10 @@
   <section class="panel" id="edit-panel" hidden>
     <h2 id="edit-title">Game</h2>
     <p class="hint">Dev status controls the banner shown on this game's tile on the main page. Uploading a new ROM here also bumps it to the top of "Most Recent" automatically.</p>
+    <p class="hint" id="page-links-line" style="margin-top:-8px">
+      <a id="lb-page-link" href="#" target="_blank" rel="noopener">Leaderboard page &#8599;</a>
+      &middot; <a id="play-page-link" href="#" target="_blank" rel="noopener">Play page &#8599;</a>
+    </p>
 
     <div class="status-row" id="status-row">
       <button type="button" class="status-btn" data-status="coming-soon">Coming Soon<span class="desc">Corner ribbon, no NEW/UPDATED badge</span></button>
@@ -500,9 +506,48 @@
     },
   };
 
-  function renderPayloadSpec(slug){
+  // Renders straight from a gameSubmissions doc (payloadFields/totalLength/sortField/
+  // sortDirection/scorecardFormula/examplePayloads) -- for any game NOT in the hand-maintained
+  // PAYLOAD_SPECS table above (i.e. every game submitted through /dev/submit/ rather than
+  // hand-entered here before that existed). Simpler than a PAYLOAD_SPECS entry -- no Firestore
+  // doc-shape table, since deriving the exact field names/types that got stored requires the same
+  // logic NGPC-Admin-Scripts/scaffold-game.js already has, not duplicated here -- but every field
+  // the developer actually typed into the submission form is shown.
+  function renderPayloadSpecFromSubmission(sub){
+    payloadPanel.hidden = false;
+    const fieldsHtml = (sub.payloadFields||[]).map(f=>
+      '<tr><td>'+escapeHtml(f.name)+'</td><td>'+escapeHtml(f.width)+'</td><td>'+escapeHtml(f.format)+'</td><td class="spec-note">'+escapeHtml(f.notes)+'</td></tr>'
+    ).join('');
+    const examplesHtml = (sub.examplePayloads||[]).map(escapeHtml).join('<br>') || '<span class="spec-note">none given</span>';
+    payloadContentEl.innerHTML =
+      '<div class="spec-group"><div class="spec-value spec-note">From this game\'s own submission -- not hand-verified against device source the way the site\'s original games are.</div></div>'
+      + '<div class="spec-group"><div class="spec-label">Payload fields</div>'
+        + '<table class="spec-table"><thead><tr><th>Field</th><th>Width</th><th>Format</th><th>Notes</th></tr></thead><tbody>'+fieldsHtml+'</tbody></table></div>'
+      + '<div class="spec-group"><div class="spec-label">Total length</div><div class="spec-value">'+escapeHtml(sub.totalLength||'—')+'</div></div>'
+      + '<div class="spec-group"><div class="spec-label">Sort</div><div class="spec-value">'+escapeHtml(sub.sortField||'—')+' ('+escapeHtml(sub.sortDirection==='asc'?'ascending':'descending')+')</div></div>'
+      + (sub.scorecardFormula ? '<div class="spec-group"><div class="spec-label">Scorecard reconstruction</div><div class="spec-value">'+escapeHtml(sub.scorecardFormula)+'</div></div>' : '')
+      + '<div class="spec-group"><div class="spec-label">Example payloads</div><div class="spec-mono">'+examplesHtml+'</div></div>';
+  }
+
+  async function renderPayloadSpec(slug, db, gameData){
     const spec = PAYLOAD_SPECS[slug];
-    if(!spec){ payloadMissingPanel.hidden = false; return; }
+    if(spec){ renderPayloadSpecFromStatic(spec); return; }
+    // Not one of the hand-maintained games -- look up the submission that created this
+    // games/{slug} doc, same lookup NGPC-Admin-Scripts/reset-game.js and scaffold-game.js already
+    // use (reviewNote first, proposedCode as a fallback).
+    try{
+      let subSnap = await db.collection('gameSubmissions').where('reviewNote','==','Approved as games/'+slug).get();
+      if(subSnap.empty && gameData.code){
+        subSnap = await db.collection('gameSubmissions').where('proposedCode','==',gameData.code).get();
+      }
+      if(subSnap.empty){ payloadMissingPanel.hidden = false; return; }
+      renderPayloadSpecFromSubmission(subSnap.docs[0].data());
+    }catch(e){
+      payloadMissingPanel.hidden = false;
+    }
+  }
+
+  function renderPayloadSpecFromStatic(spec){
     payloadPanel.hidden = false;
 
     const fieldsHtml = spec.fields.map(f=>
@@ -641,6 +686,11 @@
     // page's folder name doesn't always match this game's own slug (e.g. bw's is /play/bowling/,
     // not /play/bw/), hence the lookup table rather than assuming 'play_'+slug.
     const PLAY_FOLDER = { bw:'bowling', tt:'tetris', yz:'yahtzee', fk:'farkle', '2k':'2048', overrev:'overrev', gd:'gardenia', sd:'sd', xn:'xn' };
+    // A game scaffolded via NGPC-Admin-Scripts/scaffold-game.js always has its play page at
+    // /play/<slug>/, matching the leaderboard slug directly -- only the original hand-built games
+    // (the PLAY_FOLDER table above) have a differently-named play folder.
+    el('lb-page-link').href = data.leaderboardPath || ('/'+slug+'/');
+    el('play-page-link').href = '/play/'+(PLAY_FOLDER[slug] || slug)+'/';
     const downloads = data.romDownloads || 0;
     const playFolder = PLAY_FOLDER[slug];
     const statsLineEl = el('stats-line');
@@ -680,7 +730,7 @@
     });
 
     editPanel.hidden = false;
-    renderPayloadSpec(slug);
+    renderPayloadSpec(slug, db, data);
 
     let currentStatus = data.devStatus || 'dev';
     function paintStatusButtons(){
