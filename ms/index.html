@@ -84,6 +84,8 @@
   .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .row-meta a:hover{ color:var(--accent2); }
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
+  .row.has-detail{ cursor:pointer; } .row.has-detail:hover{ background:rgba(92,143,214,.08); }
+  .row-detail{ padding:2px 8px 14px; }
   .tk-sheet{ width:100%; border-collapse:collapse; margin:14px 0; font-size:11.5px; }
   .tk-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
   .tk-sheet td.tk-val{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
@@ -259,9 +261,39 @@
     return m + ':' + String(s).padStart(2,'0');
   }
 
-  function formatDisplayValue(o){ return fmtTime(o.time); }
-
   const DIFF_NAMES = {"0":"Easy","1":"Normal"};
+
+  // Reads games/ms.display (set graphically from admin/game/'s own "Leaderboard Display" panel)
+  // instead of hardcoding these choices -- defaults below reproduce exactly what this page shipped
+  // with before that panel existed, so an untouched games/ms doc (missing the display field
+  // entirely) renders identically to today. gameData is the same module-level var the art/ROM
+  // fetch above already populates -- it's only fetched once per page load (not subscribed live),
+  // so a saved display change takes effect on this viewer's next reload, not instantly; reading it
+  // fresh here rather than caching it once still matters for the *within-this-load* case (e.g. the
+  // gameDocPromise resolving after the board's very first snapshot already rendered once).
+  function parseInlineLabels(str){
+    const map = {};
+    (str||'').split(',').forEach(pair=>{
+      const idx = pair.indexOf(':');
+      if(idx < 0) return;
+      map[pair.slice(0,idx).trim()] = pair.slice(idx+1).trim();
+    });
+    return map;
+  }
+  function getDisplaySettings(){
+    const d = (gameData && gameData.display) || {};
+    return {
+      scoreFormat: d.scoreFormat || 'time',
+      inlineField: d.inlineField !== undefined ? d.inlineField : 'difficulty',
+      inlineLabels: parseInlineLabels(d.inlineLabels !== undefined ? d.inlineLabels : '0:Easy,1:Normal'),
+      rowDetailExpand: !!d.rowDetailExpand,
+    };
+  }
+  function fmtScoreValue(data, settings){
+    return settings.scoreFormat === 'time' ? fmtTime(data.time) : String(data.time);
+  }
+
+  function formatDisplayValue(o){ return fmtScoreValue(o, getDisplaySettings()); }
 
   function renderScorecardHTML(data){
     const rows = '<tr><td>Difficulty</td><td class="tk-val tnum">'+(DIFF_NAMES[data.difficulty] || data.difficulty)+'</td></tr>'+
@@ -271,22 +303,28 @@
 
   async function renderBoard(docs){
     if(!docs.length){ boardEl.innerHTML = '<div class="empty-state">No scores yet — be the first on the board.</div>'; return; }
+    const settings = getDisplaySettings();
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
       const data = d.data();
       const rank = i+1;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
-      const diffLine = DIFF_NAMES[data.difficulty] || data.difficulty;
-      const meta = [fmtWhen(data.submittedAt), diffLine, usernameLine].filter(Boolean).join(' · ');
+      const inlineRaw = settings.inlineField ? data[settings.inlineField] : null;
+      const inlineLine = inlineRaw != null ? (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw)) : '';
+      const meta = [fmtWhen(data.submittedAt), inlineLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
-      return '<div class="row'+(rank===1?' top1':'')+'">'+
+      const rowClass = 'row'+(rank===1?' top1':'')+(settings.rowDetailExpand?' has-detail':'');
+      const rowAttr = settings.rowDetailExpand ? ' data-detail="d'+i+'"' : '';
+      const rowHtml = '<div class="'+rowClass+'"'+rowAttr+'>'+
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.time!=null?fmtTime(data.time):'-')+'</div>'+
+        '<div class="score-val tnum">'+(data.time!=null?fmtScoreValue(data, settings):'-')+'</div>'+
       '</div>';
+      const detailHtml = settings.rowDetailExpand ? '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data)+'</div>' : '';
+      return rowHtml + detailHtml;
     }).join('');
     docs.forEach((d,i)=>{
       const data = d.data();
@@ -295,6 +333,13 @@
       if(canvasEl && window.NGPC_AUTH) NGPC_AUTH.renderAvatarToCanvas(canvasEl, avatars[data.uid], 48/NGPC_AUTH.AVATAR_SIZE);
     });
   }
+
+  boardEl.addEventListener('click', (e)=>{
+    const row = e.target.closest('.row.has-detail');
+    if(!row) return;
+    const detailId = row.dataset.detail;
+    if(detailId) el(detailId).hidden = !el(detailId).hidden;
+  });
 
   function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 

@@ -242,6 +242,31 @@
         </div>
       </div>
     </div>
+
+    <!-- Admin-only (see renderEditor's isAdmin gate) -- graphically controls a handful of display
+         choices a scaffolded leaderboard page reads from games/{slug}.display at render time
+         instead of having them hardcoded (see ms/index.html's own getDisplaySettings()). Only
+         games retrofitted to read this object are actually affected; an un-retrofitted page
+         ignores it entirely. -->
+    <div class="art-panel" id="display-panel" hidden style="margin-top:20px">
+      <div class="current-value" style="margin-bottom:10px">Leaderboard Display <span class="spec-note">(admin only)</span></div>
+      <div class="field-label">Score format</div>
+      <div class="status-row" id="display-score-format-row" style="margin-bottom:0">
+        <button type="button" class="status-btn" data-value="raw">Raw number</button>
+        <button type="button" class="status-btn" data-value="time">m:ss time</button>
+      </div>
+      <div class="field-label" style="margin-top:14px">Extra field shown inline (blank for none)</div>
+      <input type="text" id="display-inline-field" placeholder="e.g. difficulty">
+      <div class="field-label" style="margin-top:10px">Labels for that field's values (optional)</div>
+      <input type="text" id="display-inline-labels" placeholder="0:Easy,1:Normal">
+      <div class="field-label" style="margin-top:14px">Tap a row to expand its detail card</div>
+      <div class="status-row" id="display-expand-row" style="margin-bottom:0">
+        <button type="button" class="status-btn" data-value="off">Off</button>
+        <button type="button" class="status-btn" data-value="on">On</button>
+      </div>
+      <button type="button" class="action btn-primary" id="display-save" style="margin-top:14px">Save</button>
+      <div id="display-msg"></div>
+    </div>
   </section>
 
   <section class="panel" id="payload-panel" hidden>
@@ -778,6 +803,58 @@
 
     editPanel.hidden = false;
     renderPayloadSpec(slug, db, data);
+
+    // "only on my access level" -- explicitly admin-only, unlike the rest of this page (which a
+    // game's own assigned developer can also use). isAdmin already has unrestricted write access
+    // to games/{slug} in firestore.rules (only a non-admin developer is field-restricted there),
+    // so no rules change was needed -- gating is done here, in the UI, same as every other
+    // admin-only control already on this page.
+    if(isAdmin){
+      const displayPanel = el('display-panel');
+      displayPanel.hidden = false;
+      const scoreFormatRow = el('display-score-format-row');
+      const expandRow = el('display-expand-row');
+      const inlineFieldInput = el('display-inline-field');
+      const inlineLabelsInput = el('display-inline-labels');
+      const displayMsg = el('display-msg');
+      const display = data.display || {};
+      let scoreFormat = display.scoreFormat === 'raw' ? 'raw' : 'time';
+      let expand = display.rowDetailExpand ? 'on' : 'off';
+      function paintDisplayButtons(){
+        scoreFormatRow.querySelectorAll('.status-btn').forEach(btn=>{
+          btn.classList.toggle('active', btn.dataset.value === scoreFormat);
+        });
+        expandRow.querySelectorAll('.status-btn').forEach(btn=>{
+          btn.classList.toggle('active', btn.dataset.value === expand);
+        });
+      }
+      inlineFieldInput.value = display.inlineField !== undefined ? display.inlineField : '';
+      inlineLabelsInput.value = display.inlineLabels !== undefined ? display.inlineLabels : '';
+      paintDisplayButtons();
+      scoreFormatRow.querySelectorAll('.status-btn').forEach(btn=>{
+        btn.addEventListener('click', ()=>{ scoreFormat = btn.dataset.value; paintDisplayButtons(); });
+      });
+      expandRow.querySelectorAll('.status-btn').forEach(btn=>{
+        btn.addEventListener('click', ()=>{ expand = btn.dataset.value; paintDisplayButtons(); });
+      });
+      el('display-save').addEventListener('click', async ()=>{
+        const btn = el('display-save');
+        displayMsg.innerHTML = '';
+        btn.disabled = true;
+        try{
+          await docRef.update({ display: {
+            scoreFormat, rowDetailExpand: expand === 'on',
+            inlineField: inlineFieldInput.value.trim(),
+            inlineLabels: inlineLabelsInput.value.trim(),
+          } });
+          displayMsg.innerHTML = '<div class="msg ok">Saved — reload the leaderboard page to see it (it only re-reads this on load, not live).</div>';
+        }catch(e){
+          displayMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+        }finally{
+          btn.disabled = false;
+        }
+      });
+    }
 
     let currentStatus = data.devStatus || 'dev';
     function paintStatusButtons(){
