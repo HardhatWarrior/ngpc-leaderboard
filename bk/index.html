@@ -51,6 +51,15 @@
      (header-art, 130px) while width stays put, which reads as a horizontal squish. */
   .art-strip{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; flex:none; }
   .extra-art{ width:130px; max-width:38%; height:auto; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; flex:none; }
+  /* Hand-added: three ~130px images side-by-side in .art-strip (header-art
+     plus both extras) don't leave room for .title-block in the same
+     .header-row on a phone-width viewport -- .header-row stays row-
+     direction (no stacking breakpoint exists here), so it just overflows
+     and pushes the panel wider than the screen. Hiding the two optional
+     extras below 600px keeps just the title screenshot, which fits.
+     Same "reapply after a --force regen of this file" caveat as the
+     .score-val.secret-used rule above. */
+  @media (max-width:600px){ .extra-art{ display:none; } }
   main{ display:grid; grid-template-columns:1fr; gap:20px; align-items:start; }
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
   #access-gate{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px 20px; }
