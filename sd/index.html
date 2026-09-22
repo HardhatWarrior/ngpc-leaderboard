@@ -250,13 +250,14 @@
   // Payload (per the submitted spec, NOT a fixed-width binary encoding like this site's other
   // games): 2-char game code immediately followed by a space-separated "KEY-VALUE" list --
   // DIFF-<E/M/H>, TIME-<1-5 digit seconds>, MISS-<3-digit zero-padded mistake count>, and now
-  // optionally SEED-<0-65535> (the on-device puzzle generator's own seed -- added after the
-  // original spec shipped, so its own token is OPTIONAL here: an older cartridge build whose QR
-  // has no SEED- token at all still parses and submits fine, it just won't carry a seed value).
-  // No initials field -- unlike every other game here, Sudoku's own high-score flow doesn't
-  // collect device-typed initials, so the board identifies a run by the submitter's site account
-  // only. Real device output: "NGPC-DEV.COM/SD/SDDIFF-E TIME-123 MISS-002" (or, once the device
-  // build sends it, "...MISS-002 SEED-12345") -- the payload segment repeats "SD" right after the
+  // optionally SEED-<exactly 5 digits, zero-padded, 00000-65535> (the on-device puzzle
+  // generator's own seed -- added after the original spec shipped, so its own token is OPTIONAL
+  // here: an older cartridge build whose QR has no SEED- token at all still parses and submits
+  // fine, it just won't carry a seed value). No initials field -- unlike every other game here,
+  // Sudoku's own high-score flow doesn't collect device-typed initials, so the board identifies a
+  // run by the submitter's site account only. Real device output:
+  // "NGPC-DEV.COM/SD/SDDIFF-E TIME-123 MISS-002" (or, once the device build sends it,
+  // "...MISS-002 SEED-01234") -- the payload segment repeats "SD" right after the
   // URL prefix, same convention as every other game's own QR (e.g. Tetris's own payload starts
   // "TT..."), so this site's universal scanner (index.html / another game's in-browser player)
   // can identify and route a Sudoku code the same way it does for any other game. An earlier
@@ -282,7 +283,7 @@
       misses: parseInt(fields.MISS, 10),
     };
     if(fields.SEED !== undefined){
-      if(!/^\d{1,5}$/.test(fields.SEED)) return {error:"That code has an unreadable seed."};
+      if(!/^\d{5}$/.test(fields.SEED)) return {error:"That code has an unreadable seed."};
       const seed = parseInt(fields.SEED, 10);
       if(seed > 65535) return {error:"That code has an unreadable seed."};
       result.seed = seed;
@@ -332,7 +333,8 @@
       const data = d.data();
       const rank = i+1;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
-      const meta = [fmtWhen(data.submittedAt), data.misses+' miss'+(data.misses===1?'':'es'), usernameLine].filter(Boolean).join(' · ');
+      const seedLine = data.seed!=null ? 'Seed '+String(data.seed).padStart(5,'0') : '';
+      const meta = [fmtWhen(data.submittedAt), data.misses+' miss'+(data.misses===1?'':'es'), seedLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
       return '<div class="row'+(rank===1?' top1':'')+'">'+
