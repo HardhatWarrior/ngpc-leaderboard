@@ -42,7 +42,13 @@
   .play-link[hidden]{ display:none; }
   .rom-link{ color:var(--dim); font-size:11px; }
   .rom-link:hover{ color:var(--accent2); }
-  .header-art{ position:relative; width:130px; max-width:38%; height:auto; flex:none; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; }
+  /* No max-width here (unlike the site's original hand-built pages) -- this used to be a
+     percentage safety cap against .header-row's own (wide) box, back when header-art sat
+     directly inside it. Now that it's nested one level deeper in .art-strip, the SAME 38% instead
+     resolves against art-strip's own much narrower box, which on a phone-width viewport collapsed
+     it to ~49px ("tiny"). The @media hide rule below already handles narrow screens; a fixed
+     130px here is what actually renders correctly at every width. */
+  .header-art{ position:relative; width:130px; height:auto; flex:none; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; }
   /* Up to two extra screenshots/GIFs (games/{slug}.extraScreenshot1Path/2Path, set from
      admin/game/index.html's own art panel) shown right next to the title screen -- hidden
      entirely (see the [hidden] rule already in the shared reset) until JS finds one set. */
@@ -50,7 +56,7 @@
      shorter sibling (extra-art, 60px) gets its height stretched to match the tallest one
      (header-art, 130px) while width stays put, which reads as a horizontal squish. */
   .art-strip{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; flex:none; }
-  .extra-art{ width:130px; max-width:38%; height:auto; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; flex:none; }
+  .extra-art{ width:130px; height:auto; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; flex:none; }
   /* Hand-added: three ~130px images side-by-side in .art-strip (header-art
      plus both extras) don't leave room for .title-block in the same
      .header-row on a phone-width viewport -- .header-row stays row-
