@@ -94,9 +94,9 @@
   /* decorative header art -- the same real title-screen capture the main page's own tile uses,
      not a redraw of it. */
   .header-art{
-    position:relative; width:130px; max-width:38%; height:auto; flex:none; aspect-ratio:160/152;
+    position:relative; width:130px; height:auto; flex:none; aspect-ratio:160/152;
     image-rendering:pixelated; border-radius:8px; border:1px solid var(--border);
-    box-shadow:0 4px 14px rgba(0,0,0,.35);
+    box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain;
   }
   /* Up to two extra screenshots/GIFs (games/{slug}.extraScreenshot1Path/2Path, set from
      admin/game/index.html's own art panel) shown right next to the title screen, same size as it
