@@ -186,10 +186,35 @@
   document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && isMaximized) setMaximized(false); });
   window.addEventListener('resize', ()=>{ if(isMaximized) positionFsBtn(); });
 
+  // Same access-gate concept as the leaderboard page (bk/index.html's own access-gate comment) --
+  // while this game is devStatus 'coming-soon', only the site admin or its own assigned developer
+  // gets the real player; everyone else (signed in or not) sees a "not public yet" message instead
+  // of the sign-in prompt. gameData is fetched once, independent of loadEmulator()'s own later
+  // games/{slug} read (that one's lazy, only for romPath, and would run too late to gate on).
+  const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
+  let gameData = null;
+  const gameDocPromise = (window.NGPC_AUTH && NGPC_AUTH.db)
+    ? NGPC_AUTH.db.collection('games').doc('bk').get()
+        .then(doc=>{ gameData = doc.exists ? doc.data() : {}; })
+        .catch(()=>{ gameData = {}; })
+    : Promise.resolve();
+  function isAuthorizedViewer(user){
+    if(!gameData || gameData.devStatus !== 'coming-soon') return true;
+    return !!user && (user.uid === ADMIN_UID || user.uid === gameData.developerUid);
+  }
   function applyAuthState(user){
-    gateEl.hidden = !!user;
-    contentEl.hidden = !user;
-    if(user) loadEmulator();
+    gameDocPromise.then(()=>{
+      if(!isAuthorizedViewer(user)){
+        gateEl.hidden = false;
+        gateEl.textContent = 'This game isn’t public yet — check back once it’s live on the main page.';
+        contentEl.hidden = true;
+        return;
+      }
+      gateEl.hidden = !!user;
+      gateEl.textContent = '🔒 Sign in (top right) to use the in-browser player.';
+      contentEl.hidden = !user;
+      if(user) loadEmulator();
+    });
   }
   if(window.NGPC_AUTH){ NGPC_AUTH.onAuthChange(applyAuthState); } else { applyAuthState(null); }
 

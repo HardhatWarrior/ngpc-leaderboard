@@ -357,6 +357,13 @@
   // point the games fetch that boot() kicks off first has always long since finished.
   let GAME_ROUTES = {};
   let GAME_NAMES = {};
+  // code -> true once that game's own devStatus is known to be something other than
+  // 'coming-soon' -- renderTicker() below uses this to keep a not-yet-public game's test scores
+  // off the public homepage ticker. Deliberately fails CLOSED (a code with no entry yet reads as
+  // NOT live) rather than open, so nothing coming-soon can ever flash onto the ticker even
+  // briefly before this fetch resolves -- see loadGames()' own re-render of the ticker once it
+  // does resolve, same self-correcting pattern GAME_NAMES already uses.
+  let GAME_LIVE = {};
   // Over Rev's own scores/{doc} has no generic `score` field (ticks + course instead, see
   // overrev/index.html and overrev-leaderboard-kit/README.md) -- the ticker needs its own small
   // course-name lookup and tick-to-time formatter to show something meaningful for it, matching
@@ -495,6 +502,7 @@
         if(!g.code) return;
         GAME_ROUTES[g.code] = g.slug;
         GAME_NAMES[g.code] = g.name || g.slug;
+        GAME_LIVE[g.code] = g.devStatus !== 'coming-soon';
       });
       // The ticker (connectTicker(), below) subscribes independently and starts immediately at
       // load -- its first snapshot can easily arrive before this fetch resolves, rendering with
@@ -818,9 +826,12 @@
     return Math.floor(hours/24)+'d ago';
   }
 
-  async function renderTicker(docs){
+  async function renderTicker(allDocs){
     const trackEl = el('ticker-track');
     if(!trackEl) return;
+    // See GAME_LIVE's own comment -- a coming-soon game's test scores never show here, even
+    // though the query itself has no way to filter by another collection's field.
+    const docs = allDocs.filter(d=>GAME_LIVE[d.data().game] === true);
     if(!docs.length){
       trackEl.style.animation = 'none';
       trackEl.innerHTML = '<div id="ticker-empty">No submissions yet &mdash; scores will appear here as they come in.</div>';
