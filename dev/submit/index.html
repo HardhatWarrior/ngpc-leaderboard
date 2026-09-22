@@ -178,7 +178,9 @@
   }
   function fmtWhen(ts){
     if(!ts) return '';
-    return new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'});
+    const d = new Date(ts);
+    return d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})
+      + ' ' + d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
   }
 
   function addFieldRow(name, width, format, notes){
