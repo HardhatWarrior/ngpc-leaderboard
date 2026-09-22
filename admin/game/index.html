@@ -249,23 +249,28 @@
          games retrofitted to read this object are actually affected; an un-retrofitted page
          ignores it entirely. -->
     <div class="art-panel" id="display-panel" hidden style="margin-top:20px">
-      <div class="current-value" style="margin-bottom:10px">Leaderboard Display <span class="spec-note">(admin only)</span></div>
-      <div class="field-label">Score format</div>
-      <div class="status-row" id="display-score-format-row" style="margin-bottom:0">
-        <button type="button" class="status-btn" data-value="raw">Raw number</button>
-        <button type="button" class="status-btn" data-value="time">m:ss time</button>
+      <div class="panel-header collapsed" data-toggle="display-body" role="button" tabindex="0" aria-expanded="false">
+        <h2 style="margin:0">Leaderboard Display <span class="spec-note">(admin only)</span></h2>
+        <span class="chevron">&#9660;</span>
       </div>
-      <div class="field-label" style="margin-top:14px">Extra field shown inline</div>
-      <select id="display-inline-field"><option value="">(none)</option></select>
-      <div class="field-label" style="margin-top:10px">Labels for that field's values (optional)</div>
-      <input type="text" id="display-inline-labels" placeholder="0:Easy,1:Normal">
-      <div class="field-label" style="margin-top:14px">Tap a row to expand its detail card</div>
-      <div class="status-row" id="display-expand-row" style="margin-bottom:0">
-        <button type="button" class="status-btn" data-value="off">Off</button>
-        <button type="button" class="status-btn" data-value="on">On</button>
+      <div class="panel-body" id="display-body" hidden style="margin-top:14px">
+        <div class="field-label">Score format</div>
+        <div class="status-row" id="display-score-format-row" style="margin-bottom:0">
+          <button type="button" class="status-btn" data-value="raw">Raw number</button>
+          <button type="button" class="status-btn" data-value="time">m:ss time</button>
+        </div>
+        <div class="field-label" style="margin-top:14px">Extra field shown inline</div>
+        <select id="display-inline-field"><option value="">(none)</option></select>
+        <div class="field-label" style="margin-top:10px">Labels for that field's values (optional)</div>
+        <input type="text" id="display-inline-labels" placeholder="0:Easy,1:Normal">
+        <div class="field-label" style="margin-top:14px">Tap a row to expand its detail card</div>
+        <div class="status-row" id="display-expand-row" style="margin-bottom:0">
+          <button type="button" class="status-btn" data-value="off">Off</button>
+          <button type="button" class="status-btn" data-value="on">On</button>
+        </div>
+        <button type="button" class="action btn-primary" id="display-save" style="margin-top:14px">Save</button>
+        <div id="display-msg"></div>
       </div>
-      <button type="button" class="action btn-primary" id="display-save" style="margin-top:14px">Save</button>
-      <div id="display-msg"></div>
     </div>
   </section>
 
@@ -619,7 +624,11 @@
     const spec = PAYLOAD_SPECS[slug];
     if(spec){
       return spec.firestore
-        .filter(f => f.field !== 'game' && f.field !== 'initials')
+        // list<...> fields (Bowling's rolls, Yahtzee's categoryScores) are excluded -- the board's
+        // own data[settings.inlineField] lookup expects a single displayable value, and String()
+        // on an array would render as a garbled comma-joined dump, not a real bug crash but
+        // definitely not what "extra field shown inline" is for.
+        .filter(f => f.field !== 'game' && f.field !== 'initials' && !/^list</.test(f.type||''))
         .map(f => ({prop: f.field, label: f.field}));
     }
     try{

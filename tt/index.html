@@ -165,6 +165,11 @@
   .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .row-meta a:hover{ color:var(--accent2); }
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
+  .row.has-detail{ cursor:pointer; } .row.has-detail:hover{ background:rgba(92,143,214,.08); }
+  .row-detail{ padding:2px 8px 14px; }
+  .tk-sheet{ width:100%; border-collapse:collapse; margin:14px 0; font-size:11.5px; }
+  .tk-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
+  .tk-sheet td.tk-val{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
 
   /* ---------- QR scan ---------- */
   .scan-video-wrap{
@@ -327,6 +332,9 @@
   const scanFile = el('scan-file');
 
   let pending = null; // {initials, score, lines, level}
+  // Populated from games/tt (see the romLinkEl fetch further below) -- read by getDisplaySettings()
+  // for the graphical "Leaderboard Display" admin panel's saved choices.
+  let gameData = null;
 
   function validScore(n){ return Number.isInteger(n) && n>=0 && n<=MAX_SCORE; }
 
@@ -375,6 +383,42 @@
     return d.toLocaleDateString(undefined,{month:'short',day:'numeric'});
   }
 
+  // Reads games/tt.display (set graphically from admin/game/'s "Leaderboard Display" panel)
+  // instead of hardcoding these choices -- see ms/index.html's own getDisplaySettings() for the
+  // full rationale. Defaults reproduce exactly what this page shipped with before that panel
+  // existed: raw score, no extra inline field beyond the level/lines already shown, no expand.
+  function fmtTime(seconds){
+    const m = Math.floor(seconds/60), s = seconds%60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
+  function parseInlineLabels(str){
+    const map = {};
+    (str||'').split(',').forEach(pair=>{
+      const idx = pair.indexOf(':');
+      if(idx < 0) return;
+      map[pair.slice(0,idx).trim()] = pair.slice(idx+1).trim();
+    });
+    return map;
+  }
+  function getDisplaySettings(){
+    const d = (gameData && gameData.display) || {};
+    return {
+      scoreFormat: d.scoreFormat || 'raw',
+      inlineField: d.inlineField !== undefined ? d.inlineField : '',
+      inlineLabels: parseInlineLabels(d.inlineLabels),
+      rowDetailExpand: !!d.rowDetailExpand,
+    };
+  }
+  function fmtScoreValue(score, settings){
+    return settings.scoreFormat === 'time' ? fmtTime(score) : String(score);
+  }
+  function renderScorecardHTML(data){
+    const rows = '<tr><td>Score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
+      '<tr><td>Lines</td><td class="tk-val tnum">'+data.lines+'</td></tr>'+
+      '<tr><td>Level</td><td class="tk-val tnum">'+data.level+'</td></tr>';
+    return '<table class="tk-sheet">'+rows+'</table>';
+  }
+
   async function renderBoard(docs){
     if(!docs.length){
       boardEl.innerHTML = '<div class="empty-state">No scores yet &mdash; be the first on the board.</div>';
@@ -383,23 +427,30 @@
     // Avatars aren't denormalized onto the score doc (they'd go stale the moment someone repaints
     // their avatar after submitting) -- fetched fresh per render instead, one batched query for
     // every uid on the visible board rather than one read per row.
+    const settings = getDisplaySettings();
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
       const data = d.data();
       const rank = i+1;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
-      const scoreMeta = [fmtWhen(data.submittedAt), data.level!=null?('Lv '+data.level):null, data.lines!=null?(data.lines+' lines'):null]
+      const inlineRaw = settings.inlineField ? data[settings.inlineField] : null;
+      const inlineLine = inlineRaw != null ? (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw)) : null;
+      const scoreMeta = [fmtWhen(data.submittedAt), data.level!=null?('Lv '+data.level):null, data.lines!=null?(data.lines+' lines'):null, inlineLine]
         .filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
-      return '<div class="row'+(rank===1?' top1':'')+'">'+
+      const rowClass = 'row'+(rank===1?' top1':'')+(settings.rowDetailExpand?' has-detail':'');
+      const rowAttr = settings.rowDetailExpand ? ' data-detail="d'+i+'"' : '';
+      const rowHtml = '<div class="'+rowClass+'"'+rowAttr+'>'+
         '<div class="rank">'+(rank===1?'&#9733;':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           (usernameLine ? '<div class="row-meta">'+usernameLine+'</div>' : '')+'</div>'+
-        '<div class="score-col"><div class="score-val tnum">'+(data.score!=null?data.score:'-')+'</div>'+
+        '<div class="score-col"><div class="score-val tnum">'+(data.score!=null?fmtScoreValue(data.score, settings):'-')+'</div>'+
           (scoreMeta ? '<div class="row-meta">'+scoreMeta+'</div>' : '')+'</div>'+
       '</div>';
+      const detailHtml = settings.rowDetailExpand ? '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data)+'</div>' : '';
+      return rowHtml + detailHtml;
     }).join('');
     // <canvas> content can't come in through innerHTML -- draw each one in after insertion.
     docs.forEach((d,i)=>{
@@ -409,6 +460,13 @@
       if(canvasEl) NGPC_AUTH.renderAvatarToCanvas(canvasEl, avatars[data.uid], ROW_AVATAR_CELL_PX);
     });
   }
+
+  boardEl.addEventListener('click', (e)=>{
+    const row = e.target.closest('.row.has-detail');
+    if(!row) return;
+    const detailId = row.dataset.detail;
+    if(detailId) el(detailId).hidden = !el(detailId).hidden;
+  });
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -757,6 +815,7 @@
       NGPC_AUTH.db.collection('games').doc('tt').get().then(function(doc){
         if(!doc.exists) return;
         var data = doc.data();
+        gameData = data;
         if(romLinkEl && data.romPath) romLinkEl.href = data.romPath;
         var headerArtEl = el('header-art');
         if(headerArtEl && data.titleImage) headerArtEl.src = data.titleImage;

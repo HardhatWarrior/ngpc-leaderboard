@@ -240,7 +240,7 @@
   const btnScan = el('btn-scan'), scanLive = el('scan-live'), scanFallback = el('scan-fallback');
   const scanVideo = el('scan-video'), scanFile = el('scan-file');
 
-  let db = null, pending = null, unsubscribeBoard = null;
+  let db = null, pending = null, unsubscribeBoard = null, gameData = null;
 
   function parseFarklePayload(text){
     if(text.length !== 20) return {error:"That code is too short — rescan with the whole code in frame."};
@@ -295,6 +295,37 @@
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
+  // Reads games/fk.display (set graphically from admin/game/'s "Leaderboard Display" panel)
+  // instead of hardcoding these choices -- see ms/index.html's own getDisplaySettings() for the
+  // full rationale. Defaults reproduce exactly what this page shipped with before that panel
+  // existed: raw rounds count (the board's own score-val was always rounds, not score, by
+  // design), no extra inline field, rows already always expandable.
+  function fmtTime(seconds){
+    const m = Math.floor(seconds/60), s = seconds%60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
+  function parseInlineLabels(str){
+    const map = {};
+    (str||'').split(',').forEach(pair=>{
+      const idx = pair.indexOf(':');
+      if(idx < 0) return;
+      map[pair.slice(0,idx).trim()] = pair.slice(idx+1).trim();
+    });
+    return map;
+  }
+  function getDisplaySettings(){
+    const d = (gameData && gameData.display) || {};
+    return {
+      scoreFormat: d.scoreFormat || 'raw',
+      inlineField: d.inlineField !== undefined ? d.inlineField : '',
+      inlineLabels: parseInlineLabels(d.inlineLabels),
+      rowDetailExpand: d.rowDetailExpand !== undefined ? !!d.rowDetailExpand : true,
+    };
+  }
+  function fmtScoreValue(value, settings){
+    return settings.scoreFormat === 'time' ? fmtTime(value) : String(value).padStart(3,'0');
+  }
+
   function renderFarkleScorecardHTML(data){
     const badgeClass = data.resultDisplay === 'WIN' ? 'win' : data.resultDisplay === 'LOSS' ? 'loss' : data.resultDisplay === 'DRAW' ? 'draw' : 'solo';
     const rows = '<tr><td>Score</td><td class="fk-val tnum">'+data.score+'</td></tr>'+
@@ -307,21 +338,24 @@
 
   async function renderBoard(docs){
     if(!docs.length){ boardEl.innerHTML = '<div class="empty-state">No scores yet — be the first on the board.</div>'; return; }
+    const settings = getDisplaySettings();
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
       const data = d.data();
       const rank = i+1;
-      const hasDetail = data.resultDisplay !== undefined && data.rounds !== undefined;
+      const hasDetail = settings.rowDetailExpand && data.resultDisplay !== undefined && data.rounds !== undefined;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
-      const meta = [fmtWhen(data.submittedAt), usernameLine].filter(Boolean).join(' · ');
+      const inlineRaw = settings.inlineField ? data[settings.inlineField] : null;
+      const inlineLine = inlineRaw != null ? (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw)) : '';
+      const meta = [fmtWhen(data.submittedAt), inlineLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
       const rowHtml = '<div class="row'+(rank===1?' top1':'')+(hasDetail?' has-detail':'')+'"'+(hasDetail?' data-detail="d'+i+'"':'')+'>'+
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.rounds!=null?String(data.rounds).padStart(3,'0'):'-')+'</div>'+
+        '<div class="score-val tnum">'+(data.rounds!=null?fmtScoreValue(data.rounds, settings):'-')+'</div>'+
       '</div>';
       const detailHtml = hasDetail ? '<div class="row-detail" id="d'+i+'" hidden>'+renderFarkleScorecardHTML(data)+'</div>' : '';
       return rowHtml + detailHtml;
@@ -611,6 +645,7 @@
       NGPC_AUTH.db.collection('games').doc('fk').get().then(function(doc){
         if(!doc.exists) return;
         var data = doc.data();
+        gameData = data;
         if(romLinkEl && data.romPath) romLinkEl.href = data.romPath;
         var headerArtEl = el('header-art');
         if(headerArtEl && data.titleImage) headerArtEl.src = data.titleImage;

@@ -258,7 +258,7 @@
   const scanVideo = el('scan-video'), scanFile = el('scan-file');
   const modeButtons = [el('mode-1'), el('mode-2'), el('mode-3')];
 
-  let db = null, pending = null, unsubscribeBoard = null;
+  let db = null, pending = null, unsubscribeBoard = null, gameData = null;
 
   // Payload: 2-char game code + 2-digit mode (01 Picnic/02 Gardener/03 Landscaper) + 3 initials +
   // 5-digit score + 2-digit starting level + 2-digit level reached + 4-hex CRC16 checksum, raw
@@ -328,6 +328,37 @@
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
+  // Reads games/gd.display (set graphically from admin/game/'s "Leaderboard Display" panel)
+  // instead of hardcoding these choices -- see ms/index.html's own getDisplaySettings() for the
+  // full rationale. Defaults reproduce exactly what this page shipped with before that panel
+  // existed: raw score, no extra inline field beyond the level line already shown, rows already
+  // always expandable.
+  function fmtTime(seconds){
+    const m = Math.floor(seconds/60), s = seconds%60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
+  function parseInlineLabels(str){
+    const map = {};
+    (str||'').split(',').forEach(pair=>{
+      const idx = pair.indexOf(':');
+      if(idx < 0) return;
+      map[pair.slice(0,idx).trim()] = pair.slice(idx+1).trim();
+    });
+    return map;
+  }
+  function getDisplaySettings(){
+    const d = (gameData && gameData.display) || {};
+    return {
+      scoreFormat: d.scoreFormat || 'raw',
+      inlineField: d.inlineField !== undefined ? d.inlineField : '',
+      inlineLabels: parseInlineLabels(d.inlineLabels),
+      rowDetailExpand: d.rowDetailExpand !== undefined ? !!d.rowDetailExpand : true,
+    };
+  }
+  function fmtScoreValue(score, settings){
+    return settings.scoreFormat === 'time' ? fmtTime(score) : String(score).padStart(5,'0');
+  }
+
   function renderGardeniaScorecardHTML(data){
     const rows = '<tr><td>Mode</td><td class="gd-val">'+escapeHtml(MODE_NAMES[data.mode]||'?')+'</td></tr>'+
       '<tr><td>Starting level</td><td class="gd-val tnum">'+data.startLevel+'</td></tr>'+
@@ -337,22 +368,27 @@
 
   async function renderBoard(docs){
     if(!docs.length){ boardEl.innerHTML = '<div class="empty-state">No scores yet in '+escapeHtml(MODE_NAMES[activeMode])+' &mdash; be the first on the board.</div>'; return; }
+    const settings = getDisplaySettings();
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
       const data = d.data();
       const rank = i+1;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
-      const meta = [fmtWhen(data.submittedAt), 'Lv '+data.levelReached, usernameLine].filter(Boolean).join(' · ');
+      const inlineRaw = settings.inlineField ? data[settings.inlineField] : null;
+      const inlineLine = inlineRaw != null ? (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw)) : '';
+      const meta = [fmtWhen(data.submittedAt), 'Lv '+data.levelReached, inlineLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
-      const rowHtml = '<div class="row'+(rank===1?' top1':'')+' has-detail" data-detail="d'+i+'">'+
+      const rowClass = 'row'+(rank===1?' top1':'')+(settings.rowDetailExpand?' has-detail':'');
+      const rowAttr = settings.rowDetailExpand ? ' data-detail="d'+i+'"' : '';
+      const rowHtml = '<div class="'+rowClass+'"'+rowAttr+'>'+
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.score!=null?String(data.score).padStart(5,'0'):'-')+'</div>'+
+        '<div class="score-val tnum">'+(data.score!=null?fmtScoreValue(data.score, settings):'-')+'</div>'+
       '</div>';
-      const detailHtml = '<div class="row-detail" id="d'+i+'" hidden>'+renderGardeniaScorecardHTML(data)+'</div>';
+      const detailHtml = settings.rowDetailExpand ? '<div class="row-detail" id="d'+i+'" hidden>'+renderGardeniaScorecardHTML(data)+'</div>' : '';
       return rowHtml + detailHtml;
     }).join('');
     docs.forEach((d,i)=>{
@@ -646,6 +682,7 @@
       NGPC_AUTH.db.collection('games').doc('gd').get().then(function(doc){
         if(!doc.exists) return;
         var data = doc.data();
+        gameData = data;
         if(romLinkEl && data.romPath) romLinkEl.href = data.romPath;
         var headerArtEl = el('header-art');
         if(headerArtEl && data.titleImage) headerArtEl.src = data.titleImage;

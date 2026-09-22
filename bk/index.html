@@ -282,7 +282,37 @@
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
-  function formatDisplayValue(o){ return String(o.score).padStart(5,'0'); }
+  // Reads games/bk.display (set graphically from admin/game/'s "Leaderboard Display" panel)
+  // instead of hardcoding these choices -- see ms/index.html's own getDisplaySettings() for the
+  // full rationale. Defaults below reproduce exactly what this page shipped with before that panel
+  // existed: raw score (never a time here), no extra inline field, rows always expandable.
+  function fmtTime(seconds){
+    const m = Math.floor(seconds/60), s = seconds%60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
+  function parseInlineLabels(str){
+    const map = {};
+    (str||'').split(',').forEach(pair=>{
+      const idx = pair.indexOf(':');
+      if(idx < 0) return;
+      map[pair.slice(0,idx).trim()] = pair.slice(idx+1).trim();
+    });
+    return map;
+  }
+  function getDisplaySettings(){
+    const d = (gameData && gameData.display) || {};
+    return {
+      scoreFormat: d.scoreFormat || 'raw',
+      inlineField: d.inlineField !== undefined ? d.inlineField : '',
+      inlineLabels: parseInlineLabels(d.inlineLabels),
+      rowDetailExpand: d.rowDetailExpand !== undefined ? !!d.rowDetailExpand : true,
+    };
+  }
+  function fmtScoreValue(score, settings){
+    return settings.scoreFormat === 'time' ? fmtTime(score) : String(score).padStart(5,'0');
+  }
+
+  function formatDisplayValue(o){ return fmtScoreValue(o.score, getDisplaySettings()); }
 
   // TODO -- the submission's own "scorecard reconstruction" field asked for something this
   // generator can't safely auto-implement from free text. The developer's exact request:
@@ -305,22 +335,27 @@
 
   async function renderBoard(docs){
     if(!docs.length){ boardEl.innerHTML = '<div class="empty-state">No scores yet — be the first on the board.</div>'; return; }
+    const settings = getDisplaySettings();
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
       const data = d.data();
       const rank = i+1;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
-      const meta = [fmtWhen(data.submittedAt), usernameLine].filter(Boolean).join(' · ');
+      const inlineRaw = settings.inlineField ? data[settings.inlineField] : null;
+      const inlineLine = inlineRaw != null ? (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw)) : '';
+      const meta = [fmtWhen(data.submittedAt), inlineLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
-      const rowHtml = '<div class="row'+(rank===1?' top1':'')+' has-detail" data-detail="d'+i+'">'+
+      const rowClass = 'row'+(rank===1?' top1':'')+(settings.rowDetailExpand?' has-detail':'');
+      const rowAttr = settings.rowDetailExpand ? ' data-detail="d'+i+'"' : '';
+      const rowHtml = '<div class="'+rowClass+'"'+rowAttr+'>'+
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum'+(data.secretUsed?' secret-used':'')+'">'+(data.score!=null?String(data.score):'-')+'</div>'+
+        '<div class="score-val tnum'+(data.secretUsed?' secret-used':'')+'">'+(data.score!=null?fmtScoreValue(data.score, settings):'-')+'</div>'+
       '</div>';
-      const detailHtml = '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data)+'</div>';
+      const detailHtml = settings.rowDetailExpand ? '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data)+'</div>' : '';
       return rowHtml + detailHtml;
     }).join('');
     docs.forEach((d,i)=>{

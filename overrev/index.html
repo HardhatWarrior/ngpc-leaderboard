@@ -281,7 +281,7 @@
   const btnScan = el('btn-scan'), scanLive = el('scan-live'), scanFallback = el('scan-fallback');
   const scanVideo = el('scan-video'), scanFile = el('scan-file');
 
-  let db = null, pending = null, unsubscribeBoard = null;
+  let db = null, pending = null, unsubscribeBoard = null, gameData = null;
 
   COURSES.forEach((name, i)=>{
     const opt = document.createElement('option');
@@ -325,6 +325,34 @@
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
+  // Reads games/overrev.display (set graphically from admin/game/'s "Leaderboard Display" panel)
+  // instead of hardcoding these choices -- see ms/index.html's own getDisplaySettings() for the
+  // full rationale. scoreFormat here is special-cased vs. every other game: data.time is already a
+  // formatted M:SS.hh STRING decoded by OverRevProtocol, not a raw number to reformat -- "time"
+  // (default) shows that string as-is, "raw" shows the underlying raw.ticks number instead of
+  // reinterpreting it (fmtTime(ticks) would be meaningless here, ticks aren't seconds).
+  function parseInlineLabels(str){
+    const map = {};
+    (str||'').split(',').forEach(pair=>{
+      const idx = pair.indexOf(':');
+      if(idx < 0) return;
+      map[pair.slice(0,idx).trim()] = pair.slice(idx+1).trim();
+    });
+    return map;
+  }
+  function getDisplaySettings(){
+    const d = (gameData && gameData.display) || {};
+    return {
+      scoreFormat: d.scoreFormat === 'raw' ? 'raw' : 'time',
+      inlineField: d.inlineField !== undefined ? d.inlineField : '',
+      inlineLabels: parseInlineLabels(d.inlineLabels),
+      rowDetailExpand: d.rowDetailExpand !== undefined ? !!d.rowDetailExpand : true,
+    };
+  }
+  function fmtScoreValue(raw, data, settings){
+    return settings.scoreFormat === 'raw' ? String(raw.ticks) : data.time;
+  }
+
   function renderOverRevScorecardHTML(data){
     // Upgrade levels (top speed/handling/acceleration/braking) are deliberately not shown --
     // the data's still in data.upgrades/Firestore, just turned off site-wide for now.
@@ -349,6 +377,7 @@
     // span every course (redundant but harmless in "By Course" mode, where it's already implied
     // by the dropdown).
     const rankByPerformance = boardMode === 'course';
+    const settings = getDisplaySettings();
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
@@ -358,16 +387,20 @@
       catch(e){ return ''; } // a corrupted/legacy stored doc -- skip rather than crash the board
       const rank = i+1;
       const usernameLine = raw.username ? ('<a href="/user/?u='+encodeURIComponent(raw.username)+'">@'+escapeHtml(raw.username.toUpperCase())+'</a>') : '';
-      const meta = [COURSES[data.course], fmtWhen(raw.submittedAt), CARS[data.car], usernameLine].filter(Boolean).join(' · ');
+      const inlineRaw = settings.inlineField ? data[settings.inlineField] : null;
+      const inlineLine = inlineRaw != null ? (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw)) : null;
+      const meta = [COURSES[data.course], fmtWhen(raw.submittedAt), CARS[data.car], inlineLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = raw.uid && avatars[raw.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
-      const rowHtml = '<div class="row has-detail'+(rankByPerformance && rank===1?' top1':'')+'" data-detail="d'+i+'">'+
+      const rowClass = 'row'+(settings.rowDetailExpand?' has-detail':'')+(rankByPerformance && rank===1?' top1':'');
+      const rowAttr = settings.rowDetailExpand ? ' data-detail="d'+i+'"' : '';
+      const rowHtml = '<div class="'+rowClass+'"'+rowAttr+'>'+
         '<div class="rank">'+(rankByPerformance && rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.name||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+escapeHtml(data.time)+'</div>'+
+        '<div class="score-val tnum">'+escapeHtml(fmtScoreValue(raw, data, settings))+'</div>'+
       '</div>';
-      const detailHtml = '<div class="row-detail" id="d'+i+'" hidden>'+renderOverRevScorecardHTML(data)+'</div>';
+      const detailHtml = settings.rowDetailExpand ? '<div class="row-detail" id="d'+i+'" hidden>'+renderOverRevScorecardHTML(data)+'</div>' : '';
       return rowHtml + detailHtml;
     }).join('');
     docs.forEach((d,i)=>{
@@ -671,6 +704,7 @@
       NGPC_AUTH.db.collection('games').doc('overrev').get().then(function(doc){
         if(!doc.exists) return;
         var data = doc.data();
+        gameData = data;
         if(romLinkEl && data.romPath) romLinkEl.href = data.romPath;
         var headerArtEl = el('header-art');
         if(headerArtEl && data.titleImage) headerArtEl.src = data.titleImage;

@@ -238,7 +238,7 @@
   const btnScan = el('btn-scan'), scanLive = el('scan-live'), scanFallback = el('scan-fallback');
   const scanVideo = el('scan-video'), scanFile = el('scan-file');
 
-  let db = null, pending = null, unsubscribeBoard = null;
+  let db = null, pending = null, unsubscribeBoard = null, gameData = null;
 
   // Payload, per the developer's own submitted spec: bare text, NO URL and no delimiters at all
   // (every other game here encodes a full "NGPC-DEV.COM/<code>/..." URL) -- fixed-width fields
@@ -295,6 +295,37 @@
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
+  // Reads games/xn.display (set graphically from admin/game/'s "Leaderboard Display" panel)
+  // instead of hardcoding these choices -- see ms/index.html's own getDisplaySettings() for the
+  // full rationale. Defaults reproduce exactly what this page shipped with before that panel
+  // existed: raw score, no extra inline field beyond the completion/checkpoint line already
+  // shown, rows already always expandable.
+  function fmtTime(seconds){
+    const m = Math.floor(seconds/60), s = seconds%60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
+  function parseInlineLabels(str){
+    const map = {};
+    (str||'').split(',').forEach(pair=>{
+      const idx = pair.indexOf(':');
+      if(idx < 0) return;
+      map[pair.slice(0,idx).trim()] = pair.slice(idx+1).trim();
+    });
+    return map;
+  }
+  function getDisplaySettings(){
+    const d = (gameData && gameData.display) || {};
+    return {
+      scoreFormat: d.scoreFormat || 'raw',
+      inlineField: d.inlineField !== undefined ? d.inlineField : '',
+      inlineLabels: parseInlineLabels(d.inlineLabels),
+      rowDetailExpand: d.rowDetailExpand !== undefined ? !!d.rowDetailExpand : true,
+    };
+  }
+  function fmtScoreValue(score, settings){
+    return settings.scoreFormat === 'time' ? fmtTime(score) : String(score).padStart(7,'0');
+  }
+
   function renderXenon2ScorecardHTML(data){
     const rows = '<tr><td>Money</td><td class="xn-val tnum">'+data.money+'</td></tr>'+
       '<tr><td>Checkpoint</td><td class="xn-val tnum">'+data.checkpoint+' / 7</td></tr>'+
@@ -304,6 +335,7 @@
 
   async function renderBoard(docs){
     if(!docs.length){ boardEl.innerHTML = '<div class="empty-state">No scores yet &mdash; be the first on the board.</div>'; return; }
+    const settings = getDisplaySettings();
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
@@ -311,16 +343,20 @@
       const rank = i+1;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
       const completionLine = data.livesLeft>0 ? '<span class="completion-badge">&#10003; Completed</span>' : ('Checkpoint '+data.checkpoint);
-      const meta = [fmtWhen(data.submittedAt), completionLine, usernameLine].filter(Boolean).join(' · ');
+      const inlineRaw = settings.inlineField ? data[settings.inlineField] : null;
+      const inlineLine = inlineRaw != null ? (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw)) : '';
+      const meta = [fmtWhen(data.submittedAt), completionLine, inlineLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
-      const rowHtml = '<div class="row'+(rank===1?' top1':'')+' has-detail" data-detail="d'+i+'">'+
+      const rowClass = 'row'+(rank===1?' top1':'')+(settings.rowDetailExpand?' has-detail':'');
+      const rowAttr = settings.rowDetailExpand ? ' data-detail="d'+i+'"' : '';
+      const rowHtml = '<div class="'+rowClass+'"'+rowAttr+'>'+
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.score!=null?String(data.score).padStart(7,'0'):'-')+'</div>'+
+        '<div class="score-val tnum">'+(data.score!=null?fmtScoreValue(data.score, settings):'-')+'</div>'+
       '</div>';
-      const detailHtml = '<div class="row-detail" id="d'+i+'" hidden>'+renderXenon2ScorecardHTML(data)+'</div>';
+      const detailHtml = settings.rowDetailExpand ? '<div class="row-detail" id="d'+i+'" hidden>'+renderXenon2ScorecardHTML(data)+'</div>' : '';
       return rowHtml + detailHtml;
     }).join('');
     docs.forEach((d,i)=>{
@@ -604,6 +640,7 @@
       NGPC_AUTH.db.collection('games').doc('xn').get().then(function(doc){
         if(!doc.exists) return;
         var data = doc.data();
+        gameData = data;
         if(romLinkEl && data.romPath) romLinkEl.href = data.romPath;
         var headerArtEl = el('header-art');
         if(headerArtEl && data.titleImage) headerArtEl.src = data.titleImage;
