@@ -98,6 +98,19 @@
     image-rendering:pixelated; border-radius:8px; border:1px solid var(--border);
     box-shadow:0 4px 14px rgba(0,0,0,.35);
   }
+  /* Up to two extra screenshots/GIFs (games/{slug}.extraScreenshot1Path/2Path, set from
+     admin/game/index.html's own art panel) shown right next to the title screen, same size as it
+     -- hidden entirely until JS finds one set. flex-wrap on the strip lets three same-size images
+     wrap to a second line on a narrow screen instead of overflowing; align-items:flex-start (not
+     the flex default of stretch) stops a shorter/still-loading sibling from getting its height
+     stretched to match the others, which would read as a horizontal squish. No max-width on
+     either image -- a percentage cap here would resolve against art-strip's own narrow box, not
+     header-row's wider one, collapsing the image on a narrow screen instead of just capping it;
+     the @media rule below handles narrow screens by hiding the extras outright instead. */
+  .art-strip{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; flex:none; }
+  .extra-art{ width:130px; height:auto; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; flex:none; }
+  @media (max-width:600px){ .extra-art{ display:none; } }
+
   /* The <img> carries width/height="160"/"152" HTML attributes (real dimensions, a fallback
      size if this CSS ever fails to load) -- those map to a low-priority presentational height
      that otherwise wins over aspect-ratio's own auto-height computation, so height:auto above
@@ -211,7 +224,11 @@
   <header>
     <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
     <div class="header-row">
-      <img src="/assets/bowling-title.png" alt="Neo Bowling title screen" class="header-art" width="160" height="152">
+      <div class="art-strip">
+        <img src="/assets/bowling-title.png" alt="Neo Bowling title screen" class="header-art" id="header-art" width="160" height="152">
+        <img src="" alt="Neo Bowling title screen (extra 1)" class="extra-art" id="extra-art-1" hidden>
+        <img src="" alt="Neo Bowling title screen (extra 2)" class="extra-art" id="extra-art-2" hidden>
+      </div>
       <div class="title-block">
         <h1>NEO BOWLING</h1>
         <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
@@ -912,8 +929,18 @@
       if(romLinkEl) romLinkEl.addEventListener('click', function(){ if(window.NGPC_AUTH) NGPC_AUTH.trackRomDownload('bw'); });
       if(!romLinkEl || !NGPC_AUTH.db) return;
       NGPC_AUTH.db.collection('games').doc('bw').get().then(function(doc){
-        if(doc.exists && doc.data().romPath) romLinkEl.href = doc.data().romPath;
-      }).catch(function(){ /* keep the static fallback href */ });
+        if(!doc.exists) return;
+        var data = doc.data();
+        if(romLinkEl && data.romPath) romLinkEl.href = data.romPath;
+        var headerArtEl = el('header-art');
+        if(headerArtEl && data.titleImage) headerArtEl.src = data.titleImage;
+        var extraArtEls = [el('extra-art-1'), el('extra-art-2')];
+        [data.extraScreenshot1Path, data.extraScreenshot2Path].forEach(function(url, i){
+          if(!url || !extraArtEls[i]) return;
+          extraArtEls[i].src = url;
+          extraArtEls[i].hidden = false;
+        });
+      }).catch(function(){ /* keep whatever markup already has */ });
     })();
   }
 
