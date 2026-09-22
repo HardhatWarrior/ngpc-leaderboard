@@ -309,7 +309,11 @@
   const allSubsListEl = el('all-subs-list');
   const allSubsPagerEl = el('all-subs-pager');
   const allSubsPageLabelEl = el('all-subs-page-label');
-  const GAME_NAMES = { BW: 'Neo Bowling', TT: 'Tetris', YZ: 'Neo Yahtzee', FK: 'Farkle', '2K': '2048', OV: 'Over Rev', GD: 'Gardenia', SD: 'Sudoku', XN: 'Xenon 2' };
+  // Built from games/{slug}.code -> .name (see loadAllScores()'s own games param) instead of a
+  // hand-maintained table -- a hardcoded copy of this silently falls back to the raw game code for
+  // every game added after whoever last edited it, which is exactly what happened to Breakout and
+  // Minesweeper here.
+  let GAME_NAMES = {};
   const ALL_SUBS_PAGE_SIZE = 10;
   let allSubs = [];
   let allSubsPage = 0;
@@ -850,9 +854,10 @@
       : '';
   }
 
-  async function loadAllScores(db){
+  async function loadAllScores(db, games){
     allSubsContentEl.hidden = false;
     allSubsStatusEl.textContent = 'Loading…';
+    (games||[]).forEach(g=>{ if(g.code) GAME_NAMES[g.code] = g.name || g.slug; });
     // No .where('approved',...) filter here -- this panel is meant to show every submission,
     // pending or not, unlike account/index.html's own list. Relies on firestore.rules' isAdmin()
     // clause covering this admin-only read.
@@ -999,7 +1004,7 @@
       submissionsStatusEl.innerHTML = '<div class="msg err">Couldn’t load submissions: '+escapeHtml((e&&e.message)||'unknown error')+'</div>';
     }
     try{
-      await loadAllScores(NGPC_AUTH.db);
+      await loadAllScores(NGPC_AUTH.db, games);
     }catch(e){
       allSubsContentEl.hidden = false;
       allSubsStatusEl.innerHTML = '<div class="msg err">Couldn’t load submissions: '+escapeHtml((e&&e.message)||'unknown error')

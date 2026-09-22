@@ -367,7 +367,17 @@
   const el = (id)=>document.getElementById(id);
   const signedOutMsg = el('signed-out-msg');
   const content = el('account-content');
-  const GAME_NAMES = { BW: 'Neo Bowling', TT: 'Tetris', YZ: 'Neo Yahtzee', FK: 'Farkle', '2K': '2048', OV: 'Over Rev', GD: 'Gardenia', SD: 'Sudoku', XN: 'Xenon 2' };
+  // Built from games/{slug}.code -> .name at load time (see loadGameNames()) instead of a
+  // hand-maintained table -- a hardcoded copy of this (the previous approach) silently falls back
+  // to the raw game code for every game added after whoever last edited it, which is exactly what
+  // happened to Breakout and Minesweeper here.
+  let GAME_NAMES = {};
+  async function loadGameNames(){
+    try{
+      const snap = await A.db.collection('games').get();
+      snap.forEach(doc=>{ const d = doc.data(); if(d.code) GAME_NAMES[d.code] = d.name || doc.id; });
+    }catch(e){ /* non-critical -- names just fall back to raw codes */ }
+  }
   const SUB_PAGE_SIZE = 10;
 
   // Every panel here defaults collapsed (see the "collapsed" class + hidden body already on each
@@ -486,7 +496,10 @@
       // "owner can read their own" clause (that shape of rule breaks list() queries entirely,
       // see its own comment), so a still-pending score can't be fetched here at all yet; it'll
       // show up as soon as the admin approves the account, not before.
-      const snap = await A.db.collection('scores').where('uid','==',user.uid).where('approved','==',true).get();
+      const [snap] = await Promise.all([
+        A.db.collection('scores').where('uid','==',user.uid).where('approved','==',true).get(),
+        loadGameNames(),
+      ]);
       allSubs = snap.docs.slice();
       sortSubs();
       subStatus.textContent = '';

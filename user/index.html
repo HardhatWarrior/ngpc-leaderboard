@@ -174,7 +174,11 @@
 <script>
 (function(){
   "use strict";
-  const GAME_NAMES = { BW: 'Neo Bowling', TT: 'Tetris', YZ: 'Neo Yahtzee', FK: 'Farkle', '2K': '2048', OV: 'Over Rev', GD: 'Gardenia', SD: 'Sudoku', XN: 'Xenon 2' };
+  // Built from games/{slug}.code -> .name at load time (see loadGameNames() in boot()) instead of
+  // a hand-maintained table -- a hardcoded copy of this silently falls back to the raw game code
+  // for every game added after whoever last edited it, which is exactly what happened to Breakout
+  // and Minesweeper here.
+  let GAME_NAMES = {};
   const SUB_PAGE_SIZE = 10;
 
   const el = (id)=>document.getElementById(id);
@@ -336,7 +340,12 @@
     try{
       // No .orderBy() here on purpose -- pairing it with the .where('uid',...) filter needs a
       // composite index Firestore won't build automatically, so this sorts client-side instead.
-      const snap = await A.db.collection('scores').where('uid','==',uid).get();
+      const [snap] = await Promise.all([
+        A.db.collection('scores').where('uid','==',uid).get(),
+        A.db.collection('games').get().then(gamesSnap=>{
+          gamesSnap.forEach(doc=>{ const d = doc.data(); if(d.code) GAME_NAMES[d.code] = d.name || doc.id; });
+        }).catch(()=>{ /* non-critical -- names just fall back to raw codes */ }),
+      ]);
       allSubs = snap.docs.slice();
       sortSubs();
       subStatus.textContent = '';
