@@ -433,8 +433,8 @@
     },
     gd: {
       thirdParty: true,
-      urlPrefix: 'HTTPS://WWW.NGPC-DEV.COM/GARDENIA/',
-      urlNote: 'Full scheme + "WWW." + the folder’s full name (not shortened to a 2-char code) — confirmed from a real photographed QR this session, not device source (Gardenia’s firmware isn’t in this workspace).',
+      urlPrefix: 'HTTPS://NGPC-DEV.COM/GD/',
+      urlNote: 'From the developer’s own on-device encoder (GenerateQR() in his source, provided directly, not just observed from a photo). Full scheme, no "WWW.", 2-char game-code path — supersedes the previously-photographed "WWW.NGPC-DEV.COM/GARDENIA/" prefix. The encoder also appends a 4-hex-digit CRC16-CCITT checksum (poly 0x1021, init 0xFFFF, via his CRCAdd()) after the fields, which the site verifies and strips before storing.',
       fields: [
         {name:'Game code', width:'2', format:'fixed', notes:'"GD"'},
         {name:'Mode', width:'2', format:'"01"/"02"/"03"', notes:'01 Picnic, 02 Gardener, 03 Landscaper'},
@@ -442,12 +442,13 @@
         {name:'Score', width:'5', format:'numeric, zero-padded', notes:''},
         {name:'Starting level', width:'2', format:'numeric, zero-padded', notes:'info only'},
         {name:'Level reached', width:'2', format:'numeric, zero-padded', notes:'info only'},
+        {name:'Checksum', width:'4', format:'hex, uppercase, zero-padded', notes:'CRC16-CCITT (poly 0x1021, init 0xFFFF) of the 14 preceding field characters only — game code itself is not covered. Verified client-side; rejected as "failed a checksum check" on mismatch, then dropped (not stored).'},
       ],
-      totalLength: '35 (prefix) + 2 + 2 + 3 + 5 + 2 + 2 = 51 chars, fixed',
+      totalLength: '26 (prefix) + 2 + 3 + 5 + 2 + 2 + 4 = 44 chars, fixed',
       sortField: 'score (descending), scoped to one mode at a time — modes aren’t comparable to each other',
-      scorecard: 'Every field is a final raw value — printed as-is. startLevel/levelReached are shown but not re-derived or cross-checked against each other.',
-      example: 'HTTPS://WWW.NGPC-DEV.COM/GARDENIA/GD03DJD000200101',
-      exampleIsReal: true,
+      scorecard: 'Every field is a final raw value — printed as-is. startLevel/levelReached are shown but not re-derived or cross-checked against each other. Checksum is validated then discarded, never stored.',
+      example: 'HTTPS://NGPC-DEV.COM/GD/GD03DJD00020010A1B2',
+      exampleIsReal: false,
       firestore: [
         {field:'game', type:'"GD" (fixed)'},
         {field:'mode', type:'int, 1–3'},

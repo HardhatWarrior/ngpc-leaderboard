@@ -247,15 +247,34 @@
   let db = null, pending = null, unsubscribeBoard = null;
 
   // Payload: 2-char game code + 2-digit mode (01 Picnic/02 Gardener/03 Landscaper) + 3 initials +
-  // 5-digit score + 2-digit starting level + 2-digit level reached, raw (no URL) -- per the
-  // author's own QR spec, and matches the 16-char payload a real device QR decodes to.
+  // 5-digit score + 2-digit starting level + 2-digit level reached + 4-hex CRC16 checksum, raw
+  // (no URL) -- per the author's own device-side QR encoder (GenerateQR/CRCAdd/QRAddHex), which
+  // appends a CRC16-CCITT (poly 0x1021, init 0xFFFF) of the 14 field characters (game code itself
+  // is not covered) as 4 uppercase hex digits after the fields. Matches the 20-char payload a real
+  // device QR decodes to.
+  function crc16Gardenia(str){
+    let crc = 0xffff;
+    for(let i=0;i<str.length;i++){
+      crc = (crc ^ (str.charCodeAt(i) << 8)) & 0xffff;
+      for(let bit=0; bit<8; bit++){
+        crc = (((crc << 1) ^ ((crc & 0x8000) ? 0x1021 : 0)) & 0xffff);
+      }
+    }
+    return crc;
+  }
+
   function parseGardeniaPayload(text){
-    if(text.length !== 16) return {error:"That code is too short — rescan with the whole code in frame."};
+    if(text.length !== 20) return {error:"That code is too short — rescan with the whole code in frame."};
+    const fields = text.slice(2,16);
     const modeStr = text.slice(2,4);
     const initials = text.slice(4,7);
     const scoreStr = text.slice(7,12);
     const startLevelStr = text.slice(12,14);
     const levelReachedStr = text.slice(14,16);
+    const crcStr = text.slice(16,20);
+    if(!/^[0-9A-F]{4}$/.test(crcStr)) return {error:"That code has an unreadable checksum."};
+    const expectedCrc = crc16Gardenia(fields).toString(16).toUpperCase().padStart(4,'0');
+    if(crcStr !== expectedCrc) return {error:"That code failed a checksum check — rescan with the whole code in frame."};
     if(!/^\d{2}$/.test(modeStr) || !(modeStr in {'01':1,'02':1,'03':1})){
       return {error:"That code has an unrecognized game mode."};
     }
@@ -288,7 +307,7 @@
   function payloadFromEntry(){
     const raw = location.hash ? location.hash.slice(1) : lastPathSegment(location.pathname);
     const last = decodeURIComponent(lastPathSegment(raw));
-    if(last.length < 16) return null;
+    if(last.length < 20) return null;
     const result = parsePayload(last);
     return result.error ? null : result;
   }
