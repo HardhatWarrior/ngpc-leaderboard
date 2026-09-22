@@ -84,8 +84,6 @@
   .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .row-meta a:hover{ color:var(--accent2); }
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
-  .row.has-detail{ cursor:pointer; } .row.has-detail:hover{ background:rgba(92,143,214,.08); }
-  .row-detail{ padding:2px 8px 14px; }
   .tk-sheet{ width:100%; border-collapse:collapse; margin:14px 0; font-size:11.5px; }
   .tk-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
   .tk-sheet td.tk-val{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
@@ -256,14 +254,18 @@
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
-  function formatDisplayValue(o){ return String(o.time).padStart(4,'0'); }
+  function fmtTime(seconds){
+    const m = Math.floor(seconds/60), s = seconds%60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
 
-  const SCORECARD_ENUM_LABELS = {
-    difficulty: {"0":"Easy (10x9 Board","1":"Normal (20x18 Board"}
-  };
+  function formatDisplayValue(o){ return fmtTime(o.time); }
+
+  const DIFF_NAMES = {"0":"Easy","1":"Normal"};
+
   function renderScorecardHTML(data){
-    const rows = '<tr><td>Difficulty</td><td class="tk-val tnum">'+(SCORECARD_ENUM_LABELS.difficulty[data.difficulty] || data.difficulty)+'</td></tr>'+
-      '<tr><td>Time</td><td class="tk-val tnum">'+data.time+'</td></tr>';
+    const rows = '<tr><td>Difficulty</td><td class="tk-val tnum">'+(DIFF_NAMES[data.difficulty] || data.difficulty)+'</td></tr>'+
+      '<tr><td>Time</td><td class="tk-val tnum">'+fmtTime(data.time)+'</td></tr>';
     return '<table class="tk-sheet">'+rows+'</table>';
   }
 
@@ -275,17 +277,16 @@
       const data = d.data();
       const rank = i+1;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
-      const meta = [fmtWhen(data.submittedAt), usernameLine].filter(Boolean).join(' · ');
+      const diffLine = DIFF_NAMES[data.difficulty] || data.difficulty;
+      const meta = [fmtWhen(data.submittedAt), diffLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
-      const rowHtml = '<div class="row'+(rank===1?' top1':'')+' has-detail" data-detail="d'+i+'">'+
+      return '<div class="row'+(rank===1?' top1':'')+'">'+
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.time!=null?String(data.time):'-')+'</div>'+
+        '<div class="score-val tnum">'+(data.time!=null?fmtTime(data.time):'-')+'</div>'+
       '</div>';
-      const detailHtml = '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data)+'</div>';
-      return rowHtml + detailHtml;
     }).join('');
     docs.forEach((d,i)=>{
       const data = d.data();
@@ -294,13 +295,6 @@
       if(canvasEl && window.NGPC_AUTH) NGPC_AUTH.renderAvatarToCanvas(canvasEl, avatars[data.uid], 48/NGPC_AUTH.AVATAR_SIZE);
     });
   }
-
-  boardEl.addEventListener('click', (e)=>{
-    const row = e.target.closest('.row.has-detail');
-    if(!row) return;
-    const detailId = row.dataset.detail;
-    if(detailId) el(detailId).hidden = !el(detailId).hidden;
-  });
 
   function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
