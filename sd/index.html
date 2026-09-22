@@ -249,15 +249,19 @@
 
   // Payload (per the submitted spec, NOT a fixed-width binary encoding like this site's other
   // games): 2-char game code immediately followed by a space-separated "KEY-VALUE" list --
-  // DIFF-<E/M/H>, TIME-<1-5 digit seconds>, MISS-<3-digit zero-padded mistake count>. No
-  // initials field -- unlike every other game here, Sudoku's own high-score flow doesn't collect
-  // device-typed initials, so the board identifies a run by the submitter's site account only.
-  // Real device output: "NGPC-DEV.COM/SD/SDDIFF-E TIME-123 MISS-002" -- the payload segment
-  // repeats "SD" right after the URL prefix, same convention as every other game's own QR (e.g.
-  // Tetris's own payload starts "TT..."), so this site's universal scanner (index.html / another
-  // game's in-browser player) can identify and route a Sudoku code the same way it does for any
-  // other game. An earlier device build left that repeat out, which broke exactly that; fixed in
-  // Sudoku's own main.c qr_build_payload(), not patched around here.
+  // DIFF-<E/M/H>, TIME-<1-5 digit seconds>, MISS-<3-digit zero-padded mistake count>, and now
+  // optionally SEED-<0-65535> (the on-device puzzle generator's own seed -- added after the
+  // original spec shipped, so its own token is OPTIONAL here: an older cartridge build whose QR
+  // has no SEED- token at all still parses and submits fine, it just won't carry a seed value).
+  // No initials field -- unlike every other game here, Sudoku's own high-score flow doesn't
+  // collect device-typed initials, so the board identifies a run by the submitter's site account
+  // only. Real device output: "NGPC-DEV.COM/SD/SDDIFF-E TIME-123 MISS-002" (or, once the device
+  // build sends it, "...MISS-002 SEED-12345") -- the payload segment repeats "SD" right after the
+  // URL prefix, same convention as every other game's own QR (e.g. Tetris's own payload starts
+  // "TT..."), so this site's universal scanner (index.html / another game's in-browser player)
+  // can identify and route a Sudoku code the same way it does for any other game. An earlier
+  // device build left that repeat out, which broke exactly that; fixed in Sudoku's own main.c
+  // qr_build_payload(), not patched around here.
   function parseSudokuPayload(text){
     if(text.slice(0,2) !== QR_GAME_CODE) return {error:'Unknown game code "'+text.slice(0,2)+'".'};
     const tokens = text.slice(2).trim().split(/\s+/);
@@ -271,12 +275,19 @@
     if(!diff || !(diff in DIFF_NAMES)) return {error:"That code has an unrecognized difficulty."};
     if(!fields.TIME || !/^\d{1,5}$/.test(fields.TIME)) return {error:"That code has an unreadable time."};
     if(!fields.MISS || !/^\d{3}$/.test(fields.MISS)) return {error:"That code has an unreadable miss count."};
-    return {
+    const result = {
       game: QR_GAME_CODE,
       difficulty: diff,
       time: parseInt(fields.TIME, 10),
       misses: parseInt(fields.MISS, 10),
     };
+    if(fields.SEED !== undefined){
+      if(!/^\d{1,5}$/.test(fields.SEED)) return {error:"That code has an unreadable seed."};
+      const seed = parseInt(fields.SEED, 10);
+      if(seed > 65535) return {error:"That code has an unreadable seed."};
+      result.seed = seed;
+    }
+    return result;
   }
 
   function parsePayload(text){
@@ -308,7 +319,8 @@
   function renderSudokuScorecardHTML(data){
     const rows = '<tr><td>Difficulty</td><td class="gd-val">'+escapeHtml(DIFF_NAMES[data.difficulty]||'?')+'</td></tr>'+
       '<tr><td>Time</td><td class="gd-val tnum">'+fmtTime(data.time)+'</td></tr>'+
-      '<tr><td>Mistakes</td><td class="gd-val tnum">'+data.misses+'</td></tr>';
+      '<tr><td>Mistakes</td><td class="gd-val tnum">'+data.misses+'</td></tr>'+
+      (data.seed!=null ? '<tr><td>Seed</td><td class="gd-val tnum">'+data.seed+'</td></tr>' : '');
     return '<table class="gd-sheet" style="width:100%;border-collapse:collapse;margin:14px 0;font-size:11.5px">'+rows+'</table>';
   }
 
@@ -572,6 +584,9 @@
       username: authedUser.username,
       approved: !!authedUser.approved,
     };
+    // Only set when the QR actually carried one -- Firestore rejects an explicit `undefined`
+    // field value, and an un-updated cartridge's payload may not have a SEED- token at all yet.
+    if(pending.seed != null) record.seed = pending.seed;
     try{
       const res = await writeScore(record);
       btn.disabled = false;

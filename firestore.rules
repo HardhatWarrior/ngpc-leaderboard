@@ -324,10 +324,13 @@ service cloud.firestore {
       // submission review, same path any future developer submission goes through.
       function isSudokuScore(d) {
         return d.game == 'SD'
-          && d.keys().hasOnly(['game', 'difficulty', 'time', 'misses', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.keys().hasOnly(['game', 'difficulty', 'time', 'misses', 'seed', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.difficulty is string && d.difficulty in ['E', 'M', 'H']
           && d.time is int && d.time >= 0 && d.time <= 99999
           && d.misses is int && d.misses >= 0 && d.misses <= 999
+          // Optional -- added after the original spec shipped, so an un-updated cartridge's QR
+          // (no SEED- token at all) still parses and submits fine without it.
+          && (!('seed' in d) || (d.seed is int && d.seed >= 0 && d.seed <= 65535))
           && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000

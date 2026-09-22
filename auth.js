@@ -544,7 +544,8 @@ window.NGPC_AUTH = (function(){
   function renderSudokuScorecardHTML(data){
     const rows = '<tr><td>Difficulty</td><td class="sd-val">'+escapeHtml(SD_DIFF_NAMES[data.difficulty]||'?')+'</td></tr>'+
       '<tr><td>Time</td><td class="sd-val tnum">'+formatSdTime(data.time)+'</td></tr>'+
-      '<tr><td>Mistakes</td><td class="sd-val tnum">'+data.misses+'</td></tr>';
+      '<tr><td>Mistakes</td><td class="sd-val tnum">'+data.misses+'</td></tr>'+
+      (data.seed!=null ? '<tr><td>Seed</td><td class="sd-val tnum">'+data.seed+'</td></tr>' : '');
     return '<table class="sd-sheet">'+rows+'</table>';
   }
 
