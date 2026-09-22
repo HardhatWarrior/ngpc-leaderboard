@@ -66,7 +66,7 @@
   .art-upload-btn{ font-size:12px; padding:8px 12px; }
   .art-timestamp{ font-size:10.5px; color:var(--dim); }
 
-  textarea, input[type=text], input[type=url]{
+  textarea, input[type=text], input[type=url], select{
     width:100%; font:inherit; font-size:12.5px; color:var(--cream); background:var(--navy);
     border:1px solid var(--border); border-radius:8px; padding:9px 10px; margin-top:4px;
   }
@@ -255,8 +255,8 @@
         <button type="button" class="status-btn" data-value="raw">Raw number</button>
         <button type="button" class="status-btn" data-value="time">m:ss time</button>
       </div>
-      <div class="field-label" style="margin-top:14px">Extra field shown inline (blank for none)</div>
-      <input type="text" id="display-inline-field" placeholder="e.g. difficulty">
+      <div class="field-label" style="margin-top:14px">Extra field shown inline</div>
+      <select id="display-inline-field"><option value="">(none)</option></select>
       <div class="field-label" style="margin-top:10px">Labels for that field's values (optional)</div>
       <input type="text" id="display-inline-labels" placeholder="0:Easy,1:Normal">
       <div class="field-label" style="margin-top:14px">Tap a row to expand its detail card</div>
@@ -601,6 +601,40 @@
       + '<div class="spec-group"><div class="spec-label">Example payloads</div><div class="spec-mono">'+examplesHtml+'</div></div>';
   }
 
+  // Powers the Leaderboard Display panel's "Extra field shown inline" dropdown -- a free-text box
+  // here (the first version) invited exactly the confusion it caused: a non-technical admin typed
+  // a literal message into it expecting it to appear on the board, not realizing it needed to be
+  // an actual score-doc field NAME (e.g. "difficulty") for renderBoard()'s data[settings.inlineField]
+  // lookup to find anything. A dropdown of the game's own real fields makes a wrong value
+  // structurally impossible. Mirrors scaffold-game-lib.js's own camelCase()/isGameCodeField()/
+  // isInitialsField() field-naming rules so a submission-based game's options match the exact prop
+  // names its own generated leaderboard page actually stores.
+  function camelCaseField(name){
+    return String(name||'').trim()
+      .replace(/[^A-Za-z0-9]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''))
+      .replace(/^[A-Z]/, c => c.toLowerCase())
+      .replace(/^[0-9]/, c => '_' + c) || 'field';
+  }
+  async function getInlineFieldOptions(slug, db, gameData){
+    const spec = PAYLOAD_SPECS[slug];
+    if(spec){
+      return spec.firestore
+        .filter(f => f.field !== 'game' && f.field !== 'initials')
+        .map(f => ({prop: f.field, label: f.field}));
+    }
+    try{
+      let subSnap = await db.collection('gameSubmissions').where('reviewNote','==','Approved as games/'+slug).get();
+      if(subSnap.empty && gameData.code){
+        subSnap = await db.collection('gameSubmissions').where('proposedCode','==',gameData.code).get();
+      }
+      if(subSnap.empty) return [];
+      const sub = subSnap.docs[0].data();
+      return (sub.payloadFields||[])
+        .filter(f => !/game\s*code/i.test(f.name||'') && !/initial/i.test(f.name||''))
+        .map(f => ({prop: camelCaseField(f.name), label: f.name}));
+    }catch(e){ return []; }
+  }
+
   async function renderPayloadSpec(slug, db, gameData){
     const spec = PAYLOAD_SPECS[slug];
     if(spec){ renderPayloadSpecFromStatic(spec); return; }
@@ -828,7 +862,19 @@
           btn.classList.toggle('active', btn.dataset.value === expand);
         });
       }
-      inlineFieldInput.value = display.inlineField !== undefined ? display.inlineField : '';
+      getInlineFieldOptions(slug, db, data).then(opts=>{
+        opts.forEach(o=>{
+          const optEl = document.createElement('option');
+          optEl.value = o.prop; optEl.textContent = o.label;
+          inlineFieldInput.appendChild(optEl);
+        });
+        const wanted = display.inlineField !== undefined ? display.inlineField : '';
+        // Only select it if it's actually one of this game's real fields -- a stale/typo'd value
+        // saved before this became a dropdown (see the free-text-box confusion this replaced)
+        // falls back to "(none)" instead of silently matching nothing, same as the board's own
+        // data[settings.inlineField] lookup already does at render time.
+        if(wanted && opts.some(o=>o.prop===wanted)) inlineFieldInput.value = wanted;
+      });
       inlineLabelsInput.value = display.inlineLabels !== undefined ? display.inlineLabels : '';
       paintDisplayButtons();
       scoreFormatRow.querySelectorAll('.status-btn').forEach(btn=>{
