@@ -245,6 +245,7 @@
         <span class="sub-controls-label">Sort by</span>
         <button type="button" class="sub-sort-btn" data-sort="date">Date <span class="sort-arrow"></span></button>
         <button type="button" class="sub-sort-btn" data-sort="game">Game <span class="sort-arrow"></span></button>
+        <span class="sub-controls-label" id="all-subs-source-tally" style="margin-left:auto"></span>
       </div>
       <div id="all-subs-status"></div>
       <div id="all-subs-list"></div>
@@ -792,7 +793,8 @@
       const pendingBadge = data.approved ? '' : ' <span class="badge pending" style="margin-left:6px">Pending</span>';
       const hasDetail = A.scoreHasDetail(data);
       const inlineMeta = A.scoreInlineMeta(data);
-      const whenLine = fmtSubWhen(data.submittedAt) + (inlineMeta ? ' · '+inlineMeta : '');
+      const sourceLabel = data.source === 'capture' ? 'Capture' : 'QR';
+      const whenLine = fmtSubWhen(data.submittedAt) + ' · '+sourceLabel + (inlineMeta ? ' · '+inlineMeta : '');
       const detailId = 'all-sub-detail-'+i;
       const rowHtml = '<div class="sub-row'+(hasDetail?' has-detail':'')+'"'+(hasDetail?' data-detail="'+detailId+'"':'')+' data-id="'+d.id+'">'+
         '<div><div class="sub-game">'+escapeHtml(gameName)+' <span class="sub-user">&middot; '+userLink+'</span>'+pendingBadge+'</div><div class="sub-when">'+whenLine+'</div></div>'+
@@ -808,6 +810,18 @@
     el('all-subs-next').disabled = allSubsPage>=totalPages-1;
   }
 
+  // Same "N camera/photo scans vs. N in-browser screen captures" breakdown admin/game/index.html
+  // shows per-game, just totaled across every score loaded here instead of one game at a time.
+  function updateAllSubsSourceTally(){
+    const tallyEl = el('all-subs-source-tally');
+    if(!tallyEl) return;
+    let qrCount = 0, captureCount = 0;
+    allSubs.forEach(d=>{ if(d.data().source === 'capture') captureCount++; else qrCount++; });
+    tallyEl.textContent = allSubs.length
+      ? qrCount+' QR · '+captureCount+' Capture'
+      : '';
+  }
+
   async function loadAllScores(db){
     allSubsContentEl.hidden = false;
     allSubsStatusEl.textContent = 'Loading…';
@@ -820,6 +834,7 @@
     allSubsStatusEl.textContent = '';
     allSubsPage = 0;
     renderAllSubsPage();
+    updateAllSubsSourceTally();
   }
 
   const allSubsBody = el('all-subs-body');
@@ -842,6 +857,7 @@
         await NGPC_AUTH.db.collection('scores').doc(id).delete();
         allSubs = allSubs.filter(d=>d.id!==id);
         renderAllSubsPage();
+        updateAllSubsSourceTally();
       }catch(err){
         allSubsStatusEl.innerHTML = '<div class="msg err">Delete failed: '+escapeHtml(err.message||'unknown error')+'</div>';
         delBtn.disabled = false;
