@@ -202,6 +202,18 @@
     </div>
   </section>
 
+  <section class="panel" id="game-counts-content" hidden>
+    <div class="panel-header collapsed" data-toggle="game-counts-body" role="button" tabindex="0" aria-expanded="false">
+      <h2>Submissions by Game</h2>
+      <span class="chevron">&#9660;</span>
+    </div>
+    <div class="panel-body" id="game-counts-body" hidden>
+      <p class="hint">All-time approved submission count per game -- same query index.html's own "Most Active" sort uses, just for every game at a glance instead of one at a time.</p>
+      <div id="game-counts-status"></div>
+      <div class="stats-row" id="game-counts-row"></div>
+    </div>
+  </section>
+
   <section class="panel" id="content" hidden>
     <div class="panel-header collapsed" data-toggle="players-body" role="button" tabindex="0" aria-expanded="false">
       <h2>Players</h2>
@@ -281,6 +293,9 @@
   const gamesContentEl = el('games-content');
   const gamesRowsEl = el('games-rows');
   const gamesStatusEl = el('games-status');
+  const gameCountsContentEl = el('game-counts-content');
+  const gameCountsStatusEl = el('game-counts-status');
+  const gameCountsRowEl = el('game-counts-row');
   const submissionsContentEl = el('submissions-content');
   const submissionsStatusEl = el('submissions-status');
   const submissionsListEl = el('submissions-list');
@@ -575,6 +590,28 @@
     });
 
     return games;
+  }
+
+  // All-time approved submission count per game -- same query index.html's own "Most Active"
+  // sort runs per-game on demand (see its loadCounts()), just run for every game at once here so
+  // the whole catalog's activity is visible in one glance instead of switching games one at a
+  // time on the public sort. One read per matching score, same cost tradeoff loadCounts() already
+  // accepted -- fine at this site's real volume.
+  async function loadGameCounts(db, games){
+    gameCountsContentEl.hidden = false;
+    gameCountsStatusEl.textContent = 'Loading…';
+    const counts = await Promise.all(games.map(async g=>{
+      if(!g.code) return {name: g.name||g.slug, count: 0};
+      try{
+        const snap = await db.collection('scores').where('game','==',g.code).where('approved','==',true).get();
+        return {name: g.name||g.slug, count: snap.size};
+      }catch(e){ return {name: g.name||g.slug, count: 0}; }
+    }));
+    counts.sort((a,b)=>b.count-a.count);
+    gameCountsStatusEl.textContent = '';
+    gameCountsRowEl.innerHTML = counts.length
+      ? counts.map(c=>'<div class="stat-tile"><div class="n tnum">'+c.count+'</div><div class="l">'+escapeHtml(c.name)+'</div></div>').join('')
+      : '<p class="hint" style="margin:0">No games yet.</p>';
   }
 
   async function loadAndRenderSubmissions(db){
@@ -885,15 +922,22 @@
         +'. If you just added account approval, make sure the updated firestore.rules has been'
         +' published to Firebase Console (and the approval backfill script run first).</div>';
     }
+    let games = [];
     try{
       const uidToUsername = {};
       users.forEach(u=>{ uidToUsername[u.uid] = u.username; });
-      await loadAndRenderGames(NGPC_AUTH.db, uidToUsername);
+      games = await loadAndRenderGames(NGPC_AUTH.db, uidToUsername);
     }catch(e){
       gamesContentEl.hidden = false;
       gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t load games: '+escapeHtml((e&&e.message)||'unknown error')
         +'. If you just added this feature, make sure the updated firestore.rules has been published,'
         +' and run NGPC-Admin-Scripts/seed-games.js --apply first.</div>';
+    }
+    try{
+      await loadGameCounts(NGPC_AUTH.db, games);
+    }catch(e){
+      gameCountsContentEl.hidden = false;
+      gameCountsStatusEl.innerHTML = '<div class="msg err">Couldn’t load submission counts: '+escapeHtml((e&&e.message)||'unknown error')+'</div>';
     }
     try{
       await initHideGridToggle(NGPC_AUTH.db);
