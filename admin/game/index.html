@@ -64,6 +64,15 @@
   .art-preview.empty{ visibility:hidden; }
   .art-slot input[type=file]{ font-size:11px; margin-top:0; }
   .art-upload-btn{ font-size:12px; padding:8px 12px; }
+  .art-timestamp{ font-size:10.5px; color:var(--dim); }
+
+  textarea, input[type=text], input[type=url]{
+    width:100%; font:inherit; font-size:12.5px; color:var(--cream); background:var(--navy);
+    border:1px solid var(--border); border-radius:8px; padding:9px 10px; margin-top:4px;
+  }
+  textarea{ resize:vertical; min-height:64px; }
+  .field-label{ font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; }
+  .field-count{ font-size:10.5px; color:var(--dim); text-align:right; margin-top:2px; }
 
   button.action{
     font:inherit; border:none; border-radius:8px; padding:11px 16px; cursor:pointer;
@@ -158,15 +167,39 @@
     </div>
     <div id="status-msg"></div>
 
+    <!-- Independent of devStatus above -- turns the tile off the main page grid entirely (still
+         playable/manageable here, just not listed) instead of only changing its banner. Same
+         trust level as devStatus itself; see firestore.rules' games/{slug} comment. -->
+    <div class="status-row" id="active-row" style="margin-top:10px">
+      <button type="button" class="status-btn" data-active="true">Active<span class="desc">Shown on the main page</span></button>
+      <button type="button" class="status-btn" data-active="false">Inactive<span class="desc">Hidden from the main page grid</span></button>
+    </div>
+    <div id="active-msg"></div>
+
     <div class="current-value" style="margin-top:16px" id="stats-line">Downloaded &mdash; times &middot; Played &mdash; times (in-browser)</div>
     <div class="current-value" id="scan-source-line">Loading scan-source breakdown&hellip;</div>
 
     <div style="margin-top:20px">
-      <div class="current-value">Current ROM: <b id="rom-current">using the site's default build</b></div>
+      <div class="current-value">Current ROM: <b id="rom-current">using the site's default build</b> <span class="art-timestamp" id="rom-timestamp"></span></div>
       <input type="file" id="rom-file" accept=".ngp,.ngc">
       <div class="current-value" style="margin-top:8px">Uploads require Firebase Storage to be enabled on this project (ask the site admin if this fails).</div>
       <button type="button" class="action btn-primary" id="rom-upload" disabled>Upload ROM</button>
       <div id="rom-msg"></div>
+    </div>
+
+    <!-- Free-text blurb + a link back to the developer's own site (X/itch/personal page/etc) --
+         shown on this game's own leaderboard page directly under its screenshots, wrapped so a
+         long description or URL can't push that panel wider on mobile (see bk/index.html's own
+         .game-desc/.game-site). Both are entirely optional; the leaderboard page hides either
+         one with nothing typed in here. -->
+    <div style="margin-top:20px">
+      <div class="field-label">Description</div>
+      <textarea id="game-desc-input" maxlength="300" placeholder="A short blurb shown under this game's screenshots (optional)"></textarea>
+      <div class="field-count" id="game-desc-count">0 / 300</div>
+      <div class="field-label" style="margin-top:12px">Your site / social link</div>
+      <input type="url" id="game-site-input" maxlength="300" placeholder="https://example.com (optional)">
+      <button type="button" class="action btn-primary" id="game-links-save" style="margin-top:10px">Save</button>
+      <div id="game-links-msg"></div>
     </div>
 
     <div id="updated-badge-row" hidden style="margin-top:16px">
@@ -186,6 +219,7 @@
         <div class="art-slot">
           <div class="art-slot-label">Title Screen</div>
           <img class="art-preview" id="art-preview-title" alt="Title screen preview">
+          <div class="art-timestamp" id="art-timestamp-title"></div>
           <input type="file" id="art-file-title" accept=".png,.gif">
           <button type="button" class="action btn-primary art-upload-btn" id="art-upload-title" disabled>Replace</button>
           <div id="art-msg-title"></div>
@@ -193,6 +227,7 @@
         <div class="art-slot">
           <div class="art-slot-label">Extra Screenshot 1</div>
           <img class="art-preview" id="art-preview-extra1" alt="Extra screenshot 1 preview">
+          <div class="art-timestamp" id="art-timestamp-extra1"></div>
           <input type="file" id="art-file-extra1" accept=".png,.gif">
           <button type="button" class="action btn-primary art-upload-btn" id="art-upload-extra1" disabled>Replace</button>
           <div id="art-msg-extra1"></div>
@@ -200,6 +235,7 @@
         <div class="art-slot">
           <div class="art-slot-label">Extra Screenshot 2</div>
           <img class="art-preview" id="art-preview-extra2" alt="Extra screenshot 2 preview">
+          <div class="art-timestamp" id="art-timestamp-extra2"></div>
           <input type="file" id="art-file-extra2" accept=".png,.gif">
           <button type="button" class="action btn-primary art-upload-btn" id="art-upload-extra2" disabled>Replace</button>
           <div id="art-msg-extra2"></div>
@@ -250,9 +286,9 @@
   const updatedBadgeRow = el('updated-badge-row');
   const clearUpdatedBtn = el('clear-updated');
   const ART_SLOTS = {
-    title: { field: 'titleImage', preview: el('art-preview-title'), file: el('art-file-title'), btn: el('art-upload-title'), msg: el('art-msg-title') },
-    extra1: { field: 'extraScreenshot1Path', preview: el('art-preview-extra1'), file: el('art-file-extra1'), btn: el('art-upload-extra1'), msg: el('art-msg-extra1') },
-    extra2: { field: 'extraScreenshot2Path', preview: el('art-preview-extra2'), file: el('art-file-extra2'), btn: el('art-upload-extra2'), msg: el('art-msg-extra2') },
+    title: { field: 'titleImage', tsField: 'titleImageUpdatedAt', preview: el('art-preview-title'), ts: el('art-timestamp-title'), file: el('art-file-title'), btn: el('art-upload-title'), msg: el('art-msg-title') },
+    extra1: { field: 'extraScreenshot1Path', tsField: 'extraScreenshot1UpdatedAt', preview: el('art-preview-extra1'), ts: el('art-timestamp-extra1'), file: el('art-file-extra1'), btn: el('art-upload-extra1'), msg: el('art-msg-extra1') },
+    extra2: { field: 'extraScreenshot2Path', tsField: 'extraScreenshot2UpdatedAt', preview: el('art-preview-extra2'), ts: el('art-timestamp-extra2'), file: el('art-file-extra2'), btn: el('art-upload-extra2'), msg: el('art-msg-extra2') },
   };
   const payloadPanel = el('payload-panel');
   const payloadMissingPanel = el('payload-missing-panel');
@@ -276,6 +312,14 @@
   }
   function statusLabel(s){
     return s==='coming-soon' ? 'Coming Soon' : s==='beta' ? 'Beta' : s==='final' ? 'Final' : 'In Development';
+  }
+  // Shared by the ROM line and each screenshot slot -- lets a developer see at a glance how old
+  // a file is without having to check Storage metadata by hand.
+  function fmtAge(ts){
+    if(!ts) return '';
+    const d = new Date(ts);
+    return 'Updated ' + d.toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'})
+      + ' ' + d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
   }
 
   /* ---------- static payload reference, keyed by slug -----------------------------------------
@@ -772,7 +816,71 @@
     });
 
     romCurrent.textContent = data.romFileName || 'using the site’s default build';
+    el('rom-timestamp').textContent = fmtAge(data.romUpdatedAt);
     updatedBadgeRow.hidden = !(data.updatedUntil && data.updatedUntil > Date.now());
+
+    // Active/inactive: missing field means active (every game predates this toggle), so it never
+    // silently vanishes a pre-existing game the first time this page loads for it.
+    let currentActive = data.active !== false;
+    const activeRow = el('active-row');
+    function paintActiveButtons(){
+      activeRow.querySelectorAll('.status-btn').forEach(btn=>{
+        btn.classList.toggle('active', (btn.dataset.active === 'true') === currentActive);
+      });
+    }
+    paintActiveButtons();
+    const activeMsg = el('active-msg');
+    activeRow.querySelectorAll('.status-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const next = btn.dataset.active === 'true';
+        if(next === currentActive) return;
+        activeMsg.innerHTML = '';
+        btn.disabled = true;
+        try{
+          await docRef.update({active: next});
+          currentActive = next;
+          paintActiveButtons();
+          activeMsg.innerHTML = next
+            ? '<div class="msg ok">Saved — this game is shown on the main page again.</div>'
+            : '<div class="msg ok">Saved — this game is hidden from the main page grid. Everything else (leaderboard, ROM, scores) is untouched.</div>';
+        }catch(e){
+          activeMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+        }finally{
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // Description + site link, shown on this game's own leaderboard page under its screenshots
+    // (see bk/index.html's .game-desc/.game-site) -- both optional, saved together on demand
+    // rather than per-keystroke.
+    const descInput = el('game-desc-input');
+    const descCount = el('game-desc-count');
+    const siteInput = el('game-site-input');
+    const linksMsg = el('game-links-msg');
+    descInput.value = data.description || '';
+    siteInput.value = data.siteUrl || '';
+    function paintDescCount(){ descCount.textContent = descInput.value.length + ' / 300'; }
+    paintDescCount();
+    descInput.addEventListener('input', paintDescCount);
+    el('game-links-save').addEventListener('click', async ()=>{
+      const btn = el('game-links-save');
+      const url = siteInput.value.trim();
+      if(url && !/^https?:\/\/.+/i.test(url)){
+        linksMsg.innerHTML = '<div class="msg err">Site link must start with http:// or https://.</div>';
+        return;
+      }
+      linksMsg.innerHTML = '';
+      btn.disabled = true;
+      try{
+        await docRef.update({ description: descInput.value.trim(), siteUrl: url });
+        linksMsg.innerHTML = '<div class="msg ok">Saved.</div>';
+      }catch(e){
+        linksMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+      }finally{
+        btn.disabled = false;
+      }
+    });
 
     // Title screen + up to two extra screenshots, each independently replaceable. titleImage
     // also doubles as the main page's own tile art (buildTile() in index.html), so replacing it
@@ -781,6 +889,7 @@
       const current = data[slot.field];
       slot.preview.src = current || '';
       slot.preview.classList.toggle('empty', !current);
+      slot.ts.textContent = fmtAge(data[slot.tsField]);
       slot.file.addEventListener('change', ()=>{ slot.btn.disabled = !slot.file.files.length; });
       slot.btn.addEventListener('click', async ()=>{
         const file = slot.file.files[0];
@@ -798,9 +907,11 @@
           const ref = storage.ref().child('game-art/'+slug+'/'+key+ext);
           await ref.put(file);
           const url = await ref.getDownloadURL();
-          await docRef.update({ [slot.field]: url });
+          const now = Date.now();
+          await docRef.update({ [slot.field]: url, [slot.tsField]: now });
           slot.preview.src = url;
           slot.preview.classList.remove('empty');
+          slot.ts.textContent = fmtAge(now);
           slot.msg.innerHTML = '<div class="msg ok">Uploaded.</div>';
         }catch(e){
           slot.msg.innerHTML = '<div class="msg err">Upload failed: '+escapeHtml(e.message||'unknown error')

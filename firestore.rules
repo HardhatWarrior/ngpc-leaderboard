@@ -428,9 +428,28 @@ service cloud.firestore {
       // either way.
       allow update: if (request.auth != null && (
           isAdmin()
+          // description/siteUrl -- free-text blurb + a link back to the developer's own site,
+          // shown on that game's leaderboard page directly under its screenshots (see
+          // bk/index.html's own .game-desc/.game-site, or NGPC-Admin-Scripts/scaffold-game.js's
+          // template for a newly-scaffolded game). Same trust level as the art fields below: a
+          // developer describing their own game is not an identity change. siteUrl is
+          // scheme-restricted to http(s) specifically so this field can never hold a
+          // javascript:/data: URI that a leaderboard page would otherwise render straight into an
+          // href. active -- the developer's own on/off switch for their game's tile on the main
+          // page (index.html's renderGrid() skips any game with active === false); same trust
+          // level as devStatus itself, which already controls that tile's banner. titleImage*/
+          // extraScreenshot*UpdatedAt are the companion timestamps admin/game/index.html stamps
+          // alongside each art upload, purely informational (so a developer can see how stale
+          // their own screenshots are) -- never trusted for anything else.
           || (isAssignedDev(resource.data)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path'])
-              && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final'])
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'active'])
+              && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final']
+              && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 300))
+              && (!('siteUrl' in request.resource.data) || (request.resource.data.siteUrl is string && (request.resource.data.siteUrl == '' || request.resource.data.siteUrl.matches('^https?://.+'))))
+              && (!('active' in request.resource.data) || request.resource.data.active is bool)
+              && (!('titleImageUpdatedAt' in request.resource.data) || request.resource.data.titleImageUpdatedAt is int)
+              && (!('extraScreenshot1UpdatedAt' in request.resource.data) || request.resource.data.extraScreenshot1UpdatedAt is int)
+              && (!('extraScreenshot2UpdatedAt' in request.resource.data) || request.resource.data.extraScreenshot2UpdatedAt is int))
         ))
         // romDownloads -- a public, anonymous-writable +1 counter (same shape as meta/siteStats'
         // pageViews above), bumped by every leaderboard page's rom-link click handler. No sign-in

@@ -288,6 +288,11 @@ function leaderboardTemplate(sub, plan, slug) {
      required so a still-loading/broken image doesn't get its height stretched to match its
      siblings, which reads as a horizontal squish. */
   .art-strip{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; flex:none; }
+  .art-col{ display:flex; flex-direction:column; gap:8px; flex:0 1 auto; min-width:0; }
+  .game-desc{ font-size:11px; line-height:1.45; color:var(--dim); max-width:100%; min-width:0; overflow-wrap:anywhere; }
+  .game-site{ font-size:11px; max-width:100%; min-width:0; }
+  .game-site a{ color:var(--accent2); text-decoration:underline; text-underline-offset:2px; overflow-wrap:anywhere; word-break:break-word; }
+  .game-site a:hover{ color:var(--cream); }
   .extra-art{ width:130px; height:auto; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; flex:none; }
   /* Three ~130px images side-by-side in .art-strip (header-art plus both extras) don't leave room
      for .title-block in the same .header-row on a phone-width viewport -- .header-row stays
@@ -359,10 +364,14 @@ function leaderboardTemplate(sub, plan, slug) {
   <header>
     <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
     <div class="header-row">
+      <div class="art-col">
       <div class="art-strip">
         <img src="" alt="${title} title screen" class="header-art" id="header-art" width="160" height="152">
         <img src="" alt="${title} extra screenshot 1" class="extra-art" id="extra-art-1" hidden>
         <img src="" alt="${title} extra screenshot 2" class="extra-art" id="extra-art-2" hidden>
+      </div>
+      <div class="game-desc" id="game-desc" hidden></div>
+      <div class="game-site" id="game-site" hidden><a href="#" id="game-site-link" target="_blank" rel="noopener"></a></div>
       </div>
       <div class="title-block">
         <h1>${title}</h1>
@@ -768,6 +777,10 @@ ${scorecardFormulaNote}${scorecardBlock}
             extraArtEls[i].src = url;
             extraArtEls[i].hidden = false;
           });
+        var descEl = el('game-desc');
+        if(descEl){ if(gameData.description){ descEl.textContent = gameData.description; descEl.hidden = false; } else descEl.hidden = true; }
+        var siteEl = el('game-site'), siteLinkEl = el('game-site-link');
+        if(siteEl && siteLinkEl){ if(gameData.siteUrl){ siteLinkEl.href = gameData.siteUrl; siteLinkEl.textContent = gameData.siteUrl; siteEl.hidden = false; } else siteEl.hidden = true; }
         }).catch(function(){ gameData = {}; /* fail open -- an unreadable doc isn't grounds to lock the page */ })
       : Promise.resolve();
 

@@ -70,6 +70,16 @@
      header-row's wider one, collapsing the image on a narrow screen instead of just capping it;
      the @media rule below handles narrow screens by hiding the extras outright instead. */
   .art-strip{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; flex:none; }
+  .art-col{ display:flex; flex-direction:column; gap:8px; flex:0 1 auto; min-width:0; }
+  /* Optional per-game blurb + link back to the developer's own site (games/{slug}.description /
+     .siteUrl), shown directly under the title-screen art -- hidden entirely via [hidden] until JS
+     finds one set. overflow-wrap:anywhere (not just break-word) is required specifically for a
+     long unbroken URL in .game-site -- break-word alone still lets a single very long token
+     overflow its box instead of wrapping, which would push the panel wider on a phone. */
+  .game-desc{ font-size:11px; line-height:1.45; color:var(--dim); max-width:100%; min-width:0; overflow-wrap:anywhere; }
+  .game-site{ font-size:11px; max-width:100%; min-width:0; }
+  .game-site a{ color:var(--accent2); text-decoration:underline; text-underline-offset:2px; overflow-wrap:anywhere; word-break:break-word; }
+  .game-site a:hover{ color:var(--cream); }
   .extra-art{ width:130px; height:auto; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; flex:none; }
   @media (max-width:600px){ .extra-art{ display:none; } }
 
@@ -133,10 +143,14 @@
   <header>
     <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
     <div class="header-row">
+      <div class="art-col">
       <div class="art-strip">
         <img src="/assets/2048-title.png" alt="2048 title screen" class="header-art" id="header-art" width="160" height="152">
         <img src="" alt="2048 title screen (extra 1)" class="extra-art" id="extra-art-1" hidden>
         <img src="" alt="2048 title screen (extra 2)" class="extra-art" id="extra-art-2" hidden>
+      </div>
+      <div class="game-desc" id="game-desc" hidden></div>
+      <div class="game-site" id="game-site" hidden><a href="#" id="game-site-link" target="_blank" rel="noopener"></a></div>
       </div>
       <div class="title-block">
         <h1>2048</h1>
@@ -581,6 +595,10 @@
           extraArtEls[i].src = url;
           extraArtEls[i].hidden = false;
         });
+      var descEl = el('game-desc');
+      if(descEl){ if(data.description){ descEl.textContent = data.description; descEl.hidden = false; } else descEl.hidden = true; }
+      var siteEl = el('game-site'), siteLinkEl = el('game-site-link');
+      if(siteEl && siteLinkEl){ if(data.siteUrl){ siteLinkEl.href = data.siteUrl; siteLinkEl.textContent = data.siteUrl; siteEl.hidden = false; } else siteEl.hidden = true; }
       }).catch(function(){ /* keep whatever markup already has */ });
     })();
   }

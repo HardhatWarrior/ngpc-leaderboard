@@ -510,7 +510,10 @@
       // it against whatever it last received once names are actually populated, so that first
       // paint self-corrects instead of staying wrong until the next live update happens to land.
       if(lastTickerDocs) renderTicker(lastTickerDocs);
-      renderGrid(games);
+      // active === false is the admin/game/ "Inactive" toggle -- pulls a game's tile off this
+      // grid entirely while leaving everything else (leaderboard, ROM, scores) untouched. Missing
+      // the field at all means active (every game predates this toggle).
+      renderGrid(games.filter(g=>g.active !== false));
       gridStatusEl.textContent = '';
     }catch(e){
       gridStatusEl.textContent = 'Couldn’t load the games list right now — try refreshing.';
