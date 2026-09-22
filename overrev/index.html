@@ -345,6 +345,7 @@
     return {
       scoreFormat: d.scoreFormat === 'raw' ? 'raw' : 'time',
       inlineField: d.inlineField !== undefined ? d.inlineField : '',
+      inlinePrefix: d.inlinePrefix || '',
       inlineLabels: parseInlineLabels(d.inlineLabels),
       rowDetailExpand: d.rowDetailExpand !== undefined ? !!d.rowDetailExpand : true,
     };
@@ -388,7 +389,7 @@
       const rank = i+1;
       const usernameLine = raw.username ? ('<a href="/user/?u='+encodeURIComponent(raw.username)+'">@'+escapeHtml(raw.username.toUpperCase())+'</a>') : '';
       const inlineRaw = settings.inlineField ? data[settings.inlineField] : null;
-      const inlineLine = inlineRaw != null ? (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw)) : null;
+      const inlineLine = inlineRaw != null ? ((settings.inlinePrefix ? settings.inlinePrefix+' ' : '') + (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw))) : null;
       const meta = [COURSES[data.course], fmtWhen(raw.submittedAt), CARS[data.car], inlineLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = raw.uid && avatars[raw.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';

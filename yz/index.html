@@ -330,6 +330,7 @@
     return {
       scoreFormat: d.scoreFormat || 'raw',
       inlineField: d.inlineField !== undefined ? d.inlineField : '',
+      inlinePrefix: d.inlinePrefix || '',
       inlineLabels: parseInlineLabels(d.inlineLabels),
       rowDetailExpand: d.rowDetailExpand !== undefined ? !!d.rowDetailExpand : true,
     };
@@ -349,7 +350,7 @@
       const hasDetail = settings.rowDetailExpand && Array.isArray(data.categoryScores) && data.categoryScores.length===YZ_CATS.length;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
       const inlineRaw = settings.inlineField ? data[settings.inlineField] : null;
-      const inlineLine = inlineRaw != null ? (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw)) : '';
+      const inlineLine = inlineRaw != null ? ((settings.inlinePrefix ? settings.inlinePrefix+' ' : '') + (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw))) : '';
       const meta = [fmtWhen(data.submittedAt), inlineLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';

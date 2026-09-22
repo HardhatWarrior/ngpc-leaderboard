@@ -261,7 +261,9 @@
         </div>
         <div class="field-label" style="margin-top:14px">Extra field shown inline</div>
         <select id="display-inline-field"><option value="">(none)</option></select>
-        <div class="field-label" style="margin-top:10px">Labels for that field's values (optional)</div>
+        <div class="field-label" style="margin-top:10px">Label for it (optional, e.g. "Moves")</div>
+        <input type="text" id="display-inline-prefix" placeholder="Moves">
+        <div class="field-label" style="margin-top:10px">Labels for that field's values (optional, overrides the raw number/text)</div>
         <input type="text" id="display-inline-labels" placeholder="0:Easy,1:Normal">
         <div class="field-label" style="margin-top:14px">Tap a row to expand its detail card</div>
         <div class="status-row" id="display-expand-row" style="margin-bottom:0">
@@ -858,6 +860,7 @@
       const scoreFormatRow = el('display-score-format-row');
       const expandRow = el('display-expand-row');
       const inlineFieldInput = el('display-inline-field');
+      const inlinePrefixInput = el('display-inline-prefix');
       const inlineLabelsInput = el('display-inline-labels');
       const displayMsg = el('display-msg');
       const display = data.display || {};
@@ -884,6 +887,7 @@
         // data[settings.inlineField] lookup already does at render time.
         if(wanted && opts.some(o=>o.prop===wanted)) inlineFieldInput.value = wanted;
       });
+      inlinePrefixInput.value = display.inlinePrefix !== undefined ? display.inlinePrefix : '';
       inlineLabelsInput.value = display.inlineLabels !== undefined ? display.inlineLabels : '';
       paintDisplayButtons();
       scoreFormatRow.querySelectorAll('.status-btn').forEach(btn=>{
@@ -900,6 +904,7 @@
           await docRef.update({ display: {
             scoreFormat, rowDetailExpand: expand === 'on',
             inlineField: inlineFieldInput.value.trim(),
+            inlinePrefix: inlinePrefixInput.value.trim(),
             inlineLabels: inlineLabelsInput.value.trim(),
           } });
           displayMsg.innerHTML = '<div class="msg ok">Saved — reload the leaderboard page to see it (it only re-reads this on load, not live).</div>';

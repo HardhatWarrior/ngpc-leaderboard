@@ -352,6 +352,7 @@
     return {
       scoreFormat: d.scoreFormat === 'raw' ? 'raw' : 'time',
       inlineField: d.inlineField !== undefined ? d.inlineField : '',
+      inlinePrefix: d.inlinePrefix || '',
       inlineLabels: parseInlineLabels(d.inlineLabels),
       rowDetailExpand: !!d.rowDetailExpand,
     };
@@ -379,7 +380,7 @@
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
       const seedLine = data.seed!=null ? 'Seed '+String(data.seed).padStart(5,'0') : '';
       const inlineRaw = settings.inlineField ? data[settings.inlineField] : null;
-      const inlineLine = inlineRaw != null ? (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw)) : '';
+      const inlineLine = inlineRaw != null ? ((settings.inlinePrefix ? settings.inlinePrefix+' ' : '') + (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw))) : '';
       const meta = [fmtWhen(data.submittedAt), data.misses+' miss'+(data.misses===1?'':'es'), seedLine, inlineLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
