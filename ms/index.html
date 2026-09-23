@@ -221,25 +221,46 @@
 
   let db = null, pending = null, unsubscribeBoard = null;
 
-  function parseMinesweeperPayload(text){
-    if(text.length !== 10) return {error:"That code is the wrong length — rescan with the whole code in frame."};
-    const initials = text.slice(2,5);
-    if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
-    const difficultyStr = text.slice(5,6);
-    if(!/^\d{1}$/.test(difficultyStr)) return {error:"That code has an unreadable difficulty."};
-    const difficulty = parseInt(difficultyStr,10);
-    const timeStr = text.slice(6,10);
-    if(!/^\d{4}$/.test(timeStr)) return {error:"That code has an unreadable time."};
-    const time = parseInt(timeStr,10);
-    return { game:QR_GAME_CODE, initials, difficulty, time };
+  // Reads games/ms.payloadSpec (set graphically from admin/game/'s "Payload Editor" panel) instead
+  // of hardcoding the field layout -- DEFAULT_SPEC below reproduces exactly what this page shipped
+  // with, so an untouched games/ms doc parses identically to today.
+  const DEFAULT_SPEC = {
+    code: 'MS',
+    fields: [
+      {prop:'initials', label:'Initials', width:3, type:'alpha'},
+      {prop:'difficulty', label:'Difficulty', width:1, type:'numeric'},
+      {prop:'time', label:'Time', width:4, type:'numeric'},
+    ],
+    sortField: 'time', sortDir: 'asc',
+  };
+  function getPayloadSpec(){
+    const s = (gameData && gameData.payloadSpec) || null;
+    return (s && Array.isArray(s.fields) && s.fields.length) ? s : DEFAULT_SPEC;
+  }
+  function parseSpecPayload(text, spec){
+    const totalLen = spec.code.length + spec.fields.reduce((sum,f)=>sum+(f.width||0), 0);
+    if(text.length !== totalLen) return {error:"That code is the wrong length — rescan with the whole code in frame."};
+    const gameCode = text.slice(0, spec.code.length);
+    if(gameCode !== spec.code) return {error:'Unknown game code "'+gameCode+'".'};
+    let pos = spec.code.length;
+    const result = {game: spec.code};
+    for(const f of spec.fields){
+      const raw = text.slice(pos, pos+f.width); pos += f.width;
+      if(f.type === 'alpha'){
+        if(!new RegExp('^[A-Z]{'+f.width+'}$').test(raw)) return {error:"That code's "+f.label.toLowerCase()+" didn't look right."};
+        result[f.prop] = raw;
+      } else {
+        if(!new RegExp('^\\d{'+f.width+'}$').test(raw)) return {error:"That code has an unreadable "+f.label.toLowerCase()+"."};
+        result[f.prop] = parseInt(raw, 10);
+      }
+    }
+    return result;
   }
 
   function parsePayload(text){
     text = (text||'').trim().toUpperCase();
     if(text.length < 2) return {error:"That code is too short to be a valid score."};
-    const code = text.slice(0,2);
-    if(code === QR_GAME_CODE) return parseMinesweeperPayload(text);
-    return {error:'Unknown game code "'+code+'".'};
+    return parseSpecPayload(text, getPayloadSpec());
   }
 
   function lastPathSegment(text){
@@ -297,9 +318,21 @@
 
   function formatDisplayValue(o){ return fmtScoreValue(o, getDisplaySettings()); }
 
+  // Built from getPayloadSpec()'s own field list rather than hardcoded Difficulty/Time, so a
+  // field added/renamed/removed via the Payload Editor shows up here without a code change.
+  // Difficulty/Time keep their special display treatment (DIFF_NAMES label, m:ss format) only
+  // when those exact field names are still present; anything else prints as a raw value.
   function renderScorecardHTML(data){
-    const rows = '<tr><td>Difficulty</td><td class="tk-val tnum">'+(DIFF_NAMES[data.difficulty] || data.difficulty)+'</td></tr>'+
-      '<tr><td>Time</td><td class="tk-val tnum">'+fmtTime(data.time)+'</td></tr>';
+    const rows = getPayloadSpec().fields
+      .filter(f=>f.prop!=='initials')
+      .map(f=>{
+        let val;
+        if(f.prop==='difficulty') val = DIFF_NAMES[data.difficulty] || data.difficulty;
+        else if(f.prop==='time') val = fmtTime(data.time);
+        else val = data[f.prop];
+        return '<tr><td>'+escapeHtml(f.label)+'</td><td class="tk-val tnum">'+escapeHtml(String(val))+'</td></tr>';
+      })
+      .join('');
     return '<table class="tk-sheet">'+rows+'</table>';
   }
 
@@ -358,7 +391,8 @@
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('time','asc').limit(25);
+    const spec = getPayloadSpec();
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy(spec.sortField, spec.sortDir).limit(25);
     unsubscribeBoard = q.onSnapshot(
       (snap)=>{ renderBoard(snap.docs); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }

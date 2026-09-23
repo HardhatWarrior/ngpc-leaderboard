@@ -416,7 +416,7 @@
   // algorithms into a generic interpreter -- too much risk to a live site's real scoring, not
   // something to do inside this admin-tooling change. Add a slug here only once its own leaderboard
   // page has actually been retrofitted the same way tt/index.html was.
-  const EDITABLE_PAYLOAD_GAMES = new Set(['tt']);
+  const EDITABLE_PAYLOAD_GAMES = new Set(['tt', 'ms']);
 
   // Seeds the Payload Editor when games/{slug}.payloadSpec hasn't been saved yet -- must exactly
   // match each retrofitted page's own DEFAULT_SPEC constant, or the editor would show a spec that
@@ -431,6 +431,15 @@
         {prop:'level', label:'Level', width:3, type:'numeric'},
       ],
       sortField: 'score', sortDir: 'desc',
+    },
+    ms: {
+      code: 'MS',
+      fields: [
+        {prop:'initials', label:'Initials', width:3, type:'alpha'},
+        {prop:'difficulty', label:'Difficulty', width:1, type:'numeric'},
+        {prop:'time', label:'Time', width:4, type:'numeric'},
+      ],
+      sortField: 'time', sortDir: 'asc',
     },
   };
 
@@ -1290,15 +1299,22 @@
         });
       }
       function renderFieldRows(){
-        fieldsListEl.innerHTML = fields.map((f,i)=>
-          '<div class="payload-field-row" data-i="'+i+'">'
+        // "initials" is the one universally-required field name (every row displays data.initials
+        // directly) -- locked from renaming/removal. Whichever field is currently selected as the
+        // sort field is also removal-locked, since the board query needs it to exist; there's no
+        // fixed "score" requirement -- Minesweeper sorts by "time" and has no field named score
+        // at all, which is exactly why this used to be a bug (hardcoded "score" required/locked).
+        const sortProp = sortFieldSel.value;
+        fieldsListEl.innerHTML = fields.map((f,i)=>{
+          const locked = f.prop==='initials' || (sortProp && f.prop===sortProp);
+          return '<div class="payload-field-row" data-i="'+i+'">'
             + '<input type="text" data-role="label" value="'+escapeHtml(f.label)+'" placeholder="Label">'
-            + '<input type="text" data-role="prop" value="'+escapeHtml(f.prop)+'" placeholder="propName" '+(f.prop==='initials'||f.prop==='score'?'disabled':'')+'>'
+            + '<input type="text" data-role="prop" value="'+escapeHtml(f.prop)+'" placeholder="propName" '+(f.prop==='initials'?'disabled':'')+'>'
             + '<input type="number" min="1" max="12" data-role="width" value="'+f.width+'">'
             + '<select data-role="type"><option value="numeric"'+(f.type==='numeric'?' selected':'')+'>Numeric</option><option value="alpha"'+(f.type==='alpha'?' selected':'')+'>Letters</option></select>'
           + '</div>'
-          + '<button type="button" class="payload-field-remove" data-remove="'+i+'" '+(f.prop==='initials'||f.prop==='score'?'disabled':'')+'>Remove '+escapeHtml(f.label||f.prop)+'</button>'
-        ).join('');
+          + '<button type="button" class="payload-field-remove" data-remove="'+i+'" '+(locked?'disabled':'')+'>Remove '+escapeHtml(f.label||f.prop)+'</button>';
+        }).join('');
         renderSortOptions();
       }
       function renderSortOptions(){
@@ -1351,8 +1367,12 @@
           editorMsg.innerHTML = '<div class="msg err">Every field needs a unique, non-empty name.</div>';
           return;
         }
-        if(!fields.some(f=>f.prop==='initials') || !fields.some(f=>f.prop==='score')){
-          editorMsg.innerHTML = '<div class="msg err">Fields must include both "initials" and "score".</div>';
+        if(!fields.some(f=>f.prop==='initials')){
+          editorMsg.innerHTML = '<div class="msg err">Fields must include "initials".</div>';
+          return;
+        }
+        if(!sortFieldSel.value || !fields.some(f=>f.prop===sortFieldSel.value)){
+          editorMsg.innerHTML = '<div class="msg err">Pick a valid sort field.</div>';
           return;
         }
         const spec = { code: data.code, fields, sortField: sortFieldSel.value, sortDir };
