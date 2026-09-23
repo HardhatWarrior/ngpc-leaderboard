@@ -350,31 +350,57 @@
     return parts.length ? parts[parts.length-1] : '';
   }
 
-  /* ---------- QR payload parser -- <2-char game code><3-char initials><8-digit score>
-     <5-digit lines><3-digit level>, matching Tetris's own main.c qr_build_payload() exactly. ---------- */
-  function parsePayload(text){
-    text = (text||'').trim().toUpperCase();
-    const totalLen = 2 + 3 + SCORE_DIGITS + LINES_DIGITS + LEVEL_DIGITS;
-    if(text.length < totalLen) return {error:"That code is too short to be a valid score."};
-    const gameCode = text.slice(0,2);
-    if(gameCode !== QR_GAME_CODE){
+  // Reads games/tt.payloadSpec (set graphically from admin/game/'s "Payload Editor" panel)
+  // instead of hardcoding the field layout -- DEFAULT_SPEC below reproduces exactly what this page
+  // shipped with before that panel existed (matching Tetris's own main.c qr_build_payload()), so
+  // an untouched games/tt doc parses identically to today. Field widths double as their own bounds
+  // check (an N-digit numeric field is inherently 0..10^N-1), which is why the old separate
+  // MAX_SCORE/MAX_LINES/MAX_LEVEL checks below are redundant with it -- kept only as a defensive
+  // belt-and-suspenders since validScore()'s underlying MAX_SCORE constant is still used elsewhere.
+  const DEFAULT_SPEC = {
+    code: 'TT',
+    fields: [
+      {prop:'initials', label:'Initials', width:3, type:'alpha'},
+      {prop:'score', label:'Score', width:SCORE_DIGITS, type:'numeric'},
+      {prop:'lines', label:'Lines', width:LINES_DIGITS, type:'numeric'},
+      {prop:'level', label:'Level', width:LEVEL_DIGITS, type:'numeric'},
+    ],
+    sortField: 'score',
+    sortDir: 'desc',
+  };
+  function getPayloadSpec(){
+    const s = (gameData && gameData.payloadSpec) || null;
+    return (s && Array.isArray(s.fields) && s.fields.length) ? s : DEFAULT_SPEC;
+  }
+  function parseSpecPayload(text, spec){
+    const totalLen = spec.code.length + spec.fields.reduce((sum,f)=>sum+(f.width||0), 0);
+    if(text.length !== totalLen) return {error:"That code is the wrong length — rescan with the whole code in frame."};
+    const gameCode = text.slice(0, spec.code.length);
+    if(gameCode !== spec.code){
       return {error:'This code is for a different game ("'+gameCode+'") — open that game’s own hiscores page instead.'};
     }
-    let pos = 2;
-    const initials = text.slice(pos, pos+3); pos += 3;
-    const scoreStr = text.slice(pos, pos+SCORE_DIGITS); pos += SCORE_DIGITS;
-    const linesStr = text.slice(pos, pos+LINES_DIGITS); pos += LINES_DIGITS;
-    const levelStr = text.slice(pos, pos+LEVEL_DIGITS); pos += LEVEL_DIGITS;
-    if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
-    if(!/^\d+$/.test(scoreStr) || !/^\d+$/.test(linesStr) || !/^\d+$/.test(levelStr)){
-      return {error:"That code's score/lines/level didn't look right."};
+    let pos = spec.code.length;
+    const result = {};
+    for(const f of spec.fields){
+      const raw = text.slice(pos, pos+f.width); pos += f.width;
+      if(f.type === 'alpha'){
+        if(!new RegExp('^[A-Z]{'+f.width+'}$').test(raw)) return {error:"That code's "+f.label.toLowerCase()+" didn't look right."};
+        result[f.prop] = raw;
+      } else {
+        if(!new RegExp('^\\d{'+f.width+'}$').test(raw)) return {error:"That code has an unreadable "+f.label.toLowerCase()+"."};
+        result[f.prop] = parseInt(raw, 10);
+      }
     }
-    const score = parseInt(scoreStr,10);
-    const lines = parseInt(linesStr,10);
-    const level = parseInt(levelStr,10);
-    if(!validScore(score)) return {error:"That code has an impossible score."};
-    if(lines>MAX_LINES || level>MAX_LEVEL) return {error:"That code's lines/level looked impossible."};
-    return {initials, score, lines, level};
+    if(!validScore(result.score)) return {error:"That code has an impossible score."};
+    return result;
+  }
+
+  /* ---------- QR payload parser -- <2-char game code><3-char initials><8-digit score>
+     <5-digit lines><3-digit level>, matching Tetris's own main.c qr_build_payload() exactly
+     (or whatever games/tt.payloadSpec has been graphically edited to instead). ---------- */
+  function parsePayload(text){
+    text = (text||'').trim().toUpperCase();
+    return parseSpecPayload(text, getPayloadSpec());
   }
 
   function fmtWhen(ts){
@@ -413,10 +439,13 @@
   function fmtScoreValue(score, settings){
     return settings.scoreFormat === 'time' ? fmtTime(score) : String(score);
   }
+  // Built from getPayloadSpec()'s own field list rather than hardcoded Score/Lines/Level, so a
+  // field added/renamed/removed via the Payload Editor shows up here without a code change.
   function renderScorecardHTML(data){
-    const rows = '<tr><td>Score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
-      '<tr><td>Lines</td><td class="tk-val tnum">'+data.lines+'</td></tr>'+
-      '<tr><td>Level</td><td class="tk-val tnum">'+data.level+'</td></tr>';
+    const rows = getPayloadSpec().fields
+      .filter(f=>f.prop!=='initials')
+      .map(f=>'<tr><td>'+escapeHtml(f.label)+'</td><td class="tk-val tnum">'+escapeHtml(String(data[f.prop]))+'</td></tr>')
+      .join('');
     return '<table class="tk-sheet">'+rows+'</table>';
   }
 
@@ -486,15 +515,22 @@
     }
   }
 
+  // Re-called once games/tt.payloadSpec actually loads (see the romLinkEl fetch below) in case its
+  // sortField/sortDir differ from DEFAULT_SPEC -- connectDb() runs once synchronously from boot(),
+  // before that async fetch resolves, so the very first subscribe always uses DEFAULT_SPEC's
+  // ordering regardless. unsubscribeBoard avoids stacking a second live listener on the re-call.
+  let unsubscribeBoard = null;
   function connectDb(){
     if(!db){
       boardStatusEl.textContent = 'Live leaderboard is unavailable right now (Firebase failed to load).';
       formMsg.innerHTML = '<div class="msg err">Submitting a score isn’t possible until the page reloads correctly.</div>';
       return;
     }
+    if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     boardStatusEl.textContent = '';
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('score','desc').limit(25);
-    q.onSnapshot(
+    const spec = getPayloadSpec();
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy(spec.sortField, spec.sortDir).limit(25);
+    unsubscribeBoard = q.onSnapshot(
       (snap)=>{ boardStatusEl.textContent = ''; renderBoard(snap.docs); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
     );
@@ -518,11 +554,19 @@
     confirmView.classList.toggle('show', stage==='confirm');
   }
 
-  function openConfirm(initials, score, lines, level){
-    pending = {initials, score, lines, level};
-    el('confirm-initials').textContent = initials;
-    el('confirm-score').textContent = String(score);
-    el('confirm-src').textContent = 'Level '+level+' · '+lines+' lines — from a scanned QR code';
+  function openConfirm(result){
+    pending = result;
+    const spec = getPayloadSpec();
+    el('confirm-initials').textContent = result.initials || '';
+    el('confirm-score').textContent = String(result.score);
+    // Level X · Y lines wording preserved verbatim for the DEFAULT field set; once the payload's
+    // been graphically edited to something else, falls back to a generic "Label value" list built
+    // from every non-initials/score field in spec order -- there's no way to keep bespoke wording
+    // once the fields themselves are no longer fixed.
+    const srcText = (result.level!=null && result.lines!=null)
+      ? 'Level '+result.level+' · '+result.lines+' lines — from a scanned QR code'
+      : spec.fields.filter(f=>f.prop!=='initials' && f.prop!=='score').map(f=>f.label+' '+result[f.prop]).join(' · ')+' — from a scanned QR code';
+    el('confirm-src').textContent = srcText;
     confirmMsg.innerHTML = '';
     showStage('confirm');
   }
@@ -535,14 +579,13 @@
       return;
     }
     resetScanUI();
-    openConfirm(result.initials, result.score, result.lines, result.level);
+    openConfirm(result);
   }
 
   function payloadFromEntry(){
     const raw = location.hash ? location.hash.slice(1) : lastPathSegment(location.pathname);
     const last = decodeURIComponent(lastPathSegment(raw));
-    const totalLen = 2 + 3 + SCORE_DIGITS + LINES_DIGITS + LEVEL_DIGITS;
-    if(last.length < totalLen) return null;
+    if(last.length < 2) return null;
     const result = parsePayload(last);
     return result.error ? null : result;
   }
@@ -754,18 +797,17 @@
     const btn = el('btn-confirm');
     btn.disabled = true;
     confirmMsg.innerHTML = '';
-    const scoreDoc = {
+    // Spread `pending` (built by parseSpecPayload from games/tt.payloadSpec's own field list)
+    // instead of naming each field, so an admin adding/renaming a field via the Payload Editor
+    // doesn't also require a code change here to actually get written.
+    const scoreDoc = Object.assign({}, pending, {
       game: QR_GAME_CODE,
-      initials: pending.initials,
-      score: pending.score,
-      lines: pending.lines,
-      level: pending.level,
       source: SUBMIT_SOURCE,
       submittedAt: Date.now(),
       uid: authedUser.uid,
       username: authedUser.username,
       approved: !!authedUser.approved,
-    };
+    });
     const res = await writeScore(scoreDoc);
     btn.disabled = false;
     if(res.ok){
@@ -788,7 +830,7 @@
     connectDb();
     const fromEntry = payloadFromEntry();
     if(fromEntry){
-      openConfirm(fromEntry.initials, fromEntry.score, fromEntry.lines, fromEntry.level);
+      openConfirm(fromEntry);
       // Strip back to the clean /tetris/ URL (hash included) so a refresh or a re-shared link
       // can't replay the same scan as a fresh submission.
       history.replaceState(null, '', '/tetris/');
@@ -817,6 +859,7 @@
         if(!doc.exists) return;
         var data = doc.data();
         gameData = data;
+        connectDb(); // re-subscribe now that a real payloadSpec (if any) is available -- see its own comment
         if(romLinkEl && data.romPath) romLinkEl.href = data.romPath;
         var headerArtEl = el('header-art');
         if(headerArtEl && data.titleImage) headerArtEl.src = data.titleImage;
