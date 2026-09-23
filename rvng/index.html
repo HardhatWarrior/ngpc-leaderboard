@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Don't Die Mr Robot Hiscores</title>
+<title>Fruity Pals' Revenge Hiscores</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
@@ -85,9 +85,9 @@
   .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .row-meta a:hover{ color:var(--accent2); }
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
-  /* Scores are only comparable within a difficulty (the submission's own "scorecard
-     reconstruction" note: "Grouped by difficulty") -- like Gardenia's mode toggle, this page
-     filters to one difficulty's board at a time rather than pooling all three into one ranking. */
+  /* Scores are only comparable within a mode (the submission's own "scorecard reconstruction"
+     note: "Grouped by mode") -- like Gardenia's mode toggle, this page filters to one mode's
+     board at a time rather than pooling all four into one ranking. */
   .mode-toggle{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
   .mode-btn{
     width:auto; background:transparent; border:1px solid var(--border); color:var(--dim);
@@ -144,18 +144,18 @@
     <div class="header-row">
       <div class="art-col">
       <div class="art-strip">
-        <img src="" alt="Don't Die Mr Robot title screen" class="header-art" id="header-art" width="160" height="152">
-        <img src="" alt="Don't Die Mr Robot extra screenshot 1" class="extra-art" id="extra-art-1" hidden>
-        <img src="" alt="Don't Die Mr Robot extra screenshot 2" class="extra-art" id="extra-art-2" hidden>
+        <img src="" alt="Fruity Pals' Revenge title screen" class="header-art" id="header-art" width="160" height="152">
+        <img src="" alt="Fruity Pals' Revenge extra screenshot 1" class="extra-art" id="extra-art-1" hidden>
+        <img src="" alt="Fruity Pals' Revenge extra screenshot 2" class="extra-art" id="extra-art-2" hidden>
       </div>
       <div class="game-desc" id="game-desc" hidden></div>
       <div class="game-site" id="game-site" hidden><a href="#" id="game-site-link" target="_blank" rel="noopener"></a></div>
       </div>
       <div class="title-block">
-        <h1>Don't Die Mr Robot</h1>
+        <h1>Fruity Pals' Revenge</h1>
         <div class="created-by">Created by: <a href="/user/?u=ahchay">@AHCHAY</a></div>
         <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
-        <a href="/play/ddmr/" class="play-link" id="play-link" hidden>&#127918; Play Don't Die Mr Robot in Browser</a>
+        <a href="/play/rvng/" class="play-link" id="play-link" hidden>&#127918; Play Fruity Pals' Revenge in Browser</a>
       </div>
     </div>
   </header>
@@ -203,9 +203,10 @@
     <section class="panel">
       <h2>Leaderboard</h2>
       <div class="mode-toggle">
-        <button type="button" class="mode-btn active" id="mode-1" data-mode="1">Easy</button>
-        <button type="button" class="mode-btn" id="mode-2" data-mode="2">Fair</button>
-        <button type="button" class="mode-btn" id="mode-3" data-mode="3">Hard</button>
+        <button type="button" class="mode-btn active" id="mode-0" data-mode="0">Training</button>
+        <button type="button" class="mode-btn" id="mode-1" data-mode="1">Arcade</button>
+        <button type="button" class="mode-btn" id="mode-2" data-mode="2">Pure</button>
+        <button type="button" class="mode-btn" id="mode-3" data-mode="3">Chillout</button>
       </div>
       <div id="board-status"></div>
       <div id="board"></div>
@@ -220,8 +221,8 @@
 <script>
 (function(){
   "use strict";
-  const QR_GAME_CODE = 'DDMR';
-  const GAME_SLUG = 'ddmr';
+  const QR_GAME_CODE = 'RVNG';
+  const GAME_SLUG = 'rvng';
   const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
   const SUBMIT_SOURCE = new URLSearchParams(location.search).get('src') === 'capture' ? 'capture' : 'qr';
 
@@ -233,17 +234,17 @@
   const formMsg = el('form-msg'), confirmMsg = el('confirm-msg');
   const btnScan = el('btn-scan'), scanLive = el('scan-live'), scanFallback = el('scan-fallback');
   const scanVideo = el('scan-video'), scanFile = el('scan-file');
-  const modeButtons = [el('mode-1'), el('mode-2'), el('mode-3')];
 
   let db = null, pending = null, unsubscribeBoard = null;
-  const MODE_NAMES = {1:'Easy', 2:'Fair', 3:'Hard'};
-  let activeMode = 1;
+  const MODE_NAMES = {0:'Training', 1:'Arcade', 2:'Pure', 3:'Chillout'};
+  let activeMode = 0;
+  const modeButtons = [el('mode-0'), el('mode-1'), el('mode-2'), el('mode-3')];
 
-  // CRC16-CCITT (poly 0x1021, init 0xFFFF), per the developer's own spec ("CRC Calculation
-  // CRC16-CCITT (poly 0x1021, init 0xFFFF) across Difficulty, Initals and Score ONLY") -- same
-  // algorithm and convention as Gardenia's own on-device encoder (see gd/index.html's
-  // crc16Gardenia()). Verified client-side then discarded entirely -- the submission's own notes
-  // say "CRC field to be discarded", so it's never stored on the score doc.
+  // CRC16-CCITT (poly 0x1021, init 0xFFFF), per the developer's own spec ("CRC16-CCITT checksum
+  // (poly 0x1021, init 0xFFFF) Over Mode, Initials and Score ONLY") -- same algorithm/convention
+  // as Gardenia's and Don't Die Mr Robot's own on-device encoders (see gd/index.html's
+  // crc16Gardenia() / ddmr/index.html's crc16Ccitt()). Verified client-side then discarded --
+  // never stored on the score doc.
   function crc16Ccitt(str){
     let crc = 0xffff;
     for(let i=0;i<str.length;i++){
@@ -255,15 +256,15 @@
     return crc;
   }
 
-  function parseDonTDieMrRobotPayload(text){
+  function parseFruityPalsRevengePayload(text){
     if(text.length !== 18) return {error:"That code is the wrong length — rescan with the whole code in frame."};
-    const difficultyStr = text.slice(4,6);
-    if(!/^\d{2}$/.test(difficultyStr)) return {error:"That code has an unreadable difficulty."};
-    const difficulty = parseInt(difficultyStr,10);
-    if(!(difficulty in MODE_NAMES)) return {error:"That code has an unrecognized difficulty."};
-    // Not strictly [A-Z]{3} -- the submission's own format note ("[A-Z][0-9].") shows device
-    // initials can include a digit or a trailing space/period, same convention as this
-    // developer's other games (see rvng/index.html's own note).
+    const modeStr = text.slice(4,6);
+    if(!/^\d{2}$/.test(modeStr)) return {error:"That code has an unreadable mode."};
+    const mode = parseInt(modeStr,10);
+    if(!(mode in MODE_NAMES)) return {error:"That code has an unrecognized mode."};
+    // Initials aren't strictly [A-Z]{3} -- the submission's own format note ("[A-Z][0-9][ .]")
+    // and example payloads (e.g. "P2 ", a letter+digit+space) show device initials can include a
+    // digit or a trailing space/period, not just letters.
     const initials = text.slice(6,9);
     if(!/^[A-Z0-9 .]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
     const scoreStr = text.slice(9,14);
@@ -273,14 +274,14 @@
     if(!/^[0-9A-F]{4}$/.test(crcStr)) return {error:"That code has an unreadable checksum."};
     const expectedCrc = crc16Ccitt(text.slice(4,14)).toString(16).toUpperCase().padStart(4,'0');
     if(crcStr !== expectedCrc) return {error:"That code failed a checksum check — rescan with the whole code in frame."};
-    return { game:QR_GAME_CODE, difficulty, initials, score };
+    return { game:QR_GAME_CODE, mode, initials, score };
   }
 
   function parsePayload(text){
     text = (text||'').trim().toUpperCase();
     if(text.length < 4) return {error:"That code is too short to be a valid score."};
     const code = text.slice(0,4);
-    if(code === QR_GAME_CODE) return parseDonTDieMrRobotPayload(text);
+    if(code === QR_GAME_CODE) return parseFruityPalsRevengePayload(text);
     return {error:'Unknown game code "'+code+'".'};
   }
 
@@ -301,14 +302,8 @@
 
   function formatDisplayValue(o){ return String(o.score).padStart(5,'0'); }
 
-  // TODO -- the submission's own "scorecard reconstruction" field asked for something this
-  // generator can't safely auto-implement from free text. The developer's exact request:
-  //   "Grouped by difficulty. Fields are actual values to be displayed"
-  // Implement it by hand (likely inside renderScorecardHTML and/or formatDisplayValue below),
-  // then delete this comment.
-
   function renderScorecardHTML(data){
-    const rows = '<tr><td>Difficulty</td><td class="tk-val">'+escapeHtml(MODE_NAMES[data.difficulty]||'?')+'</td></tr>'+
+    const rows = '<tr><td>Mode</td><td class="tk-val">'+escapeHtml(MODE_NAMES[data.mode]||'?')+'</td></tr>'+
       '<tr><td>Score</td><td class="tk-val tnum">'+data.score+'</td></tr>';
     return '<table class="tk-sheet">'+rows+'</table>';
   }
@@ -363,7 +358,7 @@
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('difficulty','==',activeMode).where('approved','==',true).orderBy('score','desc').limit(25);
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('mode','==',activeMode).where('approved','==',true).orderBy('score','desc').limit(25);
     unsubscribeBoard = q.onSnapshot(
       (snap)=>{ renderBoard(snap.docs); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
@@ -405,7 +400,7 @@
     pending = parsed;
     el('confirm-initials').textContent = parsed.initials || '';
     el('confirm-score').textContent = formatDisplayValue(parsed);
-    el('confirm-src').textContent = (MODE_NAMES[parsed.difficulty]||'') + ' · From a scanned QR code';
+    el('confirm-src').textContent = (MODE_NAMES[parsed.mode]||'') + ' · From a scanned QR code';
     el('confirm-scorecard').innerHTML = renderScorecardHTML(parsed);
     confirmMsg.innerHTML = '';
     showStage('confirm');

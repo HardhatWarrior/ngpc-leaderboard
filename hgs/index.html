@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Don't Die Mr Robot Hiscores</title>
+<title>Horatio Goes Snowboarding Hiscores</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
@@ -85,9 +85,9 @@
   .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .row-meta a:hover{ color:var(--accent2); }
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
-  /* Scores are only comparable within a difficulty (the submission's own "scorecard
-     reconstruction" note: "Grouped by difficulty") -- like Gardenia's mode toggle, this page
-     filters to one difficulty's board at a time rather than pooling all three into one ranking. */
+  /* Scores are only comparable within one mode+difficulty group (the submission's own "scorecard
+     reconstruction" note: "Grouped by Mode and then Difficulty") -- like Gardenia's mode toggle,
+     this page filters to one group's board at a time rather than pooling everything together. */
   .mode-toggle{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
   .mode-btn{
     width:auto; background:transparent; border:1px solid var(--border); color:var(--dim);
@@ -144,18 +144,18 @@
     <div class="header-row">
       <div class="art-col">
       <div class="art-strip">
-        <img src="" alt="Don't Die Mr Robot title screen" class="header-art" id="header-art" width="160" height="152">
-        <img src="" alt="Don't Die Mr Robot extra screenshot 1" class="extra-art" id="extra-art-1" hidden>
-        <img src="" alt="Don't Die Mr Robot extra screenshot 2" class="extra-art" id="extra-art-2" hidden>
+        <img src="" alt="Horatio Goes Snowboarding title screen" class="header-art" id="header-art" width="160" height="152">
+        <img src="" alt="Horatio Goes Snowboarding extra screenshot 1" class="extra-art" id="extra-art-1" hidden>
+        <img src="" alt="Horatio Goes Snowboarding extra screenshot 2" class="extra-art" id="extra-art-2" hidden>
       </div>
       <div class="game-desc" id="game-desc" hidden></div>
       <div class="game-site" id="game-site" hidden><a href="#" id="game-site-link" target="_blank" rel="noopener"></a></div>
       </div>
       <div class="title-block">
-        <h1>Don't Die Mr Robot</h1>
+        <h1>Horatio Goes Snowboarding</h1>
         <div class="created-by">Created by: <a href="/user/?u=ahchay">@AHCHAY</a></div>
         <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
-        <a href="/play/ddmr/" class="play-link" id="play-link" hidden>&#127918; Play Don't Die Mr Robot in Browser</a>
+        <a href="/play/hgs/" class="play-link" id="play-link" hidden>&#127918; Play Horatio Goes Snowboarding in Browser</a>
       </div>
     </div>
   </header>
@@ -203,9 +203,11 @@
     <section class="panel">
       <h2>Leaderboard</h2>
       <div class="mode-toggle">
-        <button type="button" class="mode-btn active" id="mode-1" data-mode="1">Easy</button>
-        <button type="button" class="mode-btn" id="mode-2" data-mode="2">Fair</button>
-        <button type="button" class="mode-btn" id="mode-3" data-mode="3">Hard</button>
+        <button type="button" class="mode-btn active" id="mode-0" data-group="0">Adventure · Easy</button>
+        <button type="button" class="mode-btn" id="mode-1" data-group="1">Adventure · Normal</button>
+        <button type="button" class="mode-btn" id="mode-2" data-group="2">Adventure · Hard</button>
+        <button type="button" class="mode-btn" id="mode-3" data-group="3">Adventure · Extreme</button>
+        <button type="button" class="mode-btn" id="mode-4" data-group="4">Endless</button>
       </div>
       <div id="board-status"></div>
       <div id="board"></div>
@@ -220,8 +222,8 @@
 <script>
 (function(){
   "use strict";
-  const QR_GAME_CODE = 'DDMR';
-  const GAME_SLUG = 'ddmr';
+  const QR_GAME_CODE = 'HGS';
+  const GAME_SLUG = 'hgs';
   const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
   const SUBMIT_SOURCE = new URLSearchParams(location.search).get('src') === 'capture' ? 'capture' : 'qr';
 
@@ -233,17 +235,27 @@
   const formMsg = el('form-msg'), confirmMsg = el('confirm-msg');
   const btnScan = el('btn-scan'), scanLive = el('scan-live'), scanFallback = el('scan-fallback');
   const scanVideo = el('scan-video'), scanFile = el('scan-file');
-  const modeButtons = [el('mode-1'), el('mode-2'), el('mode-3')];
 
   let db = null, pending = null, unsubscribeBoard = null;
-  const MODE_NAMES = {1:'Easy', 2:'Fair', 3:'Hard'};
-  let activeMode = 1;
+  // Groups per the submission's own scheme ("Grouped by Mode and then Difficulty ... can treat
+  // mode+difficulty as a single field if that's easier"): Adventure has 4 real difficulties;
+  // Endless has only one board, difficulty sent as a placeholder 00. Each group is keyed by its
+  // own {mode, difficulty} pair, matching the exact codes the submission spelled out
+  // (0000/0001/0002/0003/0100).
+  const GROUPS = [
+    {mode:0, difficulty:0, label:'Adventure · Easy'},
+    {mode:0, difficulty:1, label:'Adventure · Normal'},
+    {mode:0, difficulty:2, label:'Adventure · Hard'},
+    {mode:0, difficulty:3, label:'Adventure · Extreme'},
+    {mode:1, difficulty:0, label:'Endless'},
+  ];
+  let activeGroup = 0;
+  const groupButtons = GROUPS.map((g,i)=>el('mode-'+i));
 
-  // CRC16-CCITT (poly 0x1021, init 0xFFFF), per the developer's own spec ("CRC Calculation
-  // CRC16-CCITT (poly 0x1021, init 0xFFFF) across Difficulty, Initals and Score ONLY") -- same
-  // algorithm and convention as Gardenia's own on-device encoder (see gd/index.html's
-  // crc16Gardenia()). Verified client-side then discarded entirely -- the submission's own notes
-  // say "CRC field to be discarded", so it's never stored on the score doc.
+  // CRC16-CCITT (poly 0x1021, init 0xFFFF), per the developer's own spec ("CRC16-CCITT checksum
+  // (poly 0x1021, init 0xFFFF) over Mode, Difficulty, Initals and Score ONLY") -- same
+  // algorithm/convention as Gardenia's and Don't Die Mr Robot's own on-device encoders. Verified
+  // client-side then discarded -- never stored on the score doc.
   function crc16Ccitt(str){
     let crc = 0xffff;
     for(let i=0;i<str.length;i++){
@@ -255,32 +267,36 @@
     return crc;
   }
 
-  function parseDonTDieMrRobotPayload(text){
-    if(text.length !== 18) return {error:"That code is the wrong length — rescan with the whole code in frame."};
-    const difficultyStr = text.slice(4,6);
+  function parseHoratioGoesSnowboardingPayload(text){
+    if(text.length !== 19) return {error:"That code is the wrong length — rescan with the whole code in frame."};
+    const modeStr = text.slice(3,5);
+    if(!/^\d{2}$/.test(modeStr)) return {error:"That code has an unreadable mode."};
+    const mode = parseInt(modeStr,10);
+    if(mode !== 0 && mode !== 1) return {error:"That code has an unrecognized mode."};
+    const difficultyStr = text.slice(5,7);
     if(!/^\d{2}$/.test(difficultyStr)) return {error:"That code has an unreadable difficulty."};
     const difficulty = parseInt(difficultyStr,10);
-    if(!(difficulty in MODE_NAMES)) return {error:"That code has an unrecognized difficulty."};
-    // Not strictly [A-Z]{3} -- the submission's own format note ("[A-Z][0-9].") shows device
-    // initials can include a digit or a trailing space/period, same convention as this
-    // developer's other games (see rvng/index.html's own note).
-    const initials = text.slice(6,9);
+    if(mode === 0 && (difficulty < 0 || difficulty > 3)) return {error:"That code has an unrecognized difficulty."};
+    // Initials aren't strictly [A-Z]{3} -- the submission's own format note ("[A-Z][0-9][ .]")
+    // shows device initials can include a digit or a trailing space/period, not just letters
+    // (same convention as this developer's other games -- see rvng/index.html's own note).
+    const initials = text.slice(7,10);
     if(!/^[A-Z0-9 .]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
-    const scoreStr = text.slice(9,14);
+    const scoreStr = text.slice(10,15);
     if(!/^\d{5}$/.test(scoreStr)) return {error:"That code has an unreadable score."};
     const score = parseInt(scoreStr,10);
-    const crcStr = text.slice(14,18);
+    const crcStr = text.slice(15,19);
     if(!/^[0-9A-F]{4}$/.test(crcStr)) return {error:"That code has an unreadable checksum."};
-    const expectedCrc = crc16Ccitt(text.slice(4,14)).toString(16).toUpperCase().padStart(4,'0');
+    const expectedCrc = crc16Ccitt(text.slice(3,15)).toString(16).toUpperCase().padStart(4,'0');
     if(crcStr !== expectedCrc) return {error:"That code failed a checksum check — rescan with the whole code in frame."};
-    return { game:QR_GAME_CODE, difficulty, initials, score };
+    return { game:QR_GAME_CODE, mode, difficulty, initials, score };
   }
 
   function parsePayload(text){
     text = (text||'').trim().toUpperCase();
-    if(text.length < 4) return {error:"That code is too short to be a valid score."};
-    const code = text.slice(0,4);
-    if(code === QR_GAME_CODE) return parseDonTDieMrRobotPayload(text);
+    if(text.length < 3) return {error:"That code is too short to be a valid score."};
+    const code = text.slice(0,3);
+    if(code === QR_GAME_CODE) return parseHoratioGoesSnowboardingPayload(text);
     return {error:'Unknown game code "'+code+'".'};
   }
 
@@ -292,7 +308,7 @@
   function payloadFromEntry(){
     const raw = location.hash ? location.hash.slice(1) : lastPathSegment(location.pathname);
     const last = decodeURIComponent(lastPathSegment(raw));
-    if(last.length < 4) return null;
+    if(last.length < 3) return null;
     const result = parsePayload(last);
     return result.error ? null : result;
   }
@@ -301,20 +317,18 @@
 
   function formatDisplayValue(o){ return String(o.score).padStart(5,'0'); }
 
-  // TODO -- the submission's own "scorecard reconstruction" field asked for something this
-  // generator can't safely auto-implement from free text. The developer's exact request:
-  //   "Grouped by difficulty. Fields are actual values to be displayed"
-  // Implement it by hand (likely inside renderScorecardHTML and/or formatDisplayValue below),
-  // then delete this comment.
-
+  function groupLabel(mode, difficulty){
+    const g = GROUPS.find(g=>g.mode===mode && (mode!==0 || g.difficulty===difficulty));
+    return g ? g.label : '?';
+  }
   function renderScorecardHTML(data){
-    const rows = '<tr><td>Difficulty</td><td class="tk-val">'+escapeHtml(MODE_NAMES[data.difficulty]||'?')+'</td></tr>'+
+    const rows = '<tr><td>Mode</td><td class="tk-val">'+escapeHtml(groupLabel(data.mode, data.difficulty))+'</td></tr>'+
       '<tr><td>Score</td><td class="tk-val tnum">'+data.score+'</td></tr>';
     return '<table class="tk-sheet">'+rows+'</table>';
   }
 
   async function renderBoard(docs){
-    if(!docs.length){ boardEl.innerHTML = '<div class="empty-state">No scores yet in '+escapeHtml(MODE_NAMES[activeMode])+' — be the first on the board.</div>'; return; }
+    if(!docs.length){ boardEl.innerHTML = '<div class="empty-state">No scores yet in '+escapeHtml(GROUPS[activeGroup].label)+' — be the first on the board.</div>'; return; }
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
@@ -363,20 +377,25 @@
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('difficulty','==',activeMode).where('approved','==',true).orderBy('score','desc').limit(25);
+    const g = GROUPS[activeGroup];
+    let q = db.collection('scores').where('game','==',QR_GAME_CODE).where('mode','==',g.mode);
+    // Endless has only one difficulty value ever sent (00, a placeholder -- the device doesn't
+    // vary it), so filtering on it too is harmless and keeps the query shape consistent across
+    // every group rather than special-casing Endless out of the difficulty filter.
+    q = q.where('difficulty','==',g.difficulty).where('approved','==',true).orderBy('score','desc').limit(25);
     unsubscribeBoard = q.onSnapshot(
       (snap)=>{ renderBoard(snap.docs); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
     );
   }
 
-  function setMode(mode){
-    if(activeMode === mode) return;
-    activeMode = mode;
-    modeButtons.forEach(btn=>btn.classList.toggle('active', Number(btn.dataset.mode)===mode));
+  function setGroup(i){
+    if(activeGroup === i) return;
+    activeGroup = i;
+    groupButtons.forEach((btn,idx)=>btn.classList.toggle('active', idx===i));
     subscribeBoard();
   }
-  modeButtons.forEach(btn=>btn.addEventListener('click', ()=>setMode(Number(btn.dataset.mode))));
+  groupButtons.forEach((btn,i)=>btn.addEventListener('click', ()=>setGroup(i)));
 
   function initDb(){
     if(!firebase || !firebase.firestore){ boardStatusEl.innerHTML = '<div class="msg err">Firestore module not available</div>'; return; }
@@ -405,7 +424,7 @@
     pending = parsed;
     el('confirm-initials').textContent = parsed.initials || '';
     el('confirm-score').textContent = formatDisplayValue(parsed);
-    el('confirm-src').textContent = (MODE_NAMES[parsed.difficulty]||'') + ' · From a scanned QR code';
+    el('confirm-src').textContent = groupLabel(parsed.mode, parsed.difficulty) + ' · From a scanned QR code';
     el('confirm-scorecard').innerHTML = renderScorecardHTML(parsed);
     confirmMsg.innerHTML = '';
     showStage('confirm');

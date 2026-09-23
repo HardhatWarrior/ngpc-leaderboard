@@ -408,11 +408,14 @@ service cloud.firestore {
       // then discarded per the developer's own notes ("CRC field to be discarded"), so it's
       // deliberately NOT in this doc shape at all. score bound is 65535 per the submission's own
       // explicit "0-65535" spec, tighter than the 5-digit field width (99999) would otherwise imply.
+      // Initials allow [A-Z0-9 .] (not just letters) -- the submission's own format note and this
+      // developer's other games' example payloads show device initials can include a digit or a
+      // trailing space/period, not just letters.
       function isDonTDieMrRobotScore(d) {
         return d.game == 'DDMR'
           && d.keys().hasOnly(['game', 'difficulty', 'initials', 'score', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.difficulty is int && d.difficulty >= 1 && d.difficulty <= 3
-          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.initials is string && d.initials.matches('^[A-Z0-9 .]{3}$')
           && d.score is int && d.score >= 0 && d.score <= 65535
           && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int
@@ -421,7 +424,54 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data);
+      // Fruity Pals' Revenge: game, mode (0-3, Training/Arcade/Pure/Chillout -- scores only
+      // comparable within one mode, see rvng/index.html's own mode toggle), initials, score,
+      // source, submittedAt, required uid/username. The submission's own QR also carries a 4-hex
+      // CRC16 checksum (over mode+initials+score, poly 0x1021, init 0xFFFF) -- verified
+      // client-side then discarded per the same convention as Gardenia/Don't Die Mr Robot, so it's
+      // deliberately NOT in this doc shape at all. score bound is 65535 per the submission's own
+      // explicit "0-65535" spec, tighter than the 5-digit field width (99999) would otherwise imply.
+      // Initials allow [A-Z0-9 .] (not just letters) -- the submission's own format note and
+      // example payloads (a letter+digit+space combination) show device initials aren't
+      // letters-only.
+      function isFruityPalsRevengeScore(d) {
+        return d.game == 'RVNG'
+          && d.keys().hasOnly(['game', 'mode', 'initials', 'score', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.mode is int && d.mode >= 0 && d.mode <= 3
+          && d.initials is string && d.initials.matches('^[A-Z0-9 .]{3}$')
+          && d.score is int && d.score >= 0 && d.score <= 65535
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
+      // Horatio Goes Snowboarding: game, mode (0=Adventure/1=Endless), difficulty (0-3, only
+      // meaningful in Adventure -- Endless always sends 00 as a placeholder), initials, score,
+      // source, submittedAt, required uid/username. Scores only comparable within one
+      // mode+difficulty group, see hgs/index.html's own 5-group toggle. The submission's own QR
+      // also carries a 4-hex CRC16 checksum (over mode+difficulty+initials+score, poly 0x1021,
+      // init 0xFFFF) -- verified client-side then discarded per the same convention as this
+      // developer's other games (Gardenia/Don't Die Mr Robot/Fruity Pals' Revenge), so it's
+      // deliberately NOT in this doc shape at all. score bound is 65535 per the submission's own
+      // explicit "0-65535" spec, tighter than the 5-digit field width (99999) would otherwise imply.
+      // Initials allow [A-Z0-9 .] (not just letters), same reasoning as this developer's other games.
+      function isHoratioGoesSnowboardingScore(d) {
+        return d.game == 'HGS'
+          && d.keys().hasOnly(['game', 'mode', 'difficulty', 'initials', 'score', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.mode is int && d.mode >= 0 && d.mode <= 1
+          && d.difficulty is int && d.difficulty >= 0 && d.difficulty <= 3
+          && d.initials is string && d.initials.matches('^[A-Z0-9 .]{3}$')
+          && d.score is int && d.score >= 0 && d.score <= 65535
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
+      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data) || isFruityPalsRevengeScore(request.resource.data) || isHoratioGoesSnowboardingScore(request.resource.data);
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on

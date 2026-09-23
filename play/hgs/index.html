@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Horatio Goes Snowboarding Web Player</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/inlined/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<style>
+  /* GENERATED DRAFT -- copied verbatim from play/2048/index.html's own template (identical across
+     every game's play page already; nothing here is game-specific except the title/ROM/slug). */
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#5c8fd6; --accent-ink:#0a1830;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif; padding-inline:20px; padding-block:32px; display:flex; justify-content:center; }
+  html.maximizing, html.maximizing body{ height:100%; overflow:hidden; }
+  .px{ font-family:"Press Start 2P",monospace; }
+  #shell{ width:100%; max-width:520px; display:flex; flex-direction:column; gap:18px; align-items:center; }
+  header{ text-align:center; display:flex; flex-direction:column; gap:8px; }
+  header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
+  header p{ margin:0; color:var(--dim); font-size:13px; }
+  #player-panel{ width:100%; max-width:480px; aspect-ratio:160/152; position:relative; background:#000; border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  #game{ width:100%; height:100%; }
+  #player-panel.maximized{ position:fixed; inset:0; z-index:9999; width:100vw; height:100vh; max-width:none; aspect-ratio:auto; border-radius:0; border:none; }
+  #btn-maximize{ position:absolute; left:10px; top:10px; z-index:5; width:34px; height:34px; border:none; border-radius:8px; cursor:pointer; background:rgba(0,0,0,.55); color:#fff; font-size:16px; line-height:1; display:flex; align-items:center; justify-content:center; }
+  @media (max-width: 600px){ body{ padding-inline:10px; padding-block:20px; } }
+  #btn-submit{ font:inherit; border:none; border-radius:8px; padding:13px 20px; cursor:pointer; font-weight:600; font-size:13.5px; width:100%; max-width:480px; background:var(--accent); color:var(--accent-ink); }
+  #btn-submit:hover:not(:disabled){ filter:brightness(1.1); }
+  #btn-submit:disabled{ opacity:.5; cursor:not-allowed; }
+  #submit-msg{ width:100%; max-width:480px; }
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; text-align:center; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+  .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
+  .msg.info{ background:rgba(92,143,214,.12); color:var(--dim); border:1px solid var(--border); }
+  #signin-gate{ width:100%; max-width:480px; text-align:center; padding:24px; }
+  #player-content{ width:100%; display:flex; flex-direction:column; gap:18px; align-items:center; }
+  #player-content[hidden], #signin-gate[hidden]{ display:none; }
+  footer{ text-align:center; color:var(--dim); font-size:11px; }
+  #play-count{ text-align:center; color:var(--dim); font-size:11px; margin-top:-6px; }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <h1 class="px">HORATIO GOES SNOWBOARDING WEB PLAYER</h1>
+    <p>Testing build &mdash; not linked from the site yet. Play in the window below, then hit
+      Submit Score once the in-game QR code is on screen.</p>
+  </header>
+
+  <div id="play-count"></div>
+
+  <div id="signin-gate">&#128274; Sign in (top right) to use the in-browser player.</div>
+
+  <div id="player-content" hidden>
+    <div id="player-panel">
+      <button type="button" id="btn-maximize" title="Full screen">&#10530;</button>
+      <div id="game"></div>
+    </div>
+
+    <button type="button" id="btn-submit">Submit Score</button>
+    <div id="submit-msg"></div>
+
+    <footer>Reads the in-game QR code directly from the emulator, then submits it the same way a real scan does.</footer>
+  </div>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  let GAME_ROUTES = null;
+  async function getGameRoutes(){
+    if(GAME_ROUTES) return GAME_ROUTES;
+    const routes = {};
+    try{
+      if(window.NGPC_AUTH && NGPC_AUTH.db){
+        const snap = await NGPC_AUTH.db.collection('games').get();
+        snap.forEach(doc=>{ const d = doc.data(); if(d.code) routes[d.code] = doc.id; });
+      }
+    }catch(e){ /* leave whatever was found */ }
+    GAME_ROUTES = routes;
+    return routes;
+  }
+  const el = (id)=>document.getElementById(id);
+  (function(){
+    const countEl = el('play-count');
+    if(!countEl || !window.NGPC_AUTH || !NGPC_AUTH.db) return;
+    NGPC_AUTH.db.collection('pageViews').doc(NGPC_AUTH.pathKeyFromLocation()).get().then(doc=>{
+      const total = (doc.exists && doc.data().total) || 0;
+      countEl.textContent = 'Played ' + total.toLocaleString() + ' time' + (total===1?'':'s');
+    }).catch(()=>{});
+  })();
+  const gateEl = el('signin-gate');
+  const contentEl = el('player-content');
+  const btnSubmit = el('btn-submit');
+  const msgEl = el('submit-msg');
+
+  let emulatorRequested = false;
+  async function loadEmulator(){
+    if(emulatorRequested) return;
+    emulatorRequested = true;
+    let gameUrl = 'HORATIO.ngp';
+    try{
+      if(window.NGPC_AUTH && NGPC_AUTH.db){
+        const doc = await NGPC_AUTH.db.collection('games').doc('hgs').get();
+        if(doc.exists && doc.data().romPath) gameUrl = doc.data().romPath;
+      }
+    }catch(e){}
+    window.EJS_player = '#game';
+    window.EJS_gameUrl = gameUrl;
+    window.EJS_pathtodata = '../emulatorjs/data/';
+    window.EJS_core = 'ngp';
+    const loaderScript = document.createElement('script');
+    loaderScript.src = '../emulatorjs/data/loader.js';
+    document.body.appendChild(loaderScript);
+    const pollId = setInterval(()=>{ if(injectFullscreenButton()) clearInterval(pollId); }, 300);
+    setTimeout(()=>clearInterval(pollId), 30000);
+  }
+
+  let fsBtn = null;
+  function injectFullscreenButton(){
+    const gameEl = document.getElementById('game');
+    if(!gameEl || !gameEl.querySelector('.ejs_canvas_parent')) return false;
+    if(fsBtn) return true;
+    fsBtn = document.createElement('button');
+    fsBtn.type = 'button';
+    fsBtn.textContent = 'Submit Score';
+    fsBtn.style.cssText = 'display:none; position:absolute; z-index:2147483647;'
+      + 'font:600 13.5px "IBM Plex Sans",system-ui,sans-serif; padding:10px 16px; border:none;'
+      + 'border-radius:8px; cursor:pointer; background:var(--accent); color:var(--accent-ink);'
+      + 'box-shadow:0 2px 10px rgba(0,0,0,.5); white-space:nowrap;';
+    gameEl.appendChild(fsBtn);
+    fsBtn.addEventListener('click', ()=>captureAndSubmit());
+    return true;
+  }
+
+  const NATIVE_ASPECT = 160 / 152;
+  function positionFsBtn(){
+    if(!fsBtn) return;
+    const gameEl = document.getElementById('game');
+    if(!gameEl) return;
+    const gameRect = gameEl.getBoundingClientRect();
+    if(!gameRect.width || !gameRect.height) return;
+    const visibleHeight = Math.min(gameRect.height, gameRect.width / NATIVE_ASPECT);
+    const visibleWidth = visibleHeight * NATIVE_ASPECT;
+    const offsetX = (gameRect.width - visibleWidth) / 2;
+    fsBtn.style.top = (visibleHeight + 12) + 'px';
+    fsBtn.style.left = (offsetX + visibleWidth / 2) + 'px';
+    fsBtn.style.right = 'auto';
+    fsBtn.style.transform = 'translateX(-50%)';
+  }
+
+  const btnMaximize = el('btn-maximize');
+  const playerPanel = el('player-panel');
+  let isMaximized = false;
+  function setMaximized(on){
+    isMaximized = on;
+    playerPanel.classList.toggle('maximized', on);
+    document.documentElement.classList.toggle('maximizing', on);
+    btnMaximize.innerHTML = on ? '&times;' : '&#10530;';
+    btnMaximize.title = on ? 'Exit full screen' : 'Full screen';
+    if(fsBtn) fsBtn.style.display = on ? 'block' : 'none';
+    btnSubmit.style.display = on ? 'none' : '';
+    msgEl.style.display = on ? 'none' : '';
+    if(window.EJS_emulator && typeof EJS_emulator.handleResize === 'function'){
+      requestAnimationFrame(()=>{ EJS_emulator.handleResize(); requestAnimationFrame(positionFsBtn); });
+    } else if(on){ requestAnimationFrame(positionFsBtn); }
+  }
+  btnMaximize.addEventListener('click', ()=>setMaximized(!isMaximized));
+  document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && isMaximized) setMaximized(false); });
+  window.addEventListener('resize', ()=>{ if(isMaximized) positionFsBtn(); });
+
+  // Same access-gate concept as the leaderboard page (bk/index.html's own access-gate comment) --
+  // while this game is devStatus 'coming-soon', only the site admin or its own assigned developer
+  // gets the real player; everyone else (signed in or not) sees a "not public yet" message instead
+  // of the sign-in prompt. gameData is fetched once, independent of loadEmulator()'s own later
+  // games/{slug} read (that one's lazy, only for romPath, and would run too late to gate on).
+  const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
+  let gameData = null;
+  const gameDocPromise = (window.NGPC_AUTH && NGPC_AUTH.db)
+    ? NGPC_AUTH.db.collection('games').doc('hgs').get()
+        .then(doc=>{ gameData = doc.exists ? doc.data() : {}; })
+        .catch(()=>{ gameData = {}; })
+    : Promise.resolve();
+  function isAuthorizedViewer(user){
+    if(!gameData || gameData.devStatus !== 'coming-soon') return true;
+    return !!user && (user.uid === ADMIN_UID || user.uid === gameData.developerUid);
+  }
+  function applyAuthState(user){
+    gameDocPromise.then(()=>{
+      if(!isAuthorizedViewer(user)){
+        gateEl.hidden = false;
+        gateEl.textContent = 'This game isn’t public yet — check back once it’s live on the main page.';
+        contentEl.hidden = true;
+        return;
+      }
+      gateEl.hidden = !!user;
+      gateEl.textContent = '🔒 Sign in (top right) to use the in-browser player.';
+      contentEl.hidden = !user;
+      if(user) loadEmulator();
+    });
+  }
+  if(window.NGPC_AUTH){ NGPC_AUTH.onAuthChange(applyAuthState); } else { applyAuthState(null); }
+
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+  function showMsg(cls, text){
+    msgEl.innerHTML = '<div class="msg '+cls+'">'+escapeHtml(text)+'</div>';
+    if(fsBtn) fsBtn.textContent = text.length > 34 ? text.slice(0, 31)+'…' : text;
+  }
+
+  function lastPathSegment(text){
+    const parts = String(text||'').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length-1] : '';
+  }
+
+  const scanCanvas = document.createElement('canvas');
+  const scanCtx = scanCanvas.getContext('2d', {willReadFrequently:true});
+
+  let barcodeDetector;
+  function getBarcodeDetector(){
+    if(barcodeDetector !== undefined) return barcodeDetector;
+    if(!('BarcodeDetector' in window)){ barcodeDetector = null; return null; }
+    try{ barcodeDetector = new window.BarcodeDetector({formats:['qr_code']}); }
+    catch(e){ barcodeDetector = null; }
+    return barcodeDetector;
+  }
+
+  async function decodeViaZbarWasm(source, w0, h0){
+    if(!window.zbarWasm || !w0 || !h0) return null;
+    const scale = Math.min(1, 1000/Math.max(w0,h0));
+    const w = Math.round(w0*scale), h = Math.round(h0*scale);
+    scanCanvas.width = w; scanCanvas.height = h;
+    scanCtx.drawImage(source, 0, 0, w, h);
+    try{
+      const symbols = await window.zbarWasm.scanImageData(scanCtx.getImageData(0, 0, w, h));
+      if(symbols && symbols.length) return symbols[0].decode();
+    }catch(e){}
+    return null;
+  }
+
+  function jsqrFallback(source, w0, h0, scales){
+    if(!window.jsQR || !w0 || !h0) return null;
+    for(const target of scales){
+      const scale = Math.min(1, target/Math.max(w0,h0));
+      const w = Math.round(w0*scale), h = Math.round(h0*scale);
+      scanCanvas.width = w; scanCanvas.height = h;
+      scanCtx.drawImage(source, 0, 0, w, h);
+      const frame = scanCtx.getImageData(0, 0, w, h);
+      const code = window.jsQR(frame.data, w, h, {inversionAttempts:'attemptBoth'});
+      if(code && code.data) return code.data;
+    }
+    return null;
+  }
+
+  async function decodeSource(source, w0, h0, scales){
+    const viaZbar = await decodeViaZbarWasm(source, w0, h0);
+    if(viaZbar) return viaZbar;
+    const bd = getBarcodeDetector();
+    if(bd){
+      try{
+        const results = await bd.detect(source);
+        if(results && results.length && results[0].rawValue) return results[0].rawValue;
+      }catch(e){}
+    }
+    return jsqrFallback(source, w0, h0, scales);
+  }
+
+  function grabGameFrame(){
+    const canvas = window.EJS_emulator && EJS_emulator.canvas;
+    if(!canvas || !canvas.width || !canvas.height) return Promise.resolve(null);
+    return new Promise(resolve=>{
+      requestAnimationFrame(()=>{
+        const visH = Math.min(canvas.height, canvas.width / NATIVE_ASPECT);
+        const visW = Math.min(canvas.width, canvas.height * NATIVE_ASPECT);
+        const out = document.createElement('canvas');
+        out.width = visW; out.height = visH;
+        out.getContext('2d', {alpha:false}).drawImage(canvas, 0, 0, visW, visH, 0, 0, visW, visH);
+        resolve(out);
+      });
+    });
+  }
+
+  let captureBusy = false;
+  function setBusy(busy){
+    captureBusy = busy;
+    btnSubmit.disabled = busy;
+    if(fsBtn) fsBtn.disabled = busy;
+  }
+
+  async function captureAndSubmit(){
+    if(captureBusy) return;
+    if(!window.EJS_emulator || !EJS_emulator.canvas){
+      showMsg('err', 'The game isn’t ready yet — make sure it’s running, then try again.');
+      return;
+    }
+    setBusy(true);
+    showMsg('info', 'Looking for a QR code…');
+    try{
+      const frame = await grabGameFrame();
+      if(!frame) throw new Error('screenshot was empty');
+      const w = frame.width, h = frame.height;
+      const value = await decodeSource(frame, w, h, [700, 1100, 1500, 2000]);
+      if(!value){
+        showMsg('err', 'No QR code found on screen — make sure the in-game QR code is fully visible and try again.');
+        setBusy(false);
+        return;
+      }
+      const payload = lastPathSegment(value).toUpperCase();
+      const routes = await getGameRoutes();
+      const sortedCodes = Object.keys(routes).sort((a,b)=>b.length-a.length);
+      const code = sortedCodes.find(c=>payload.startsWith(c)) || null;
+      const slug = code ? routes[code] : null;
+      if(!slug){
+        showMsg('err', 'Unrecognized game code — that leaderboard might not be set up yet.');
+        setBusy(false);
+        return;
+      }
+      showMsg('ok', 'Found it — opening the leaderboard…');
+      location.href = '/'+slug+'/?v='+Date.now()+'&src=capture#'+payload;
+    }catch(e){
+      showMsg('err', 'Capture failed: '+escapeHtml(e.message||'unknown error'));
+      setBusy(false);
+    }
+  }
+
+  btnSubmit.addEventListener('click', captureAndSubmit);
+})();
+</script>
+</body>
+</html>
