@@ -401,7 +401,27 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data);
+      // Don't Die Mr Robot: game, difficulty (1-3, Easy/Fair/Hard -- scores only comparable within
+      // one difficulty, see ddmr/index.html's own mode toggle), initials, score, source,
+      // submittedAt, required uid/username. The submission's own QR also carries a 4-hex CRC16
+      // checksum (over difficulty+initials+score, poly 0x1021, init 0xFFFF) -- verified client-side
+      // then discarded per the developer's own notes ("CRC field to be discarded"), so it's
+      // deliberately NOT in this doc shape at all. score bound is 65535 per the submission's own
+      // explicit "0-65535" spec, tighter than the 5-digit field width (99999) would otherwise imply.
+      function isDonTDieMrRobotScore(d) {
+        return d.game == 'DDMR'
+          && d.keys().hasOnly(['game', 'difficulty', 'initials', 'score', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.difficulty is int && d.difficulty >= 1 && d.difficulty <= 3
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.score is int && d.score >= 0 && d.score <= 65535
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
+      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data);
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
