@@ -1,13 +1,24 @@
 name: Scaffold approved games
 
-# Polls every 15 min for games/{slug} docs that were approved (via /admin/'s browser Approve
-# button, which only writes the Firestore doc -- see scaffold-approved-games.js's own comment)
-# but don't have a <slug>/index.html page yet, generates their leaderboard + play pages, and
-# commits them straight to main. Lets a submission get approved and scaffolded end-to-end from a
-# phone, with no computer needed. Also runnable on demand from the Actions tab.
+# Polls for games/{slug} docs that were approved (via /admin/'s browser Approve button, which only
+# writes the Firestore doc -- see scaffold-approved-games.js's own comment) but don't have a
+# <slug>/index.html page yet, generates their leaderboard + play pages, and commits them straight
+# to main. Lets a submission get approved and scaffolded end-to-end from a phone, with no computer
+# needed. Also runnable on demand from the Actions tab.
+#
+# The `schedule` trigger below has never actually fired a single run since this workflow was
+# added (confirmed via the Actions API after ~24h with zero event:"schedule" runs, despite the
+# workflow showing state:"active") -- a real, unexplained GitHub-side issue, not a propagation
+# delay. `push` is added as a reliable backstop: this repo gets pushed to often enough (confirmed:
+# every one of those 24 hours' worth of commits DID trigger a run, just a "no matching trigger"
+# no-op since push wasn't listed here before) that a scaffold check piggybacking on every push
+# closes the gap in practice, even though it's not purely time-based for a phone-only approval
+# with zero commits happening. Left `schedule` in place in case it ever starts working on its own.
 on:
   schedule:
     - cron: '*/15 * * * *'
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
