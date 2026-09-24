@@ -469,11 +469,15 @@
       ribbon.className = 'corner-badge new';
       ribbon.textContent = 'NEW';
       art.appendChild(ribbon);
+      // applySort()'s "Recent" comparator reads this to rank NEW above UPDATED above everything
+      // else, on top of the pinned tiebreak -- same ribbon this ribbon shows, not a second signal.
+      a.dataset.badge = 'new';
     } else if(data.updatedUntil && data.updatedUntil > now){
       const ribbon = document.createElement('div');
       ribbon.className = 'corner-badge updated';
       ribbon.textContent = 'UPDATED';
       art.appendChild(ribbon);
+      a.dataset.badge = 'updated';
     }
 
     const body = document.createElement('div');
@@ -542,6 +546,12 @@
           const diff = new Date(b.dataset.pinnedAt) - new Date(a.dataset.pinnedAt);
           if(diff !== 0) return diff;
         }
+        // Below the pinned tiles: NEW-ribboned games first, then UPDATED-ribboned, then everything
+        // else -- same ribbon buildTile() already shows, just also used to rank here. Ties within
+        // a tier (e.g. two NEW games) fall through to the normal added-date order below.
+        const badgeRank = {new: 2, updated: 1};
+        const aBadge = badgeRank[a.dataset.badge] || 0, bBadge = badgeRank[b.dataset.badge] || 0;
+        if(aBadge !== bBadge) return bBadge - aBadge;
       }
       if(mode === 'active' && counts){
         const diff = (counts[b.dataset.game]||0) - (counts[a.dataset.game]||0);
