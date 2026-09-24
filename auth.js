@@ -614,14 +614,15 @@ window.NGPC_AUTH = (function(){
   // its score doc has no `score` field at all (ticks/course instead -- see index.html's own
   // recent-activity ticker, which hit this same gap first). Farkle has a `score` field, but its
   // own leaderboard (farkle/index.html) ranks and headlines `rounds` instead -- shown here too,
-  // so a Farkle run's "main" number matches what its own board actually shows for it. Sudoku has
-  // no `score` field either -- it ranks by `time` (ascending), so that's its headline value; a
-  // missed case here is exactly what showed a bare "-" for every Sudoku row on the account page
-  // before this existed.
+  // so a Farkle run's "main" number matches what its own board actually shows for it. Sudoku and
+  // Minesweeper both have no `score` field either -- they rank by `time` (ascending), so that's
+  // their headline value; a missed case here is exactly what showed a bare "-" for every Sudoku
+  // (and later Minesweeper) row on the account page and homepage ticker before this existed.
   function scoreValueDisplay(data){
     if(data.game === 'OV') return data.ticks!=null ? formatOvTicks(data.ticks) : '-';
     if(data.game === 'FK') return data.rounds!=null ? (data.rounds+' rounds') : '-';
     if(data.game === 'SD') return data.time!=null ? formatSdTime(data.time) : '-';
+    if(data.game === 'MS') return data.time!=null ? formatSdTime(data.time) : '-';
     return data.score!=null ? data.score : '-';
   }
 
