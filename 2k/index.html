@@ -43,7 +43,7 @@
   .created-by{ font-size:11px; color:var(--dim); }
   .created-by a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .created-by a:hover{ color:var(--accent2); }
-  .rom-link, .play-link{
+  .rom-link, .play-link, .admin-link{
     display:inline-flex; align-items:center; gap:5px; width:auto;
     font-weight:600; text-decoration:underline; text-underline-offset:2px;
   }
@@ -52,6 +52,11 @@
   .play-link[hidden]{ display:none; }
   .rom-link{ color:var(--dim); font-size:11px; }
   .rom-link:hover{ color:var(--accent2); }
+  /* Only ever shown to the site admin or this game's own assigned developer -- see
+     NGPC_AUTH.isGameManager(). Quick jump to this game's admin panel from its own public page. */
+  .admin-link{ color:var(--dim); font-size:11px; margin-top:2px; }
+  .admin-link:hover{ color:var(--accent2); }
+  .admin-link[hidden]{ display:none; }
 
   /* decorative header art -- the same real title-screen capture the main page's own tile uses,
      not a redraw of it. */
@@ -157,6 +162,7 @@
         <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
         <a href="/play/2048/2048.ngp" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
         <a href="/play/2048/" class="play-link" id="play-link" hidden>&#127918; Play 2048 in Browser</a>
+        <a href="/admin/game/?slug=2k" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
     </div>
   </header>
@@ -601,12 +607,22 @@
   // The in-browser player is only offered to a signed-in visitor -- anonymous QR submission
   // stays exactly as-is either way, this is purely about who sees the link.
   if(window.NGPC_AUTH){
+    // Only ever shown to the site admin or this game's own assigned developer -- reads whichever
+    // of currentUser/gameData has loaded so far, since the auth state and the games/2k doc fetch
+    // below are two independent async paths that can resolve in either order.
+    var currentUser = null;
+    function updateAdminLink(){
+      var adminLinkEl = el('admin-link');
+      if(adminLinkEl) adminLinkEl.hidden = !NGPC_AUTH.isGameManager(currentUser, gameData);
+    }
     NGPC_AUTH.onAuthChange((user)=>{
+      currentUser = user;
       el('play-link').hidden = !user;
       // Members only -- gates the whole scan mechanism, not just the final submit step.
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();
+      updateAdminLink();
     });
     el('scan-signin-btn').addEventListener('click', ()=>NGPC_AUTH.openSignInModal('signin'));
 
@@ -621,6 +637,7 @@
         if(!doc.exists) return;
         var data = doc.data();
         gameData = data;
+        updateAdminLink();
         if(romLinkEl && data.romPath) romLinkEl.href = data.romPath;
         var headerArtEl = el('header-art');
         if(headerArtEl && data.titleImage) headerArtEl.src = data.titleImage;

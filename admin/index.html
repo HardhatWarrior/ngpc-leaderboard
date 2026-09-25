@@ -284,7 +284,6 @@
 <script>
 (function(){
   "use strict";
-  const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
   const el = (id)=>document.getElementById(id);
   const deniedEl = el('denied');
   const contentEl = el('content');
@@ -368,6 +367,7 @@
         approved: d.approved === undefined ? true : !!d.approved,
         wantsDev: !!d.wantsDev,
         isDeveloper: !!d.isDeveloper,
+        admin: !!d.admin,
         disabled: !!d.disabled,
         avatar: Array.isArray(d.avatar) ? d.avatar : null,
         email: null,
@@ -395,12 +395,14 @@
     const disabled = users.filter(u=>u.disabled).length;
     const wantsDev = users.filter(u=>u.wantsDev).length;
     const developers = users.filter(u=>u.isDeveloper).length;
+    const admins = users.filter(u=>u.admin).length + 1; // +1: the hardcoded owner, never in this list's own `admin` field
     statsEl.innerHTML = [
       ['Total players', users.length],
       ['Pending approval', pending],
       ['Disabled', disabled],
       ['Developers', developers],
       ['Want to dev', wantsDev],
+      ['Admins', admins],
     ].map(([label,n])=>'<div class="stat-tile"><div class="n tnum">'+n+'</div><div class="l">'+label+'</div></div>').join('');
   }
 
@@ -416,7 +418,13 @@
       + (u.isDeveloper
           ? '<button type="button" class="badge is-developer" data-action="demote-dev" data-uid="'+u.uid+'" title="Can submit a game via /dev/submit/ -- click to remove">Developer &times;</button>'
           : '<button type="button" class="badge promote-dev" data-action="promote-dev" data-uid="'+u.uid+'" title="Let this account submit a game via /dev/submit/">+ Developer</button>')
-      + (u.wantsDev ? '<button type="button" class="badge wants-dev" data-action="clear-dev" data-uid="'+u.uid+'" title="Checked &quot;Developer&quot; at signup -- click to clear (e.g. if mis-clicked)">Wants Dev &times;</button>' : '');
+      + (u.wantsDev ? '<button type="button" class="badge wants-dev" data-action="clear-dev" data-uid="'+u.uid+'" title="Checked &quot;Developer&quot; at signup -- click to clear (e.g. if mis-clicked)">Wants Dev &times;</button>' : '')
+      // Same full site-admin privilege the hardcoded owner account always has (see
+      // NGPC_AUTH.isSiteAdmin()) -- the owner's own row never shows this toggle at all, since
+      // their access never depends on this flag either way.
+      + (u.uid === NGPC_AUTH.ADMIN_UID ? '' : (u.admin
+          ? '<button type="button" class="badge is-developer" data-action="demote-admin" data-uid="'+u.uid+'" title="Full site-admin access -- click to remove">Admin &times;</button>'
+          : '<button type="button" class="badge promote-dev" data-action="promote-admin" data-uid="'+u.uid+'" title="Grant full site-admin access, same as the site owner">+ Admin</button>'));
   }
 
   function renderRows(users, db){
@@ -467,6 +475,20 @@
         try{
           await db.collection('users').doc(uid).update({isDeveloper: next});
           u.isDeveloper = next;
+          if(row) row.querySelector('td:nth-child(4)').innerHTML = renderStatusCell(u);
+        }catch(err){
+          statusEl.innerHTML = '<div class="msg err">Update failed: '+escapeHtml(err.message||'unknown')+'</div>';
+          btn.disabled = false;
+        }
+        return;
+      }
+      if(action === 'demote-admin' || action === 'promote-admin'){
+        const next = action === 'promote-admin';
+        if(next && !confirm('Grant full site-admin access to this account? They\'ll be able to do everything you can here, including granting admin to others.')) return;
+        btn.disabled = true;
+        try{
+          await db.collection('users').doc(uid).update({admin: next});
+          u.admin = next;
           if(row) row.querySelector('td:nth-child(4)').innerHTML = renderStatusCell(u);
         }catch(err){
           statusEl.innerHTML = '<div class="msg err">Update failed: '+escapeHtml(err.message||'unknown')+'</div>';
@@ -561,14 +583,19 @@
       return '<button type="button" class="badge '+(active?'pending':'promote-dev')+'" data-action="toggle-new" data-slug="'+encodeURIComponent(g.slug)+'" style="cursor:pointer;border:none">'
         + (active ? 'NEW &times;' : '+ New') + '</button>';
     }
-    // Missing `active` means active (every game predates this toggle) -- see games/{slug}'s own
-    // renderEditor() comment on admin/game/. Toggling here writes straight to Firestore the same
-    // way toggle-new already does; the actual hide-from-homepage logic lives in index.html's
-    // loadGames(), which filters games.active === false out of its render entirely.
+    // A doc with no `visibility` yet falls back to the old `active` boolean this field replaced
+    // -- see admin/game/'s own renderEditor() comment. Clicking cycles active -> inactive ->
+    // hidden -> active; the actual on-page effect of each state (unclickable tile vs. no tile at
+    // all) lives in index.html's buildTile()/loadGames().
+    function gameVisibility(g){
+      return g.visibility || (g.active === false ? 'hidden' : 'active');
+    }
+    const VISIBILITY_NEXT = {active:'inactive', inactive:'hidden', hidden:'active'};
+    const VISIBILITY_LABEL = {active:'Active', inactive:'Inactive', hidden:'Hidden'};
     function activeCell(g){
-      const isActive = g.active !== false;
-      return '<button type="button" class="badge '+(isActive?'promote-dev':'pending')+'" data-action="toggle-active" data-slug="'+encodeURIComponent(g.slug)+'" style="cursor:pointer;border:none">'
-        + (isActive ? 'Active' : 'Inactive') + '</button>';
+      const vis = gameVisibility(g);
+      return '<button type="button" class="badge '+(vis==='active'?'promote-dev':'pending')+'" data-action="toggle-active" data-slug="'+encodeURIComponent(g.slug)+'" style="cursor:pointer;border:none">'
+        + VISIBILITY_LABEL[vis] + '</button>';
     }
     // Overrides "Most Recent" sort on the main page entirely -- see index.html's own applySort()
     // comment. Same admin-only trust level as this toggle already has, since it's only reachable
@@ -618,11 +645,11 @@
       if(activeBtn){
         const slug = decodeURIComponent(activeBtn.dataset.slug);
         const g = games.find(x=>x.slug===slug);
-        const next = !(g.active !== false);
+        const next = VISIBILITY_NEXT[gameVisibility(g)];
         activeBtn.disabled = true;
         try{
-          await db.collection('games').doc(slug).update({active: next});
-          g.active = next;
+          await db.collection('games').doc(slug).update({visibility: next});
+          g.visibility = next;
           activeBtn.outerHTML = activeCell(g);
         }catch(err){
           gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t update active state: '+escapeHtml(err.message||'unknown error')+'</div>';
@@ -984,7 +1011,7 @@
     }
     await NGPC_AUTH.authReady;
     const user = NGPC_AUTH.currentUser;
-    if(!user || user.uid !== ADMIN_UID){
+    if(!NGPC_AUTH.isSiteAdmin(user)){
       deniedEl.hidden = false;
       deniedEl.textContent = 'Not authorized. Sign in as the site admin to view this page.';
       return;

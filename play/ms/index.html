@@ -191,7 +191,6 @@
   // gets the real player; everyone else (signed in or not) sees a "not public yet" message instead
   // of the sign-in prompt. gameData is fetched once, independent of loadEmulator()'s own later
   // games/{slug} read (that one's lazy, only for romPath, and would run too late to gate on).
-  const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
   let gameData = null;
   const gameDocPromise = (window.NGPC_AUTH && NGPC_AUTH.db)
     ? NGPC_AUTH.db.collection('games').doc('ms').get()
@@ -200,7 +199,7 @@
     : Promise.resolve();
   function isAuthorizedViewer(user){
     if(!gameData || gameData.devStatus !== 'coming-soon') return true;
-    return !!user && (user.uid === ADMIN_UID || user.uid === gameData.developerUid);
+    return NGPC_AUTH.isGameManager(user, gameData);
   }
   function applyAuthState(user){
     gameDocPromise.then(()=>{

@@ -973,11 +973,10 @@
     }
   }
 
-  const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
   async function loadAdminLinks(user){
     const adminLinksEl = el('admin-links');
     const links = [];
-    if(user.uid === ADMIN_UID){
+    if(window.NGPC_AUTH && NGPC_AUTH.isSiteAdmin(user)){
       links.push('<a href="/admin/">Site Admin</a>');
     }
     try{

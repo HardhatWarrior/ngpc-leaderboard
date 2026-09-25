@@ -171,12 +171,16 @@
     </div>
     <div id="status-msg"></div>
 
-    <!-- Independent of devStatus above -- turns the tile off the main page grid entirely (still
-         playable/manageable here, just not listed) instead of only changing its banner. Same
-         trust level as devStatus itself; see firestore.rules' games/{slug} comment. -->
+    <!-- Independent of devStatus above. Active is the normal state; Inactive keeps the tile in
+         the grid but unclickable (no href), the same treatment a "coming soon" tile gets, for a
+         published game that's temporarily paused; Hidden pulls the tile off the grid entirely
+         (still playable/manageable here, just not listed) -- this is what "Inactive" used to mean
+         before this three-way split. Same trust level as devStatus itself; see firestore.rules'
+         games/{slug} comment. -->
     <div class="status-row" id="active-row" style="margin-top:10px">
-      <button type="button" class="status-btn" data-active="true">Active<span class="desc">Shown on the main page</span></button>
-      <button type="button" class="status-btn" data-active="false">Inactive<span class="desc">Hidden from the main page grid</span></button>
+      <button type="button" class="status-btn" data-active="active">Active<span class="desc">Shown on the main page</span></button>
+      <button type="button" class="status-btn" data-active="inactive">Inactive<span class="desc">Shown but unclickable</span></button>
+      <button type="button" class="status-btn" data-active="hidden">Hidden<span class="desc">Removed from the main page grid</span></button>
     </div>
     <div id="active-msg"></div>
 
@@ -1090,30 +1094,36 @@
     el('rom-timestamp').textContent = fmtAge(data.romUpdatedAt);
     updatedBadgeRow.hidden = !(data.updatedUntil && data.updatedUntil > Date.now());
 
-    // Active/inactive: missing field means active (every game predates this toggle), so it never
-    // silently vanishes a pre-existing game the first time this page loads for it.
-    let currentActive = data.active !== false;
+    // Active/Inactive/Hidden, stored as the string `visibility` (replaces the old boolean
+    // `active` field, which only distinguished shown-vs-gone). A doc with no `visibility` yet
+    // falls back to the old field so a pre-existing game doesn't silently change state the first
+    // time this page loads for it: `active === false` becomes 'hidden' (that WAS the whole
+    // behavior of "Inactive" before this split), anything else becomes 'active'.
+    let currentVisibility = data.visibility || (data.active === false ? 'hidden' : 'active');
     const activeRow = el('active-row');
     function paintActiveButtons(){
       activeRow.querySelectorAll('.status-btn').forEach(btn=>{
-        btn.classList.toggle('active', (btn.dataset.active === 'true') === currentActive);
+        btn.classList.toggle('active', btn.dataset.active === currentVisibility);
       });
     }
     paintActiveButtons();
     const activeMsg = el('active-msg');
+    const activeMessages = {
+      active: '<div class="msg ok">Saved — this game is shown on the main page again.</div>',
+      inactive: '<div class="msg ok">Saved — this game’s tile stays on the main page but is unclickable, the same as a "coming soon" tile. Everything else (leaderboard, ROM, scores) is untouched.</div>',
+      hidden: '<div class="msg ok">Saved — this game is removed from the main page grid entirely. Everything else (leaderboard, ROM, scores) is untouched.</div>',
+    };
     activeRow.querySelectorAll('.status-btn').forEach(btn=>{
       btn.addEventListener('click', async ()=>{
-        const next = btn.dataset.active === 'true';
-        if(next === currentActive) return;
+        const next = btn.dataset.active;
+        if(next === currentVisibility) return;
         activeMsg.innerHTML = '';
         btn.disabled = true;
         try{
-          await docRef.update({active: next});
-          currentActive = next;
+          await docRef.update({visibility: next});
+          currentVisibility = next;
           paintActiveButtons();
-          activeMsg.innerHTML = next
-            ? '<div class="msg ok">Saved — this game is shown on the main page again.</div>'
-            : '<div class="msg ok">Saved — this game is hidden from the main page grid. Everything else (leaderboard, ROM, scores) is untouched.</div>';
+          activeMsg.innerHTML = activeMessages[next] || '';
         }catch(e){
           activeMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
         }finally{
@@ -1411,7 +1421,7 @@
       deniedEl.textContent = 'Sign in to manage a game.';
       return;
     }
-    const isAdmin = user.uid === ADMIN_UID;
+    const isAdmin = NGPC_AUTH.isSiteAdmin(user);
     const params = new URLSearchParams(location.search);
     const slug = params.get('slug');
     if(slug){

@@ -16,11 +16,19 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Single hardcoded admin uid (hardhatwarrior) -- there is exactly one site owner and no
-    // multi-admin need, so a role field/collection would be pure overhead. Used to gate the
-    // account-approval toggle and reading anyone else's private/ subcollection (recovery email).
+    // The hardcoded site owner (hardhatwarrior) is ALWAYS an admin, full stop -- that part never
+    // depends on any Firestore data. On top of that, the owner can grant the same access to
+    // another account via users/{uid}.admin (see that collection's own allow update below, and
+    // admin/index.html's promote-admin/demote-admin toggle) -- this get() only ever reads the
+    // CALLER's own doc, keyed off request.auth (never resource.data), so it's still a fixed
+    // true/false for a given caller across every document in a request, same as the plain uid
+    // check used to be -- see scores/{scoreId}'s own comment on why that property is required for
+    // isAdmin() to keep working inside a list() query's rule, not just single-document reads.
     function isAdmin() {
-      return request.auth != null && request.auth.uid == 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
+      return request.auth != null && (
+        request.auth.uid == 'L44BFbmiNkhi2vvLdrPUIxkvmfs2'
+        || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('admin', false) == true
+      );
     }
 
     // ---- username/password auth (see auth.js) ----
@@ -60,7 +68,8 @@ service cloud.firestore {
           && d.approved is bool
           && (!('avatar' in d) || (d.avatar is list && d.avatar.size() == 1024))
           && (!('wantsDev' in d) || d.wantsDev is bool)
-          && (!('isDeveloper' in d) || d.isDeveloper is bool);
+          && (!('isDeveloper' in d) || d.isDeveloper is bool)
+          && (!('admin' in d) || d.admin is bool);
       }
 
       // New accounts always start unapproved (approved:false) -- nobody can self-approve at
@@ -81,22 +90,26 @@ service cloud.firestore {
         && isWellFormedProfile(request.resource.data);
 
       // Two distinct update paths, kept mutually exclusive by field scope:
-      //  - the owner can change username/avatar (account page) but never their own `approved` or
-      //    `isDeveloper` bits
-      //  - the admin can flip `approved`/`wantsDev`/`isDeveloper` on any account, never touch
-      //    anything else about it
+      //  - the owner can change username/avatar (account page) but never their own `approved`,
+      //    `isDeveloper`, or `admin` bits
+      //  - the admin can flip `approved`/`wantsDev`/`isDeveloper`/`admin` on any account, never
+      //    touch anything else about it. `admin` is the same site-wide privilege isAdmin() grants
+      //    the hardcoded owner uid, just extendable to another account by the owner (or any other
+      //    admin) -- see admin/index.html's promote-admin/demote-admin toggle.
       allow update: if request.auth != null && (
         (request.auth.uid == uid
-          && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved', 'wantsDev', 'isDeveloper'])
+          && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved', 'wantsDev', 'isDeveloper', 'admin'])
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.approved == resource.data.approved
           && request.resource.data.get('isDeveloper', false) == resource.data.get('isDeveloper', false)
+          && request.resource.data.get('admin', false) == resource.data.get('admin', false)
           && isWellFormedProfile(request.resource.data))
         || (isAdmin()
-          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved', 'wantsDev', 'isDeveloper'])
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved', 'wantsDev', 'isDeveloper', 'admin'])
           && request.resource.data.approved is bool
           && (!('wantsDev' in request.resource.data) || request.resource.data.wantsDev is bool)
-          && (!('isDeveloper' in request.resource.data) || request.resource.data.isDeveloper is bool))
+          && (!('isDeveloper' in request.resource.data) || request.resource.data.isDeveloper is bool)
+          && (!('admin' in request.resource.data) || request.resource.data.admin is bool))
       );
 
       allow delete: if false;
@@ -523,18 +536,22 @@ service cloud.firestore {
           // developer describing their own game is not an identity change. siteUrl is
           // scheme-restricted to http(s) specifically so this field can never hold a
           // javascript:/data: URI that a leaderboard page would otherwise render straight into an
-          // href. active -- the developer's own on/off switch for their game's tile on the main
-          // page (index.html's renderGrid() skips any game with active === false); same trust
-          // level as devStatus itself, which already controls that tile's banner. titleImage*/
-          // extraScreenshot*UpdatedAt are the companion timestamps admin/game/index.html stamps
-          // alongside each art upload, purely informational (so a developer can see how stale
-          // their own screenshots are) -- never trusted for anything else.
+          // href. visibility -- the developer's own on/off switch for their game's tile on the
+          // main page: 'active' (normal), 'inactive' (tile stays listed but unclickable, same
+          // treatment as a coming-soon tile), or 'hidden' (index.html's renderGrid() skips it
+          // entirely) -- same trust level as devStatus itself, which already controls that tile's
+          // banner. Replaces the older boolean `active` field (still readable on old docs as a
+          // fallback -- see index.html's own loadGames()/buildTile() -- but no longer written).
+          // titleImage*/extraScreenshot*UpdatedAt are the companion timestamps
+          // admin/game/index.html stamps alongside each art upload, purely informational (so a
+          // developer can see how stale their own screenshots are) -- never trusted for anything
+          // else.
           || (isAssignedDev(resource.data)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'active'])
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'visibility'])
               && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final']
               && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 300))
               && (!('siteUrl' in request.resource.data) || (request.resource.data.siteUrl is string && (request.resource.data.siteUrl == '' || request.resource.data.siteUrl.matches('^https?://.+'))))
-              && (!('active' in request.resource.data) || request.resource.data.active is bool)
+              && (!('visibility' in request.resource.data) || request.resource.data.visibility in ['active', 'inactive', 'hidden'])
               && (!('titleImageUpdatedAt' in request.resource.data) || request.resource.data.titleImageUpdatedAt is int)
               && (!('extraScreenshot1UpdatedAt' in request.resource.data) || request.resource.data.extraScreenshot1UpdatedAt is int)
               && (!('extraScreenshot2UpdatedAt' in request.resource.data) || request.resource.data.extraScreenshot2UpdatedAt is int))

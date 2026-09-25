@@ -36,12 +36,17 @@
   .created-by{ font-size:11px; color:var(--dim); }
   .created-by a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .created-by a:hover{ color:var(--accent2); }
-  .rom-link, .play-link{ display:inline-flex; align-items:center; gap:5px; width:auto; font-weight:600; text-decoration:underline; text-underline-offset:2px; }
+  .rom-link, .play-link, .admin-link{ display:inline-flex; align-items:center; gap:5px; width:auto; font-weight:600; text-decoration:underline; text-underline-offset:2px; }
   .play-link{ color:var(--accent2); font-size:11.5px; margin-top:4px; }
   .play-link:hover{ color:var(--cream); }
   .play-link[hidden]{ display:none; }
   .rom-link{ color:var(--dim); font-size:11px; }
   .rom-link:hover{ color:var(--accent2); }
+  /* Only ever shown to the site admin or this game's own assigned developer -- see
+     NGPC_AUTH.isGameManager(). Quick jump to this game's admin panel from its own public page. */
+  .admin-link{ color:var(--dim); font-size:11px; margin-top:2px; }
+  .admin-link:hover{ color:var(--accent2); }
+  .admin-link[hidden]{ display:none; }
   /* No max-width here (unlike the site's original hand-built pages) -- this used to be a
      percentage safety cap against .header-row's own (wide) box, back when header-art sat
      directly inside it. Now that it's nested one level deeper in .art-strip, the SAME 38% instead
@@ -162,6 +167,7 @@
         <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
         <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
         <a href="/play/bk/" class="play-link" id="play-link" hidden>&#127918; Play Breakout in Browser</a>
+        <a href="/admin/game/?slug=bk" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
     </div>
   </header>
@@ -223,7 +229,6 @@
   "use strict";
   const QR_GAME_CODE = 'BK';
   const GAME_SLUG = 'bk';
-  const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
   const SUBMIT_SOURCE = new URLSearchParams(location.search).get('src') === 'capture' ? 'capture' : 'qr';
 
   const el = (id)=>document.getElementById(id);
@@ -611,7 +616,7 @@
   let gateInitialized = false;
   function isAuthorizedViewer(user){
     if(!gameData || gameData.devStatus !== 'coming-soon') return true;
-    return !!user && (user.uid === ADMIN_UID || user.uid === gameData.developerUid);
+    return NGPC_AUTH.isGameManager(user, gameData);
   }
   function applyAccessGate(user){
     const authorized = isAuthorizedViewer(user);
@@ -655,7 +660,11 @@
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();
-      gameDocPromise.then(()=>applyAccessGate(user));
+      gameDocPromise.then(()=>{
+        applyAccessGate(user);
+        var adminLinkEl = el('admin-link');
+        if(adminLinkEl) adminLinkEl.hidden = !NGPC_AUTH.isGameManager(user, gameData);
+      });
     });
     el('scan-signin-btn').addEventListener('click', ()=>NGPC_AUTH.openSignInModal('signin'));
   } else {

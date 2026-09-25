@@ -269,12 +269,17 @@ function leaderboardTemplate(sub, plan, slug) {
   .created-by{ font-size:11px; color:var(--dim); }
   .created-by a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .created-by a:hover{ color:var(--accent2); }
-  .rom-link, .play-link{ display:inline-flex; align-items:center; gap:5px; width:auto; font-weight:600; text-decoration:underline; text-underline-offset:2px; }
+  .rom-link, .play-link, .admin-link{ display:inline-flex; align-items:center; gap:5px; width:auto; font-weight:600; text-decoration:underline; text-underline-offset:2px; }
   .play-link{ color:var(--accent2); font-size:11.5px; margin-top:4px; }
   .play-link:hover{ color:var(--cream); }
   .play-link[hidden]{ display:none; }
   .rom-link{ color:var(--dim); font-size:11px; }
   .rom-link:hover{ color:var(--accent2); }
+  /* Only ever shown to the site admin or this game's own assigned developer -- see
+     NGPC_AUTH.isGameManager(). Quick jump to this game's admin panel from its own public page. */
+  .admin-link{ color:var(--dim); font-size:11px; margin-top:2px; }
+  .admin-link:hover{ color:var(--accent2); }
+  .admin-link[hidden]{ display:none; }
   /* No max-width on either image below -- a percentage cap here resolves against .art-strip's
      OWN box (its nearest sized ancestor), not .header-row's wider one, so on a narrow viewport it
      collapses the image to a small fraction of 130px instead of just capping it. The @media rule
@@ -379,6 +384,7 @@ function leaderboardTemplate(sub, plan, slug) {
         <div class="created-by">Created by: <a href="/user/?u=${sub.submitterUsername || ''}">@${(sub.submitterUsername || '').toUpperCase()}</a></div>
         <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
         <a href="/play/${slug}/" class="play-link" id="play-link" hidden>&#127918; Play ${title} in Browser</a>
+        <a href="/admin/game/?slug=${slug}" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
     </div>
   </header>
@@ -440,7 +446,6 @@ function leaderboardTemplate(sub, plan, slug) {
   "use strict";
   const QR_GAME_CODE = '${code}';
   const GAME_SLUG = '${slug}';
-  const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
   const SUBMIT_SOURCE = new URLSearchParams(location.search).get('src') === 'capture' ? 'capture' : 'qr';
 
   const el = (id)=>document.getElementById(id);
@@ -746,7 +751,7 @@ ${scorecardFormulaNote}${scorecardBlock}
   let gateInitialized = false;
   function isAuthorizedViewer(user){
     if(!gameData || gameData.devStatus !== 'coming-soon') return true;
-    return !!user && (user.uid === ADMIN_UID || user.uid === gameData.developerUid);
+    return NGPC_AUTH.isGameManager(user, gameData);
   }
   function applyAccessGate(user){
     const authorized = isAuthorizedViewer(user);
@@ -790,7 +795,11 @@ ${scorecardFormulaNote}${scorecardBlock}
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();
-      gameDocPromise.then(()=>applyAccessGate(user));
+      gameDocPromise.then(()=>{
+        applyAccessGate(user);
+        var adminLinkEl = el('admin-link');
+        if(adminLinkEl) adminLinkEl.hidden = !NGPC_AUTH.isGameManager(user, gameData);
+      });
     });
     el('scan-signin-btn').addEventListener('click', ()=>NGPC_AUTH.openSignInModal('signin'));
   } else {
@@ -1003,7 +1012,6 @@ function playPageTemplate(sub, slug) {
   // gets the real player; everyone else (signed in or not) sees a "not public yet" message instead
   // of the sign-in prompt. gameData is fetched once, independent of loadEmulator()'s own later
   // games/{slug} read (that one's lazy, only for romPath, and would run too late to gate on).
-  const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
   let gameData = null;
   const gameDocPromise = (window.NGPC_AUTH && NGPC_AUTH.db)
     ? NGPC_AUTH.db.collection('games').doc('${slug}').get()
@@ -1012,7 +1020,7 @@ function playPageTemplate(sub, slug) {
     : Promise.resolve();
   function isAuthorizedViewer(user){
     if(!gameData || gameData.devStatus !== 'coming-soon') return true;
-    return !!user && (user.uid === ADMIN_UID || user.uid === gameData.developerUid);
+    return NGPC_AUTH.isGameManager(user, gameData);
   }
   function applyAuthState(user){
     gameDocPromise.then(()=>{

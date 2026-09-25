@@ -415,7 +415,12 @@
     const a = document.createElement('a');
     a.className = 'tile';
     const isComingSoon = data.devStatus === 'coming-soon';
-    if(isComingSoon){
+    // See loadGames()'s own comment: a doc with no `visibility` yet falls back to the old
+    // `active` boolean this field replaced. 'inactive' gets the exact same unclickable treatment
+    // as a coming-soon tile (still listed, just not a link); 'hidden' never reaches buildTile() at
+    // all -- loadGames() filters it out of the grid entirely before rendering.
+    const visibility = data.visibility || (data.active === false ? 'hidden' : 'active');
+    if(isComingSoon || visibility === 'inactive'){
       // No href at all -- an <a> with no href isn't a link (not focusable via Tab, no navigation
       // on click/Enter), which is what actually makes this unclickable. The 'disabled' class is
       // just the visual half (see its CSS): removing href alone wouldn't look any different
@@ -520,10 +525,11 @@
       // it against whatever it last received once names are actually populated, so that first
       // paint self-corrects instead of staying wrong until the next live update happens to land.
       if(lastTickerDocs) renderTicker(lastTickerDocs);
-      // active === false is the admin/game/ "Inactive" toggle -- pulls a game's tile off this
-      // grid entirely while leaving everything else (leaderboard, ROM, scores) untouched. Missing
-      // the field at all means active (every game predates this toggle).
-      renderGrid(games.filter(g=>g.active !== false));
+      // visibility 'hidden' (admin/game/'s three-way Active/Inactive/Hidden toggle) pulls a game's
+      // tile off this grid entirely while leaving everything else (leaderboard, ROM, scores)
+      // untouched -- 'inactive' still renders the tile, just unclickable (see buildTile()).
+      // Missing the field at all falls back to the old `active` boolean it replaced.
+      renderGrid(games.filter(g=>(g.visibility || (g.active === false ? 'hidden' : 'active')) !== 'hidden'));
       gridStatusEl.textContent = '';
     }catch(e){
       gridStatusEl.textContent = 'Couldn’t load the games list right now — try refreshing.';

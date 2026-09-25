@@ -40,6 +40,28 @@ window.NGPC_AUTH = (function(){
   const auth = firebase.auth();
   const db = firebase.firestore();
 
+  // The site owner's own uid -- ALWAYS an admin, regardless of the `admin` Firestore flag below
+  // (which is how the owner grants that same access to somebody else). Previously copy-pasted as
+  // a local `ADMIN_UID` const on every game page that needed it (ms/ddmr/hgs/rvng/bk's own
+  // access-gate logic, admin/index.html, admin/game/index.html, account/index.html). Centralized
+  // here so nothing needs to duplicate the literal ever again.
+  const ADMIN_UID = 'L44BFbmiNkhi2vvLdrPUIxkvmfs2';
+  // True for the hardcoded site owner OR any account the owner has granted the `admin` flag to
+  // (users/{uid}.admin -- see admin/index.html's own promote-admin/demote-admin toggle and
+  // firestore.rules' isAdmin(), which this mirrors client-side). `user` here is the enriched
+  // profile object onAuthChange()/currentUser hands out, not the raw Firebase Auth user.
+  function isSiteAdmin(user){
+    return !!user && (user.uid === ADMIN_UID || user.admin === true);
+  }
+  // True for a site admin (see isSiteAdmin) or this specific game's own assigned developer -- the
+  // same "who's allowed behind this game's curtain" check every access-gated leaderboard page
+  // already made inline (see ms/index.html's isAuthorizedViewer, for instance). gameData is a
+  // games/{slug} doc read (or null/undefined before it's loaded, which just means "not yet", not
+  // "not manager").
+  function isGameManager(user, gameData){
+    return isSiteAdmin(user) || (!!user && !!gameData && user.uid === gameData.developerUid);
+  }
+
   // ---- admin email notifications -- writes a doc to mail/{id}, which the Firebase "Trigger
   // Email" extension (installed separately from the Firebase Console, requires the Blaze plan)
   // watches and turns into a real email. The recipient is hardcoded here AND in firestore.rules'
@@ -653,6 +675,11 @@ window.NGPC_AUTH = (function(){
       // firestore.rules' gameSubmissions allow create). Defaults false; nobody grants this to
       // themselves.
       isDeveloper: !!data.isDeveloper,
+      // Admin-granted yes/no, same trust level as the hardcoded ADMIN_UID below -- see
+      // isSiteAdmin(). Defaults false; nobody grants this to themselves (see firestore.rules'
+      // users/{uid} allow update, which only lets the OWNER'S OWN branch leave this field
+      // untouched, never set it).
+      admin: !!data.admin,
     };
     listeners.forEach(cb=>cb(currentUser));
   }
@@ -869,6 +896,7 @@ window.NGPC_AUTH = (function(){
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,
     friendlyAuthError, escapeHtml, notifyAdmin, trackRomDownload, pathKeyFromLocation,
     scoreHasDetail, scoreDetailHTML, scoreInlineMeta, scoreValueDisplay,
+    ADMIN_UID, isSiteAdmin, isGameManager,
     authReady, openSignInModal,
     get currentUser(){ return currentUser; }
   };
