@@ -270,15 +270,16 @@
   let db = null, pending = null, unsubscribeBoard = null, gameData = null;
 
   // Payload (per the submitted spec, NOT a fixed-width binary encoding like this site's other
-  // games): 2-char game code immediately followed by a space-separated "KEY-VALUE" list --
-  // DIFF-<E/M/H>, TIME-<1-5 digit seconds>, MISS-<3-digit zero-padded mistake count>, and now
-  // optionally SEED-<exactly 5 digits, zero-padded, 00000-65535> (the on-device puzzle
-  // generator's own seed -- added after the original spec shipped, so its own token is OPTIONAL
-  // here: an older cartridge build whose QR has no SEED- token at all still parses and submits
-  // fine, it just won't carry a seed value). No initials field -- unlike every other game here,
-  // Sudoku's own high-score flow doesn't collect device-typed initials, so the board identifies a
-  // run by the submitter's site account only. Real device output:
-  // "NGPC-DEV.COM/SD/SDDIFF-E TIME-123 MISS-002" (or, once the device build sends it,
+  // games): 2-char game code, then a 3-char device-typed initials field (same
+  // ^[A-Z0-9 .]{3}$ format every other game here uses -- added after the original spec shipped;
+  // Sudoku's high-score flow didn't collect initials at first, identifying a run by the
+  // submitter's site account alone), then a space-separated "KEY-VALUE" list -- DIFF-<E/M/H>,
+  // TIME-<1-5 digit seconds>, MISS-<3-digit zero-padded mistake count>, and optionally
+  // SEED-<exactly 5 digits, zero-padded, 00000-65535> (the on-device puzzle generator's own
+  // seed -- also added after the original spec shipped, so its own token is OPTIONAL here: an
+  // older cartridge build whose QR has no SEED- token at all still parses and submits fine, it
+  // just won't carry a seed value). Real device output:
+  // "NGPC-DEV.COM/SD/ABCDIFF-E TIME-123 MISS-002" (or, once the device build sends it,
   // "...MISS-002 SEED-01234") -- the payload segment repeats "SD" right after the
   // URL prefix, same convention as every other game's own QR (e.g. Tetris's own payload starts
   // "TT..."), so this site's universal scanner (index.html / another game's in-browser player)
@@ -287,7 +288,9 @@
   // qr_build_payload(), not patched around here.
   function parseSudokuPayload(text){
     if(text.slice(0,2) !== QR_GAME_CODE) return {error:'Unknown game code "'+text.slice(0,2)+'".'};
-    const tokens = text.slice(2).trim().split(/\s+/);
+    const initials = text.slice(2,5);
+    if(!/^[A-Z0-9 .]{3}$/.test(initials)) return {error:"That code has unreadable initials."};
+    const tokens = text.slice(5).trim().split(/\s+/);
     const fields = {};
     for(const tok of tokens){
       const dash = tok.indexOf('-');
@@ -300,6 +303,7 @@
     if(!fields.MISS || !/^\d{3}$/.test(fields.MISS)) return {error:"That code has an unreadable miss count."};
     const result = {
       game: QR_GAME_CODE,
+      initials: initials,
       difficulty: diff,
       time: parseInt(fields.TIME, 10),
       misses: parseInt(fields.MISS, 10),
@@ -394,7 +398,7 @@
       const rowAttr = settings.rowDetailExpand ? ' data-detail="d'+i+'"' : '';
       const rowHtml = '<div class="'+rowClass+'"'+rowAttr+'>'+
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
-        '<div><div class="initials">'+avatarHtml+(data.username?escapeHtml(data.username.toUpperCase()):'?')+'</div>'+
+        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
         '<div class="score-val tnum">'+(data.time!=null?fmtScoreValue(data.time, settings):'-')+'</div>'+
       '</div>';
@@ -476,7 +480,7 @@
 
   function openConfirm(parsed){
     pending = parsed;
-    el('confirm-initials').textContent = DIFF_NAMES[parsed.difficulty].toUpperCase();
+    el('confirm-initials').textContent = parsed.initials;
     el('confirm-score').textContent = fmtTime(parsed.time);
     el('confirm-src').textContent = DIFF_NAMES[parsed.difficulty] + ' · From a scanned QR code';
     el('confirm-scorecard').innerHTML = renderSudokuScorecardHTML(parsed);
@@ -641,6 +645,7 @@
     confirmMsg.innerHTML = '<div class="msg ok">Submitting…</div>';
     const record = {
       game: QR_GAME_CODE,
+      initials: pending.initials,
       difficulty: pending.difficulty,
       time: pending.time,
       misses: pending.misses,
@@ -657,7 +662,7 @@
       const res = await writeScore(record);
       btn.disabled = false;
       if(res.ok){
-        el('success-text').textContent = DIFF_NAMES[pending.difficulty] + ' — ' + fmtTime(pending.time) + ' submitted to the leaderboard.';
+        el('success-text').textContent = pending.initials + ' — ' + DIFF_NAMES[pending.difficulty] + ' — ' + fmtTime(pending.time) + ' submitted to the leaderboard.';
         pending = null;
         showStage('success');
       } else {

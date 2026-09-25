@@ -337,7 +337,12 @@ service cloud.firestore {
       // submission review, same path any future developer submission goes through.
       function isSudokuScore(d) {
         return d.game == 'SD'
-          && d.keys().hasOnly(['game', 'difficulty', 'time', 'misses', 'seed', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.keys().hasOnly(['game', 'initials', 'difficulty', 'time', 'misses', 'seed', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          // Added after the original spec shipped -- an un-updated cartridge's QR has no
+          // initials at all, so this stays optional the same way `seed` does below (a pre-update
+          // score already on the board keeps working; see sd/index.html's own `data.initials ||
+          // '???'` fallback on the board row).
+          && (!('initials' in d) || (d.initials is string && d.initials.matches('^[A-Z0-9 .]{3}$')))
           && d.difficulty is string && d.difficulty in ['E', 'M', 'H']
           && d.time is int && d.time >= 0 && d.time <= 99999
           && d.misses is int && d.misses >= 0 && d.misses <= 999

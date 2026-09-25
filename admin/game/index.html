@@ -677,18 +677,23 @@
       urlNote: 'Scheme- and "WWW."-less, same convention as Bowling/Tetris/Yahtzee/Farkle’s own QR_URL_PREFIX.',
       fields: [
         {name:'Game code', width:'2', format:'fixed', notes:'"SD"'},
+        {name:'Initials', width:'3', format:'A-Z0-9, space, period', notes:'no key/dash — sits directly between the game code and the "DIFF-" token, unlike every other field here. OPTIONAL on the read side: added after the original spec shipped, so a pre-update score already on the board has no `initials` field at all (see sd/index.html’s own `data.initials || \'???\'` board-row fallback); every NEW submission is required to have one.'},
         {name:'Difficulty', width:'1', format:'E/M/H', notes:'key "DIFF"'},
         {name:'Time', width:'1–5', format:'numeric, no padding', notes:'seconds, includes the mistake-count time penalty; key "TIME"'},
         {name:'Mistakes', width:'3', format:'numeric, zero-padded', notes:'key "MISS", capped at 999'},
         {name:'Seed', width:'5', format:'numeric, zero-padded', notes:'key "SEED", the on-device puzzle generator’s own seed, 00000–65535 (always exactly 5 digits, never shortened) — OPTIONAL: added after the original spec shipped, so a QR with no SEED- token at all still parses fine (an un-updated cartridge build).'},
       ],
-      totalLength: '17 (prefix) + 2 (repeated code) + "DIFF-"+1 + " TIME-"+1–5 + " MISS-"+3 [+ " SEED-"+5] = 40–44 chars (51 max with seed), variable',
+      totalLength: '17 (prefix) + 2 (repeated code) + 3 (initials) + "DIFF-"+1 + " TIME-"+1–5 + " MISS-"+3 [+ " SEED-"+5] = 43–47 chars (54 max with seed), variable',
       sortField: 'time (ascending — faster wins), scoped to one difficulty at a time — times aren’t comparable across difficulties',
-      scorecard: 'Every field is a final raw value — printed as-is, no reconstruction. No initials field, unlike every other game here: Sudoku’s own high-score flow doesn’t collect device-typed initials, so a row identifies by the submitter’s site account only.',
-      example: 'NGPC-DEV.COM/SD/SDDIFF-E TIME-123 MISS-002',
-      exampleIsReal: true,
+      scorecard: 'Every field is a final raw value — printed as-is, no reconstruction. Initials are the row’s identity label (same convention as every other game here); the submitter’s site account/username is separate, shown alongside it.',
+      example: 'NGPC-DEV.COM/SD/ABCDIFF-E TIME-... MISS-... SEED-...',
+      // Was a real decoded scan before the initials field was added; the user's own description
+      // of the new format uses template placeholders ("..."), not a concrete decoded example --
+      // flip back to true once a real post-update scan is confirmed.
+      exampleIsReal: false,
       firestore: [
         {field:'game', type:'"SD" (fixed)'},
+        {field:'initials', type:'string, matches ^[A-Z0-9 .]{3}$ (OPTIONAL — omitted on a score submitted before this field existed)'},
         {field:'difficulty', type:'string, in ["E","M","H"]'},
         {field:'time', type:'int, 0–99,999'},
         {field:'misses', type:'int, 0–999'},
