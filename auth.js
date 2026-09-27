@@ -640,11 +640,13 @@ window.NGPC_AUTH = (function(){
   // Minesweeper both have no `score` field either -- they rank by `time` (ascending), so that's
   // their headline value; a missed case here is exactly what showed a bare "-" for every Sudoku
   // (and later Minesweeper) row on the account page and homepage ticker before this existed.
+  // Furry ranks by `totalScore`, not `score` -- same gap, caught before shipping this time.
   function scoreValueDisplay(data){
     if(data.game === 'OV') return data.ticks!=null ? formatOvTicks(data.ticks) : '-';
     if(data.game === 'FK') return data.rounds!=null ? (data.rounds+' rounds') : '-';
     if(data.game === 'SD') return data.time!=null ? formatSdTime(data.time) : '-';
     if(data.game === 'MS') return data.time!=null ? formatSdTime(data.time) : '-';
+    if(data.game === 'FU') return data.totalScore!=null ? data.totalScore : '-';
     return data.score!=null ? data.score : '-';
   }
 
