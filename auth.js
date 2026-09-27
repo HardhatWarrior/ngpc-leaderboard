@@ -581,6 +581,30 @@ window.NGPC_AUTH = (function(){
     return '<table class="xn-sheet">'+rows+'</table>';
   }
 
+  // Mirrors fu/index.html's own renderScorecardHTML exactly (duplicated per the same
+  // each-page-keeps-its-own-copy convention every other game's table renderer here follows).
+  // totalScore is the console's own final pre-computed value, printed as-is -- see that page's
+  // comment on why it's never recomputed from the other fields here either.
+  function renderFurryScorecardHTML(data){
+    const rows = '<tr><td>Start World</td><td class="fu-val tnum">'+data.startWorld+'</td></tr>'+
+      '<tr><td>Level Reached</td><td class="fu-val tnum">'+data.levelReached+'</td></tr>'+
+      '<tr><td>Game Completed</td><td class="fu-val tnum">'+data.gameCompleted+'</td></tr>'+
+      '<tr><td>Play Time In Seconds</td><td class="fu-val tnum">'+data.playTimeInSeconds+'</td></tr>'+
+      '<tr><td>Gems Collected (Total)</td><td class="fu-val tnum">'+data.gemsCollectedTotal+'</td></tr>'+
+      '<tr><td>Total Deaths</td><td class="fu-val tnum">'+data.totalDeaths+'</td></tr>'+
+      '<tr><td>Lives Left</td><td class="fu-val tnum">'+data.livesLeft+'</td></tr>'+
+      '<tr><td>Enemies Shot</td><td class="fu-val tnum">'+data.enemiesShot+'</td></tr>'+
+      '<tr><td>Bombs That Exploded On Furry</td><td class="fu-val tnum">'+data.bombsThatExplodedOnFurry+'</td></tr>'+
+      '<tr><td>Deaths By Enemies</td><td class="fu-val tnum">'+data.deathsByEnemies+'</td></tr>'+
+      '<tr><td>Deaths By Bombs</td><td class="fu-val tnum">'+data.deathsByBombs+'</td></tr>'+
+      '<tr><td>Deaths By Spikes</td><td class="fu-val tnum">'+data.deathsBySpikes+'</td></tr>'+
+      '<tr><td>Deaths By Lava And Acid</td><td class="fu-val tnum">'+data.deathsByLavaAndAcid+'</td></tr>'+
+      '<tr><td>Deaths By Piranhas</td><td class="fu-val tnum">'+data.deathsByPiranhas+'</td></tr>'+
+      '<tr><td>Deaths By Falling Into The Abyss</td><td class="fu-val tnum">'+data.deathsByFallingIntoTheAbyss+'</td></tr>'+
+      '<tr><td>Total Score</td><td class="fu-val tnum">'+data.totalScore+'</td></tr>';
+    return '<table class="fu-sheet">'+rows+'</table>';
+  }
+
   // True for a game whose row expands into a click-to-reveal detail (Bowling/Yahtzee/Farkle/
   // 2048/Over Rev/Sudoku/Xenon 2); false for Tetris, whose own leaderboard shows lines/level as
   // plain inline meta text instead -- scoreInlineMeta() covers that case.
@@ -592,6 +616,7 @@ window.NGPC_AUTH = (function(){
       case '2K': return data.moves !== undefined;
       case 'SD': return data.difficulty !== undefined && data.time !== undefined;
       case 'XN': return data.money !== undefined && data.checkpoint !== undefined;
+      case 'FU': return data.totalScore !== undefined && data.startWorld !== undefined;
       case 'OV':
         // Same "skip rather than crash" stance overrev/index.html's own board rendering takes on
         // a corrupted/legacy stored doc -- OverRevProtocol comes from overrev/protocol.js, which
@@ -609,6 +634,7 @@ window.NGPC_AUTH = (function(){
       case '2K': return render2048ScorecardHTML(data);
       case 'SD': return renderSudokuScorecardHTML(data);
       case 'XN': return renderXenon2ScorecardHTML(data);
+      case 'FU': return renderFurryScorecardHTML(data);
       case 'OV':
         try{ return renderOverRevScorecardHTML(Object.assign({}, data, OverRevProtocol.decode(data.raw))); }
         catch(e){ return ''; }
