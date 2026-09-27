@@ -244,8 +244,12 @@
 
   let db = null, pending = null, unsubscribeBoard = null, gameData = null;
 
-  // Payload: 2-char game code + 3 initials + 5-digit score + 4-digit move count, raw (no URL) --
-  // matches 2048's own qr_build_payload() in src/main.c.
+  // Payload: 2-char game code + 3 initials + 5-digit score + 4-digit move count, e.g.
+  // "NGPC-DEV.COM/2K/2KAAA012340042" -- matches 2048's own qr_build_payload() in src/main.c. Now
+  // wrapped in a real URL (prefix + repeated game code), same convention as every other game's own
+  // QR, so a generic phone camera app can auto-open this leaderboard instead of just decoding
+  // inert text -- lastPathSegment() below strips that wrapper off either way, so an older
+  // cartridge build's bare (no-URL) payload still parses exactly the same as before.
   function parse2048Payload(text){
     if(text.length !== 14) return {error:"That code is too short — rescan with the whole code in frame."};
     const initials = text.slice(2,5);
