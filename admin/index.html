@@ -514,6 +514,16 @@
         btn.disabled = false;
         return;
       }
+      // Best-effort, fire-and-forget -- only on a fresh approval (not a revoke), and only when
+      // this account actually has a recovery email on file (u.email, already loaded by
+      // loadUsers()'s own private/contact read above). Never blocks or fails the approve action
+      // itself if the email doesn't go out; see firestore.rules' mail/{id} comment for how this
+      // is locked to the account's own registered address server-side, not just trusted here.
+      if(approve && u.email && window.NGPC_AUTH){
+        NGPC_AUTH.notifyUser(uid, u.email,
+          'Your NGPC Hiscores account is approved!',
+          'Hi ' + u.username + ',\n\nYour NGPC Hiscores account has been approved -- your scores are now visible on the public leaderboards at https://ngpc-dev.com.\n\nThanks for playing!\n-- NGPC Hiscores');
+      }
       // Every score doc denormalizes its submitter's approved status (see firestore.rules' scores
       // match block), so flipping the account also has to fan out to all of that uid's existing
       // scores, or their board visibility stays stuck at whatever it was when each was submitted.

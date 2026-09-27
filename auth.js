@@ -78,6 +78,22 @@ window.NGPC_AUTH = (function(){
     }catch(e){ /* non-critical */ }
   }
 
+  // Sends to a PLAYER's own recovery email -- unlike notifyAdmin above (fixed admin address),
+  // this is admin/index.html's own account-approval notice, so firestore.rules' mail/{id} rule
+  // requires the `uid` field here and checks the `to` address against THAT account's own
+  // private/contact.recoveryEmail server-side, so even a compromised admin-panel script couldn't
+  // redirect this to an arbitrary inbox. Caller's job to only call this when a recovery email
+  // actually exists (admin/index.html already has it loaded from its own players table).
+  function notifyUser(uid, email, subject, text){
+    try{
+      db.collection('mail').add({
+        to: [email],
+        message: { subject, text },
+        uid,
+      }).catch(()=>{});
+    }catch(e){ /* non-critical */ }
+  }
+
   // ---- page-view tracking -- fires once per page load, on every page that loads this file
   // (every game leaderboard, the homepage, account/admin/user pages, everything). Two docs per
   // view: pageViews/{pathKey} holds a running total for the "top pages" list, pageViewsDaily/
@@ -137,6 +153,12 @@ window.NGPC_AUTH = (function(){
       throw {code:'invalid-username', message:'Usernames are 3-16 characters: letters, numbers, underscore only.'};
     }
     const usernameLower = username.toLowerCase();
+    // A developer needs a real way for the admin to reach them (game approval, payload
+    // questions, etc.) -- checked here too, not just via the modal's own `required` attribute on
+    // the email field, in case something ever calls signUp() directly.
+    if(wantsDev && !(recoveryEmailRaw||'').trim()){
+      throw {code:'dev-needs-email', message:'A recovery email is required to sign up as a developer.'};
+    }
     const email = usernameToEmail(usernameLower);
     const cred = await auth.createUserWithEmailAndPassword(email, password);
     const uid = cred.user.uid;
@@ -366,6 +388,7 @@ window.NGPC_AUTH = (function(){
       case 'invalid-username': return e.message;
       case 'username-taken': return e.message;
       case 'signup-rejected': return e.message;
+      case 'dev-needs-email': return e.message;
       case 'same-username': return e.message;
       case 'not-signed-in': return e.message;
       case 'invalid-avatar': return e.message;
@@ -773,7 +796,7 @@ window.NGPC_AUTH = (function(){
         <form id="auth-form">
           <label>Username<input id="auth-username" autocomplete="username" required maxlength="16"></label>
           <label>Password<input id="auth-password" type="password" autocomplete="current-password" required minlength="6"></label>
-          <label id="auth-email-label" hidden>Recovery email (optional)<input id="auth-email" type="email" autocomplete="email"></label>
+          <label id="auth-email-label" hidden><span id="auth-email-label-text">Recovery email (optional)</span><input id="auth-email" type="email" autocomplete="email"></label>
           <label id="auth-dev-label" class="auth-checkbox-label" hidden><input id="auth-wants-dev" type="checkbox"> <span>Developer</span></label>
           <button type="submit" class="btn-primary" id="auth-submit">Sign In</button>
           <div id="auth-msg"></div>
@@ -797,7 +820,20 @@ window.NGPC_AUTH = (function(){
     const devLabel = document.getElementById('auth-dev-label');
     const submitBtn = document.getElementById('auth-submit');
     const msg = document.getElementById('auth-msg');
+    const emailInput = document.getElementById('auth-email');
+    const emailLabelText = document.getElementById('auth-email-label-text');
+    const wantsDevCheckbox = document.getElementById('auth-wants-dev');
     let mode = 'signin';
+
+    // A developer signup needs a real way for the admin to reach them (game approval, payload
+    // questions, etc.) -- recovery email is otherwise optional, so this only flips to required
+    // once "Developer" is actually checked, not for every signup.
+    function updateEmailRequirement(){
+      const required = mode === 'signup' && wantsDevCheckbox.checked;
+      emailInput.required = required;
+      emailLabelText.textContent = required ? 'Recovery email (required for developers)' : 'Recovery email (optional)';
+    }
+    wantsDevCheckbox.addEventListener('change', updateEmailRequirement);
 
     function setMode(m){
       mode = m;
@@ -806,6 +842,7 @@ window.NGPC_AUTH = (function(){
       devLabel.hidden = (m !== 'signup');
       submitBtn.textContent = m==='signup' ? 'Sign Up' : 'Sign In';
       msg.innerHTML = '';
+      updateEmailRequirement();
     }
     tabs.forEach(t=>t.addEventListener('click', ()=>setMode(t.dataset.mode)));
 
@@ -922,7 +959,7 @@ window.NGPC_AUTH = (function(){
     packColor, unpackColor, css255FromWord, renderAvatarToCanvas, drawAvatarCell,
     TRANSPARENT, isTransparent,
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,
-    friendlyAuthError, escapeHtml, notifyAdmin, trackRomDownload, pathKeyFromLocation,
+    friendlyAuthError, escapeHtml, notifyAdmin, notifyUser, trackRomDownload, pathKeyFromLocation,
     scoreHasDetail, scoreDetailHTML, scoreInlineMeta, scoreValueDisplay,
     ADMIN_UID, isSiteAdmin, isGameManager,
     authReady, openSignInModal,

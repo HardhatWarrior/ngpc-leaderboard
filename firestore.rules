@@ -717,22 +717,38 @@ service cloud.firestore {
     // mail/{id} -- watched by the Firebase "Trigger Email" extension (Admin SDK only; installed
     // separately from the Firebase Console), which turns each doc into a real email and then
     // writes delivery status back onto it. Written by auth.js's notifyAdmin() on a new signup and
-    // by dev/submit/index.html on a new game submission. The recipient is hardcoded to a single
-    // literal address here -- NOT just trusted from the client -- so nothing a client sends can
-    // redirect a notification to an arbitrary inbox; this is a fixed admin alert channel, not a
-    // general mailer. No read/update/delete for any client: only the extension's own Admin SDK
-    // (which bypasses rules entirely) ever touches a doc after creation.
+    // by dev/submit/index.html on a new game submission -- the recipient there is hardcoded to a
+    // single literal address, NOT just trusted from the client, so nothing a client sends can
+    // redirect a notification to an arbitrary inbox; that's a fixed admin alert channel, not a
+    // general mailer. auth.js's notifyUser() (admin/index.html's own account-approval notice) is
+    // the one exception: it can address a real player instead, but ONLY the site admin can send
+    // one, and ONLY to that exact account's own registered recovery email -- the `uid` field is
+    // required and the `to` address is checked server-side against
+    // users/{uid}/private/contact.recoveryEmail, so even a compromised admin-panel script couldn't
+    // redirect this to somewhere else. No read/update/delete for any client either way: only the
+    // extension's own Admin SDK (which bypasses rules entirely) ever touches a doc after creation.
     match /mail/{id} {
       allow read, update, delete: if false;
-      allow create: if request.auth != null
-        && request.resource.data.keys().hasOnly(['to', 'message'])
-        && request.resource.data.to is list
-        && request.resource.data.to.size() == 1
-        && request.resource.data.to[0] == 'darekdavis@gmail.com'
-        && request.resource.data.message is map
-        && request.resource.data.message.keys().hasOnly(['subject', 'text'])
-        && request.resource.data.message.subject is string
-        && request.resource.data.message.text is string;
+      allow create: if request.auth != null && (
+        (request.resource.data.keys().hasOnly(['to', 'message'])
+          && request.resource.data.to is list
+          && request.resource.data.to.size() == 1
+          && request.resource.data.to[0] == 'darekdavis@gmail.com'
+          && request.resource.data.message is map
+          && request.resource.data.message.keys().hasOnly(['subject', 'text'])
+          && request.resource.data.message.subject is string
+          && request.resource.data.message.text is string)
+        || (isAdmin()
+          && request.resource.data.keys().hasOnly(['to', 'message', 'uid'])
+          && request.resource.data.to is list
+          && request.resource.data.to.size() == 1
+          && request.resource.data.message is map
+          && request.resource.data.message.keys().hasOnly(['subject', 'text'])
+          && request.resource.data.message.subject is string
+          && request.resource.data.message.text is string
+          && request.resource.data.uid is string
+          && request.resource.data.to[0] == get(/databases/$(database)/documents/users/$(request.resource.data.uid)/private/contact).data.recoveryEmail)
+      );
     }
 
     // Default-deny for every other collection -- Firestore denies unmatched
