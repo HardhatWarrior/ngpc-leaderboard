@@ -356,6 +356,39 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
+      // Furry: game, initials, and 15 numeric run-stat fields, per the developer's own submitted
+      // spec (fixed-width, URL-prefixed same as every other game here). totalScore is sent
+      // pre-computed by the console and used as-is, never recomputed (its own formula depends on
+      // gems still in the HUD at run end, which isn't transmitted) -- see fu/index.html's own
+      // renderScorecardHTML comment. The six "deaths by X" fields sum to totalDeaths, per the
+      // developer's own note; verified against all three of their real example payloads.
+      function isFurryScore(d) {
+        return d.game == 'FU'
+          && d.keys().hasOnly(['game', 'initials', 'startWorld', 'levelReached', 'gameCompleted', 'playTimeInSeconds', 'gemsCollectedTotal', 'totalDeaths', 'livesLeft', 'enemiesShot', 'bombsThatExplodedOnFurry', 'deathsByEnemies', 'deathsByBombs', 'deathsBySpikes', 'deathsByLavaAndAcid', 'deathsByPiranhas', 'deathsByFallingIntoTheAbyss', 'totalScore', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.startWorld is int && d.startWorld >= 0 && d.startWorld <= 9
+          && d.levelReached is int && d.levelReached >= 0 && d.levelReached <= 99
+          && d.gameCompleted is int && d.gameCompleted >= 0 && d.gameCompleted <= 9
+          && d.playTimeInSeconds is int && d.playTimeInSeconds >= 0 && d.playTimeInSeconds <= 99999
+          && d.gemsCollectedTotal is int && d.gemsCollectedTotal >= 0 && d.gemsCollectedTotal <= 99999
+          && d.totalDeaths is int && d.totalDeaths >= 0 && d.totalDeaths <= 999
+          && d.livesLeft is int && d.livesLeft >= 0 && d.livesLeft <= 9
+          && d.enemiesShot is int && d.enemiesShot >= 0 && d.enemiesShot <= 999
+          && d.bombsThatExplodedOnFurry is int && d.bombsThatExplodedOnFurry >= 0 && d.bombsThatExplodedOnFurry <= 999
+          && d.deathsByEnemies is int && d.deathsByEnemies >= 0 && d.deathsByEnemies <= 999
+          && d.deathsByBombs is int && d.deathsByBombs >= 0 && d.deathsByBombs <= 999
+          && d.deathsBySpikes is int && d.deathsBySpikes >= 0 && d.deathsBySpikes <= 999
+          && d.deathsByLavaAndAcid is int && d.deathsByLavaAndAcid >= 0 && d.deathsByLavaAndAcid <= 999
+          && d.deathsByPiranhas is int && d.deathsByPiranhas >= 0 && d.deathsByPiranhas <= 999
+          && d.deathsByFallingIntoTheAbyss is int && d.deathsByFallingIntoTheAbyss >= 0 && d.deathsByFallingIntoTheAbyss <= 999
+          && d.totalScore is int && d.totalScore >= 0 && d.totalScore <= 99999
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
       // Xenon 2: game, initials, score, money, checkpoint, livesLeft, source, submittedAt,
       // required uid/username. Third-party (firmware not in this workspace) -- shape/bounds only,
       // per the developer's own submitted spec (fixed-width, no delimiters, no URL: the raw QR
@@ -489,7 +522,7 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data) || isFruityPalsRevengeScore(request.resource.data) || isHoratioGoesSnowboardingScore(request.resource.data);
+      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data) || isFruityPalsRevengeScore(request.resource.data) || isHoratioGoesSnowboardingScore(request.resource.data) || isFurryScore(request.resource.data);
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
