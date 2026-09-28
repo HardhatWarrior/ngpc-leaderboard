@@ -10,10 +10,16 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@undecaf/zbar-wasm@0.11.0/dist/inlined/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <style>
   :root{
     --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
-    --cream:#f4eedd; --dim:#93a0c9; --accent:#3fa9dc; --accent2:#5c8fd6;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#3fa9dc; --accent-ink:#06202e;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
   }
   *{ box-sizing:border-box; }
   body{
@@ -26,11 +32,27 @@
   header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
   header p{ margin:0; color:var(--dim); font-size:13px; }
   /* This page's whole point is loading an arbitrary local ROM -- no fixed game, no leaderboard
-     tie-in, no QR capture. Just the emulator's own stock full-player element (built-in file
-     picker, settings, save import/export), same as ngpc/index.html's own demo page, but wrapped
-     in this site's own chrome so it's easy to find and reads as "ours" instead of a bare vendor
-     page. Not linked from the main site nav -- direct-URL testing utility only. */
+     tie-in beyond whatever the loaded ROM's own QR code turns out to route to. Just the
+     emulator's own stock full-player element (built-in file picker, settings, save import/
+     export), same as ngpc/index.html's own demo page, but wrapped in this site's own chrome
+     AND with the same QR-capture-and-submit flow every game's own /play/<slug>/ page has --
+     the full player has no built-in Capture button of its own (unlike the compact
+     <ngpcraft-embed> the real game pages use), so #btn-submit below drives it by hand via
+     player.captureFrame(). Not linked from the main site nav -- direct-URL testing utility only. */
   ngpcraft-player{ width:100%; max-width:none; }
+  #signin-gate{ width:100%; text-align:center; padding:24px; }
+  #player-content[hidden], #signin-gate[hidden]{ display:none; }
+  #btn-submit{
+    font:inherit; border:none; border-radius:8px; padding:13px 20px; cursor:pointer;
+    font-weight:600; font-size:13.5px; width:100%;
+    background:var(--accent); color:var(--accent-ink);
+  }
+  #btn-submit:hover:not(:disabled){ background:#5fbce6; }
+  #btn-submit:disabled{ opacity:.5; cursor:not-allowed; }
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; text-align:center; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+  .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
+  .msg.info{ background:rgba(92,143,214,.12); color:var(--dim); border:1px solid var(--border); }
   a{ color:var(--accent2); }
   footer{ text-align:center; color:var(--dim); font-size:11px; }
 </style>
@@ -44,16 +66,197 @@
   <header>
     <h1 class="px">EMULATOR TEST PAGE</h1>
     <p>Open any local .ngp/.ngc ROM and play it straight from your browser -- nothing is
-      uploaded, the file never leaves this tab. For trying out the
+      uploaded, the file never leaves this tab. Once an in-game QR code is on screen, hit
+      Submit Score to decode it and route into that game's own leaderboard, same as a real
+      scan. For trying out the
       <a href="https://github.com/Tixul/NgpCraft_web_emulator" target="_blank" rel="noopener">NgpCraft Web Emulator</a>
-      itself, not for scoring/leaderboards -- see a game's own <code>/play/&lt;slug&gt;/</code> page for that.</p>
+      itself.</p>
   </header>
 
-  <ngpcraft-player></ngpcraft-player>
+  <div id="signin-gate">&#128274; Sign in (top right) to use this page.</div>
+
+  <div id="player-content" hidden>
+    <ngpcraft-player></ngpcraft-player>
+
+    <button type="button" id="btn-submit" disabled>Submit Score</button>
+    <div id="submit-msg"></div>
+  </div>
 
   <footer>Internal testing page -- not linked from the main site.</footer>
 </div>
 
-<script type="module" src="/ngpc/player.js"></script>
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  const el = (id)=>document.getElementById(id);
+  const gateEl = el('signin-gate');
+  const contentEl = el('player-content');
+  const btnSubmit = el('btn-submit');
+  const msgEl = el('submit-msg');
+
+  // Every game's QR encodes its own routing code first -- fetched lazily from the games/
+  // collection instead of a hardcoded table (see index.html's own GAME_ROUTES comment), so a
+  // new game's routing works the instant its games/{slug} doc exists, no code edit needed here.
+  let GAME_ROUTES = null;
+  async function getGameRoutes(){
+    if(GAME_ROUTES) return GAME_ROUTES;
+    const routes = {};
+    try{
+      if(window.NGPC_AUTH && NGPC_AUTH.db){
+        const snap = await NGPC_AUTH.db.collection('games').get();
+        snap.forEach(doc=>{ const d = doc.data(); if(d.code) routes[d.code] = doc.id; });
+      }
+    }catch(e){ /* leave whatever was found -- a partial/empty table just fails routing below */ }
+    GAME_ROUTES = routes;
+    return routes;
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+  function showMsg(cls, text){
+    msgEl.innerHTML = '<div class="msg '+cls+'">'+escapeHtml(text)+'</div>';
+  }
+
+  function lastPathSegment(text){
+    const parts = String(text||'').split('/').filter(Boolean);
+    return parts.length ? parts[parts.length-1] : '';
+  }
+
+  /* ---------- QR decode stack -- identical to every other page's own scan code (zbar-wasm
+     tried first, native BarcodeDetector second, jsQR last); see e.g. /2048/index.html's own
+     comments for why. Only the image *source* differs here: a captured emulator frame instead
+     of a live camera video or an uploaded photo. ---------- */
+  const scanCanvas = document.createElement('canvas');
+  const scanCtx = scanCanvas.getContext('2d', {willReadFrequently:true});
+
+  let barcodeDetector;
+  function getBarcodeDetector(){
+    if(barcodeDetector !== undefined) return barcodeDetector;
+    if(!('BarcodeDetector' in window)){ barcodeDetector = null; return null; }
+    try{ barcodeDetector = new window.BarcodeDetector({formats:['qr_code']}); }
+    catch(e){ barcodeDetector = null; }
+    return barcodeDetector;
+  }
+
+  async function decodeViaZbarWasm(source, w0, h0){
+    if(!window.zbarWasm || !w0 || !h0) return null;
+    const scale = Math.min(1, 1000/Math.max(w0,h0));
+    const w = Math.round(w0*scale), h = Math.round(h0*scale);
+    scanCanvas.width = w; scanCanvas.height = h;
+    scanCtx.drawImage(source, 0, 0, w, h);
+    try{
+      const symbols = await window.zbarWasm.scanImageData(scanCtx.getImageData(0, 0, w, h));
+      if(symbols && symbols.length) return symbols[0].decode();
+    }catch(e){ /* fall through */ }
+    return null;
+  }
+
+  function jsqrFallback(source, w0, h0, scales){
+    if(!window.jsQR || !w0 || !h0) return null;
+    for(const target of scales){
+      const scale = Math.min(1, target/Math.max(w0,h0));
+      const w = Math.round(w0*scale), h = Math.round(h0*scale);
+      scanCanvas.width = w; scanCanvas.height = h;
+      scanCtx.drawImage(source, 0, 0, w, h);
+      const frame = scanCtx.getImageData(0, 0, w, h);
+      const code = window.jsQR(frame.data, w, h, {inversionAttempts:'attemptBoth'});
+      if(code && code.data) return code.data;
+    }
+    return null;
+  }
+
+  async function decodeSource(source, w0, h0, scales){
+    const viaZbar = await decodeViaZbarWasm(source, w0, h0);
+    if(viaZbar) return viaZbar;
+    const bd = getBarcodeDetector();
+    if(bd){
+      try{
+        const results = await bd.detect(source);
+        if(results && results.length && results[0].rawValue) return results[0].rawValue;
+      }catch(e){ /* fall through to jsQR */ }
+    }
+    return jsqrFallback(source, w0, h0, scales);
+  }
+
+  /* ---------- decode whatever frame the emulator's own captureFrame() hands back (native
+     160x152, no letterboxing/cropping math needed), and route into the real leaderboard page's
+     own confirm/submit flow -- same hash-payload handoff the main site's QR scan and every
+     leaderboard's own scan already use (see index.html's routeToGame()), so this page never
+     needs its own copy of the Firestore write/auth logic. ---------- */
+  let captureBusy = false;
+  let player = null;
+
+  async function captureAndSubmit(){
+    if(captureBusy || !player) return;
+    captureBusy = true;
+    btnSubmit.disabled = true;
+    showMsg('info', 'Looking for a QR code…');
+
+    try{
+      const canvas = player.captureFrame();
+      const value = await decodeSource(canvas, canvas.width, canvas.height, [700, 1100, 1500, 2000]);
+      if(!value){
+        showMsg('err', 'No QR code found on screen — make sure the in-game QR code is fully visible and try again.');
+        return;
+      }
+
+      const payload = lastPathSegment(value).toUpperCase();
+      // Game codes are 2-6 characters -- longest-match against known codes, since there's no
+      // delimiter after a variable-length code in the payload itself.
+      const routes = await getGameRoutes();
+      const sortedCodes = Object.keys(routes).sort((a,b)=>b.length-a.length);
+      const code = sortedCodes.find(c=>payload.startsWith(c)) || null;
+      const slug = code ? routes[code] : null;
+      if(!slug){
+        showMsg('err', 'Unrecognized game code — that leaderboard might not be set up yet.');
+        return;
+      }
+
+      showMsg('ok', 'Found it — opening the leaderboard…');
+      // Same "?v=" cache-buster + hash handoff the main page's own scan uses, so the target
+      // leaderboard always fetches fresh code and reads the payload back out via its own
+      // existing payloadFromEntry(). "src=capture" marks this as an in-browser-player submission
+      // (vs a real camera/photo scan) -- read once by the leaderboard page's own SUBMIT_SOURCE
+      // before its boot() strips the query string, and stored on the score doc for
+      // admin/game/index.html's scan-source breakdown.
+      location.href = '/'+slug+'/?v='+Date.now()+'&src=capture#'+payload;
+    }catch(e){
+      showMsg('err', 'Capture failed: '+escapeHtml(e.message||'unknown error'));
+    }finally{
+      captureBusy = false;
+      btnSubmit.disabled = false;
+    }
+  }
+  btnSubmit.addEventListener('click', captureAndSubmit);
+
+  // The player is hidden -- and the emulator WASM never even requested -- until sign-in is
+  // confirmed. player.js is only dynamically import()ed here, on first confirmed sign-in,
+  // rather than a static <script> tag, so a signed-out visitor never triggers the WASM download
+  // at all. No fixed ROM: the element's own built-in "Open ROM" file picker is the whole point
+  // of this page, so nothing is set on it beyond letting it mount.
+  let emulatorRequested = false;
+  async function loadEmulator(){
+    if(emulatorRequested) return;
+    emulatorRequested = true;
+    await import('/ngpc/player.js');
+    player = document.querySelector('ngpcraft-player');
+    player.addEventListener('ngpc-ready', ()=>{ btnSubmit.disabled = false; });
+  }
+
+  function applyAuthState(user){
+    gateEl.hidden = !!user;
+    contentEl.hidden = !user;
+    if(user) loadEmulator();
+  }
+  if(window.NGPC_AUTH){
+    NGPC_AUTH.onAuthChange(applyAuthState);
+  } else {
+    // auth.js itself failed to load -- fail closed, same as "hidden if not signed in" intends.
+    applyAuthState(null);
+  }
+})();
+</script>
 </body>
 </html>
