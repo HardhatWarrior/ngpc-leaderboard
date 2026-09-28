@@ -54,11 +54,8 @@ jobs:
             echo "Nothing to commit."
             exit 0
           fi
-          git commit -m "Auto-scaffold newly-approved game page(s)
-
-This is a generated DRAFT -- read it before flipping devStatus off
-'coming-soon', same as a manually-run scaffold-game.js output. Any
-*-rules-snippet.txt alongside it still needs to be reviewed and
-pasted into firestore.rules by hand."
+          git commit \
+            -m "Auto-scaffold newly-approved game page(s)" \
+            -m "This is a generated DRAFT -- read it before flipping devStatus off 'coming-soon', same as a manually-run scaffold-game.js output. Any *-rules-snippet.txt alongside it still needs to be reviewed and pasted into firestore.rules by hand."
           git push
 
