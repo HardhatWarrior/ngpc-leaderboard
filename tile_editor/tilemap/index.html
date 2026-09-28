@@ -170,6 +170,11 @@ label.chk{display:flex;align-items:center;gap:6px;cursor:pointer;}
         <button id="btnPasteTool">Paste</button>
         <button id="btnClearSel">Clear</button>
       </div>
+      <div class="row" style="margin-top:6px">
+        <button id="btnRotateCW" title="Rotate the selection 90° clockwise. Real hardware has no tile-rotate flag, so each affected tile's current (post-flip) look gets baked into a brand-new rotated tile bitmap (reusing an identical one already generated where possible) and its flip flags reset to 0.">Rotate CW</button>
+        <button id="btnRotateCCW" title="Rotate the selection 90° counter-clockwise (see Rotate CW for how this works).">Rotate CCW</button>
+        <button id="btnRotate180" title="Rotate the selection 180°. Unlike 90°/270°, this is free on real hardware -- just both flip flags toggled, no new tiles needed.">Rotate 180°</button>
+      </div>
       <div class="hint statusText" id="selInfo" style="margin-top:4px">No selection — actions apply to whole map.</div>
       <div class="row" style="margin-top:6px;border-top:1px solid var(--border);padding-top:6px">
         <button id="btnUndo">Undo</button>
@@ -977,6 +982,94 @@ function writeBlock(layer,buf,x0,y0){
     layer.tileId[di]=buf.tileId[si]; layer.pal[di]=buf.pal[si]; layer.srcLayer[di]=buf.srcLayer[si]; layer.flip[di]=buf.flip[si];
   }
 }
+/* ---------- selection rotation ----------
+   Real NGPC hardware has no tile-rotate flag -- only H/V flip (bits 15/14 of the tilemap entry).
+   180° is therefore free (just toggle both flip bits on every cell), but a true 90°/270° needs an
+   actual new tile bitmap, matching the toolchain's own ngpc_tile_rotate90/270 helpers (software
+   rotation into a new dest tile, not an in-place hardware op). Position remap reuses the same
+   generic CW/CCW grid primitive as the sibling Tile Editor's own rotate feature. */
+function rotateGridCW(w,h,data,Ctor){
+  const out=new Ctor(w*h);
+  for(let y=0;y<h;y++)for(let x=0;x<w;x++) out[x*h+(h-1-y)]=data[y*w+x];
+  return {w:h,h:w,data:out};
+}
+function rotateGridCCW(w,h,data,Ctor){
+  let r={w,h,data};
+  r=rotateGridCW(r.w,r.h,r.data,Ctor);
+  r=rotateGridCW(r.w,r.h,r.data,Ctor);
+  r=rotateGridCW(r.w,r.h,r.data,Ctor);
+  return r;
+}
+function applyFlipToPixels(pixels,fh,fv){
+  if(!fh && !fv) return pixels;
+  const out=new Uint8Array(TILE*TILE);
+  for(let y=0;y<TILE;y++)for(let x=0;x<TILE;x++){
+    const sx=fh?TILE-1-x:x, sy=fv?TILE-1-y:y;
+    out[y*TILE+x]=pixels[sy*TILE+sx];
+  }
+  return out;
+}
+function tileBitmapKey(pixels){ return pixels.join(','); }
+const generatedTileCache=new Map(); // session-only dedup ("layerIdx|64-byte-key" -> tile index); never persisted
+function getOrCreateRotatedTile(layerIdx, pixels, defaultPalette){
+  const srcLayer=tileset.layers[layerIdx];
+  const key=layerIdx+'|'+tileBitmapKey(pixels);
+  if(generatedTileCache.has(key)) return generatedTileCache.get(key);
+  for(let i=0;i<srcLayer.tiles.length;i++){
+    if(tileBitmapKey(srcLayer.tiles[i].pixels)===tileBitmapKey(pixels)){ generatedTileCache.set(key,i); return i; }
+  }
+  const idx=srcLayer.tiles.length;
+  srcLayer.tiles.push({pixels:Uint8Array.from(pixels), defaultPalette});
+  generatedTileCache.set(key,idx);
+  return idx;
+}
+function rotateSelection(kind){
+  if(!selection){ modalAlert('Select a rectangle first.'); return; }
+  if(!tileset){ modalAlert('Import a tileset first.'); return; }
+  pushUndo();
+  const layer=currentMapLayer();
+  const buf=extractBlock(layer,selection);
+  const {w,h}=buf;
+  let nw,nh,tileId,pal,srcLayerArr,flip;
+
+  if(kind==='180'){
+    nw=w; nh=h;
+    tileId=new Int16Array(w*h); pal=new Int16Array(w*h); srcLayerArr=new Int16Array(w*h); flip=new Uint8Array(w*h);
+    for(let i=0;i<w*h;i++){
+      const di=w*h-1-i;
+      tileId[di]=buf.tileId[i]; pal[di]=buf.pal[i]; srcLayerArr[di]=buf.srcLayer[i];
+      flip[di] = buf.tileId[i]<0 ? 0 : (buf.flip[i]^3);
+    }
+  } else {
+    const rotFn = kind==='cw' ? rotateGridCW : rotateGridCCW;
+    const rTile=rotFn(w,h,buf.tileId,Int16Array);
+    const rPal=rotFn(w,h,buf.pal,Int16Array);
+    const rSrc=rotFn(w,h,buf.srcLayer,Int16Array);
+    const rFlip=rotFn(w,h,buf.flip,Uint8Array);
+    nw=rTile.w; nh=rTile.h;
+    tileId=rTile.data; pal=rPal.data; srcLayerArr=rSrc.data; flip=new Uint8Array(nw*nh);
+    for(let i=0;i<tileId.length;i++){
+      const t=tileId[i];
+      if(t<0) continue;
+      const li=srcLayerArr[i];
+      const srcTile=tileset.layers[li].tiles[t];
+      const fh=!!(rFlip.data[i]&1), fv=!!(rFlip.data[i]&2);
+      const eff=applyFlipToPixels(srcTile.pixels,fh,fv);
+      const rotatedPixels=rotFn(TILE,TILE,eff,Uint8Array).data;
+      const resolvedPal = pal[i]>=0 ? pal[i] : srcTile.defaultPalette;
+      tileId[i]=getOrCreateRotatedTile(li, rotatedPixels, resolvedPal);
+      // flip[i] stays 0 -- the rotation is now baked into the new tile's own pixels
+    }
+  }
+
+  clearBlock(layer,selection);
+  writeBlock(layer,{w:nw,h:nh,tileId,pal,srcLayer:srcLayerArr,flip},selection.x0,selection.y0);
+  selection={x0:selection.x0,y0:selection.y0,
+    x1:Math.min(mapState.mapW-1,selection.x0+nw-1),
+    y1:Math.min(mapState.mapH-1,selection.y0+nh-1)};
+  render(); scheduleAutosave();
+}
+
 function cellInSelection(c){
   return selection && c.x>=selection.x0 && c.x<=selection.x1 && c.y>=selection.y0 && c.y<=selection.y1;
 }
@@ -1133,6 +1226,9 @@ document.getElementById('btnClearSel').onclick=()=>{
   else { layer.tileId.fill(-1); layer.srcLayer.fill(-1); layer.pal.fill(-1); layer.flip.fill(0); }
   render(); scheduleAutosave();
 };
+document.getElementById('btnRotateCW').onclick=()=>rotateSelection('cw');
+document.getElementById('btnRotateCCW').onclick=()=>rotateSelection('ccw');
+document.getElementById('btnRotate180').onclick=()=>rotateSelection('180');
 document.getElementById('btnUndo').onclick=undo;
 document.getElementById('btnRedo').onclick=redo;
 
