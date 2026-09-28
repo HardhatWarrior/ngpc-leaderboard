@@ -585,14 +585,19 @@ service cloud.firestore {
           // developer can see how stale their own screenshots are) -- never trusted for anything
           // else. emulator -- which web-player backend play/<slug>/ mounts, EmulatorJS (default/
           // missing) or NgpCraft (github.com/Tixul/NgpCraft_web_emulator) -- see play/webplayer.js's
-          // own header comment; purely a UI choice, same trust level as devStatus.
+          // own header comment; purely a UI choice, same trust level as devStatus. version -- a
+          // free-text build/version string (e.g. "v1.2"), shown on this game's own leaderboard
+          // page next to its title, and optionally (showVersionOnTile) right-justified inline
+          // with the game name on the homepage tile too -- see index.html's buildTile().
           || (isAssignedDev(resource.data)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'visibility', 'emulator'])
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'visibility', 'emulator', 'version', 'showVersionOnTile'])
               && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final']
               && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 300))
               && (!('siteUrl' in request.resource.data) || (request.resource.data.siteUrl is string && (request.resource.data.siteUrl == '' || request.resource.data.siteUrl.matches('^https?://.+'))))
               && (!('visibility' in request.resource.data) || request.resource.data.visibility in ['active', 'inactive', 'hidden'])
               && (!('emulator' in request.resource.data) || request.resource.data.emulator in ['emulatorjs', 'ngpcraft'])
+              && (!('version' in request.resource.data) || (request.resource.data.version is string && request.resource.data.version.size() <= 20))
+              && (!('showVersionOnTile' in request.resource.data) || request.resource.data.showVersionOnTile is bool)
               && (!('titleImageUpdatedAt' in request.resource.data) || request.resource.data.titleImageUpdatedAt is int)
               && (!('extraScreenshot1UpdatedAt' in request.resource.data) || request.resource.data.extraScreenshot1UpdatedAt is int)
               && (!('extraScreenshot2UpdatedAt' in request.resource.data) || request.resource.data.extraScreenshot2UpdatedAt is int))

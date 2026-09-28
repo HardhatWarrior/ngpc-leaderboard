@@ -248,8 +248,12 @@
   .corner-badge.updated{ background:var(--good); color:#0a1f16; }
 
   .tile-body{ padding:14px 16px 16px; display:flex; flex-direction:column; gap:4px; }
-  .tile-name{ font-size:13.5px; font-weight:700; color:var(--cream); }
+  .tile-name{ font-size:13.5px; font-weight:700; color:var(--cream); display:flex; align-items:baseline; gap:6px; }
   .tile.disabled .tile-name{ color:var(--dim); opacity:.7; }
+  /* Admin-opt-in per game (games/{slug}.showVersionOnTile) -- most tiles never have this element
+     at all. margin-left:auto pushes it flush right within .tile-name's own flex row, regardless
+     of how long the game name to its left is. */
+  .tile-version{ margin-left:auto; font-size:11px; font-weight:600; color:var(--dim); white-space:nowrap; }
 
   footer{ text-align:center; color:var(--dim); font-size:11px; }
   footer a{ color:var(--accent2); }
@@ -414,6 +418,10 @@
   function buildTile(slug, data){
     const a = document.createElement('a');
     a.className = 'tile';
+    // applySort()'s "A-Z" comparator reads this directly rather than .tile-name's own textContent
+    // -- that element can also contain the optional right-justified version span now (see below),
+    // which would otherwise get swept into the alphabetical comparison too.
+    a.dataset.name = data.name || slug;
     const isComingSoon = data.devStatus === 'coming-soon';
     // See loadGames()'s own comment: a doc with no `visibility` yet falls back to the old
     // `active` boolean this field replaced. 'inactive' gets the exact same unclickable treatment
@@ -489,7 +497,17 @@
     body.className = 'tile-body';
     const nameEl = document.createElement('div');
     nameEl.className = 'tile-name';
-    nameEl.textContent = data.name || slug;
+    const nameTextEl = document.createElement('span');
+    nameTextEl.textContent = data.name || slug;
+    nameEl.appendChild(nameTextEl);
+    // Admin opt-in (games/{slug}.showVersionOnTile) -- most games leave this off; see
+    // admin/game/index.html's own Version field, also shown on this game's leaderboard page.
+    if(data.showVersionOnTile && data.version){
+      const versionEl = document.createElement('span');
+      versionEl.className = 'tile-version';
+      versionEl.textContent = data.version;
+      nameEl.appendChild(versionEl);
+    }
     body.appendChild(nameEl);
 
     a.appendChild(art);
@@ -540,7 +558,7 @@
     const counts = countsCache[activePeriod];
     const sorted = tileEls.slice().sort((a, b)=>{
       if(mode === 'alpha'){
-        return a.querySelector('.tile-name').textContent.localeCompare(b.querySelector('.tile-name').textContent);
+        return a.dataset.name.localeCompare(b.dataset.name);
       }
       // Pinned tiles always float to the top of "Recent" specifically -- "Most Active" is a real
       // popularity ranking an admin pin shouldn't distort, and "A-Z" is about identity, not
