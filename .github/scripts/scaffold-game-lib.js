@@ -294,7 +294,10 @@ function leaderboardTemplate(sub, plan, slug) {
      required so a still-loading/broken image doesn't get its height stretched to match its
      siblings, which reads as a horizontal squish. */
   .art-strip{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; flex:none; }
-  .art-col{ display:flex; flex-direction:column; gap:8px; flex:0 1 auto; min-width:0; }
+  /* max-width caps this at three ~130px images across (130*3 + 8*2 gap) -- without it, a long
+     .game-desc line has no width to wrap against and stretches this column (and the flex row
+     it shares with .title-block) wide enough to wrap the ROM/Play/Manage links on the right. */
+  .art-col{ display:flex; flex-direction:column; gap:8px; flex:0 1 auto; min-width:0; max-width:406px; }
   .game-desc{ font-size:11px; line-height:1.45; color:var(--dim); max-width:100%; min-width:0; overflow-wrap:anywhere; }
   .game-site{ font-size:11px; max-width:100%; min-width:0; }
   .game-site a{ color:var(--accent2); text-decoration:underline; text-underline-offset:2px; overflow-wrap:anywhere; word-break:break-word; }

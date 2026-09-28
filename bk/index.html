@@ -62,7 +62,10 @@
      shorter sibling (extra-art, 60px) gets its height stretched to match the tallest one
      (header-art, 130px) while width stays put, which reads as a horizontal squish. */
   .art-strip{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; flex:none; }
-  .art-col{ display:flex; flex-direction:column; gap:8px; flex:0 1 auto; min-width:0; }
+  /* max-width caps this at three ~130px images across (130*3 + 8*2 gap) -- without it, a long
+     .game-desc line has no width to wrap against and stretches this column (and the flex row
+     it shares with .title-block) wide enough to wrap the ROM/Play/Manage links on the right. */
+  .art-col{ display:flex; flex-direction:column; gap:8px; flex:0 1 auto; min-width:0; max-width:406px; }
   /* Optional per-game blurb + link back to the developer's own site (games/{slug}.description /
      .siteUrl), shown directly under the title-screen art -- hidden entirely via [hidden] until JS
      finds one set. overflow-wrap:anywhere (not just break-word) is required specifically for a
