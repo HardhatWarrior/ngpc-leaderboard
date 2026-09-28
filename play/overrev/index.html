@@ -21,51 +21,30 @@
     --cream:#f4eedd; --dim:#93a0c9; --accent:#3fa9dc; --accent-ink:#06202e;
     --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
   }
-  *{ box-sizing:border-box; }
-  html,body{ height:auto; }
-  body{
-    margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
-    padding-inline:20px; padding-block:32px; display:flex; justify-content:center;
-  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif; padding-inline:20px; padding-block:32px; display:flex; justify-content:center; }
+  html.maximizing, html.maximizing body{ height:100%; overflow:hidden; }
   .px{ font-family:"Press Start 2P",monospace; }
   #shell{ width:100%; max-width:520px; display:flex; flex-direction:column; gap:18px; align-items:center; }
-
   header{ text-align:center; display:flex; flex-direction:column; gap:8px; }
   header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
   header p{ margin:0; color:var(--dim); font-size:13px; }
-
-  /* ---------- player container -- a fixed-size box the <ngpcraft-embed> custom element fills
-     entirely (its own :host CSS is width:100%/height:100%/aspect-ratio:160/152). Its maximize
-     mode (a CSS-only :host([expanded]) position:fixed, deliberately never the real Fullscreen
-     API -- see the emulator's own integrated.js comment: "also works when Fullscreen API is
-     denied", the same iOS Safari/Edge gap the old EmulatorJS integration here used to work
-     around by hand) is entirely self-contained inside the component, so this page needs no
-     maximize CSS/JS of its own anymore. Its own bottom toolbar (Capture/Settings/Maximize) is
-     what used to be this page's separate #btn-maximize and #btn-submit -- see loadEmulator()'s
-     capture-label attribute, which relabels its built-in Capture button to "Submit Score" and
-     wires its ngpc-capture event into this page's own QR-decode/routing flow. ---------- */
-  #game{ width:100%; max-width:480px; aspect-ratio:160/152; }
-
-  /* Shrink the page's own side/top padding on narrow screens so the player gets noticeably
-     more room on a phone. */
-  @media (max-width: 600px){
-    body{ padding-inline:10px; padding-block:20px; }
-  }
-
+  #player-panel{ width:100%; max-width:480px; aspect-ratio:160/152; position:relative; background:#000; border:1px solid var(--border); border-radius:14px; overflow:hidden; }
+  #game{ width:100%; height:100%; }
+  #player-panel.maximized{ position:fixed; inset:0; z-index:9999; width:100vw; height:100vh; max-width:none; aspect-ratio:auto; border-radius:0; border:none; }
+  #btn-maximize{ position:absolute; left:10px; top:10px; z-index:5; width:34px; height:34px; border:none; border-radius:8px; cursor:pointer; background:rgba(0,0,0,.55); color:#fff; font-size:16px; line-height:1; display:flex; align-items:center; justify-content:center; }
+  @media (max-width: 600px){ body{ padding-inline:10px; padding-block:20px; } }
+  #btn-submit{ font:inherit; border:none; border-radius:8px; padding:13px 20px; cursor:pointer; font-weight:600; font-size:13.5px; width:100%; max-width:480px; background:var(--accent); color:var(--accent-ink); }
+  #btn-submit:hover:not(:disabled){ filter:brightness(1.1); }
+  #btn-submit:disabled{ opacity:.5; cursor:not-allowed; }
   #submit-msg{ width:100%; max-width:480px; }
   .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; text-align:center; }
   .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
   .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
   .msg.info{ background:rgba(92,143,214,.12); color:var(--dim); border:1px solid var(--border); }
-
-  /* Shown until sign-in is confirmed; the emulator itself isn't even requested until then --
-     see the script tail. This is a client-side gate only (same limit as everything else on this
-     static site: no server to enforce it against a determined visitor), but it does stop the
-     ROM/cores from loading and keeps the player out of the page for a signed-out visitor. */
   #signin-gate{ width:100%; max-width:480px; text-align:center; padding:24px; }
   #player-content{ width:100%; display:flex; flex-direction:column; gap:18px; align-items:center; }
   #player-content[hidden], #signin-gate[hidden]{ display:none; }
-
   footer{ text-align:center; color:var(--dim); font-size:11px; }
   #play-count{ text-align:center; color:var(--dim); font-size:11px; margin-top:-6px; }
 </style>
@@ -87,8 +66,12 @@
   <div id="signin-gate">&#128274; Sign in (top right) to use the in-browser player.</div>
 
   <div id="player-content" hidden>
-    <div id="game"></div>
+    <div id="player-panel">
+      <button type="button" id="btn-maximize" title="Full screen">&#10530;</button>
+      <div id="game"></div>
+    </div>
 
+    <button type="button" id="btn-submit">Submit Score</button>
     <div id="submit-msg"></div>
 
     <footer>Reads the in-game QR code directly from the emulator, then submits it the same way a real scan does.</footer>
@@ -96,210 +79,15 @@
 </div>
 
 <script src="/auth.js"></script>
+<!-- webplayer.js: shared sign-in/coming-soon gate, ROM resolution, QR decode+route flow, and
+     EmulatorJS-vs-NgpCraft mounting (per games/overrev.emulator, set from admin/game/) -- see
+     that file's own header comment. Every /play/<slug>/ page uses the same markup ids and this
+     same two-line wiring; only slug/title/staticRomUrl differ per game. Restored the standard
+     #player-panel/#btn-maximize/#btn-submit markup here (previously simplified away when this
+     page was NgpCraft-only) so this game can now be switched back to EmulatorJS too. -->
+<script src="/play/webplayer.js"></script>
 <script>
-(function(){
-  "use strict";
-  // Every game's QR encodes its own routing code first -- fetched lazily from the games/
-  // collection on first capture attempt instead of a hardcoded table (see index.html's own
-  // GAME_ROUTES comment), so a new game's routing works the instant its games/{slug} doc exists,
-  // no code edit needed here. Cached after the first successful fetch for the rest of this page
-  // view (matters for shared/generic code like this, even though in practice this particular
-  // page will only ever see this one game's own QR on screen).
-  let GAME_ROUTES = null;
-  async function getGameRoutes(){
-    if(GAME_ROUTES) return GAME_ROUTES;
-    const routes = {};
-    try{
-      if(window.NGPC_AUTH && NGPC_AUTH.db){
-        const snap = await NGPC_AUTH.db.collection('games').get();
-        snap.forEach(doc=>{ const d = doc.data(); if(d.code) routes[d.code] = doc.id; });
-      }
-    }catch(e){ /* leave whatever was found -- a partial/empty table just fails routing below */ }
-    GAME_ROUTES = routes;
-    return routes;
-  }
-  const el = (id)=>document.getElementById(id);
-  // Public "played N times" readout -- off the same pageViews/{pathKey} doc auth.js's own
-  // trackPageView() already increments on this page's own load (pathKeyFromLocation() derives
-  // the key from location.pathname, so this needs no per-game slug lookup, unlike
-  // admin/game/index.html's version of the same stat, which reads this from a different page).
-  (function(){
-    const countEl = el('play-count');
-    if(!countEl || !window.NGPC_AUTH || !NGPC_AUTH.db) return;
-    NGPC_AUTH.db.collection('pageViews').doc(NGPC_AUTH.pathKeyFromLocation()).get().then(doc=>{
-      const total = (doc.exists && doc.data().total) || 0;
-      countEl.textContent = 'Played ' + total.toLocaleString() + ' time' + (total===1?'':'s');
-    }).catch(()=>{ /* decorative -- leave blank on error */ });
-  })();
-  const gateEl = el('signin-gate');
-  const contentEl = el('player-content');
-  const msgEl = el('submit-msg');
-
-  // The player is hidden -- and the emulator/ROM never even requested -- until sign-in is
-  // confirmed. integrated.js is only dynamically import()ed here, on first confirmed sign-in,
-  // rather than a static <script> tag, so a signed-out visitor never triggers the WASM/ROM
-  // download at all.
-  let emulatorRequested = false;
-  async function loadEmulator(){
-    if(emulatorRequested) return;
-    emulatorRequested = true;
-    // Prefer a developer-uploaded build (games/overrev.romPath, set from /admin/game/) over
-    // the static repo-committed ROM -- falls back to the static file on any lookup failure.
-    let gameUrl = 'overrev.ngp';
-    try{
-      if(window.NGPC_AUTH && NGPC_AUTH.db){
-        const doc = await NGPC_AUTH.db.collection('games').doc('overrev').get();
-        if(doc.exists && doc.data().romPath) gameUrl = doc.data().romPath;
-      }
-    }catch(e){ /* keep the static fallback */ }
-    // Importing registers the <ngpcraft-embed> custom element as a side effect; mounting it by
-    // hand (rather than the module's own mountNgpCraft() helper) so capture-label can be set
-    // BEFORE the element connects to the DOM -- INTEGRATION.md is explicit that it has to be set
-    // pre-connection, since the component reads it once in its own connectedCallback. This is
-    // what relabels its built-in Capture button to "Submit Score", so this page needs no submit
-    // button, maximize button, or fullscreen handling of its own at all -- see the #game CSS
-    // comment above for why.
-    await import('/ngpc/integrated.js');
-    const player = document.createElement('ngpcraft-embed');
-    player.setAttribute('rom', gameUrl);
-    player.setAttribute('game-title', 'Over Rev');
-    player.setAttribute('capture-label', 'Submit Score');
-    player.addEventListener('ngpc-capture', (event)=>{
-      event.preventDefault(); // suppress the component's own default PNG-download behavior
-      captureAndSubmit(event.detail.canvas);
-    });
-    el('game').appendChild(player);
-  }
-
-  function applyAuthState(user){
-    gateEl.hidden = !!user;
-    contentEl.hidden = !user;
-    if(user) loadEmulator();
-  }
-  if(window.NGPC_AUTH){
-    NGPC_AUTH.onAuthChange(applyAuthState);
-  } else {
-    // auth.js itself failed to load -- fail closed, same as "hidden if not signed in" intends.
-    applyAuthState(null);
-  }
-
-  function escapeHtml(s){
-    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  }
-  function showMsg(cls, text){
-    msgEl.innerHTML = '<div class="msg '+cls+'">'+escapeHtml(text)+'</div>';
-  }
-
-  function lastPathSegment(text){
-    const parts = String(text||'').split('/').filter(Boolean);
-    return parts.length ? parts[parts.length-1] : '';
-  }
-
-  /* ---------- QR decode stack -- identical to every other page's own scan code (zbar-wasm
-     tried first, native BarcodeDetector second, jsQR last); see e.g. /2048/index.html's own
-     comments for why. Only the image *source* differs here: a single captured screen frame
-     instead of a live camera video or an uploaded photo. ---------- */
-  const scanCanvas = document.createElement('canvas');
-  const scanCtx = scanCanvas.getContext('2d', {willReadFrequently:true});
-
-  let barcodeDetector;
-  function getBarcodeDetector(){
-    if(barcodeDetector !== undefined) return barcodeDetector;
-    if(!('BarcodeDetector' in window)){ barcodeDetector = null; return null; }
-    try{ barcodeDetector = new window.BarcodeDetector({formats:['qr_code']}); }
-    catch(e){ barcodeDetector = null; }
-    return barcodeDetector;
-  }
-
-  async function decodeViaZbarWasm(source, w0, h0){
-    if(!window.zbarWasm || !w0 || !h0) return null;
-    const scale = Math.min(1, 1000/Math.max(w0,h0));
-    const w = Math.round(w0*scale), h = Math.round(h0*scale);
-    scanCanvas.width = w; scanCanvas.height = h;
-    scanCtx.drawImage(source, 0, 0, w, h);
-    try{
-      const symbols = await window.zbarWasm.scanImageData(scanCtx.getImageData(0, 0, w, h));
-      if(symbols && symbols.length) return symbols[0].decode();
-    }catch(e){ /* fall through */ }
-    return null;
-  }
-
-  function jsqrFallback(source, w0, h0, scales){
-    if(!window.jsQR || !w0 || !h0) return null;
-    for(const target of scales){
-      const scale = Math.min(1, target/Math.max(w0,h0));
-      const w = Math.round(w0*scale), h = Math.round(h0*scale);
-      scanCanvas.width = w; scanCanvas.height = h;
-      scanCtx.drawImage(source, 0, 0, w, h);
-      const frame = scanCtx.getImageData(0, 0, w, h);
-      const code = window.jsQR(frame.data, w, h, {inversionAttempts:'attemptBoth'});
-      if(code && code.data) return code.data;
-    }
-    return null;
-  }
-
-  async function decodeSource(source, w0, h0, scales){
-    const viaZbar = await decodeViaZbarWasm(source, w0, h0);
-    if(viaZbar) return viaZbar;
-    const bd = getBarcodeDetector();
-    if(bd){
-      try{
-        const results = await bd.detect(source);
-        if(results && results.length && results[0].rawValue) return results[0].rawValue;
-      }catch(e){ /* fall through to jsQR */ }
-    }
-    return jsqrFallback(source, w0, h0, scales);
-  }
-
-  /* ---------- decode the frame the <ngpcraft-embed> component's own Capture button already
-     handed us (native 160x152, no letterboxing/cropping math needed -- unlike the old EmulatorJS
-     integration, this component's captureFrame() draws straight from its internal emulator
-     canvas, which IS the native resolution, so what we're handed is already exactly the visible
-     game area), and route into the real leaderboard page's own confirm/submit flow -- same
-     hash-payload handoff the main site's QR scan and every leaderboard's own scan already use
-     (see index.html's routeToGame()), so this page never needs its own copy of the Firestore
-     write/auth logic. ---------- */
-  let captureBusy = false;
-
-  async function captureAndSubmit(canvas){
-    if(captureBusy) return;
-    captureBusy = true;
-    showMsg('info', 'Looking for a QR code…');
-
-    try{
-      const value = await decodeSource(canvas, canvas.width, canvas.height, [700, 1100, 1500, 2000]);
-      if(!value){
-        showMsg('err', 'No QR code found on screen — make sure the in-game QR code is fully visible and try again.');
-        return;
-      }
-
-      const payload = lastPathSegment(value).toUpperCase();
-      // Game codes are 2-6 characters -- longest-match against known codes, since there's no
-      // delimiter after a variable-length code in the payload itself.
-      const routes = await getGameRoutes();
-      const sortedCodes = Object.keys(routes).sort((a,b)=>b.length-a.length);
-      const code = sortedCodes.find(c=>payload.startsWith(c)) || null;
-      const slug = code ? routes[code] : null;
-      if(!slug){
-        showMsg('err', 'Unrecognized game code — that leaderboard might not be set up yet.');
-        return;
-      }
-
-      showMsg('ok', 'Found it — opening the leaderboard…');
-      // Same "?v=" cache-buster + hash handoff the main page's own scan uses, so the target
-      // leaderboard always fetches fresh code and reads the payload back out via its own
-      // existing payloadFromEntry(). "src=capture" marks this as an in-browser-player submission
-      // (vs a real camera/photo scan) -- read once by the leaderboard page's own SUBMIT_SOURCE
-      // before its boot() strips the query string, and stored on the score doc for
-      // admin/game/index.html's scan-source breakdown.
-      location.href = '/'+slug+'/?v='+Date.now()+'&src=capture#'+payload;
-    }catch(e){
-      showMsg('err', 'Capture failed: '+escapeHtml(e.message||'unknown error'));
-    }finally{
-      captureBusy = false;
-    }
-  }
-})();
+  NGPCWebPlayer.init({ slug: 'overrev', title: 'Over Rev', staticRomUrl: 'overrev.ngp' });
 </script>
 </body>
 </html>

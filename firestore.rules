@@ -583,13 +583,16 @@ service cloud.firestore {
           // titleImage*/extraScreenshot*UpdatedAt are the companion timestamps
           // admin/game/index.html stamps alongside each art upload, purely informational (so a
           // developer can see how stale their own screenshots are) -- never trusted for anything
-          // else.
+          // else. emulator -- which web-player backend play/<slug>/ mounts, EmulatorJS (default/
+          // missing) or NgpCraft (github.com/Tixul/NgpCraft_web_emulator) -- see play/webplayer.js's
+          // own header comment; purely a UI choice, same trust level as devStatus.
           || (isAssignedDev(resource.data)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'visibility'])
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'visibility', 'emulator'])
               && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final']
               && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 300))
               && (!('siteUrl' in request.resource.data) || (request.resource.data.siteUrl is string && (request.resource.data.siteUrl == '' || request.resource.data.siteUrl.matches('^https?://.+'))))
               && (!('visibility' in request.resource.data) || request.resource.data.visibility in ['active', 'inactive', 'hidden'])
+              && (!('emulator' in request.resource.data) || request.resource.data.emulator in ['emulatorjs', 'ngpcraft'])
               && (!('titleImageUpdatedAt' in request.resource.data) || request.resource.data.titleImageUpdatedAt is int)
               && (!('extraScreenshot1UpdatedAt' in request.resource.data) || request.resource.data.extraScreenshot1UpdatedAt is int)
               && (!('extraScreenshot2UpdatedAt' in request.resource.data) || request.resource.data.extraScreenshot2UpdatedAt is int))

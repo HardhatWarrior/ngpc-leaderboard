@@ -184,6 +184,17 @@
     </div>
     <div id="active-msg"></div>
 
+    <!-- Which backend play/<slug>/ mounts for this game's in-browser player -- see
+         play/webplayer.js's own header comment. EmulatorJS is the long-standing default; NgpCraft
+         (github.com/Tixul/NgpCraft_web_emulator) is a newer, lighter, purpose-built NGP/NGPC WASM
+         player with a native screenshot API, first proven out on Over Rev's own play page. Same
+         trust level as devStatus/visibility above -- a dev's own choice for their own game. -->
+    <div class="status-row" id="emulator-row" style="margin-top:10px">
+      <button type="button" class="status-btn" data-emulator="emulatorjs">EmulatorJS<span class="desc">Long-standing default</span></button>
+      <button type="button" class="status-btn" data-emulator="ngpcraft">NgpCraft<span class="desc">Lighter, purpose-built NGP/NGPC player</span></button>
+    </div>
+    <div id="emulator-msg"></div>
+
     <!-- Admin only. Overrides "Most Recent" sort entirely -- a ROM build pushed to some OTHER
          game shouldn't be able to bump this one down, e.g. while running a promotion. Does not
          affect "Most Active" or "A-Z" sort; see index.html's own applySort() comment. -->
@@ -1131,6 +1142,40 @@
           activeMsg.innerHTML = activeMessages[next] || '';
         }catch(e){
           activeMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+        }finally{
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // Web player backend, stored as the string `emulator` -- a doc with no `emulator` yet falls
+    // back to 'emulatorjs' (the long-standing default every game predates this toggle with).
+    let currentEmulator = data.emulator || 'emulatorjs';
+    const emulatorRow = el('emulator-row');
+    function paintEmulatorButtons(){
+      emulatorRow.querySelectorAll('.status-btn').forEach(btn=>{
+        btn.classList.toggle('active', btn.dataset.emulator === currentEmulator);
+      });
+    }
+    paintEmulatorButtons();
+    const emulatorMsg = el('emulator-msg');
+    const emulatorMessages = {
+      emulatorjs: '<div class="msg ok">Saved — this game’s web player now runs on EmulatorJS.</div>',
+      ngpcraft: '<div class="msg ok">Saved — this game’s web player now runs on NgpCraft.</div>',
+    };
+    emulatorRow.querySelectorAll('.status-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const next = btn.dataset.emulator;
+        if(next === currentEmulator) return;
+        emulatorMsg.innerHTML = '';
+        btn.disabled = true;
+        try{
+          await docRef.update({emulator: next});
+          currentEmulator = next;
+          paintEmulatorButtons();
+          emulatorMsg.innerHTML = emulatorMessages[next] || '';
+        }catch(e){
+          emulatorMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
         }finally{
           btn.disabled = false;
         }
