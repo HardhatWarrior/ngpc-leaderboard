@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Neo Bowling Hiscores</title>
+<title>Neo Bowling High Scores</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
@@ -464,7 +464,7 @@
     if(text.length < 9) return {error:"That code is too short to be a valid score."};
     const gameCode = text.slice(0,2);
     if(gameCode !== QR_GAME_CODE){
-      return {error:'This code is for a different game ("'+gameCode+'") — open that game’s own hiscores page instead.'};
+      return {error:'This code is for a different game ("'+gameCode+'") — open that game’s own high scores page instead.'};
     }
     const initials = text.slice(2,5);
     const weightStr = text.slice(5,7);

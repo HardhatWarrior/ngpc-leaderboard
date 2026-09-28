@@ -521,8 +521,8 @@
       // is locked to the account's own registered address server-side, not just trusted here.
       if(approve && u.email && window.NGPC_AUTH){
         NGPC_AUTH.notifyUser(uid, u.email,
-          'Your NGPC Hiscores account is approved!',
-          'Hi ' + u.username + ',\n\nYour NGPC Hiscores account has been approved -- your scores are now visible on the public leaderboards at https://ngpc-dev.com.\n\nThanks for playing!\n-- NGPC Hiscores');
+          'Your NGPC High Scores account is approved!',
+          'Hi ' + u.username + ',\n\nYour NGPC High Scores account has been approved -- your scores are now visible on the public leaderboards at https://ngpc-dev.com.\n\nThanks for playing!\n-- NGPC High Scores');
       }
       // Every score doc denormalizes its submitter's approved status (see firestore.rules' scores
       // match block), so flipping the account also has to fan out to all of that uid's existing

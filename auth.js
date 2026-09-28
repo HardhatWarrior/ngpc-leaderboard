@@ -210,7 +210,7 @@ window.NGPC_AUTH = (function(){
       throw e;
     }
     notifyAdmin(
-      'New NGPC Hiscores signup: ' + username,
+      'New NGPC High Scores signup: ' + username,
       'Username: ' + username + '\nSigned up: ' + new Date().toLocaleString()
         + (recoveryEmail ? '\nRecovery email: ' + recoveryEmail : '')
         + (wantsDev ? '\nChecked "I\'d like to submit a game" at signup.' : '')
