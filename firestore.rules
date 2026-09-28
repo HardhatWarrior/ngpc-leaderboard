@@ -714,19 +714,21 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // mail/{id} -- watched by the Firebase "Trigger Email" extension (Admin SDK only; installed
-    // separately from the Firebase Console), which turns each doc into a real email and then
-    // writes delivery status back onto it. Written by auth.js's notifyAdmin() on a new signup and
-    // by dev/submit/index.html on a new game submission -- the recipient there is hardcoded to a
-    // single literal address, NOT just trusted from the client, so nothing a client sends can
-    // redirect a notification to an arbitrary inbox; that's a fixed admin alert channel, not a
-    // general mailer. auth.js's notifyUser() (admin/index.html's own account-approval notice) is
-    // the one exception: it can address a real player instead, but ONLY the site admin can send
-    // one, and ONLY to that exact account's own registered recovery email -- the `uid` field is
-    // required and the `to` address is checked server-side against
+    // mail/{id} -- watched by functions/index.js's own sendMail (a plain Firestore-triggered
+    // Cloud Function, Admin SDK only), which turns each doc into a real email sent through
+    // support@ngpc-dev.com and writes delivery status back onto it. Previously watched by
+    // Firebase's prebuilt "Trigger Email" extension instead -- swapped out since that extension is
+    // being sunset (March 2027); this rule (who can write what) is unchanged either way. Written by
+    // auth.js's notifyAdmin() on a new signup and by dev/submit/index.html on a new game submission
+    // -- the recipient there is hardcoded to a single literal address, NOT just trusted from the
+    // client, so nothing a client sends can redirect a notification to an arbitrary inbox; that's a
+    // fixed admin alert channel, not a general mailer. auth.js's notifyUser() (admin/index.html's
+    // own account-approval notice) is the one exception: it can address a real player instead, but
+    // ONLY the site admin can send one, and ONLY to that exact account's own registered recovery
+    // email -- the `uid` field is required and the `to` address is checked server-side against
     // users/{uid}/private/contact.recoveryEmail, so even a compromised admin-panel script couldn't
-    // redirect this to somewhere else. No read/update/delete for any client either way: only the
-    // extension's own Admin SDK (which bypasses rules entirely) ever touches a doc after creation.
+    // redirect this to somewhere else. No read/update/delete for any client either way: only
+    // sendMail's own Admin SDK (which bypasses rules entirely) ever touches a doc after creation.
     match /mail/{id} {
       allow read, update, delete: if false;
       allow create: if request.auth != null && (

@@ -8,9 +8,11 @@ hardware required.
 
 No backend of its own: this is a static site (GitHub Pages) backed entirely by Firebase
 (Firestore for data, Firebase Auth for accounts, Firebase Storage for ROM/screenshot uploads).
-There is no server-side code anywhere in this repo except two small GitHub Actions automations —
-everything else is plain HTML/CSS/JS talking to Firebase directly from the browser, with
-`firestore.rules`/`storage.rules` doing all the access control.
+The only server-side code in this repo is two small GitHub Actions automations and
+[functions/](functions/) — one Cloud Function (`sendMail`) that turns a `mail/{id}` doc into a
+real email via support@ngpc-dev.com's own SMTP, replacing Firebase's now-deprecated "Trigger
+Email" extension. Everything else is plain HTML/CSS/JS talking to Firebase directly from the
+browser, with `firestore.rules`/`storage.rules` doing all the access control.
 
 See [about/index.html](about/index.html) (live at `/about/`) for the project's own write-up —
 why it exists, how the QR flow works, and what's next.
