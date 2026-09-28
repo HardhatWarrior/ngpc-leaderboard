@@ -1058,6 +1058,12 @@ function rotateSelection(kind){
       const rotatedPixels=rotFn(TILE,TILE,eff,Uint8Array).data;
       const resolvedPal = pal[i]>=0 ? pal[i] : srcTile.defaultPalette;
       tileId[i]=getOrCreateRotatedTile(li, rotatedPixels, resolvedPal);
+      // Pin the cell's palette explicitly instead of leaving it "inherit" (-1): the reuse-match
+      // in getOrCreateRotatedTile keys on pixel bitmap alone, so a rotated tile can land on an
+      // EXISTING tileset slot whose own defaultPalette differs (e.g. two tiles that share the same
+      // shape/index pattern but are recolored via different default palettes) -- without this, an
+      // inherited cell would silently pick up that other tile's color instead of its own.
+      pal[i]=resolvedPal;
       // flip[i] stays 0 -- the rotation is now baked into the new tile's own pixels
     }
   }
