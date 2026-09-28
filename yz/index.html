@@ -18,7 +18,7 @@
 <style>
   :root{
     --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
-    --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#5c8fd6; --accent-ink:#0a1830;
     --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
   }
   *{ box-sizing:border-box; } html,body{ height:auto; }
@@ -26,7 +26,6 @@
   .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; } .tnum{ font-variant-numeric:tabular-nums; }
   #shell{ width:100%; max-width:960px; display:flex; flex-direction:column; gap:22px; }
   header{ background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--border); border-radius:14px; padding:22px 22px 18px; display:flex; flex-direction:column; gap:14px; position:relative; overflow:hidden; }
-  header::before{ content:""; position:absolute; inset:0; background:radial-gradient(circle at 85% -10%, rgba(178,58,82,.35), transparent 55%); pointer-events:none; }
   .eyebrow{
     position:relative; font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase;
   }
