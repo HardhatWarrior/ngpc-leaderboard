@@ -231,6 +231,11 @@
           <tbody id="user-rows"></tbody>
         </table>
       </div>
+      <div class="sub-pager" id="players-pager" hidden>
+        <button class="btn-revoke" id="players-prev">&larr; Prev</button>
+        <span class="sub-page-label" id="players-page-label"></span>
+        <button class="btn-revoke" id="players-next">Next &rarr;</button>
+      </div>
     </div>
   </section>
 
@@ -290,6 +295,10 @@
   const rowsEl = el('user-rows');
   const statsEl = el('stats-row');
   const statusEl = el('list-status');
+  const playersPagerEl = el('players-pager');
+  const playersPageLabelEl = el('players-page-label');
+  const PLAYERS_PAGE_SIZE = 10;
+  let playersPage = 0;
   const gamesContentEl = el('games-content');
   const gamesRowsEl = el('games-rows');
   const gamesStatusEl = el('games-status');
@@ -428,26 +437,43 @@
   }
 
   function renderRows(users, db){
-    rowsEl.innerHTML = users.map(u=>{
-      const avatarHtml = u.avatar
-        ? '<canvas class="row-avatar" data-avatar-uid="'+u.uid+'"></canvas>'
-        : '<div class="row-avatar"></div>';
-      const actionBtn = u.approved
-        ? '<button type="button" class="btn-revoke" data-action="revoke" data-uid="'+u.uid+'">Revoke</button>'
-        : '<button type="button" class="btn-approve" data-action="approve" data-uid="'+u.uid+'">Approve</button>';
-      return '<tr data-row-uid="'+u.uid+'">'+
-        '<td><div class="col-user">'+avatarHtml+'<span class="username"><a href="/user/?u='+encodeURIComponent(u.username)+'">'+escapeHtml(u.username)+'</a></span></div></td>'+
-        '<td class="tnum">'+fmtWhen(u.createdAt)+'</td>'+
-        '<td class="email-cell">'+(u.email ? escapeHtml(u.email) : '&mdash;')+'</td>'+
-        '<td>'+renderStatusCell(u)+'</td>'+
-        '<td>'+actionBtn+'</td>'+
-      '</tr>';
-    }).join('');
-    users.forEach(u=>{
-      if(!u.avatar) return;
-      const canvasEl = rowsEl.querySelector('[data-avatar-uid="'+u.uid+'"]');
-      if(canvasEl && window.NGPC_AUTH) NGPC_AUTH.renderAvatarToCanvas(canvasEl, u.avatar, 26/NGPC_AUTH.AVATAR_SIZE);
-    });
+    // Paginated at PLAYERS_PAGE_SIZE -- same Prev/Next pattern as the "All Submissions" panel
+    // below. renderPlayersPage() only ever re-renders the current page's own rows; onActionClick
+    // still closes over the FULL users array (so approve/revoke/etc. can find and patch any row's
+    // cells in place), it just never needs to touch pagination itself since an action never
+    // changes how many players there are.
+    function renderPlayersPage(){
+      const totalPages = Math.max(1, Math.ceil(users.length / PLAYERS_PAGE_SIZE));
+      playersPage = Math.min(playersPage, totalPages-1);
+      const pageUsers = users.slice(playersPage*PLAYERS_PAGE_SIZE, playersPage*PLAYERS_PAGE_SIZE + PLAYERS_PAGE_SIZE);
+      rowsEl.innerHTML = pageUsers.map(u=>{
+        const avatarHtml = u.avatar
+          ? '<canvas class="row-avatar" data-avatar-uid="'+u.uid+'"></canvas>'
+          : '<div class="row-avatar"></div>';
+        const actionBtn = u.approved
+          ? '<button type="button" class="btn-revoke" data-action="revoke" data-uid="'+u.uid+'">Revoke</button>'
+          : '<button type="button" class="btn-approve" data-action="approve" data-uid="'+u.uid+'">Approve</button>';
+        return '<tr data-row-uid="'+u.uid+'">'+
+          '<td><div class="col-user">'+avatarHtml+'<span class="username"><a href="/user/?u='+encodeURIComponent(u.username)+'">'+escapeHtml(u.username)+'</a></span></div></td>'+
+          '<td class="tnum">'+fmtWhen(u.createdAt)+'</td>'+
+          '<td class="email-cell">'+(u.email ? escapeHtml(u.email) : '&mdash;')+'</td>'+
+          '<td>'+renderStatusCell(u)+'</td>'+
+          '<td>'+actionBtn+'</td>'+
+        '</tr>';
+      }).join('');
+      pageUsers.forEach(u=>{
+        if(!u.avatar) return;
+        const canvasEl = rowsEl.querySelector('[data-avatar-uid="'+u.uid+'"]');
+        if(canvasEl && window.NGPC_AUTH) NGPC_AUTH.renderAvatarToCanvas(canvasEl, u.avatar, 26/NGPC_AUTH.AVATAR_SIZE);
+      });
+      playersPagerEl.hidden = totalPages<=1;
+      playersPageLabelEl.textContent = 'Page '+(playersPage+1)+' of '+totalPages;
+      el('players-prev').disabled = playersPage<=0;
+      el('players-next').disabled = playersPage>=totalPages-1;
+    }
+    renderPlayersPage();
+    el('players-prev').addEventListener('click', ()=>{ playersPage = Math.max(0, playersPage-1); renderPlayersPage(); });
+    el('players-next').addEventListener('click', ()=>{ playersPage += 1; renderPlayersPage(); });
 
     async function onActionClick(e){
       const btn = e.target.closest('button[data-action]');
