@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Emulator Test Page</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#3fa9dc; --accent2:#5c8fd6;
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+    padding-inline:20px; padding-block:32px; display:flex; justify-content:center;
+  }
+  .px{ font-family:"Press Start 2P",monospace; }
+  #shell{ width:100%; max-width:580px; display:flex; flex-direction:column; gap:18px; }
+  header{ text-align:center; display:flex; flex-direction:column; gap:8px; }
+  header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
+  header p{ margin:0; color:var(--dim); font-size:13px; }
+  /* This page's whole point is loading an arbitrary local ROM -- no fixed game, no leaderboard
+     tie-in, no QR capture. Just the emulator's own stock full-player element (built-in file
+     picker, settings, save import/export), same as ngpc/index.html's own demo page, but wrapped
+     in this site's own chrome so it's easy to find and reads as "ours" instead of a bare vendor
+     page. Not linked from the main site nav -- direct-URL testing utility only. */
+  ngpcraft-player{ width:100%; max-width:none; }
+  a{ color:var(--accent2); }
+  footer{ text-align:center; color:var(--dim); font-size:11px; }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <h1 class="px">EMULATOR TEST PAGE</h1>
+    <p>Open any local .ngp/.ngc ROM and play it straight from your browser -- nothing is
+      uploaded, the file never leaves this tab. For trying out the
+      <a href="https://github.com/Tixul/NgpCraft_web_emulator" target="_blank" rel="noopener">NgpCraft Web Emulator</a>
+      itself, not for scoring/leaderboards -- see a game's own <code>/play/&lt;slug&gt;/</code> page for that.</p>
+  </header>
+
+  <ngpcraft-player></ngpcraft-player>
+
+  <footer>Internal testing page -- not linked from the main site.</footer>
+</div>
+
+<script type="module" src="/ngpc/player.js"></script>
+</body>
+</html>
