@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NgpCraft — embedded game</title>
+<style>html,body{height:100%;margin:0;background:#080d15}ngpcraft-embed{width:100%;height:100%}</style>
+<script type="module">
+import {mountNgpCraft} from './integrated.js';
+const params=new URLSearchParams(location.search);
+mountNgpCraft(document.body,{rom:params.get('rom'),title:params.get('title')||'Neo Geo Pocket Color'});
+</script></html>

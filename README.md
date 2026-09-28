@@ -52,10 +52,13 @@ firmware updated still lands somewhere real.
   ranked board with per-game scorecard detail, ROM download, and (where available) a link into
   that game's in-browser player.
 - **`play/<slug>/index.html`** (folder names don't all match the leaderboard slug — e.g. `bw`'s
-  player is at `play/bowling/`) — an in-browser NGPC player built on
-  [EmulatorJS](https://emulatorjs.org/) (vendored under `play/emulatorjs/`), gated behind sign-in.
-  Captures a frame straight off the emulator's own canvas to decode the in-game QR code and feeds
-  it into that game's normal submit flow. Shows a public "Played N times" counter.
+  player is at `play/bowling/`) — an in-browser NGPC player, gated behind sign-in. Captures a
+  frame straight off the emulator's own canvas to decode the in-game QR code and feeds it into
+  that game's normal submit flow. Shows a public "Played N times" counter. Most games run on
+  [EmulatorJS](https://emulatorjs.org/) (vendored under `play/emulatorjs/`); `play/overrev/` was
+  migrated to [NgpCraft Web Emulator](https://github.com/Tixul/NgpCraft_web_emulator) (vendored
+  under `ngpc/`), a lighter, purpose-built NGP/NGPC WASM player with a native screenshot API built
+  for exactly this QR-capture use case — a future candidate to migrate the rest of these to.
 - **`about/index.html`** — the project write-up (see above).
 - **`account/index.html`** — a signed-in user's own settings: username, optional recovery email
   (not yet wired to a real password-reset email flow), a 32×32 pixel-art avatar editor (same

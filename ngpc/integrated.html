@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NgpCraft — website integration</title>
+<style>body{margin:0;background:#10162a;color:#f4eedd;font:15px system-ui;padding:28px 16px}main{max-width:920px;margin:auto}h1{font-size:25px}p{color:#b5bfd7;line-height:1.6}.layout{display:grid;grid-template-columns:minmax(0,480px) 1fr;gap:28px;align-items:start}#game{width:100%;aspect-ratio:160/152;border:1px solid #37426e;border-radius:12px;overflow:hidden}aside{background:#181f3a;padding:20px;border-radius:12px}button,a{color:#a7e6d3}button{font:inherit;background:#26334a;border:1px solid #41526d;border-radius:6px;padding:9px;cursor:pointer}canvas{image-rendering:pixelated;max-width:100%;width:320px}code{overflow-wrap:anywhere}input{max-width:100%}@media(max-width:740px){.layout{grid-template-columns:1fr}}</style>
+<main><h1>A game, right inside your page.</h1><p>A compact player leaves room for your game description, scores and links.</p>
+<div class="layout"><div><div id="game"></div><p id="state" role="status">Choose a demo ROM, or provide its URL with <code>?rom=…</code>.</p><input id="rom-file" type="file" accept=".ngp,.ngc,.npc,.bin" aria-label="Demo ROM"></div>
+<aside><h2>Your content</h2><p>Game description, leaderboard, instructions… Embed the player within your own page layout.</p><button id="capture" disabled>Capture screen for this page</button><p>Captures are exactly 160 × 152 pixels. Pass them to your QR decoder without cropping fullscreen images.</p><div id="preview"></div><p><a href="index.html">Full player</a></p></aside></div></main>
+<script type="module">
+import {mountNgpCraft} from './integrated.js';
+const params=new URLSearchParams(location.search),url=params.get('rom');
+const state=document.querySelector('#state'),capture=document.querySelector('#capture');
+function showFrame(canvas){document.querySelector('#preview').replaceChildren(canvas);state.textContent='Native 160 × 152 capture received by the page.';}
+const player=mountNgpCraft('#game',{rom:url,title:params.get('title')||'Your NGPC game',onCapture:showFrame});
+player.addEventListener('ngpc-ready',()=>{capture.disabled=false;state.textContent='Game loaded: controls stay inside the player.';});
+capture.onclick=()=>showFrame(player.captureFrame());
+document.querySelector('#rom-file').onchange=async e=>{const file=e.target.files[0];if(!file)return;try{if(file.size>4194304)throw Error('ROM is too large.');await player.load(new Uint8Array(await file.arrayBuffer()),file.name);state.textContent='Local ROM ready. Click Play inside the player.';}catch(error){state.textContent=error.message;}};
+if(url){document.querySelector('#rom-file').hidden=true;state.textContent='Click Play inside the player. The game and emulator will download only after this click.';}
+</script></html>

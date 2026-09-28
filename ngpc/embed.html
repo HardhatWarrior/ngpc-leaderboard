@@ -1,0 +1,9 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>NgpCraft Player</title><style>body{margin:0;background:transparent}ngpcraft-player{margin:auto}</style>
+<ngpcraft-player></ngpcraft-player>
+<script type="module">
+import './player.js';
+const rom=new URLSearchParams(location.search).get('rom');
+if(rom)document.querySelector('ngpcraft-player').loadURL(rom).catch(e=>document.querySelector('ngpcraft-player').report(e.message));
+</script></html>
