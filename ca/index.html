@@ -516,7 +516,7 @@
   // plain CSS `rotate()` of the rotation-0 sprite reproduces it exactly,
   // with no need to export separate art per rotation.
   const CA_TILE_STRIP_URL = '/ca/carc-tiles.png';
-  const CA_TILE_DISPLAY = 16;     // on-screen px per board cell
+  const CA_TILE_DISPLAY = 28;     // on-screen px per board cell (source frames are 24px native)
 
   function renderBoardHTML(tiles){
     if(!tiles || !tiles.length) return '';
