@@ -528,25 +528,45 @@
   // plain CSS `rotate()` of the rotation-0 sprite reproduces it exactly,
   // with no need to export separate art per rotation.
   const CA_TILE_STRIP_URL = '/ca/carc-tiles.png';
-  const CA_TILE_DISPLAY = 28;     // on-screen px per board cell (source frames are 24px native)
+
+  // Every tile is positioned/sized in PERCENTAGES of the container, not
+  // fixed pixels -- deliberately NOT the full 26x26 board bounding box
+  // (that would waste huge amounts of space and shrink tile art for any
+  // game that doesn't fill the whole board, which is most of them), but
+  // still guaranteed to never push a panel wider than its parent on
+  // mobile: the container is always exactly `width:100%` of whatever
+  // panel it's in (capped at CA_BOARD_MAX_PX so it doesn't get silly-wide
+  // on desktop), with `aspect-ratio` matching THIS board's own tile
+  // extent so its height follows its shape while its width stays
+  // consistent across every submission on the same screen. A percentage-
+  // positioned background-image on a percentage-sized element scales
+  // together automatically as the container resizes (window resize,
+  // different devices, etc.) -- no JS measurement/ResizeObserver needed.
+  const CA_BOARD_MAX_PX = 360;
 
   function renderBoardHTML(tiles){
     if(!tiles || !tiles.length) return '';
     let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
     tiles.forEach((t)=>{ if(t.x<minX)minX=t.x; if(t.x>maxX)maxX=t.x; if(t.y<minY)minY=t.y; if(t.y>maxY)maxY=t.y; });
-    const w = maxX-minX+1, h = maxY-minY+1, cell = CA_TILE_DISPLAY;
-    const totalW = w*cell, totalH = h*cell;
-    const bgSizeW = CA_NUM_SHAPES*cell;
+    const w = maxX-minX+1, h = maxY-minY+1;
     let inner = '';
     tiles.forEach((t)=>{
-      const px = (t.x-minX)*cell, py = (t.y-minY)*cell;
-      const bgX = -(t.shapeId*cell);
-      inner += '<div style="position:absolute;left:'+px+'px;top:'+py+'px;width:'+cell+'px;height:'+cell+'px;'
+      // Percent-of-container position/size for this tile.
+      const leftPct = ((t.x-minX)/w*100), topPct = ((t.y-minY)/h*100);
+      const wPct = (100/w), hPct = (100/h);
+      // Percent-of-container background-size/position for the sprite strip
+      // -- CSS background-position percentages align the P% point of the
+      // (larger) image with the P% point of the element, so positioning
+      // frame `shapeId` out of CA_NUM_SHAPES needs
+      // shapeId*100/(CA_NUM_SHAPES-1), not a naive shapeId/CA_NUM_SHAPES.
+      const bgSizeWPct = CA_NUM_SHAPES*100;
+      const bgPosXPct = (t.shapeId*100/(CA_NUM_SHAPES-1));
+      inner += '<div style="position:absolute;left:'+leftPct+'%;top:'+topPct+'%;width:'+wPct+'%;height:'+hPct+'%;'
         +'background-image:url('+CA_TILE_STRIP_URL+');background-repeat:no-repeat;'
-        +'background-size:'+bgSizeW+'px '+cell+'px;background-position:'+bgX+'px 0;'
+        +'background-size:'+bgSizeWPct+'% 100%;background-position:'+bgPosXPct+'% 0;'
         +'image-rendering:pixelated;transform:rotate('+(t.rotation*90)+'deg);"></div>';
     });
-    return '<div style="position:relative;width:'+totalW+'px;height:'+totalH+'px;max-width:100%;margin:10px auto;'
+    return '<div style="position:relative;width:100%;max-width:'+CA_BOARD_MAX_PX+'px;aspect-ratio:'+w+'/'+h+';margin:10px auto;'
       +'background:#0a1830;border-radius:6px;overflow:hidden;outline:1px solid #37426e;">'+inner+'</div>';
   }
 
