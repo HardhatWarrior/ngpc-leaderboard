@@ -356,7 +356,7 @@
 
     function isAuthorizedViewer(user){
       if(!gameData || gameData.devStatus !== 'coming-soon') return true;
-      return NGPC_AUTH.isGameManager(user, gameData);
+      return NGPC_AUTH.canPreviewGame(user, gameData);
     }
     function applyAuthState(user){
       gameDocPromise.then(()=>{

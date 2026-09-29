@@ -237,6 +237,20 @@
       <div id="game-links-msg"></div>
     </div>
 
+    <!-- Lets a developer (or admin) grant OTHER accounts early access to this game's leaderboard
+         and play page while it's still devStatus 'coming-soon' -- e.g. another dev they want
+         testing it before it goes live. Stored as an array of uids on games/{slug}.previewTesters,
+         entered/shown here by username (resolved against the users/ collection, which is publicly
+         readable). Grants viewing only -- see auth.js's canPreviewGame(), which is what every
+         access-gated leaderboard/play page actually checks. -->
+    <div style="margin-top:20px">
+      <div class="field-label">Preview access (before this game goes live)</div>
+      <div class="current-value" style="margin-bottom:6px">Comma-separated usernames allowed to see and play this while it's Coming Soon.</div>
+      <input type="text" id="game-preview-input" placeholder="e.g. someotherdev, theirfriend">
+      <button type="button" class="action btn-primary" id="game-preview-save" style="margin-top:10px">Save</button>
+      <div id="game-preview-msg"></div>
+    </div>
+
     <div id="updated-badge-row" hidden style="margin-top:16px">
       <div class="current-value">This game currently shows an <b>UPDATED</b> badge on the main page (expires automatically 30 days after upload).</div>
       <button type="button" class="action" style="background:transparent;border:1px solid var(--border);color:var(--dim)" id="clear-updated">Turn off UPDATED badge now</button>
@@ -1261,6 +1275,49 @@
         linksMsg.innerHTML = '<div class="msg ok">Saved.</div>';
       }catch(e){
         linksMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+      }finally{
+        btn.disabled = false;
+      }
+    });
+
+    // Preview access: stored as uids (previewTesters), edited/shown as usernames. Resolves against
+    // the users/ collection (publicly readable -- see firestore.rules) rather than requiring the
+    // caller to already know uids. Unknown usernames are reported back rather than silently
+    // dropped, so a typo doesn't look like it worked.
+    const previewInput = el('game-preview-input');
+    const previewMsg = el('game-preview-msg');
+    (async ()=>{
+      const testerUids = Array.isArray(data.previewTesters) ? data.previewTesters : [];
+      if(!testerUids.length) return;
+      const names = await Promise.all(testerUids.map(uid=>
+        db.collection('users').doc(uid).get().then(d=>d.exists ? (d.data().username||uid) : uid)
+      ));
+      previewInput.value = names.join(', ');
+    })();
+    el('game-preview-save').addEventListener('click', async ()=>{
+      const btn = el('game-preview-save');
+      const names = previewInput.value.split(',').map(s=>s.trim()).filter(Boolean);
+      if(names.length > 20){
+        previewMsg.innerHTML = '<div class="msg err">Up to 20 testers at a time.</div>';
+        return;
+      }
+      previewMsg.innerHTML = '';
+      btn.disabled = true;
+      try{
+        const lookups = await Promise.all(names.map(name=>
+          db.collection('usernames').doc(name.toLowerCase()).get()
+        ));
+        const notFound = [];
+        const uids = [];
+        lookups.forEach((doc, i)=>{
+          if(doc.exists) uids.push(doc.data().uid); else notFound.push(names[i]);
+        });
+        await docRef.update({ previewTesters: uids });
+        previewMsg.innerHTML = notFound.length
+          ? '<div class="msg err">Saved, but couldn’t find: '+escapeHtml(notFound.join(', '))+'</div>'
+          : '<div class="msg ok">Saved.</div>';
+      }catch(e){
+        previewMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
       }finally{
         btn.disabled = false;
       }

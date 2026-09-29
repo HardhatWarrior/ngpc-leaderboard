@@ -620,8 +620,14 @@ service cloud.firestore {
           // free-text build/version string (e.g. "v1.2"), shown on this game's own leaderboard
           // page next to its title, and optionally (showVersionOnTile) right-justified inline
           // with the game name on the homepage tile too -- see index.html's buildTile().
+          // previewTesters -- an admin- or the assigned-developer-curated list of OTHER accounts'
+          // uids allowed to see and play this game's leaderboard/play page while it's still
+          // devStatus 'coming-soon', without granting them any ability to edit the game itself
+          // (see auth.js's canPreviewGame(), which every access-gated leaderboard/play page's
+          // isAuthorizedViewer() checks alongside isGameManager). Capped at 20 entries -- this is
+          // a short early-access list, not a general permissions system.
           || (isAssignedDev(resource.data)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'visibility', 'emulator', 'version', 'showVersionOnTile'])
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'visibility', 'emulator', 'version', 'showVersionOnTile', 'previewTesters'])
               && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final']
               && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 300))
               && (!('siteUrl' in request.resource.data) || (request.resource.data.siteUrl is string && (request.resource.data.siteUrl == '' || request.resource.data.siteUrl.matches('^https?://.+'))))
@@ -629,6 +635,7 @@ service cloud.firestore {
               && (!('emulator' in request.resource.data) || request.resource.data.emulator in ['emulatorjs', 'ngpcraft'])
               && (!('version' in request.resource.data) || (request.resource.data.version is string && request.resource.data.version.size() <= 20))
               && (!('showVersionOnTile' in request.resource.data) || request.resource.data.showVersionOnTile is bool)
+              && (!('previewTesters' in request.resource.data) || (request.resource.data.previewTesters is list && request.resource.data.previewTesters.size() <= 20))
               && (!('titleImageUpdatedAt' in request.resource.data) || request.resource.data.titleImageUpdatedAt is int)
               && (!('extraScreenshot1UpdatedAt' in request.resource.data) || request.resource.data.extraScreenshot1UpdatedAt is int)
               && (!('extraScreenshot2UpdatedAt' in request.resource.data) || request.resource.data.extraScreenshot2UpdatedAt is int))

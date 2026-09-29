@@ -61,6 +61,16 @@ window.NGPC_AUTH = (function(){
   function isGameManager(user, gameData){
     return isSiteAdmin(user) || (!!user && !!gameData && user.uid === gameData.developerUid);
   }
+  // True for isGameManager() OR an account this game's own developer/admin has listed under
+  // games/{slug}.previewTesters (an array of uids, set from admin/game/'s Preview Access panel) --
+  // lets another developer see and play a still-'coming-soon' game's leaderboard/play page before
+  // it goes live, without granting them the ability to actually edit it. Every access-gated
+  // leaderboard/play page's isAuthorizedViewer() should use this, not isGameManager, for the
+  // coming-soon check.
+  function canPreviewGame(user, gameData){
+    return isGameManager(user, gameData)
+      || (!!user && !!gameData && Array.isArray(gameData.previewTesters) && gameData.previewTesters.includes(user.uid));
+  }
 
   // ---- admin email notifications -- writes a doc to mail/{id}, which the Firebase "Trigger
   // Email" extension (installed separately from the Firebase Console, requires the Blaze plan)
@@ -961,7 +971,7 @@ window.NGPC_AUTH = (function(){
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,
     friendlyAuthError, escapeHtml, notifyAdmin, notifyUser, trackRomDownload, pathKeyFromLocation,
     scoreHasDetail, scoreDetailHTML, scoreInlineMeta, scoreValueDisplay,
-    ADMIN_UID, isSiteAdmin, isGameManager,
+    ADMIN_UID, isSiteAdmin, isGameManager, canPreviewGame,
     authReady, openSignInModal,
     get currentUser(){ return currentUser; }
   };

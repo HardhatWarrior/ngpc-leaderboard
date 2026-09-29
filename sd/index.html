@@ -100,6 +100,8 @@
 
   main{ display:grid; grid-template-columns:1fr; gap:20px; align-items:start; }
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  #access-gate{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px 20px; }
+  #page-content{ display:flex; flex-direction:column; gap:22px; }
   .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
   .panel .hint{ margin:0 0 16px; color:var(--dim); font-size:12.5px; line-height:1.5; }
 
@@ -165,6 +167,10 @@
 <body>
 
 <div id="shell">
+  <div id="access-gate" hidden>
+    <p class="hint" style="text-align:center;margin:0">This game isn't public yet. Check back once it's live on the main page.</p>
+  </div>
+  <div id="page-content" hidden>
   <header>
     <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
     <div class="header-row">
@@ -247,6 +253,7 @@
   </main>
 
   <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com</footer>
+  </div>
 </div>
 
 <script src="/auth.js"></script>
@@ -254,6 +261,7 @@
 (function(){
   "use strict";
   const QR_GAME_CODE = 'SD';
+  const GAME_SLUG = 'sd';
   // Which mechanism produced the payload about to be submitted: a real camera/photo scan (the
   // default, including the on-device QR's own deep link) vs the in-browser player's Screen
   // Capture API flow (play/sd/index.html's captureAndSubmit(), which redirects here with
@@ -264,6 +272,8 @@
   let activeDiff = 'E';
 
   const el = (id)=>document.getElementById(id);
+  const accessGateEl = el('access-gate');
+  const pageContentEl = el('page-content');
   const boardEl = el('board'), boardStatusEl = el('board-status');
   const idleView = el('idle-view'), confirmView = el('confirm-view'), successView = el('success-view');
   const formMsg = el('form-msg'), confirmMsg = el('confirm-msg');
@@ -680,63 +690,70 @@
 
   el('btn-again').addEventListener('click', ()=>{ pending = null; showStage('idle'); });
 
-  if(window.NGPC_AUTH){
-    // Only ever shown to the site admin or this game's own assigned developer -- reads whichever
-    // of currentUser/gameData has loaded so far, since the auth state and the games/sd doc fetch
-    // below are two independent async paths that can resolve in either order.
-    var currentUser = null;
-    function updateAdminLink(){
-      var adminLinkEl = el('admin-link');
-      if(adminLinkEl) adminLinkEl.hidden = !NGPC_AUTH.isGameManager(currentUser, gameData);
+  let gateInitialized = false;
+  function isAuthorizedViewer(user){
+    if(!gameData || gameData.devStatus !== 'coming-soon') return true;
+    return NGPC_AUTH.canPreviewGame(user, gameData);
+  }
+  function applyAccessGate(user){
+    const authorized = isAuthorizedViewer(user);
+    if(accessGateEl) accessGateEl.hidden = authorized;
+    if(pageContentEl) pageContentEl.hidden = !authorized;
+    if(!authorized || gateInitialized) return;
+    gateInitialized = true;
+    initDb();
+    const fromEntry = payloadFromEntry();
+    if(fromEntry){
+      setDiff(fromEntry.difficulty);
+      openConfirm(fromEntry);
+      history.replaceState(null, '', location.pathname);
     }
+  }
+
+  if(window.NGPC_AUTH){
+    var romLinkEl = el('rom-link');
+    var artEl = el('header-art');
+    var extraArtEls = [el('extra-art-1'), el('extra-art-2')];
+    if(romLinkEl) romLinkEl.addEventListener('click', function(){ if(window.NGPC_AUTH) NGPC_AUTH.trackRomDownload(GAME_SLUG); });
+
+    // Points the "Download ROM" link at the developer-uploaded build (games/sd.romPath) --
+    // there's no repo-committed static fallback for a submitted-not-built-in game like this one.
+    const gameDocPromise = NGPC_AUTH.db
+      ? NGPC_AUTH.db.collection('games').doc(GAME_SLUG).get().then(function(doc){
+          if(!doc.exists){ if(romLinkEl) romLinkEl.hidden = true; gameData = {}; return; }
+          gameData = doc.data();
+          if(romLinkEl){ if(gameData.romPath) romLinkEl.href = gameData.romPath; else romLinkEl.hidden = true; }
+          if(artEl && gameData.titleImage) artEl.src = gameData.titleImage;
+          [gameData.extraScreenshot1Path, gameData.extraScreenshot2Path].forEach(function(url, i){
+            if(!url) return;
+            extraArtEls[i].src = url;
+            extraArtEls[i].hidden = false;
+          });
+        var descEl = el('game-desc');
+        if(descEl){ if(gameData.description){ descEl.textContent = gameData.description; descEl.hidden = false; } else descEl.hidden = true; }
+        var siteEl = el('game-site'), siteLinkEl = el('game-site-link');
+        if(siteEl && siteLinkEl){ if(gameData.siteUrl){ siteLinkEl.href = gameData.siteUrl; siteLinkEl.textContent = gameData.siteUrl; siteEl.hidden = false; } else siteEl.hidden = true; }
+        var versionEl = el('game-version');
+        if(versionEl){ if(gameData.version){ versionEl.textContent = gameData.version; versionEl.hidden = false; } else versionEl.hidden = true; }
+        }).catch(function(){ if(romLinkEl) romLinkEl.hidden = true; gameData = {}; })
+      : Promise.resolve();
+
     NGPC_AUTH.onAuthChange((user)=>{
-      currentUser = user;
       // Members only -- gates the whole scan mechanism, not just the final submit step.
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();
       el('play-link').hidden = !user;
-      updateAdminLink();
+      gameDocPromise.then(()=>{
+        applyAccessGate(user);
+        var adminLinkEl = el('admin-link');
+        if(adminLinkEl) adminLinkEl.hidden = !NGPC_AUTH.isGameManager(user, gameData);
+      });
     });
     el('scan-signin-btn').addEventListener('click', ()=>NGPC_AUTH.openSignInModal('signin'));
-
-    // Points the "Download ROM" link at the developer-uploaded build (games/sd.romPath) --
-    // there's no repo-committed static fallback for a submitted-not-built-in game like this one.
-    (function(){
-      var romLinkEl = el('rom-link');
-      if(romLinkEl) romLinkEl.addEventListener('click', function(){ if(window.NGPC_AUTH) NGPC_AUTH.trackRomDownload('sd'); });
-      if(!romLinkEl || !NGPC_AUTH.db) return;
-      NGPC_AUTH.db.collection('games').doc('sd').get().then(function(doc){
-        if(!doc.exists){ romLinkEl.hidden = true; return; }
-        var data = doc.data();
-        gameData = data;
-        updateAdminLink();
-        if(data.romPath) romLinkEl.href = data.romPath; else romLinkEl.hidden = true;
-        var headerArtEl = el('header-art');
-        if(headerArtEl && data.titleImage) headerArtEl.src = data.titleImage;
-        var extraArtEls = [el('extra-art-1'), el('extra-art-2')];
-        [data.extraScreenshot1Path, data.extraScreenshot2Path].forEach(function(url, i){
-          if(!url || !extraArtEls[i]) return;
-          extraArtEls[i].src = url;
-          extraArtEls[i].hidden = false;
-        });
-      var descEl = el('game-desc');
-      if(descEl){ if(data.description){ descEl.textContent = data.description; descEl.hidden = false; } else descEl.hidden = true; }
-      var siteEl = el('game-site'), siteLinkEl = el('game-site-link');
-      if(siteEl && siteLinkEl){ if(data.siteUrl){ siteLinkEl.href = data.siteUrl; siteLinkEl.textContent = data.siteUrl; siteEl.hidden = false; } else siteEl.hidden = true; }
-      var versionEl = el('game-version');
-      if(versionEl){ if(data.version){ versionEl.textContent = data.version; versionEl.hidden = false; } else versionEl.hidden = true; }
-      }).catch(function(){ romLinkEl.hidden = true; });
-    })();
-  }
-
-  initDb();
-
-  const fromEntry = payloadFromEntry();
-  if(fromEntry){
-    setDiff(fromEntry.difficulty);
-    openConfirm(fromEntry);
-    history.replaceState(null, '', location.pathname);
+  } else {
+    gameData = { devStatus: 'final' };
+    applyAccessGate(null);
   }
 })();
 </script>
