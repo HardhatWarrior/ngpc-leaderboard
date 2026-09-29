@@ -236,6 +236,27 @@ window.NGPC_AUTH = (function(){
 
   function signOutNow(){ return auth.signOut(); }
 
+  // ---- password reset (see functions/index.js's handlePasswordResetRequest/confirmPasswordReset
+  // for the privileged server-side half of this flow) ----
+  //
+  // Deliberately resolves the same way whether or not the username exists, has a recovery email,
+  // or is currently throttled -- usernames/{lower} is public-read either way (a determined visitor
+  // could already probe existence through it directly), but this function itself never reveals
+  // anything: the caller sees one generic "check your email" message regardless, same shape as any
+  // reputable "forgot password" flow's own anti-enumeration behavior.
+  async function requestPasswordReset(usernameRaw){
+    const usernameLower = (usernameRaw||'').trim().toLowerCase();
+    if(!usernameLower) return;
+    try{
+      const reservationDoc = await db.collection('usernames').doc(usernameLower).get();
+      if(!reservationDoc.exists) return;
+      await db.collection('passwordResetRequests').add({
+        uid: reservationDoc.data().uid,
+        requestedAt: Date.now(),
+      });
+    }catch(e){ /* swallow -- see comment above, this never surfaces a distinguishable error */ }
+  }
+
   // ---- profile updates (account page) ----
 
   async function updateUsername(newUsernameRaw){
@@ -793,6 +814,12 @@ window.NGPC_AUTH = (function(){
     #auth-form input:focus{ outline:none; border-color:var(--accent2); }
     #auth-form label.auth-checkbox-label:not([hidden]){ display:flex; align-items:center; gap:7px; font-size:11.5px; width:100%; box-sizing:border-box; }
     #auth-form label.auth-checkbox-label input{ display:inline; width:auto; margin:0; flex:none; }
+    .auth-link-row{ text-align:right; margin:-6px 0 12px; }
+    .auth-link-row[hidden]{ display:none; }
+    .auth-link-btn{ background:none; border:none; color:var(--accent2); font-size:11.5px; cursor:pointer; padding:0; width:auto; text-decoration:underline; text-underline-offset:2px; font-family:inherit; }
+    .auth-link-btn:hover{ color:var(--cream); }
+    #auth-forgot-hint{ font-size:11.5px; color:var(--dim); margin:-4px 0 12px; line-height:1.4; }
+    #auth-forgot-hint[hidden]{ display:none; }
   `;
 
   const MODAL_HTML = `
@@ -804,8 +831,11 @@ window.NGPC_AUTH = (function(){
           <button type="button" class="auth-tab" data-mode="signup">Sign Up</button>
         </div>
         <form id="auth-form">
+          <p id="auth-forgot-hint" hidden>Enter your username and, if it has a recovery email on file, we'll send a link to reset your password.</p>
           <label>Username<input id="auth-username" autocomplete="username" required maxlength="16"></label>
-          <label>Password<input id="auth-password" type="password" autocomplete="current-password" required minlength="6"></label>
+          <label id="auth-password-label">Password<input id="auth-password" type="password" autocomplete="current-password" required minlength="6"></label>
+          <div class="auth-link-row" id="auth-forgot-row"><button type="button" class="auth-link-btn" id="auth-forgot-link">Forgot password?</button></div>
+          <div class="auth-link-row" id="auth-back-row" hidden><button type="button" class="auth-link-btn" id="auth-back-link">&larr; Back to sign in</button></div>
           <label id="auth-email-label" hidden><span id="auth-email-label-text">Recovery email (optional)</span><input id="auth-email" type="email" autocomplete="email"></label>
           <label id="auth-dev-label" class="auth-checkbox-label" hidden><input id="auth-wants-dev" type="checkbox"> <span>Developer</span></label>
           <button type="submit" class="btn-primary" id="auth-submit">Sign In</button>
@@ -833,7 +863,13 @@ window.NGPC_AUTH = (function(){
     const emailInput = document.getElementById('auth-email');
     const emailLabelText = document.getElementById('auth-email-label-text');
     const wantsDevCheckbox = document.getElementById('auth-wants-dev');
+    const passwordLabel = document.getElementById('auth-password-label');
+    const passwordInput = document.getElementById('auth-password');
+    const forgotHint = document.getElementById('auth-forgot-hint');
+    const forgotRow = document.getElementById('auth-forgot-row');
+    const backRow = document.getElementById('auth-back-row');
     let mode = 'signin';
+    let lastNonForgotMode = 'signin';
 
     // A developer signup needs a real way for the admin to reach them (game approval, payload
     // questions, etc.) -- recovery email is otherwise optional, so this only flips to required
@@ -847,14 +883,23 @@ window.NGPC_AUTH = (function(){
 
     function setMode(m){
       mode = m;
+      if(m !== 'forgot') lastNonForgotMode = m;
       tabs.forEach(t=>t.classList.toggle('active', t.dataset.mode===m));
+      document.getElementById('auth-tabs').hidden = (m === 'forgot');
       emailLabel.hidden = (m !== 'signup');
       devLabel.hidden = (m !== 'signup');
-      submitBtn.textContent = m==='signup' ? 'Sign Up' : 'Sign In';
+      passwordLabel.hidden = (m === 'forgot');
+      passwordInput.required = (m !== 'forgot');
+      forgotHint.hidden = (m !== 'forgot');
+      forgotRow.hidden = (m !== 'signin');
+      backRow.hidden = (m !== 'forgot');
+      submitBtn.textContent = m==='signup' ? 'Sign Up' : m==='forgot' ? 'Send Reset Link' : 'Sign In';
       msg.innerHTML = '';
       updateEmailRequirement();
     }
     tabs.forEach(t=>t.addEventListener('click', ()=>setMode(t.dataset.mode)));
+    document.getElementById('auth-forgot-link').addEventListener('click', ()=>setMode('forgot'));
+    document.getElementById('auth-back-link').addEventListener('click', ()=>setMode(lastNonForgotMode));
 
     function openModal(initialMode){
       setMode(initialMode || 'signin');
@@ -875,12 +920,19 @@ window.NGPC_AUTH = (function(){
       submitBtn.disabled = true;
       msg.innerHTML = '';
       try{
-        if(mode==='signup'){
+        if(mode==='forgot'){
+          await requestPasswordReset(username);
+          // Same message whether or not the account/recovery-email actually exists -- see
+          // requestPasswordReset's own comment on why this can't reveal that.
+          msg.innerHTML = '<div class="msg ok">If that account has a recovery email on file, a reset link is on its way.</div>';
+          passwordInput.value = '';
+        } else if(mode==='signup'){
           await signUp(username, password, email, wantsDev);
+          closeModal();
         } else {
           await signIn(username, password);
+          closeModal();
         }
-        closeModal();
       }catch(err){
         msg.innerHTML = '<div class="msg err">'+escapeHtml(friendlyAuthError(err))+'</div>';
       }finally{
@@ -971,7 +1023,7 @@ window.NGPC_AUTH = (function(){
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,
     friendlyAuthError, escapeHtml, notifyAdmin, notifyUser, trackRomDownload, pathKeyFromLocation,
     scoreHasDetail, scoreDetailHTML, scoreInlineMeta, scoreValueDisplay,
-    ADMIN_UID, isSiteAdmin, isGameManager, canPreviewGame,
+    ADMIN_UID, isSiteAdmin, isGameManager, canPreviewGame, requestPasswordReset,
     authReady, openSignInModal,
     get currentUser(){ return currentUser; }
   };

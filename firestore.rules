@@ -799,6 +799,32 @@ service cloud.firestore {
       );
     }
 
+    // passwordResetRequests/{id} -- the ONLY client-writable step of the password reset flow (see
+    // functions/index.js's handlePasswordResetRequest, which is what actually reacts to these).
+    // Deliberately open to anyone, signed in or not -- "forgot password" has to work while signed
+    // out by definition, and the admin Players table (admin/index.html) writes the exact same shape
+    // for its own "Reset password" button, so there's no separate privileged path to gate here. The
+    // Cloud Function does its own uid-existence check, recovery-email lookup, and per-uid throttle
+    // server-side (via the Admin SDK, which bypasses these rules entirely) -- this rule only pins
+    // the shape so a client can't smuggle extra fields onto the doc. No read/update/delete: once
+    // written, only the function (as admin) ever touches it again.
+    match /passwordResetRequests/{id} {
+      allow read, update, delete: if false;
+      allow create: if request.resource.data.keys().hasOnly(['uid', 'requestedAt'])
+        && request.resource.data.uid is string
+        && request.resource.data.requestedAt is int;
+    }
+
+    // passwordResets/{token} -- the one-time reset token minted by handlePasswordResetRequest and
+    // consumed by the confirmPasswordReset HTTPS function (functions/index.js), which calls it with
+    // the Admin SDK -- entirely invisible to Firestore rules either way. No client of any kind
+    // (including a signed-in admin) has any business reading or writing this collection directly,
+    // so it's closed on every operation; this match exists purely so the schema is documented here
+    // rather than only inside the function.
+    match /passwordResets/{token} {
+      allow read, write: if false;
+    }
+
     // Default-deny for every other collection -- Firestore denies unmatched
     // paths by default anyway, but this makes the intent explicit as the
     // schema grows (Phase 3 comments/, etc).

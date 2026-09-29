@@ -453,12 +453,18 @@
         const actionBtn = u.approved
           ? '<button type="button" class="btn-revoke" data-action="revoke" data-uid="'+u.uid+'">Revoke</button>'
           : '<button type="button" class="btn-approve" data-action="approve" data-uid="'+u.uid+'">Approve</button>';
+        // Writes the same passwordResetRequests/{id} doc the sign-in modal's own "Forgot
+        // password?" link writes (see auth.js's requestPasswordReset) -- disabled when this
+        // account has no recovery email on file, since the Cloud Function has nowhere to send
+        // the link either way (see firestore.rules/functions/index.js's handlePasswordResetRequest).
+        const resetBtn = '<button type="button" class="btn-revoke" data-action="reset-password" data-uid="'+u.uid+'" style="margin-top:6px"'
+          +(u.email ? '' : ' disabled title="No recovery email on file for this account"')+'>Reset Password</button>';
         return '<tr data-row-uid="'+u.uid+'">'+
           '<td><div class="col-user">'+avatarHtml+'<span class="username"><a href="/user/?u='+encodeURIComponent(u.username)+'">'+escapeHtml(u.username)+'</a></span></div></td>'+
           '<td class="tnum">'+fmtWhen(u.createdAt)+'</td>'+
           '<td class="email-cell">'+(u.email ? escapeHtml(u.email) : '&mdash;')+'</td>'+
           '<td>'+renderStatusCell(u)+'</td>'+
-          '<td>'+actionBtn+'</td>'+
+          '<td>'+actionBtn+resetBtn+'</td>'+
         '</tr>';
       }).join('');
       pageUsers.forEach(u=>{
@@ -492,6 +498,20 @@
         }catch(err){
           statusEl.innerHTML = '<div class="msg err">Update failed: '+escapeHtml(err.message||'unknown')+'</div>';
           btn.disabled = false;
+        }
+        return;
+      }
+      if(action === 'reset-password'){
+        if(!confirm('Send a password reset link to '+(u.email||'this account')+'?')) return;
+        btn.disabled = true;
+        const original = btn.textContent;
+        try{
+          await db.collection('passwordResetRequests').add({uid, requestedAt: Date.now()});
+          btn.textContent = 'Sent';
+        }catch(err){
+          statusEl.innerHTML = '<div class="msg err">Couldn’t send reset link: '+escapeHtml(err.message||'unknown')+'</div>';
+          btn.disabled = false;
+          btn.textContent = original;
         }
         return;
       }
