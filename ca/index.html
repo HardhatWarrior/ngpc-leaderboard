@@ -670,22 +670,37 @@
   // decodes the whole set at once. Each individual scan still stops the
   // camera (resetScanUI()) so the live loop can't push duplicate frames of
   // the same code; the player taps "Scan QR Code" again for the next one.
-  function handleScanResult(text){
+  // Whether the accumulated scannedCodes already include the code that
+  // declared itself last (more='0') -- checked this way, not by array
+  // position, because a single photo can capture SEVERAL codes at once
+  // (the device now draws every code it needs on screen simultaneously,
+  // see main.c's draw_qr_boxes()) in no particular order.
+  function isSubmissionComplete(){
+    return scannedCodes.some((t)=>probeCode(t).more === '0');
+  }
+
+  // Accepts every code found in ONE scan/photo at once -- a single photo
+  // can and often will capture the whole submission (2-3 small codes side
+  // by side), not just one.
+  function handleScanResults(texts){
     formMsg.innerHTML = '';
-    const probe = probeCode(text);
-    if(probe.error){ formMsg.innerHTML = '<div class="msg err">'+escapeHtml(probe.error)+'</div>'; return; }
-    if(probe.kind === 'C' && scannedCodes.length === 0){
-      formMsg.innerHTML = '<div class="msg err">That looks like a continuation code -- scan the FIRST code (the one shown right after your score) first.</div>';
-      return;
-    }
-    if(probe.kind === 'H'){
-      scannedCodes = [text]; // a header always starts (or restarts) a fresh accumulation
-    } else {
-      scannedCodes.push(text);
+    if(!texts || !texts.length) return;
+    for(const text of texts){
+      const probe = probeCode(text);
+      if(probe.error){ formMsg.innerHTML = '<div class="msg err">'+escapeHtml(probe.error)+'</div>'; return; }
+      if(probe.kind === 'C' && scannedCodes.length === 0){
+        formMsg.innerHTML = '<div class="msg err">That looks like a continuation code -- make sure the FIRST code (the one shown right after your score) is in frame too.</div>';
+        return;
+      }
+      if(probe.kind === 'H'){
+        scannedCodes = [text]; // a header always starts (or restarts) a fresh accumulation
+      } else if(!scannedCodes.includes(text)){
+        scannedCodes.push(text);
+      }
     }
     resetScanUI();
-    if(probe.more === '1'){
-      formMsg.innerHTML = '<div class="msg ok">Code '+scannedCodes.length+' scanned -- scan the next code shown on the console.</div>';
+    if(!isSubmissionComplete()){
+      formMsg.innerHTML = '<div class="msg ok">'+scannedCodes.length+' code(s) scanned so far -- scan the remaining code(s) shown on the console.</div>';
       return;
     }
     const decoded = caDecodeSubmission(scannedCodes);
@@ -693,6 +708,8 @@
     if(!decoded.ok){ formMsg.innerHTML = '<div class="msg err">'+escapeHtml(decoded.error)+'</div>'; return; }
     openConfirm(decoded);
   }
+
+  function handleScanResult(text){ handleScanResults([text]); }
 
   let cameraStream = null, scanRAF = null;
   const scanCanvas = document.createElement('canvas'), scanCtx = scanCanvas.getContext('2d', {willReadFrequently:true});
@@ -736,14 +753,20 @@
     return barcodeDetector;
   }
 
+  // Returns EVERY symbol zbar finds in one image, not just the first --
+  // the device can draw up to 3 small codes on screen at once, and a
+  // single photo/frame should decode all of them together.
   async function decodeViaZbarWasm(source, w0, h0){
-    if(!window.zbarWasm || !w0 || !h0) return null;
+    if(!window.zbarWasm || !w0 || !h0) return [];
     const scale = Math.min(1, 1000/Math.max(w0,h0));
     const w = Math.round(w0*scale), h = Math.round(h0*scale);
     scanCanvas.width = w; scanCanvas.height = h;
     scanCtx.drawImage(source, 0, 0, w, h);
-    try{ const symbols = await window.zbarWasm.scanImageData(scanCtx.getImageData(0, 0, w, h)); if(symbols && symbols.length) return symbols[0].decode(); }catch(e){}
-    return null;
+    try{
+      const symbols = await window.zbarWasm.scanImageData(scanCtx.getImageData(0, 0, w, h));
+      if(symbols && symbols.length) return symbols.map((s)=>s.decode());
+    }catch(e){}
+    return [];
   }
 
   function jsqrFallback(source, w0, h0, scales){
@@ -759,12 +782,17 @@
     return null;
   }
 
+  // Returns an array of raw decoded texts (possibly more than one -- see
+  // decodeViaZbarWasm's own comment). BarcodeDetector/jsQR fallbacks only
+  // ever find one at a time; that's fine, the accumulator in
+  // handleScanResults() still collects across multiple scans either way.
   async function decodeSource(source, w0, h0, scales){
     const viaZbar = await decodeViaZbarWasm(source, w0, h0);
-    if(viaZbar) return viaZbar;
+    if(viaZbar.length) return viaZbar;
     const bd = getBarcodeDetector();
-    if(bd){ try{ const r = await bd.detect(source); if(r && r.length) return r[0].rawValue; }catch(e){} }
-    return jsqrFallback(source, w0, h0, scales);
+    if(bd){ try{ const r = await bd.detect(source); if(r && r.length) return r.map((x)=>x.rawValue); }catch(e){} }
+    const single = jsqrFallback(source, w0, h0, scales);
+    return single ? [single] : [];
   }
 
   const LIVE_SCALES = [500, 900];
@@ -776,7 +804,7 @@
     const w = scanVideo.videoWidth, h = scanVideo.videoHeight;
     if(!w || !h) return;
     liveBusy = true;
-    try{ const v = await decodeSource(scanVideo, w, h, LIVE_SCALES); if(v) handleScanResult(v); }finally{ liveBusy = false; }
+    try{ const v = await decodeSource(scanVideo, w, h, LIVE_SCALES); if(v.length) handleScanResults(v); }finally{ liveBusy = false; }
   }
 
   function loadViaImageElement(file){
@@ -805,7 +833,7 @@
     }
     if(!img.width || !img.height){ formMsg.innerHTML = '<div class="msg err">That photo came back empty — try again.</div>'; return; }
     const v = await decodeSource(img, img.width, img.height, FILE_SCALES);
-    if(v){ handleScanResult(v); }else{
+    if(v.length){ handleScanResults(v); }else{
       formMsg.innerHTML = '<div class="msg err">No QR code found in that photo — make sure the whole code is in frame and try again.</div>';
     }
   }
