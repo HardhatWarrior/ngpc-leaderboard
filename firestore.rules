@@ -522,7 +522,38 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data) || isFruityPalsRevengeScore(request.resource.data) || isHoratioGoesSnowboardingScore(request.resource.data) || isFurryScore(request.resource.data);
+      // Carcassonne: game, initials, the reconstructed final score plus its 4 category
+      // subtotals, tileCount, riverEnabled, the two shuffle seeds, and `tiles` -- a JSON-encoded
+      // array of [shapeId,rotation,x,y] tuples for the leaderboard's own board-recreation flyout
+      // (NOT the raw multi-QR-code wire fields like codeKind/moreFlag/boardData -- those are pure
+      // scan-transport artifacts the client already resolves into this shape before writing, since
+      // one score doc can be assembled from more than one scanned QR code). score/road/city/
+      // cloister/farm bounds are generous headroom over realistic play, not tight spec numbers (see
+      // src/game/carc_qr_payload.c in the Carcassonne2 NGPC project for the real wire format this
+      // is decoded from). `tiles` is capped at 4000 chars -- a full ~85-tile game's JSON encoding
+      // is comfortably under 1500.
+      function isCarcassonneScore(d) {
+        return d.game == 'CA'
+          && d.keys().hasOnly(['game', 'initials', 'score', 'road', 'city', 'cloister', 'farm', 'tileCount', 'riverEnabled', 'deckSeed', 'riverSeed', 'tiles', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.score is int && d.score >= 0 && d.score <= 9999
+          && d.road is int && d.road >= 0 && d.road <= 999
+          && d.city is int && d.city >= 0 && d.city <= 999
+          && d.cloister is int && d.cloister >= 0 && d.cloister <= 999
+          && d.farm is int && d.farm >= 0 && d.farm <= 999
+          && d.tileCount is int && d.tileCount >= 0 && d.tileCount <= 99
+          && d.riverEnabled is bool
+          && d.deckSeed is int && d.deckSeed >= 0 && d.deckSeed <= 65535
+          && d.riverSeed is int && d.riverSeed >= 0 && d.riverSeed <= 65535
+          && d.tiles is string && d.tiles.size() <= 4000
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
+      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data) || isFruityPalsRevengeScore(request.resource.data) || isHoratioGoesSnowboardingScore(request.resource.data) || isFurryScore(request.resource.data) || isCarcassonneScore(request.resource.data);
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
