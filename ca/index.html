@@ -685,18 +685,25 @@
   function handleScanResults(texts){
     formMsg.innerHTML = '';
     if(!texts || !texts.length) return;
-    for(const text of texts){
-      const probe = probeCode(text);
-      if(probe.error){ formMsg.innerHTML = '<div class="msg err">'+escapeHtml(probe.error)+'</div>'; return; }
-      if(probe.kind === 'C' && scannedCodes.length === 0){
+    const probed = texts.map((t)=>({ text: t, probe: probeCode(t) }));
+    const bad = probed.find((p)=>p.probe.error);
+    if(bad){ formMsg.innerHTML = '<div class="msg err">'+escapeHtml(bad.probe.error)+'</div>'; return; }
+    // Apply any header FOUND IN THIS BATCH first, regardless of where it
+    // sits in the array -- zbar/BarcodeDetector don't guarantee scan
+    // order, so a photo capturing both codes at once can just as easily
+    // decode the continuation before its own header. Only bail with the
+    // "scan the first code" error when a continuation shows up with
+    // genuinely no header anywhere (neither already accumulated nor in
+    // this same batch).
+    const header = probed.find((p)=>p.probe.kind === 'H');
+    if(header) scannedCodes = [header.text];
+    for(const p of probed){
+      if(p.probe.kind !== 'C') continue;
+      if(scannedCodes.length === 0){
         formMsg.innerHTML = '<div class="msg err">That looks like a continuation code -- make sure the FIRST code (the one shown right after your score) is in frame too.</div>';
         return;
       }
-      if(probe.kind === 'H'){
-        scannedCodes = [text]; // a header always starts (or restarts) a fresh accumulation
-      } else if(!scannedCodes.includes(text)){
-        scannedCodes.push(text);
-      }
+      if(!scannedCodes.includes(p.text)) scannedCodes.push(p.text);
     }
     resetScanUI();
     if(!isSubmissionComplete()){
