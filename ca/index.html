@@ -231,52 +231,253 @@
 
   let db = null, pending = null, unsubscribeBoard = null;
 
-  function parseCarcassonnePayload(text){
-    const codeKindStr = text.slice(2,3);
-    if(!/^\d{1}$/.test(codeKindStr)) return {error:"That code has an unreadable code kind."};
-    const codeKind = parseInt(codeKindStr,10);
-    const moreFlagStr = text.slice(3,4);
-    if(!/^\d{1}$/.test(moreFlagStr)) return {error:"That code has an unreadable more flag."};
-    const moreFlag = parseInt(moreFlagStr,10);
-    const deckSeedStr = text.slice(4,7);
-    if(!/^\d{3}$/.test(deckSeedStr)) return {error:"That code has an unreadable deck seed."};
-    const deckSeed = parseInt(deckSeedStr,10);
-    const riverSeedStr = text.slice(7,10);
-    if(!/^\d{3}$/.test(riverSeedStr)) return {error:"That code has an unreadable river seed."};
-    const riverSeed = parseInt(riverSeedStr,10);
-    const riverEnabledStr = text.slice(10,11);
-    if(!/^\d{1}$/.test(riverEnabledStr)) return {error:"That code has an unreadable river enabled."};
-    const riverEnabled = parseInt(riverEnabledStr,10);
-    const roadScoreStr = text.slice(11,14);
-    if(!/^\d{3}$/.test(roadScoreStr)) return {error:"That code has an unreadable road score."};
-    const roadScore = parseInt(roadScoreStr,10);
-    const cityScoreStr = text.slice(14,17);
-    if(!/^\d{3}$/.test(cityScoreStr)) return {error:"That code has an unreadable city score."};
-    const cityScore = parseInt(cityScoreStr,10);
-    const cloisterScoreStr = text.slice(17,20);
-    if(!/^\d{3}$/.test(cloisterScoreStr)) return {error:"That code has an unreadable cloister score."};
-    const cloisterScore = parseInt(cloisterScoreStr,10);
-    const farmScoreStr = text.slice(20,23);
-    if(!/^\d{3}$/.test(farmScoreStr)) return {error:"That code has an unreadable farm score."};
-    const farmScore = parseInt(farmScoreStr,10);
-    const tileCountStr = text.slice(23,25);
-    if(!/^\d{2}$/.test(tileCountStr)) return {error:"That code has an unreadable tile count."};
-    const tileCount = parseInt(tileCountStr,10);
-    const initials = text.slice(25,28);
-    if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
-    // TODO: "Board data" has a non-fixed width ("See scorecardFormula below -- this is the field that needs real reconstruction logic, not a straight decode. Present in both header and continuation codes; concatenate all codes' board-data tails, in scan order, before reconstructing.") -- scaffold-game.js couldn't
-    //   auto-slice this field. Add the real parsing here by hand (see this game's submission
-    //   in admin/index.html's All Submissions panel for the developer's own notes/example payloads).
-    const boardData = null; // FIXME
-    return { game:QR_GAME_CODE, codeKind, moreFlag, deckSeed, riverSeed, riverEnabled, roadScore, cityScore, cloisterScore, farmScore, tileCount, initials, boardData };
+  /* ============================================================
+   * Carcassonne2 QR payload decoder -- ported from, and MUST stay in sync
+   * with, the cartridge's own src/game/carc_tiles.c (g_tile_shapes[], the
+   * seeded deck shuffle), src/game/carc_board.c (carc_board_can_place()'s
+   * edge-matching rule) and src/game/carc_qr_payload.c (the wire format
+   * itself, incl. the move-index board-data encoding). Same logic as the
+   * standalone carc-qr-decode.js reference decoder (verified round-trip
+   * against synthetic test vectors), inlined here since this page has no
+   * module loader.
+   * ============================================================ */
+  const CA_BOARD_DIM = 26;
+  const CA_SIDE_N = 0, CA_SIDE_E = 1, CA_SIDE_S = 2, CA_SIDE_W = 3;
+  const CA_F = "F", CA_R = "R", CA_C = "C", CA_V = "V";
+
+  const CA_SHAPES = [
+    { edge: [CA_F, CA_F, CA_F, CA_F], cloister: 1, deck: 4 },
+    { edge: [CA_F, CA_F, CA_R, CA_F], cloister: 1, deck: 2 },
+    { edge: [CA_C, CA_F, CA_F, CA_F], cloister: 0, deck: 5 },
+    { edge: [CA_C, CA_F, CA_C, CA_F], cloister: 0, deck: 3 },
+    { edge: [CA_C, CA_C, CA_F, CA_F], cloister: 0, deck: 2 },
+    { edge: [CA_C, CA_F, CA_C, CA_F], cloister: 0, deck: 1 },
+    { edge: [CA_C, CA_F, CA_C, CA_F], cloister: 0, deck: 2 },
+    { edge: [CA_C, CA_C, CA_F, CA_F], cloister: 0, deck: 3 },
+    { edge: [CA_C, CA_C, CA_F, CA_F], cloister: 0, deck: 2 },
+    { edge: [CA_C, CA_C, CA_F, CA_C], cloister: 0, deck: 3 },
+    { edge: [CA_C, CA_C, CA_F, CA_C], cloister: 0, deck: 1 },
+    { edge: [CA_C, CA_C, CA_C, CA_C], cloister: 0, deck: 1 },
+    { edge: [CA_C, CA_C, CA_R, CA_C], cloister: 0, deck: 1 },
+    { edge: [CA_C, CA_C, CA_R, CA_C], cloister: 0, deck: 2 },
+    { edge: [CA_C, CA_R, CA_R, CA_R], cloister: 0, deck: 3 },
+    { edge: [CA_F, CA_R, CA_F, CA_R], cloister: 0, deck: 8 },
+    { edge: [CA_F, CA_R, CA_R, CA_F], cloister: 0, deck: 9 },
+    { edge: [CA_F, CA_R, CA_R, CA_R], cloister: 0, deck: 4 },
+    { edge: [CA_R, CA_R, CA_R, CA_R], cloister: 0, deck: 1 },
+    { edge: [CA_C, CA_R, CA_R, CA_F], cloister: 0, deck: 4 },
+    { edge: [CA_C, CA_F, CA_R, CA_R], cloister: 0, deck: 3 },
+    { edge: [CA_C, CA_R, CA_F, CA_R], cloister: 0, deck: 3 },
+    { edge: [CA_C, CA_C, CA_R, CA_R], cloister: 0, deck: 3 },
+    { edge: [CA_C, CA_C, CA_R, CA_R], cloister: 0, deck: 2 },
+    { edge: [CA_F, CA_F, CA_V, CA_F], cloister: 0, deck: 1 },
+    { edge: [CA_F, CA_F, CA_V, CA_F], cloister: 0, deck: 1 },
+    { edge: [CA_V, CA_F, CA_V, CA_F], cloister: 0, deck: 2 },
+    { edge: [CA_V, CA_V, CA_F, CA_F], cloister: 0, deck: 2 },
+    { edge: [CA_V, CA_C, CA_V, CA_C], cloister: 0, deck: 1 },
+    { edge: [CA_V, CA_V, CA_C, CA_C], cloister: 0, deck: 1 },
+    { edge: [CA_F, CA_V, CA_R, CA_V], cloister: 1, deck: 1 },
+    { edge: [CA_C, CA_V, CA_R, CA_V], cloister: 0, deck: 1 },
+    { edge: [CA_V, CA_R, CA_V, CA_R], cloister: 0, deck: 1 },
+    { edge: [CA_V, CA_V, CA_R, CA_R], cloister: 0, deck: 1 },
+  ];
+  const CA_SHAPE_START = 21, CA_SHAPE_RIVER_END = 24, CA_SHAPE_RIVER_LAKE = 25, CA_NUM_SHAPES = CA_SHAPES.length;
+
+  function caTileEdges(shapeId, rotation){
+    const shape = CA_SHAPES[shapeId], rot = rotation & 3, out = [0,0,0,0];
+    for(let side=0; side<4; side++) out[side] = shape.edge[(side+4-rot)&3];
+    return out;
+  }
+  function caMakePrng(seed){
+    let state = seed ? (seed & 0xffff) : 1;
+    return function next(n){
+      let px = state;
+      px = (px ^ (px<<7)) & 0xffff;
+      px = (px ^ (px>>>9)) & 0xffff;
+      px = (px ^ (px<<8)) & 0xffff;
+      state = px;
+      let pv = (px ^ (px>>>8)) & 0xff;
+      while(pv >= n) pv -= n;
+      return pv;
+    };
+  }
+  function caShuffleDeck(pool, seed){
+    const next = caMakePrng(seed);
+    for(let i=pool.length; i>1; i--){
+      const j = next(i), tmp = pool[i-1];
+      pool[i-1] = pool[j]; pool[j] = tmp;
+    }
+    return pool;
+  }
+  function caBuildBaseDeck(seed){
+    const pool = [];
+    for(let s=0; s<CA_SHAPE_RIVER_END; s++){
+      for(let c=0; c<CA_SHAPES[s].deck; c++) pool.push(s);
+    }
+    for(let i=0; i<pool.length; i++){
+      if(pool[i] === CA_SHAPE_START){ pool[i] = pool[pool.length-1]; pool.pop(); break; }
+    }
+    return caShuffleDeck(pool, seed);
+  }
+  function caBuildRiverDeck(seed){
+    const pool = [];
+    for(let s=CA_SHAPE_RIVER_END; s<CA_NUM_SHAPES; s++){
+      if(s === CA_SHAPE_RIVER_END || s === CA_SHAPE_RIVER_LAKE) continue;
+      for(let c=0; c<CA_SHAPES[s].deck; c++) pool.push(s);
+    }
+    return caShuffleDeck(pool, seed);
+  }
+  function caMakeBoard(){
+    const grid = [];
+    for(let y=0; y<CA_BOARD_DIM; y++) grid.push(new Array(CA_BOARD_DIM).fill(null));
+    return { grid, tiles: [] };
+  }
+  function caCanPlace(board, edge, x, y){
+    if(x<0 || x>=CA_BOARD_DIM || y<0 || y>=CA_BOARD_DIM) return false;
+    if(board.grid[y][x] !== null) return false;
+    let hasNeighbor = false;
+    const check = (nx, ny, mySide, theirSide)=>{
+      const n = board.grid[ny] && board.grid[ny][nx];
+      if(!n) return true;
+      hasNeighbor = true;
+      return edge[mySide] === caTileEdges(n.shapeId, n.rotation)[theirSide];
+    };
+    if(y>0 && !check(x,y-1,CA_SIDE_N,CA_SIDE_S)) return false;
+    if(y+1<CA_BOARD_DIM && !check(x,y+1,CA_SIDE_S,CA_SIDE_N)) return false;
+    if(x>0 && !check(x-1,y,CA_SIDE_W,CA_SIDE_E)) return false;
+    if(x+1<CA_BOARD_DIM && !check(x+1,y,CA_SIDE_E,CA_SIDE_W)) return false;
+    return hasNeighbor;
+  }
+  function caCountLegal(board, shapeId){
+    let count = 0;
+    for(let rot=0; rot<4; rot++){
+      const edge = caTileEdges(shapeId, rot);
+      for(let y=0; y<CA_BOARD_DIM; y++) for(let x=0; x<CA_BOARD_DIM; x++) if(caCanPlace(board,edge,x,y)) count++;
+    }
+    return count;
+  }
+  function caNthLegal(board, shapeId, m){
+    let seen = 0;
+    for(let rot=0; rot<4; rot++){
+      const edge = caTileEdges(shapeId, rot);
+      for(let y=0; y<CA_BOARD_DIM; y++){
+        for(let x=0; x<CA_BOARD_DIM; x++){
+          if(!caCanPlace(board,edge,x,y)) continue;
+          if(seen === m) return { rotation: rot, x, y };
+          seen++;
+        }
+      }
+    }
+    return null;
+  }
+  function caCharsForCount(n){ return n<=1 ? 0 : n<=45 ? 1 : n<=2025 ? 2 : 3; }
+  const CA_ALPHANUM = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:";
+  function caBase45Decode(str){
+    let v = 0;
+    for(const ch of str){
+      const d = CA_ALPHANUM.indexOf(ch);
+      if(d<0) return null;
+      v = v*45 + d;
+    }
+    return v;
   }
 
-  function parsePayload(text){
-    text = (text||'').trim().toUpperCase();
-    if(text.length < 2) return {error:"That code is too short to be a valid score."};
-    const code = text.slice(0,2);
-    if(code === QR_GAME_CODE) return parseCarcassonnePayload(text);
-    return {error:'Unknown game code "'+code+'".'};
+  // Strips a scanned/entered code down to "kind+more+data" -- everything
+  // after the last '/' (the URL prefix always ends in one), then validates
+  // and removes the 2-char game code.
+  function caStripToPayload(rawScannedText){
+    const s = (rawScannedText||'').trim();
+    if(!s) return null;
+    const slash = s.lastIndexOf('/');
+    const tail = (slash>=0 ? s.slice(slash+1) : s).toUpperCase();
+    if(!tail.startsWith(QR_GAME_CODE)) return null;
+    return tail.slice(QR_GAME_CODE.length);
+  }
+
+  // Decodes a full submission from every scanned code's RAW text, in scan
+  // order (the header code -- kind 'H' -- is expected first, but this finds
+  // it anywhere). Returns {ok:true, ...} or {ok:false, error}.
+  function caDecodeSubmission(rawCodes){
+    const parsed = rawCodes.map(caStripToPayload);
+    const badIdx = parsed.findIndex((p)=>p===null);
+    if(badIdx !== -1) return { ok:false, error: 'Code '+(badIdx+1)+' doesn\'t look like a "'+QR_GAME_CODE+'" leaderboard code.' };
+    const headerIdx = parsed.findIndex((p)=>p[0]==='H');
+    if(headerIdx === -1) return { ok:false, error: 'No header code ("H") found among the scanned codes.' };
+
+    const header = parsed[headerIdx];
+    if(header.length < 23) return { ok:false, error: 'Header code is truncated.' };
+    let pos = 2;
+    const deckSeed = caBase45Decode(header.slice(pos,pos+3)); pos+=3;
+    const riverSeedRaw = caBase45Decode(header.slice(pos,pos+3)); pos+=3;
+    const riverEnabled = header[pos] === '1'; pos+=1;
+    const road = caBase45Decode(header.slice(pos,pos+3)); pos+=3;
+    const city = caBase45Decode(header.slice(pos,pos+3)); pos+=3;
+    const cloister = caBase45Decode(header.slice(pos,pos+3)); pos+=3;
+    const farm = caBase45Decode(header.slice(pos,pos+3)); pos+=3;
+    const tileCount = caBase45Decode(header.slice(pos,pos+2)); pos+=2;
+    const initials = header.slice(pos,pos+3); pos+=3;
+    if(deckSeed===null || riverSeedRaw===null || road===null || city===null || cloister===null || farm===null || tileCount===null || !/^[A-Z]{3}$/.test(initials)){
+      return { ok:false, error: 'Header code has unreadable fields.' };
+    }
+    const score = road+city+cloister+farm;
+
+    let moveStream = header.slice(pos);
+    for(let i=0; i<parsed.length; i++){ if(i!==headerIdx) moveStream += parsed[i].slice(2); }
+
+    const board = caMakeBoard();
+    const startXY = CA_BOARD_DIM >> 1;
+    const startShape = riverEnabled ? CA_SHAPE_RIVER_END : CA_SHAPE_START;
+    board.grid[startXY][startXY] = { shapeId: startShape, rotation: 0 };
+    board.tiles.push({ shapeId: startShape, rotation: 0, x: startXY, y: startXY });
+
+    const draws = [];
+    if(riverEnabled){ for(const s of caBuildRiverDeck(riverSeedRaw)) draws.push(s); draws.push(CA_SHAPE_RIVER_LAKE); }
+    for(const s of caBuildBaseDeck(deckSeed)) draws.push(s);
+
+    let streamPos = 0, placed = 0;
+    for(const shapeId of draws){
+      if(placed >= tileCount) break;
+      const n = caCountLegal(board, shapeId);
+      if(n === 0) continue;
+      let rot, x, y;
+      if(n === 1){
+        const only = caNthLegal(board, shapeId, 0);
+        rot = only.rotation; x = only.x; y = only.y;
+      } else {
+        const need = caCharsForCount(n);
+        const m = caBase45Decode(moveStream.slice(streamPos, streamPos+need));
+        streamPos += need;
+        const found = m===null ? null : caNthLegal(board, shapeId, m);
+        if(!found) return { ok:false, error: 'Reconstruction desynced at tile '+(placed+1)+' of '+tileCount+' -- try re-scanning every code.' };
+        rot = found.rotation; x = found.x; y = found.y;
+      }
+      board.grid[y][x] = { shapeId, rotation: rot };
+      board.tiles.push({ shapeId, rotation: rot, x, y });
+      placed++;
+    }
+    if(placed < tileCount) return { ok:false, error: 'Only reconstructed '+placed+' of '+tileCount+' tiles -- a code may be missing. Try scanning again.' };
+
+    return { ok:true, initials, deckSeed, riverEnabled, riverSeed: riverEnabled ? riverSeedRaw : 0, score, road, city, cloister, farm, tileCount, tiles: board.tiles };
+  }
+
+  /* ---- Multi-code scan accumulation -- one leaderboard entry can need more
+   * than one QR code (a big board doesn't fit in ~114 chars), so the raw
+   * text of every scan is collected here until a code's own "more" flag
+   * says none follow, then the whole set is decoded together. ---- */
+  let scannedCodes = [];
+
+  function resetScanAccumulator(){ scannedCodes = []; }
+
+  // Lightweight probe of ONE scanned code -- just enough to drive the
+  // accumulation UI (kind/more), without running the (comparatively heavy)
+  // full board reconstruction on every single scan.
+  function probeCode(rawText){
+    const stripped = caStripToPayload(rawText);
+    if(stripped === null) return { error: 'That doesn\'t look like a "'+QR_GAME_CODE+'" leaderboard code.' };
+    const kind = stripped[0], more = stripped[1];
+    if(kind !== 'H' && kind !== 'C') return { error: 'That code has an unreadable code kind.' };
+    if(more !== '0' && more !== '1') return { error: 'That code has an unreadable "more codes" flag.' };
+    return { kind, more };
   }
 
   function lastPathSegment(text){
@@ -284,37 +485,72 @@
     return parts.length ? parts[parts.length-1] : '';
   }
 
+  // A single scanned/routed code arriving via the page's own URL (the
+  // webplayer's route-a-scan flow, or a direct link) -- returns the raw
+  // text so it can go through the exact same accumulation path a live
+  // camera/photo scan does (handleScanResult), since one code is never
+  // guaranteed to be the WHOLE submission.
   function payloadFromEntry(){
     const raw = location.hash ? location.hash.slice(1) : lastPathSegment(location.pathname);
     const last = decodeURIComponent(lastPathSegment(raw));
-    if(last.length < 2) return null;
-    const result = parsePayload(last);
-    return result.error ? null : result;
+    return last.length >= 2 ? last : null;
   }
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
   function formatDisplayValue(o){ return String(o.score); }
 
-  // TODO -- the submission's own "scorecard reconstruction" field asked for something this
-  // generator can't safely auto-implement from free text. The developer's exact request:
-  //   "The board-data stream does NOT encode each tile's raw (rotation,x,y). Instead, each tile placed after the start tile costs 0, 1, 2, or 3 base45 characters depending on how many legal placements existed for that shape at that point in a RE-SIMULATED game: 0 chars if there were 0 legal spots (the draw was discarded, matching real Carcassonne/River rules) or exactly 1 (a forced move); otherwise chars_for_count(N) = 1 char if N<=45, 2 if N<=2025, else 3, base45-encoding WHICH of the N legal (rotation,x,y) candidates -- enumerated rotation-outermost, then y, then x -- was actually chosen. To reconstruct: (1) rebuild the 71-tile base deck (and, if riverEnabled, the 10-tile river deck) by replaying the SAME seeded xorshift16 + Fisher-Yates shuffle the cartridge used (state=seed||1; per draw: px^=px<<7; px^=px>>9; px^=px<<8; state=px; take (px^(px>>8))&0xFF, reduce mod n by repeated subtraction -- NOT the % operator, this hardware's C compiler has a confirmed division bug); (2) place the fixed start tile (game's own designated start shape) at board center; (3) for each subsequent draw, using the identical edge-matching legality rule the game uses (in bounds, empty, every side touching an occupied neighbor has a matching feature), enumerate legal placements in the same canonical order, consume 0/1/N board-data characters per the rule above, and place the tile at the resulting candidate. A reference JS implementation of this entire algorithm (deck rebuild, legality rule, move-index reconstruction) already exists and is verified round-trip against synthetic test vectors -- happy to hand it over directly instead of having it re-implemented from this description alone."
-  // Implement it by hand (likely inside renderScorecardHTML and/or formatDisplayValue below),
-  // then delete this comment.
+  const CA_FEATURE_COLOR = { F:'#2f6b3a', R:'#c9a35c', C:'#9a9a9a', V:'#3f7fd6' };
 
-  function renderScorecardHTML(data){
-    const rows = '<tr><td>Code Kind</td><td class="tk-val tnum">'+data.codeKind+'</td></tr>'+
-      '<tr><td>More Flag</td><td class="tk-val tnum">'+data.moreFlag+'</td></tr>'+
-      '<tr><td>Deck Seed</td><td class="tk-val tnum">'+data.deckSeed+'</td></tr>'+
-      '<tr><td>River Seed</td><td class="tk-val tnum">'+data.riverSeed+'</td></tr>'+
-      '<tr><td>River Enabled</td><td class="tk-val tnum">'+data.riverEnabled+'</td></tr>'+
-      '<tr><td>Road Score</td><td class="tk-val tnum">'+data.roadScore+'</td></tr>'+
-      '<tr><td>City Score</td><td class="tk-val tnum">'+data.cityScore+'</td></tr>'+
-      '<tr><td>Cloister Score</td><td class="tk-val tnum">'+data.cloisterScore+'</td></tr>'+
-      '<tr><td>Farm Score</td><td class="tk-val tnum">'+data.farmScore+'</td></tr>'+
-      '<tr><td>Tile Count</td><td class="tk-val tnum">'+data.tileCount+'</td></tr>'+
-      '<tr><td>Board Data</td><td class="tk-val tnum">'+data.boardData+'</td></tr>';
-    return '<table class="tk-sheet">'+rows+'</table>';
+  // Diagrammatic (not pixel-art) board recreation for the flyout -- one
+  // small square per tile, a colored strip per side for that side's edge
+  // feature (green=field, tan=road, grey=city, blue=river), a dot for a
+  // cloister. `tiles` is [{shapeId,rotation,x,y}, ...] (tiles[0] is always
+  // the fixed start tile).
+  function renderBoardSVG(tiles){
+    if(!tiles || !tiles.length) return '';
+    let minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+    tiles.forEach((t)=>{ if(t.x<minX)minX=t.x; if(t.x>maxX)maxX=t.x; if(t.y<minY)minY=t.y; if(t.y>maxY)maxY=t.y; });
+    const w = maxX-minX+1, h = maxY-minY+1, cell = 18;
+    const svgW = w*cell, svgH = h*cell, strip = cell*0.34;
+    let shapes = '';
+    tiles.forEach((t)=>{
+      const edge = caTileEdges(t.shapeId, t.rotation);
+      const px = (t.x-minX)*cell, py = (t.y-minY)*cell;
+      shapes += '<rect x="'+px+'" y="'+py+'" width="'+cell+'" height="'+cell+'" fill="'+CA_FEATURE_COLOR.F+'" stroke="#0a1830" stroke-width="0.5"/>';
+      shapes += '<rect x="'+px+'" y="'+py+'" width="'+cell+'" height="'+strip+'" fill="'+CA_FEATURE_COLOR[edge[0]]+'"/>';
+      shapes += '<rect x="'+(px+cell-strip)+'" y="'+py+'" width="'+strip+'" height="'+cell+'" fill="'+CA_FEATURE_COLOR[edge[1]]+'"/>';
+      shapes += '<rect x="'+px+'" y="'+(py+cell-strip)+'" width="'+cell+'" height="'+strip+'" fill="'+CA_FEATURE_COLOR[edge[2]]+'"/>';
+      shapes += '<rect x="'+px+'" y="'+py+'" width="'+strip+'" height="'+cell+'" fill="'+CA_FEATURE_COLOR[edge[3]]+'"/>';
+      if(CA_SHAPES[t.shapeId].cloister){
+        shapes += '<circle cx="'+(px+cell/2)+'" cy="'+(py+cell/2)+'" r="'+(cell*0.14)+'" fill="#e5c98a"/>';
+      }
+    });
+    return '<svg viewBox="0 0 '+svgW+' '+svgH+'" width="100%" style="max-width:360px;display:block;margin:10px auto;background:#0a1830;border-radius:6px" xmlns="http://www.w3.org/2000/svg">'+shapes+'</svg>';
+  }
+
+  // Accepts either a freshly-decoded submission (tiles: array) or a stored
+  // Firestore score doc (tiles: JSON string) and returns one flat shape
+  // both openConfirm() and the leaderboard row-detail flyout can render.
+  function toDisplayShape(record){
+    const tiles = typeof record.tiles === 'string' ? JSON.parse(record.tiles || '[]') : (record.tiles || []);
+    return {
+      initials: record.initials, score: record.score, road: record.road,
+      city: record.city, cloister: record.cloister, farm: record.farm,
+      tileCount: record.tileCount, riverEnabled: !!record.riverEnabled,
+      deckSeed: record.deckSeed, riverSeed: record.riverSeed, tiles,
+    };
+  }
+
+  function renderScorecardHTML(record){
+    const d = toDisplayShape(record);
+    const rows = '<tr><td>Road</td><td class="tk-val tnum">'+d.road+'</td></tr>'+
+      '<tr><td>City</td><td class="tk-val tnum">'+d.city+'</td></tr>'+
+      '<tr><td>Cloister</td><td class="tk-val tnum">'+d.cloister+'</td></tr>'+
+      '<tr><td>Farm</td><td class="tk-val tnum">'+d.farm+'</td></tr>'+
+      '<tr><td>Tiles placed</td><td class="tk-val tnum">'+d.tileCount+'</td></tr>'+
+      '<tr><td>River</td><td class="tk-val tnum">'+(d.riverEnabled?'On':'Off')+'</td></tr>';
+    return '<table class="tk-sheet">'+rows+'</table>' + renderBoardSVG(d.tiles);
   }
 
   async function renderBoard(docs){
@@ -407,12 +643,34 @@
     showStage('confirm');
   }
 
+  // A Carcassonne submission can need MORE THAN ONE QR code (a big board
+  // doesn't fit in ~114 chars) -- this accumulates raw scans in
+  // scannedCodes until a code's own "more" flag says none follow, then
+  // decodes the whole set at once. Each individual scan still stops the
+  // camera (resetScanUI()) so the live loop can't push duplicate frames of
+  // the same code; the player taps "Scan QR Code" again for the next one.
   function handleScanResult(text){
     formMsg.innerHTML = '';
-    const result = parsePayload(lastPathSegment(text));
-    if(result.error){ formMsg.innerHTML = '<div class="msg err">'+escapeHtml(result.error)+'</div>'; return; }
+    const probe = probeCode(text);
+    if(probe.error){ formMsg.innerHTML = '<div class="msg err">'+escapeHtml(probe.error)+'</div>'; return; }
+    if(probe.kind === 'C' && scannedCodes.length === 0){
+      formMsg.innerHTML = '<div class="msg err">That looks like a continuation code -- scan the FIRST code (the one shown right after your score) first.</div>';
+      return;
+    }
+    if(probe.kind === 'H'){
+      scannedCodes = [text]; // a header always starts (or restarts) a fresh accumulation
+    } else {
+      scannedCodes.push(text);
+    }
     resetScanUI();
-    openConfirm(result);
+    if(probe.more === '1'){
+      formMsg.innerHTML = '<div class="msg ok">Code '+scannedCodes.length+' scanned -- scan the next code shown on the console.</div>';
+      return;
+    }
+    const decoded = caDecodeSubmission(scannedCodes);
+    resetScanAccumulator();
+    if(!decoded.ok){ formMsg.innerHTML = '<div class="msg err">'+escapeHtml(decoded.error)+'</div>'; return; }
+    openConfirm(decoded);
   }
 
   let cameraStream = null, scanRAF = null;
@@ -532,8 +790,8 @@
   }
 
   btnScan.addEventListener('click', startLiveScan);
-  el('btn-cancel-scan').addEventListener('click', resetScanUI);
-  el('btn-cancel-fallback').addEventListener('click', resetScanUI);
+  el('btn-cancel-scan').addEventListener('click', ()=>{ resetScanAccumulator(); resetScanUI(); });
+  el('btn-cancel-fallback').addEventListener('click', ()=>{ resetScanAccumulator(); resetScanUI(); });
   scanFile.addEventListener('change', (e)=>{ const f = e.target.files[0]; e.target.value = ''; if(f) scanFromFile(f); });
 
   el('btn-back').addEventListener('click', ()=>{ pending = null; showStage('idle'); });
@@ -553,13 +811,28 @@
     const btn = el('btn-confirm');
     btn.disabled = true;
     confirmMsg.innerHTML = '<div class="msg ok">Submitting…</div>';
-    const record = Object.assign({}, pending, {
+    // Stored shape matches firestore.rules' isCarcassonneScore() exactly --
+    // the reconstructed result, not raw per-QR-code wire fields (those are
+    // pure scan-transport artifacts already resolved by caDecodeSubmission).
+    const record = {
+      game: QR_GAME_CODE,
+      initials: pending.initials,
+      score: pending.score,
+      road: pending.road,
+      city: pending.city,
+      cloister: pending.cloister,
+      farm: pending.farm,
+      tileCount: pending.tileCount,
+      riverEnabled: !!pending.riverEnabled,
+      deckSeed: pending.deckSeed,
+      riverSeed: pending.riverSeed,
+      tiles: JSON.stringify(pending.tiles),
       source: SUBMIT_SOURCE,
       submittedAt: Date.now(),
       uid: authedUser.uid,
       username: authedUser.username,
       approved: !!authedUser.approved,
-    });
+    };
     try{
       const res = await writeScore(record);
       btn.disabled = false;
@@ -599,8 +872,8 @@
     initDb();
     const fromEntry = payloadFromEntry();
     if(fromEntry){
-      openConfirm(fromEntry);
       history.replaceState(null, '', location.pathname);
+      handleScanResult(fromEntry);
     }
   }
 
