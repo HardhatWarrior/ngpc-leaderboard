@@ -1,3 +1,4 @@
+import {ScreenEffects} from './effects.js';
 const FPS = 6144000 / (515 * 199);
 const KEYS = {ArrowUp:1, ArrowDown:2, ArrowLeft:4, ArrowRight:8, KeyZ:16, KeyX:32, Enter:64};
 const MAX_ROM = 4 * 1024 * 1024;
@@ -30,11 +31,39 @@ export class NgpCraftPlayer extends HTMLElement {
       :host(:fullscreen) .touch{width:min(100%,540px);margin-bottom:auto}:host(:fullscreen) .status{margin-top:8px}:host(:fullscreen) .settings{position:absolute;z-index:2;top:12px;right:12px;width:min(440px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;box-shadow:0 8px 40px #0009}
       @media(max-width:380px){section{padding:12px}.bar{gap:5px}button,.file{padding:8px}.dpad{grid-template-columns:repeat(3,38px)}}
       @media(max-height:500px) and (min-width:700px){:host(:fullscreen) canvas{width:calc((100dvh - 110px) * 160 / 152)}:host(:fullscreen) .touch{position:absolute;left:12px;bottom:85px;width:calc(100% - 24px);margin:0;pointer-events:none}:host(:fullscreen) .touch button{pointer-events:auto}}
+      canvas{touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+      .touch{--pad-size:48px;--action-size:54px;touch-action:none;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+      .dpad{grid-template-columns:repeat(3,var(--pad-size));grid-template-rows:repeat(3,var(--pad-size));gap:2px;touch-action:none}
+      .dpad button{padding:0;min-width:0;font-size:19px}
+      .actions{display:grid;grid-template-columns:repeat(2,var(--action-size));gap:10px}
+      .actions button{width:var(--action-size);height:var(--action-size);padding:0;font-size:18px;border-radius:50%}
+      .actions [data-bit="64"]{grid-column:1 / -1;justify-self:center;width:72px;height:44px;border-radius:12px;font-size:13px}
+      @media(max-width:380px){.touch{--pad-size:44px;--action-size:48px;gap:8px}}
+      section{position:relative}
+      .quick-menu{display:none}
+      @media(pointer:coarse){
+        :host(:fullscreen) .quick-menu,:host([expanded]) .quick-menu{display:grid;place-items:center;position:absolute;z-index:4;top:max(8px,env(safe-area-inset-top,0px));right:max(8px,env(safe-area-inset-right,0px));width:44px;height:44px;padding:10px;border-radius:50%;background:#111b2c99;border:1px solid #ffffff30;color:#fff;opacity:.65;touch-action:manipulation}
+        .quick-menu:hover,.quick-menu:focus-visible,.quick-menu[aria-expanded=true]{opacity:1}
+        :host(:fullscreen) section>.bar,:host([expanded]) section>.bar{display:none}
+        :host(:fullscreen[menu-open]) section>.bar,:host([expanded][menu-open]) section>.bar{display:flex;position:absolute;z-index:4;top:60px;right:max(8px,env(safe-area-inset-right,0px));left:auto;bottom:auto;width:200px;max-height:calc(100% - 76px);height:auto;overflow:auto;margin:0;padding:10px;gap:6px;flex-direction:column;align-items:stretch;border:1px solid #53647c;border-radius:12px;background:#172235f5;box-shadow:0 8px 30px #0006}
+        :host(:fullscreen[menu-open]) section>.bar button,:host([expanded][menu-open]) section>.bar button{margin:0;min-height:44px;font-size:14px}
+        :host(:fullscreen) section>.bar>.file{display:none}
+        :host(:fullscreen) section{padding:0;overflow:hidden}
+        :host(:fullscreen) canvas.game-screen{width:100%;height:100%;margin:0;object-fit:contain;aspect-ratio:auto}
+        :host(:fullscreen) .touch{position:absolute;left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));width:auto;max-width:none;margin:0;pointer-events:none}
+        :host(:fullscreen) .touch .dpad,:host(:fullscreen) .touch .actions{pointer-events:auto}
+        :host(:fullscreen) .status{position:absolute;top:8px;left:8px;right:60px;z-index:2}
+        :host(:fullscreen) .settings{z-index:5}
+      }
+      @media(pointer:coarse) and (orientation:portrait){
+        :host(:fullscreen) section:has(.touch:not([hidden])) canvas.game-screen{height:calc(100% - 180px - env(safe-area-inset-bottom,0px))}
+      }
       </style>
       <section lang="en" aria-label="Neo Geo Pocket Color player">
         <header><strong>NGPCRAFT <small>WEB</small></strong><small>NEO GEO POCKET COLOR</small></header>
-        <canvas width="160" height="152" tabindex="0" aria-label="Game screen"></canvas>
-        <div class="bar">
+        <canvas class="game-screen" width="160" height="152" tabindex="0" aria-label="Game screen"></canvas>
+        <button class="quick-menu" aria-label="Open player menu" aria-expanded="false" aria-controls="player-toolbar" title="Player menu"><svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="5" r="2" fill="currentColor"/><circle cx="12" cy="12" r="2" fill="currentColor"/><circle cx="12" cy="19" r="2" fill="currentColor"/></svg></button>
+        <div class="bar" id="player-toolbar">
           <label class="file">Open ROM<input class="rom" type="file" accept=".ngp,.ngc,.npc,.bin"></label>
           <button class="primary play" disabled>Play</button><button class="reset" disabled>Restart</button>
           <button class="mute" aria-pressed="false">Sound: on</button><button class="full">Fullscreen</button>
@@ -44,6 +73,7 @@ export class NgpCraftPlayer extends HTMLElement {
           <h2>Player settings</h2>
           <label class="setting-row">Volume <span><input class="volume" type="range" min="0" max="100" value="100" aria-label="Volume"><output class="volume-value">100 %</output></span></label>
           <label class="setting-row">Display <select class="display"><option value="pixelated">Sharp pixels</option><option value="smooth">Smooth</option></select></label>
+          <label class="setting-row">Screen effect <select class="effect"><option value="off">Off</option><option value="lcd">LCD grid</option><option value="crt">CRT scanlines</option></select></label>
           <label class="setting-row">Show touch controls <input class="show-touch" type="checkbox" checked></label>
           <h2>Keyboard controls</h2>
           <div class="bindings">${CONTROLS.map(([bit,name])=>`<div class="binding"><span>${name}</span><button data-bind="${bit}" aria-label="Assign key for ${name}" aria-pressed="false"></button></div>`).join('')}</div>
@@ -79,17 +109,34 @@ export class NgpCraftPlayer extends HTMLElement {
       await this.load(new Uint8Array(await file.arrayBuffer()),file.name);
       this.$('.rom').value='';
     }));
-    on(this.$('.play'),'click',task(()=>this.running ? this.pause() : this.play()));
+    on(this.$('.play'),'click',task(()=>{this.toggleQuickMenu(false,false);return this.running ? this.pause() : this.play();}));
     on(this.$('.reset'),'click',()=>{if(this.loaded){this.stopAudio();this.module._web_reset();this.report('Game restarted.');}});
     on(this.$('.mute'),'click',()=>{if(this.settings.volume===0){this.settings.volume=100;this.muted=false;this.writeSettings();}else this.muted=!this.muted;this.applySettings();});
-    on(this.$('.full'),'click',task(()=>this.toggleFullscreen()));
-    on(this.canvas,'dblclick',task(()=>this.toggleFullscreen()));
+    on(this.$('.full'),'click',task(()=>{this.toggleQuickMenu(false);return this.toggleFullscreen();}));
+    on(this.$('.quick-menu'),'click',()=>this.toggleQuickMenu());
+    document.addEventListener('pointerdown',e=>{
+      const path=e.composedPath();
+      if(!this.$('.settings').hidden&&!path.includes(this.$('.settings'))&&!path.includes(this.$('.options'))){
+        this.toggleOptions(false);
+      }
+      if(this.hasAttribute('menu-open')&&!path.includes(this.$('#player-toolbar'))&&!path.includes(this.$('.quick-menu'))){
+        this.toggleQuickMenu(false);
+      }
+    },{capture:true,signal:this.events.signal});
+    on(this.canvas,'pointerdown',e=>{this.canvasPointerType=e.pointerType;});
+    on(this.canvas,'dblclick',e=>{
+      // Mobile double taps also synthesize dblclick. Only a mouse may use
+      // this shortcut; touch users have the explicit maximize button.
+      if(this.canvasPointerType==='touch'||this.canvasPointerType==='pen'||e.sourceCapabilities?.firesTouchEvents){e.preventDefault();e.stopPropagation();return;}
+      task(()=>this.toggleFullscreen())();
+    });
     on(document,'fullscreenchange',()=>this.updateFullscreen());
     this.updateFullscreen();
     on(this.$('.options'),'click',()=>this.toggleOptions());
     on(this.$('.close-options'),'click',()=>this.toggleOptions(false));
     on(this.$('.volume'),'input',()=>{this.settings.volume=+this.$('.volume').value;this.muted=false;this.applySettings();this.writeSettings();});
     on(this.$('.display'),'change',()=>{this.settings.display=this.$('.display').value;this.applySettings();this.writeSettings();});
+    on(this.$('.effect'),'change',()=>{this.settings.effect=this.$('.effect').value;this.applySettings();this.writeSettings();});
     on(this.$('.show-touch'),'change',()=>{this.settings.touch=this.$('.show-touch').checked;this.clearInput();this.applySettings();this.writeSettings();});
     on(this.$('.defaults'),'click',()=>{this.captureBit=null;this.settings=this.defaultSettings();this.muted=false;this.clearInput();this.applySettings();this.writeSettings();this.$('.settings-note').textContent='Default settings restored.';});
     for(const b of this.shadowRoot.querySelectorAll('[data-bind]')){
@@ -109,25 +156,36 @@ export class NgpCraftPlayer extends HTMLElement {
     }));
     on(this.shadowRoot,'keydown',e=>{
       if(this.captureBit){this.captureBinding(e);return;}
+      if(e.code==='Escape'&&this.hasAttribute('menu-open')){e.preventDefault();e.stopPropagation();this.toggleQuickMenu(false);return;}
       if(e.code==='Escape'&&!this.$('.settings').hidden){e.preventDefault();e.stopPropagation();this.toggleOptions(false);return;}
       if (e.target!==this.canvas || !this.settings.keys[e.code] || e.ctrlKey || e.altKey || e.metaKey)return;
       e.preventDefault();this.keys.add(e.code);
     });
     on(window,'keyup',e=>{this.keys.delete(e.code);if(e.code===this.captureReleaseCode){e.preventDefault();this.captureReleaseCode=null;}});
     on(this.canvas,'blur',()=>this.clearInput());
-    for(const b of this.shadowRoot.querySelectorAll('[data-bit]')){
-      on(b,'pointerdown',e=>{e.preventDefault();b.setPointerCapture(e.pointerId);this.pointers.set(e.pointerId,+b.dataset.bit);b.setAttribute('aria-pressed','true');});
-      const release=e=>{this.pointers.delete(e.pointerId);b.setAttribute('aria-pressed','false');};
-      on(b,'pointerup',release);on(b,'pointercancel',release);on(b,'lostpointercapture',release);
-    }
+    const touch=this.$('.touch');
+    this.pointerAreas=new Map();
+    on(touch,'pointerdown',e=>{
+      if(e.pointerType==='mouse'&&e.button!==0)return;
+      const area=e.target.closest('.dpad,.actions');if(!area)return;
+      if(area.matches('.actions')&&!e.target.closest('[data-bit]'))return;
+      e.preventDefault();touch.setPointerCapture(e.pointerId);
+      this.pointerAreas.set(e.pointerId,area);this.moveTouch(e);
+    });
+    on(touch,'pointermove',e=>{if(this.pointerAreas.has(e.pointerId)){e.preventDefault();this.moveTouch(e);}});
+    const release=e=>{this.pointerAreas.delete(e.pointerId);this.pointers.delete(e.pointerId);this.renderTouch();};
+    on(touch,'pointerup',release);on(touch,'pointercancel',release);on(touch,'lostpointercapture',release);
+    on(touch,'contextmenu',e=>e.preventDefault());
     on(this,'focusout',e=>{if(!this.contains(e.relatedTarget))this.clearInput();});
     on(window,'blur',()=>this.pause());
     on(document,'visibilitychange',()=>{if(document.hidden)this.pause();});
     on(window,'pagehide',()=>this.pause());
     this.saveTimer=setInterval(()=>this.persist(),5000);
+    this.applyScreenEffect();
     if(this.getAttribute('rom')&&!this.hasAttribute('defer'))this.loadURL(this.getAttribute('rom')).catch(e=>this.report(e.message));
   }
   disconnectedCallback() {
+    this.toggleQuickMenu(false,false);this.effects?.destroy();this.effects=null;
     this.pause();clearInterval(this.saveTimer);this.events?.abort();this.events=null;
     this.generation=(this.generation||0)+1;this.module?._web_close();this.module=null;this.loaded=false;
     this.urlRequest=(this.urlRequest||0)+1;this.romFetch?.abort();
@@ -136,12 +194,13 @@ export class NgpCraftPlayer extends HTMLElement {
     this.report('Open a game to begin.');
   }
   report(text){this.$('.status').textContent=text;}
-  defaultSettings(){return {volume:100,display:'pixelated',touch:true,keys:{...KEYS},labels:Object.fromEntries(Object.keys(KEYS).map(code=>[code,keyLabel(code)]))};}
+  defaultSettings(){return {volume:100,display:'pixelated',effect:'off',touch:true,keys:{...KEYS},labels:Object.fromEntries(Object.keys(KEYS).map(code=>[code,keyLabel(code)]))};}
   readSettings(){
     try{
       const s=JSON.parse(localStorage.getItem(SETTINGS_KEY));if(!s)return;
       if(Number.isFinite(s.volume)&&s.volume>=0&&s.volume<=100)this.settings.volume=s.volume;
       if(['pixelated','smooth'].includes(s.display))this.settings.display=s.display;
+      if(['off','lcd','crt'].includes(s.effect))this.settings.effect=s.effect;
       if(typeof s.touch==='boolean')this.settings.touch=s.touch;
       const pairs=Object.entries(s.keys||{}),bits=CONTROLS.map(([bit])=>bit);
       if(pairs.length===7&&new Set(pairs.map(([,bit])=>bit)).size===7&&pairs.every(([code,bit])=>this.allowedKey(code)&&bits.includes(bit))){
@@ -155,6 +214,7 @@ export class NgpCraftPlayer extends HTMLElement {
     const s=this.settings;if(this.gain)this.gain.gain.value=this.muted?0:s.volume/100;
     this.$('.volume').value=s.volume;this.$('.volume-value').textContent=`${s.volume} %`;
     this.$('.display').value=s.display;this.canvas.style.imageRendering=s.display==='smooth'?'auto':'pixelated';
+    this.$('.effect').value=s.effect;this.applyScreenEffect();
     this.$('.show-touch').checked=s.touch;this.$('.touch').hidden=!s.touch;
     this.$('section').style.setProperty('--fullscreen-ui',s.touch?'320px':'160px');
     this.$('.mute').textContent=`Sound: ${this.muted||s.volume===0?'off':'on'}`;this.$('.mute').setAttribute('aria-pressed',String(this.muted||s.volume===0));
@@ -182,7 +242,30 @@ export class NgpCraftPlayer extends HTMLElement {
     this.captureBit=null;this.clearInput();this.renderBindings();this.$('.settings-note').textContent='Key assigned. Close settings, then click Play.';this.writeSettings();
   }
   cancelBinding(){this.captureBit=null;this.renderBindings();this.$('.settings-note').textContent='Assignment canceled. Click a key to change it.';}
+  applyScreenEffect(){
+    if(this.settings.effect==='off'){this.effects?.destroy();this.effects=null;return;}
+    if(!this.isConnected)return;
+    try{
+      if(!this.effects)this.effects=new ScreenEffects(this.canvas,()=>this.disableScreenEffect());
+      this.effects.configure(this.settings.effect,this.settings.display==='smooth');this.effects.render(this.frame.data);
+    }catch{this.disableScreenEffect();}
+  }
+  disableScreenEffect(){
+    this.effects?.destroy();this.effects=null;this.settings.effect='off';this.$('.effect').value='off';this.writeSettings();
+    this.$('.settings-note').textContent='The screen effect is unavailable. Original display restored.';
+    this.report('The screen effect is unavailable. Original display restored.');
+  }
+  toggleQuickMenu(open=!this.hasAttribute('menu-open'),resume=true){
+    if(open){if(this.hasAttribute('menu-open'))return;this.quickWasRunning=this.running;this.pause();}
+    const wasOpen=this.hasAttribute('menu-open');this.toggleAttribute('menu-open',open);
+    this.$('.quick-menu').setAttribute('aria-expanded',String(open));
+    this.$('.quick-menu').setAttribute('aria-label',open?'Close player menu':'Open player menu');
+    if(open)this.$('.play').focus({preventScroll:true});
+    if(!open&&wasOpen){const play=this.quickWasRunning&&resume;this.quickWasRunning=false;if(play)this.play().catch(e=>this.report(e.message));}
+  }
+  updateQuickMenu(){if(!this.hasAttribute('expanded')&&document.fullscreenElement!==this)this.toggleQuickMenu(false);}
   toggleOptions(open=this.$('.settings').hidden){
+    this.toggleQuickMenu(false,false);
     this.captureBit=null;if(open)this.pause();this.renderBindings();
     this.$('.settings').hidden=!open;this.$('.options').setAttribute('aria-expanded',String(open));
     if(open)this.$('.volume').focus();else this.$('.options').focus();
@@ -192,7 +275,7 @@ export class NgpCraftPlayer extends HTMLElement {
     else if(this.requestFullscreen&&document.fullscreenEnabled)await this.requestFullscreen();
     else throw Error('Fullscreen is unavailable in this browser or embedded page.');
   }
-  updateFullscreen(){const active=document.fullscreenElement===this;this.$('.full').textContent=active?'Exit fullscreen':'Fullscreen';this.$('.full').setAttribute('aria-pressed',String(active));}
+  updateFullscreen(){const active=document.fullscreenElement===this;this.$('.full').textContent=active?'Exit fullscreen':'Fullscreen';this.$('.full').setAttribute('aria-pressed',String(active));this.updateQuickMenu();}
   async loadURL(url){
     this.romFetch?.abort();const controller=this.romFetch=new AbortController();
     const request=this.urlRequest=(this.urlRequest||0)+1,generation=this.generation||0;
@@ -228,7 +311,7 @@ export class NgpCraftPlayer extends HTMLElement {
       }}
       catch(e){warning=' Local storage unavailable: use Export.';}
       this.$('.play').disabled=false;this.$('.reset').disabled=false;this.$('.export').disabled=false;
-      this.context.fillStyle='#080d15';this.context.fillRect(0,0,160,152);
+      this.context.fillStyle='#080d15';this.context.fillRect(0,0,160,152);this.frame.data.fill(0);this.effects?.render(this.frame.data);
       this.report(`${name} — ready. Click Play.${warning}`);
       this.dispatchEvent(new CustomEvent('ngpc-ready',{detail:{name}}));
     }finally{this.locked=false;}
@@ -245,7 +328,28 @@ export class NgpCraftPlayer extends HTMLElement {
     this.$('.play').textContent='Pause';this.canvas.focus();this.report(this.gameName);
     this.raf=requestAnimationFrame(t=>this.tick(t));
   }
-  clearInput(){this.keys.clear();this.pointers.clear();for(const b of this.shadowRoot.querySelectorAll('[data-bit]'))b.setAttribute('aria-pressed','false');}
+  moveTouch(e){
+    const area=this.pointerAreas.get(e.pointerId);if(!area)return;
+    const r=area.getBoundingClientRect();let bit=0;
+    if(e.clientX>=r.left&&e.clientX<r.right&&e.clientY>=r.top&&e.clientY<r.bottom){
+      if(area.matches('.dpad')){
+        // The whole pad is a continuous surface, including gaps and diagonals.
+        const x=(e.clientX-r.left)/r.width,y=(e.clientY-r.top)/r.height;
+        bit=(x<1/3?4:x>2/3?8:0)|(y<1/3?1:y>2/3?2:0);
+      }else{
+        for(const b of area.querySelectorAll('[data-bit]')){
+          const box=b.getBoundingClientRect();
+          if(e.clientX>=box.left&&e.clientX<box.right&&e.clientY>=box.top&&e.clientY<box.bottom){bit=+b.dataset.bit;break;}
+        }
+      }
+    }
+    this.pointers.set(e.pointerId,bit);this.renderTouch();
+  }
+  renderTouch(){
+    let mask=0;for(const bit of this.pointers.values())mask|=bit;
+    for(const b of this.shadowRoot.querySelectorAll('[data-bit]'))b.setAttribute('aria-pressed',String(!!(mask&+b.dataset.bit)));
+  }
+  clearInput(){this.keys.clear();this.pointerAreas?.clear();this.pointers.clear();this.renderTouch();}
   async unlockAudio(){
     if(!this.audio){this.audio=new AudioContext({latencyHint:'interactive'});this.gain=this.audio.createGain();this.gain.gain.value=this.muted?0:this.settings.volume/100;this.gain.connect(this.audio.destination);}
     await this.audio.resume();
@@ -277,7 +381,7 @@ export class NgpCraftPlayer extends HTMLElement {
         this.queueAudio();this.accumulator-=1000/FPS;count++;
       }
       if(count===4)this.accumulator=0;
-      if(count){const p=this.module._web_video();this.frame.data.set(this.module.HEAPU8.subarray(p,p+160*152*4));this.context.putImageData(this.frame,0,0);}
+      if(count){const p=this.module._web_video();this.frame.data.set(this.module.HEAPU8.subarray(p,p+160*152*4));this.context.putImageData(this.frame,0,0);this.effects?.render(this.frame.data);}
       this.raf=requestAnimationFrame(t=>this.tick(t));
     }catch(e){this.pause();this.report(e.message);}
   }

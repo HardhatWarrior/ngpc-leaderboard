@@ -31,6 +31,25 @@ export class NgpCraftEmbed extends NgpCraftPlayer {
       :host([expanded]) .touch,:host(:fullscreen) .touch{width:auto;left:18px;right:18px;bottom:70px;margin:0}
       :host([expanded]) .settings,:host(:fullscreen) .settings{inset:12px;width:auto;max-width:460px;margin-left:auto;max-height:calc(100% - 24px)}
       @media(max-width:380px){section>.bar button{padding:7px 5px;font-size:11px}.setting-row input[type=range]{width:95px}.settings-tabs button{font-size:11px}.settings-footer small{display:none}.settings-footer{justify-content:flex-end}}
+      .touch .dpad{grid-template-columns:repeat(3,var(--pad-size));pointer-events:auto}
+      .touch .dpad button,.touch .actions button{padding:0}
+      .touch .actions{pointer-events:auto}
+      :host([expanded]),:host(:fullscreen){--safe-bottom:env(safe-area-inset-bottom,0px)}
+      :host([expanded]) section>.bar,:host(:fullscreen) section>.bar{height:calc(48px + var(--safe-bottom));padding-bottom:calc(7px + var(--safe-bottom))}
+      :host([expanded]) .touch,:host(:fullscreen) .touch{left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));bottom:calc(64px + var(--safe-bottom))}
+      :host([expanded]) canvas,:host(:fullscreen) canvas{height:calc(100% - 48px - var(--safe-bottom))}
+      @media(pointer:coarse) and (orientation:portrait){
+        :host([expanded]) section:has(.touch:not([hidden])) canvas,:host(:fullscreen) section:has(.touch:not([hidden])) canvas{height:calc(100% - 224px - var(--safe-bottom))}
+      }
+      @media(pointer:coarse){
+        :host([expanded]) canvas.game-screen,:host(:fullscreen) canvas.game-screen{height:100%;width:100%;margin:0}
+        :host([expanded]) .touch,:host(:fullscreen) .touch{bottom:max(16px,env(safe-area-inset-bottom,0px))}
+        :host([expanded]) .status,:host(:fullscreen) .status{right:60px}
+        :host([expanded][menu-open]) section>.bar,:host(:fullscreen[menu-open]) section>.bar{height:auto;padding:10px}
+      }
+      @media(pointer:coarse) and (orientation:portrait){
+        :host([expanded]) section:has(.touch:not([hidden])) canvas.game-screen,:host(:fullscreen) section:has(.touch:not([hidden])) canvas.game-screen{height:calc(100% - 180px - var(--safe-bottom))}
+      }
     `;
     this.shadowRoot.append(style);
     this.buildSettings();
@@ -97,6 +116,7 @@ export class NgpCraftEmbed extends NgpCraftPlayer {
         const canvas=this.captureFrame();
         const unhandled=this.dispatchEvent(new CustomEvent('ngpc-capture',{detail:{canvas},bubbles:true,composed:true,cancelable:true}));
         if(unhandled){const a=document.createElement('a');a.href=canvas.toDataURL('image/png');a.download='ngpcraft-capture.png';a.click();}
+        this.toggleQuickMenu(false);
       }
       catch(e){this.report(e.message);}
     },{signal});
@@ -143,7 +163,7 @@ export class NgpCraftEmbed extends NgpCraftPlayer {
     if(!active&&expandedPlayers.delete(this)&&!expandedPlayers.size)document.documentElement.style.overflow=savedOverflow;
     this.toggleAttribute('expanded',active);this.updateFullscreen();
   }
-  updateFullscreen(){const active=this.hasAttribute('expanded')||document.fullscreenElement===this;this.$('.full').textContent=active?'Restore':'Maximize';this.$('.full').setAttribute('aria-pressed',String(active));}
+  updateFullscreen(){const active=this.hasAttribute('expanded')||document.fullscreenElement===this;this.$('.full').textContent=active?'Restore':'Maximize';this.$('.full').setAttribute('aria-pressed',String(active));this.updateQuickMenu();}
 }
 customElements.define('ngpcraft-embed',NgpCraftEmbed);
 
