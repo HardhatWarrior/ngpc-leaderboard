@@ -1,0 +1,25 @@
+    // GENERATED DRAFT by scaffold-game.js from gameSubmissions/eObRURBvYXaPZRdvzHsf -- review every bound below
+    // (widths are a plain "10^width - 1" guess; tighten or loosen per the developer's real spec)
+    // before pasting this into firestore.rules' own OR-chain, same as every other isXScore(). Any
+    // "TODO"/manual field noted in the generated ca/index.html parser also needs its own
+    // check added here by hand -- this generator only covers fixed-width fields.
+    function isCarcassonneScore(d) {
+      return d.game == 'CA'
+        && d.keys().hasOnly(['game', 'initials', 'codeKind', 'moreFlag', 'deckSeed', 'riverSeed', 'riverEnabled', 'roadScore', 'cityScore', 'cloisterScore', 'farmScore', 'tileCount', 'boardData', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+        && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+        && d.codeKind is int && d.codeKind >= 0 && d.codeKind <= 9
+        && d.moreFlag is int && d.moreFlag >= 0 && d.moreFlag <= 9
+        && d.deckSeed is int && d.deckSeed >= 0 && d.deckSeed <= 999
+        && d.riverSeed is int && d.riverSeed >= 0 && d.riverSeed <= 999
+        && d.riverEnabled is int && d.riverEnabled >= 0 && d.riverEnabled <= 9
+        && d.roadScore is int && d.roadScore >= 0 && d.roadScore <= 999
+        && d.cityScore is int && d.cityScore >= 0 && d.cityScore <= 999
+        && d.cloisterScore is int && d.cloisterScore >= 0 && d.cloisterScore <= 999
+        && d.farmScore is int && d.farmScore >= 0 && d.farmScore <= 999
+        && d.tileCount is int && d.tileCount >= 0 && d.tileCount <= 99
+        && d.source is string && d.source in ['qr', 'capture']
+        && d.submittedAt is int
+        && d.submittedAt <= request.time.toMillis() + 300000
+        && d.submittedAt >= request.time.toMillis() - 300000
+        && hasValidIdentity(d);
+    }
