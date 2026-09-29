@@ -386,16 +386,24 @@
   // after the last '/' (the URL prefix always ends in one), then validates
   // and removes the 2-char game code.
   function caStripToPayload(rawScannedText){
-    const s = (rawScannedText||'').trim();
+    const s = (rawScannedText||'').trim().toUpperCase();
     if(!s) return null;
-    // split+filter(Boolean), not lastIndexOf('/') -- a phone's browser
-    // commonly normalizes a bare-looking URL by appending a TRAILING
-    // slash, which made lastIndexOf find that trailing slash as "the last
-    // one" and leave an empty tail (a real submission failed this way:
-    // "https://www.ngpc-dev.com/CAC0.../" decoded to nothing). Filtering
-    // out empty segments makes a trailing (or doubled) slash a non-issue.
-    const parts = s.split('/').filter(Boolean);
-    const tail = (parts.length ? parts[parts.length-1] : s).toUpperCase();
+    // Find the literal "NGPC-DEV.COM/" marker and take everything after
+    // it -- NOT split('/') and take the last segment. The payload itself
+    // is QR alphanumeric-mode data, which legitimately includes '/' as one
+    // of its 45 valid characters (base45-encoded move-index data), so a
+    // real scanned code can contain '/' WITHIN the payload (confirmed on
+    // a real user submission: ".../CAH...A7A0.6F0/0B11", where "0/0B11"
+    // is payload data, not a path). split('/').filter(Boolean).pop() cut
+    // that payload apart at the embedded slash and returned only "0B11".
+    // An earlier version used lastIndexOf('/') instead, which had its own
+    // bug (a trailing slash from a phone's URL normalization became "the
+    // last slash", yielding an empty tail) -- this marker-search approach
+    // has neither failure mode, since it never depends on slash position
+    // at all.
+    const marker = 'NGPC-DEV.COM/';
+    const idx = s.indexOf(marker);
+    const tail = idx >= 0 ? s.slice(idx + marker.length) : s;
     if(!tail.startsWith(QR_GAME_CODE)) return null;
     return tail.slice(QR_GAME_CODE.length);
   }
@@ -783,17 +791,32 @@
   // Returns EVERY symbol zbar finds in one image, not just the first --
   // the device can draw up to 3 small codes on screen at once, and a
   // single photo/frame should decode all of them together.
-  async function decodeViaZbarWasm(source, w0, h0){
+  // Sweeps resolutions instead of trying one fixed 1000px cap -- a real
+  // user photo of the new small-side-by-side QR boxes decoded ZERO
+  // symbols at 1000px (confirmed via pyzbar, a real zbar binding, as a
+  // proxy for zbar-wasm) but decoded BOTH codes cleanly at 500px. This is
+  // the same "smaller can be better, don't only escalate upward" lesson
+  // this project's own sibling hiscores-db work already hit once before.
+  async function decodeViaZbarWasm(source, w0, h0, scales){
     if(!window.zbarWasm || !w0 || !h0) return [];
-    const scale = Math.min(1, 1000/Math.max(w0,h0));
-    const w = Math.round(w0*scale), h = Math.round(h0*scale);
-    scanCanvas.width = w; scanCanvas.height = h;
-    scanCtx.drawImage(source, 0, 0, w, h);
-    try{
-      const symbols = await window.zbarWasm.scanImageData(scanCtx.getImageData(0, 0, w, h));
-      if(symbols && symbols.length) return symbols.map((s)=>s.decode());
-    }catch(e){}
-    return [];
+    // Tries EVERY resolution and merges results (deduped), rather than
+    // stopping at the first one that finds anything -- a real test photo
+    // (2 small codes side by side) found only the header at 350px but
+    // BOTH codes at 500px, and only the header again at 700-900px. Only
+    // trying the first hit would have needed a second scan for the
+    // continuation code even though one photo already had everything.
+    const found = new Set();
+    for(const target of scales){
+      const scale = Math.min(1, target/Math.max(w0,h0));
+      const w = Math.round(w0*scale), h = Math.round(h0*scale);
+      scanCanvas.width = w; scanCanvas.height = h;
+      scanCtx.drawImage(source, 0, 0, w, h);
+      try{
+        const symbols = await window.zbarWasm.scanImageData(scanCtx.getImageData(0, 0, w, h));
+        if(symbols) symbols.forEach((s)=>found.add(s.decode()));
+      }catch(e){}
+    }
+    return Array.from(found);
   }
 
   function jsqrFallback(source, w0, h0, scales){
@@ -814,7 +837,7 @@
   // ever find one at a time; that's fine, the accumulator in
   // handleScanResults() still collects across multiple scans either way.
   async function decodeSource(source, w0, h0, scales){
-    const viaZbar = await decodeViaZbarWasm(source, w0, h0);
+    const viaZbar = await decodeViaZbarWasm(source, w0, h0, scales);
     if(viaZbar.length) return viaZbar;
     const bd = getBarcodeDetector();
     if(bd){ try{ const r = await bd.detect(source); if(r && r.length) return r.map((x)=>x.rawValue); }catch(e){} }
