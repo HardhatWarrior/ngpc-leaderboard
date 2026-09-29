@@ -493,7 +493,13 @@
   function payloadFromEntry(){
     const raw = location.hash ? location.hash.slice(1) : lastPathSegment(location.pathname);
     const last = decodeURIComponent(lastPathSegment(raw));
-    return last.length >= 2 ? last : null;
+    if(last.length < 2) return null;
+    // The pathname fallback above also matches this page's OWN url slug
+    // ("/ca/" -> "ca") on a completely normal page load with no real scan
+    // involved -- probeCode() rejects anything that doesn't actually look
+    // like a real "CA..." code with a readable kind/more flag, so a bare
+    // page load never shows a scan error.
+    return probeCode(last).error ? null : last;
   }
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
