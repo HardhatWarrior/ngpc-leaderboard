@@ -86,6 +86,41 @@
   .btn-primary{ background:var(--accent); color:var(--accent-ink); }
   .btn-primary:hover:not(:disabled){ background:#c14259; }
 
+  /* Preview-access tag input: chips for already-picked usernames + a plain text field for typing
+     the next one, with an autocomplete dropdown underneath sourced from the site's real users/
+     collection (fetched once, see loadTagSuggestions()). Deliberately reuses the same visual shell
+     (.field-label/border/radius) as every other input on this page rather than inventing a new
+     component style. */
+  .tag-input{
+    display:flex; flex-wrap:wrap; align-items:center; gap:6px; position:relative;
+    background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:6px 8px; margin-top:4px;
+  }
+  .tag-input:focus-within{ border-color:var(--accent2); }
+  .tag-chip{
+    display:inline-flex; align-items:center; gap:5px; background:rgba(92,143,214,.15); color:var(--cream);
+    border:1px solid rgba(92,143,214,.4); border-radius:999px; padding:3px 6px 3px 10px; font-size:12px;
+  }
+  .tag-chip button{
+    background:none; border:none; color:var(--dim); cursor:pointer; font-size:14px; line-height:1;
+    padding:0 2px; width:auto;
+  }
+  .tag-chip button:hover{ color:var(--danger); }
+  .tag-input input[type=text]{
+    flex:1 1 120px; min-width:120px; border:none; background:transparent; padding:5px 2px; margin:0;
+  }
+  .tag-input input[type=text]:focus{ outline:none; }
+  .tag-suggestions{
+    position:absolute; top:100%; left:0; right:0; margin-top:4px; background:var(--panel2);
+    border:1px solid var(--border); border-radius:8px; max-height:180px; overflow-y:auto; z-index:5;
+    box-shadow:0 8px 20px rgba(0,0,0,.35);
+  }
+  .tag-suggestion{
+    display:block; width:100%; text-align:left; background:none; border:none; color:var(--cream);
+    font-size:12.5px; padding:8px 10px; cursor:pointer;
+  }
+  .tag-suggestion:hover, .tag-suggestion.active{ background:rgba(92,143,214,.15); }
+  .tag-suggestions[hidden]{ display:none; }
+
   .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; margin-top:10px; }
   .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
   .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
@@ -245,8 +280,12 @@
          access-gated leaderboard/play page actually checks. -->
     <div style="margin-top:20px">
       <div class="field-label">Preview access (before this game goes live)</div>
-      <div class="current-value" style="margin-bottom:6px">Comma-separated usernames allowed to see and play this while it's Coming Soon.</div>
-      <input type="text" id="game-preview-input" placeholder="e.g. someotherdev, theirfriend">
+      <div class="current-value" style="margin-bottom:6px">Accounts allowed to see and play this while it's Coming Soon. Start typing to search.</div>
+      <div class="tag-input" id="game-preview-taginput">
+        <div class="tag-chips" id="game-preview-chips" style="display:contents"></div>
+        <input type="text" id="game-preview-input" placeholder="Type a username&hellip;" autocomplete="off">
+        <div class="tag-suggestions" id="game-preview-suggestions" hidden></div>
+      </div>
       <button type="button" class="action btn-primary" id="game-preview-save" style="margin-top:10px">Save</button>
       <div id="game-preview-msg"></div>
     </div>
@@ -1280,48 +1319,121 @@
       }
     });
 
-    // Preview access: stored as uids (previewTesters), edited/shown as usernames. Resolves against
-    // the users/ collection (publicly readable -- see firestore.rules) rather than requiring the
-    // caller to already know uids. Unknown usernames are reported back rather than silently
-    // dropped, so a typo doesn't look like it worked.
-    const previewInput = el('game-preview-input');
-    const previewMsg = el('game-preview-msg');
-    (async ()=>{
-      const testerUids = Array.isArray(data.previewTesters) ? data.previewTesters : [];
-      if(!testerUids.length) return;
-      const names = await Promise.all(testerUids.map(uid=>
-        db.collection('users').doc(uid).get().then(d=>d.exists ? (d.data().username||uid) : uid)
-      ));
-      previewInput.value = names.join(', ');
+    // Preview access: stored as uids (previewTesters), picked here as chips over an autocomplete
+    // of real usernames -- avoids the old plain-text field's typo/comma-splitting fragility
+    // entirely, since a chip can only ever exist for a real account the dropdown actually offered.
+    // The full users/ list (publicly readable -- see firestore.rules) is fetched once and reused
+    // both for suggestions and for resolving the game's already-saved previewTesters uids back to
+    // display names.
+    (function(){
+      const previewInput = el('game-preview-input');
+      const previewMsg = el('game-preview-msg');
+      const chipsEl = el('game-preview-chips');
+      const suggestionsEl = el('game-preview-suggestions');
+      const MAX_TESTERS = 20;
+      const MAX_SUGGESTIONS = 8;
+
+      let allUsers = []; // [{uid, username}], loaded once below
+      let chips = []; // [{uid, username}], the current picks
+      let activeIndex = -1;
+
+      function renderChips(){
+        chipsEl.innerHTML = chips.map(c=>
+          '<span class="tag-chip">'+escapeHtml(c.username)+'<button type="button" data-uid="'+c.uid+'" aria-label="Remove">&times;</button></span>'
+        ).join('');
+      }
+      chipsEl.addEventListener('click', (e)=>{
+        const btn = e.target.closest('button[data-uid]');
+        if(!btn) return;
+        chips = chips.filter(c=>c.uid !== btn.dataset.uid);
+        renderChips();
+      });
+
+      function closeSuggestions(){ suggestionsEl.hidden = true; suggestionsEl.innerHTML = ''; activeIndex = -1; }
+      function addChip(user){
+        if(chips.some(c=>c.uid===user.uid)) return;
+        if(chips.length >= MAX_TESTERS){
+          previewMsg.innerHTML = '<div class="msg err">Up to '+MAX_TESTERS+' testers at a time.</div>';
+          return;
+        }
+        previewMsg.innerHTML = '';
+        chips.push(user);
+        renderChips();
+        previewInput.value = '';
+        previewInput.focus();
+        closeSuggestions();
+      }
+
+      function renderSuggestions(matches){
+        if(!matches.length){ closeSuggestions(); return; }
+        suggestionsEl.innerHTML = matches.map((u,i)=>
+          '<button type="button" class="tag-suggestion'+(i===activeIndex?' active':'')+'" data-uid="'+u.uid+'">'+escapeHtml(u.username)+'</button>'
+        ).join('');
+        suggestionsEl.hidden = false;
+      }
+      suggestionsEl.addEventListener('mousedown', (e)=>{
+        // mousedown (not click) so this fires before the input's own blur hides the dropdown --
+        // and prevented here so mousedown's default focus-shift never moves focus off the input
+        // and onto the button in the first place, or the next keystroke goes nowhere.
+        const btn = e.target.closest('button[data-uid]');
+        if(!btn) return;
+        e.preventDefault();
+        const user = allUsers.find(u=>u.uid===btn.dataset.uid);
+        if(user) addChip(user);
+      });
+
+      function currentMatches(){
+        const q = previewInput.value.trim().toLowerCase();
+        if(!q) return [];
+        const chipUids = new Set(chips.map(c=>c.uid));
+        return allUsers
+          .filter(u=>!chipUids.has(u.uid) && u.username.toLowerCase().includes(q))
+          .slice(0, MAX_SUGGESTIONS);
+      }
+      previewInput.addEventListener('input', ()=>{ activeIndex = -1; renderSuggestions(currentMatches()); });
+      previewInput.addEventListener('focus', ()=>{ if(previewInput.value.trim()) renderSuggestions(currentMatches()); });
+      previewInput.addEventListener('blur', ()=>{ setTimeout(closeSuggestions, 150); });
+      previewInput.addEventListener('keydown', (e)=>{
+        const matches = currentMatches();
+        if(e.key === 'ArrowDown' && matches.length){
+          e.preventDefault(); activeIndex = Math.min(activeIndex+1, matches.length-1); renderSuggestions(matches);
+        } else if(e.key === 'ArrowUp' && matches.length){
+          e.preventDefault(); activeIndex = Math.max(activeIndex-1, 0); renderSuggestions(matches);
+        } else if(e.key === 'Enter' || e.key === ','){
+          e.preventDefault();
+          const pick = activeIndex >= 0 ? matches[activeIndex]
+            : matches.find(u=>u.username.toLowerCase() === previewInput.value.trim().toLowerCase());
+          if(pick) addChip(pick);
+        } else if(e.key === 'Escape'){
+          closeSuggestions();
+        } else if(e.key === 'Backspace' && !previewInput.value && chips.length){
+          chips.pop();
+          renderChips();
+        }
+      });
+
+      db.collection('users').get().then(snap=>{
+        allUsers = snap.docs.map(d=>({uid:d.id, username:d.data().username||d.id}))
+          .sort((a,b)=>a.username.localeCompare(b.username));
+        const testerUids = Array.isArray(data.previewTesters) ? data.previewTesters : [];
+        chips = testerUids.map(uid=>allUsers.find(u=>u.uid===uid) || {uid, username:uid});
+        renderChips();
+      }).catch(()=>{ previewMsg.innerHTML = '<div class="msg err">Couldn’t load the account list for autocomplete.</div>'; });
+
+      el('game-preview-save').addEventListener('click', async ()=>{
+        const btn = el('game-preview-save');
+        previewMsg.innerHTML = '';
+        btn.disabled = true;
+        try{
+          await docRef.update({ previewTesters: chips.map(c=>c.uid) });
+          previewMsg.innerHTML = '<div class="msg ok">Saved.</div>';
+        }catch(e){
+          previewMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+        }finally{
+          btn.disabled = false;
+        }
+      });
     })();
-    el('game-preview-save').addEventListener('click', async ()=>{
-      const btn = el('game-preview-save');
-      const names = previewInput.value.split(',').map(s=>s.trim()).filter(Boolean);
-      if(names.length > 20){
-        previewMsg.innerHTML = '<div class="msg err">Up to 20 testers at a time.</div>';
-        return;
-      }
-      previewMsg.innerHTML = '';
-      btn.disabled = true;
-      try{
-        const lookups = await Promise.all(names.map(name=>
-          db.collection('usernames').doc(name.toLowerCase()).get()
-        ));
-        const notFound = [];
-        const uids = [];
-        lookups.forEach((doc, i)=>{
-          if(doc.exists) uids.push(doc.data().uid); else notFound.push(names[i]);
-        });
-        await docRef.update({ previewTesters: uids });
-        previewMsg.innerHTML = notFound.length
-          ? '<div class="msg err">Saved, but couldn’t find: '+escapeHtml(notFound.join(', '))+'</div>'
-          : '<div class="msg ok">Saved.</div>';
-      }catch(e){
-        previewMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
-      }finally{
-        btn.disabled = false;
-      }
-    });
 
     // Title screen + up to two extra screenshots, each independently replaceable. titleImage
     // also doubles as the main page's own tile art (buildTile() in index.html), so replacing it
