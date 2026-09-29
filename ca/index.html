@@ -388,8 +388,14 @@
   function caStripToPayload(rawScannedText){
     const s = (rawScannedText||'').trim();
     if(!s) return null;
-    const slash = s.lastIndexOf('/');
-    const tail = (slash>=0 ? s.slice(slash+1) : s).toUpperCase();
+    // split+filter(Boolean), not lastIndexOf('/') -- a phone's browser
+    // commonly normalizes a bare-looking URL by appending a TRAILING
+    // slash, which made lastIndexOf find that trailing slash as "the last
+    // one" and leave an empty tail (a real submission failed this way:
+    // "https://www.ngpc-dev.com/CAC0.../" decoded to nothing). Filtering
+    // out empty segments makes a trailing (or doubled) slash a non-issue.
+    const parts = s.split('/').filter(Boolean);
+    const tail = (parts.length ? parts[parts.length-1] : s).toUpperCase();
     if(!tail.startsWith(QR_GAME_CODE)) return null;
     return tail.slice(QR_GAME_CODE.length);
   }
