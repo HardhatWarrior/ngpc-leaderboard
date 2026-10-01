@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Sokoban High Scores</title>
+<title>SOKOBAN High Scores</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
 <link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
 <link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
@@ -16,9 +16,6 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <style>
-  /* GENERATED DRAFT -- palette/layout copied verbatim from 2k/index.html's own template. Swap
-     --accent/--accent-ink for this game's own art if you want a distinct color, same as every
-     other game page here does. */
   :root{
     --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
     --cream:#f4eedd; --dim:#93a0c9; --accent:#5c8fd6; --accent-ink:#0a1830;
@@ -29,57 +26,84 @@
   .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; } .tnum{ font-variant-numeric:tabular-nums; }
   #shell{ width:100%; max-width:960px; display:flex; flex-direction:column; gap:22px; }
   header{ background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--border); border-radius:14px; padding:22px 22px 18px; display:flex; flex-direction:column; gap:14px; position:relative; overflow:hidden; }
-  .eyebrow{ position:relative; font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase; }
+  .eyebrow{
+    position:relative; font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase;
+  }
+  /* Image left, title/creator/links right -- all one cluster, so on narrow screens the text
+     never has to wrap onto its own crowded row above the screenshot the way a wrapping flex
+     "wordmark" row used to. rom-link/play-link moved out of absolute positioning and into normal
+     flow here too, directly under created-by, so they're never floating disconnected from it. */
   .header-row{ position:relative; display:flex; flex-direction:row; justify-content:space-between; gap:16px; align-items:flex-start; }
   .title-block{ display:flex; flex-direction:column; align-items:flex-end; text-align:right; gap:5px; min-width:0; }
-  .title-block h1{ margin:0; font-size:clamp(18px,5vw,28px); line-height:1.2; color:var(--cream); overflow-wrap:break-word; }
+  .title-block h1{
+    margin:0; font-size:clamp(18px,5vw,28px); line-height:1.2;
+    color:var(--cream); overflow-wrap:break-word;
+  }
   .game-version{ font-size:11px; color:var(--dim); }
   .created-by{ font-size:11px; color:var(--dim); }
   .created-by a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .created-by a:hover{ color:var(--accent2); }
-  .rom-link, .play-link, .admin-link{ display:inline-flex; align-items:center; gap:5px; width:auto; font-weight:600; text-decoration:underline; text-underline-offset:2px; }
+  .rom-link, .play-link, .admin-link{
+    display:inline-flex; align-items:center; gap:5px; width:auto;
+    font-weight:600; text-decoration:underline; text-underline-offset:2px;
+  }
   .play-link{ color:var(--accent2); font-size:11.5px; margin-top:4px; }
   .play-link:hover{ color:var(--cream); }
   .play-link[hidden]{ display:none; }
+  .rom-link[hidden]{ display:none; }
   .rom-link{ color:var(--dim); font-size:11px; }
-  .rom-link:hover{ color:var(--accent2); }
   /* Only ever shown to the site admin or this game's own assigned developer -- see
      NGPC_AUTH.isGameManager(). Quick jump to this game's admin panel from its own public page. */
   .admin-link{ color:var(--dim); font-size:11px; margin-top:2px; }
   .admin-link:hover{ color:var(--accent2); }
   .admin-link[hidden]{ display:none; }
-  /* No max-width on either image below -- a percentage cap here resolves against .art-strip's
-     OWN box (its nearest sized ancestor), not .header-row's wider one, so on a narrow viewport it
-     collapses the image to a small fraction of 130px instead of just capping it. The @media rule
-     further down handles narrow screens instead, by hiding the extras outright. */
-  .header-art{ position:relative; width:130px; height:auto; flex:none; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; }
+  .rom-link:hover{ color:var(--accent2); }
+
+  /* decorative header art -- the same real title-screen capture the main page's own tile uses,
+     not a redraw of it. */
+  .header-art{
+    position:relative; width:130px; height:auto; flex:none; aspect-ratio:160/152;
+    image-rendering:pixelated; border-radius:8px; border:1px solid var(--border);
+    box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain;
+  }
   /* Up to two extra screenshots/GIFs (games/{slug}.extraScreenshot1Path/2Path, set from
      admin/game/index.html's own art panel) shown right next to the title screen, same size as it
-     -- hidden entirely (see the [hidden] rule already in the shared reset) until JS finds one
-     set. flex-wrap on the strip lets three same-size images wrap to a second line on a narrow
-     screen instead of overflowing; align-items:flex-start (not the flex default of stretch) is
-     required so a still-loading/broken image doesn't get its height stretched to match its
-     siblings, which reads as a horizontal squish. */
+     -- hidden entirely until JS finds one set. flex-wrap on the strip lets three same-size images
+     wrap to a second line on a narrow screen instead of overflowing; align-items:flex-start (not
+     the flex default of stretch) stops a shorter/still-loading sibling from getting its height
+     stretched to match the others, which would read as a horizontal squish. No max-width on
+     either image -- a percentage cap here would resolve against art-strip's own narrow box, not
+     header-row's wider one, collapsing the image on a narrow screen instead of just capping it;
+     the @media rule below handles narrow screens by hiding the extras outright instead. */
   .art-strip{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; flex:none; }
   /* max-width caps this at three ~130px images across (130*3 + 8*2 gap) -- without it, a long
      .game-desc line has no width to wrap against and stretches this column (and the flex row
      it shares with .title-block) wide enough to wrap the ROM/Play/Manage links on the right. */
   .art-col{ display:flex; flex-direction:column; gap:8px; flex:0 1 auto; min-width:0; max-width:406px; }
+  /* Optional per-game blurb + link back to the developer's own site (games/{slug}.description /
+     .siteUrl), shown directly under the title-screen art -- hidden entirely via [hidden] until JS
+     finds one set. overflow-wrap:anywhere (not just break-word) is required specifically for a
+     long unbroken URL in .game-site -- break-word alone still lets a single very long token
+     overflow its box instead of wrapping, which would push the panel wider on a phone. */
   .game-desc{ font-size:11px; line-height:1.45; color:var(--dim); max-width:100%; min-width:0; overflow-wrap:anywhere; }
   .game-site{ font-size:11px; max-width:100%; min-width:0; }
   .game-site a{ color:var(--accent2); text-decoration:underline; text-underline-offset:2px; overflow-wrap:anywhere; word-break:break-word; }
   .game-site a:hover{ color:var(--cream); }
   .extra-art{ width:130px; height:auto; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; flex:none; }
-  /* Three ~130px images side-by-side in .art-strip (header-art plus both extras) don't leave room
-     for .title-block in the same .header-row on a phone-width viewport -- .header-row stays
-     row-direction (no stacking breakpoint exists here), so it would otherwise overflow and push
-     the panel wider than the screen. Hiding the two optional extras below 600px keeps just the
-     title screenshot, which fits. */
   @media (max-width:600px){ .extra-art{ display:none; } }
+
+  /* The <img> carries width/height="160"/"152" HTML attributes (real dimensions, a fallback
+     size if this CSS ever fails to load) -- those map to a low-priority presentational height
+     that otherwise wins over aspect-ratio's own auto-height computation, so height:auto above
+     has to be explicit or the box stays a fixed 152px tall while width shrinks to 130px,
+     squishing the image instead of scaling it proportionally. */
   main{ display:grid; grid-template-columns:1fr; gap:20px; align-items:start; }
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
   #access-gate{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px 20px; }
   #page-content{ display:flex; flex-direction:column; gap:22px; }
+  /* The id rule's display:flex outranks the UA [hidden] rule, so without this the coming-soon
+     gate showed its message with the full page still visible underneath. */
+  #page-content[hidden]{ display:none; }
   .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
   .panel .hint{ margin:0 0 16px; color:var(--dim); font-size:12.5px; line-height:1.5; }
   #board-status{ font-size:12px; color:var(--dim); margin-bottom:10px; min-height:1.4em; }
@@ -94,18 +118,34 @@
   .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .row-meta a:hover{ color:var(--accent2); }
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
-  .row.has-detail{ cursor:pointer; } .row.has-detail:hover{ background:rgba(92,143,214,.08); }
+  .row.has-detail{ cursor:pointer; } .row.has-detail:hover{ background:rgba(122,107,186,.08); }
   .row-detail{ padding:2px 8px 14px; }
+  /* Same .scorecard-grid/.sc-frame and .tk-sheet classes account/ and user/ already style, so a
+     Sokoban run's detail (auth.js's renderSokobanScorecardHTML builds the same markup) looks
+     identical in all three places. */
+  .scorecard-grid{ display:grid; grid-template-columns:repeat(10,1fr); gap:3px; margin:14px 0; }
+  .sc-frame{ background:var(--navy); border:1px solid var(--border); border-radius:4px; padding:3px 1px 4px; text-align:center; min-width:0; }
+  .sc-marks{ display:flex; justify-content:center; gap:2px; min-height:11px; font-family:"IBM Plex Mono",monospace; font-size:9px; font-weight:600; color:var(--accent2); }
+  .sc-total{ font-size:9.5px; margin-top:3px; color:var(--cream); font-weight:600; }
+  .sc-frame.sk-unsolved .sc-total{ color:var(--dim); font-weight:400; }
+  .sk-stars{ color:#e8c547; letter-spacing:-1px; }
+  .sk-over{ display:block; font-family:"IBM Plex Mono",monospace; font-size:8.5px; color:var(--dim); margin-top:1px; }
   .tk-sheet{ width:100%; border-collapse:collapse; margin:14px 0; font-size:11.5px; }
   .tk-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
   .tk-sheet td.tk-val{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
+  .sk-legend{ font-size:10.5px; color:var(--dim); line-height:1.5; margin:-6px 0 10px; }
+  /* Board score cell: levels solved is the big number (primary rank key); over-par and stars
+     ride underneath in a plain font -- Press Start 2P has no star glyph. */
+  .score-cell{ text-align:right; }
+  .score-sub{ font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--dim); margin-top:4px; white-space:nowrap; }
+  .confirm-score .sub{ margin-top:10px; font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--cream); }
   .scan-video-wrap{ position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden; background:#000; margin-bottom:10px; }
   #scan-video{ width:100%; height:100%; object-fit:cover; display:block; }
   .scan-frame{ position:absolute; inset:14%; border:2px solid var(--accent2); border-radius:12px; box-shadow:0 0 0 999px rgba(0,0,0,.4); pointer-events:none; }
   .file-btn{ display:block; text-align:center; cursor:pointer; }
   button{ font:inherit; border:none; border-radius:8px; padding:12px 16px; cursor:pointer; font-weight:600; font-size:13.5px; width:100%; }
   button:disabled{ opacity:.5; cursor:not-allowed; }
-  .btn-primary{ background:var(--accent); color:var(--accent-ink); } .btn-primary:hover:not(:disabled){ filter:brightness(1.1); }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); } .btn-primary:hover:not(:disabled){ background:#7aa6e3; }
   .btn-secondary{ background:transparent; border:1px solid var(--border); color:var(--cream); margin-top:8px; }
   .btn-secondary:hover:not(:disabled){ border-color:var(--accent2); }
   #confirm-view, #success-view{ display:none; }
@@ -129,11 +169,6 @@
 <body>
 
 <div id="shell">
-  <!-- Shown instead of everything below while this game is devStatus 'coming-soon' and the
-       viewer isn't the site admin or this game's own assigned developer -- see ACCESS_GATE_UID
-       below. A determined visitor could still read the raw games/{slug} doc directly (this is a
-       static site, there's no server to actually enforce this), but the real page/board/ROM
-       aren't linked or shown to anyone else. -->
   <div id="access-gate" hidden>
     <p class="hint" style="text-align:center;margin:0">This game isn't public yet. Check back once it's live on the main page.</p>
   </div>
@@ -143,18 +178,18 @@
     <div class="header-row">
       <div class="art-col">
       <div class="art-strip">
-        <img src="" alt="Sokoban title screen" class="header-art" id="header-art" width="160" height="152">
-        <img src="" alt="Sokoban extra screenshot 1" class="extra-art" id="extra-art-1" hidden>
-        <img src="" alt="Sokoban extra screenshot 2" class="extra-art" id="extra-art-2" hidden>
+        <img src="" alt="Sokoban title screen" class="header-art" id="header-art" width="160" height="152" hidden>
+        <img src="" alt="Sokoban screenshot (extra 1)" class="extra-art" id="extra-art-1" hidden>
+        <img src="" alt="Sokoban screenshot (extra 2)" class="extra-art" id="extra-art-2" hidden>
       </div>
       <div class="game-desc" id="game-desc" hidden></div>
       <div class="game-site" id="game-site" hidden><a href="#" id="game-site-link" target="_blank" rel="noopener"></a></div>
       </div>
       <div class="title-block">
-        <h1>Sokoban</h1>
+        <h1>SOKOBAN</h1>
         <div class="game-version" id="game-version" hidden></div>
         <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
-        <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
+        <a href="#" class="rom-link" id="rom-link" download hidden>&#128190; Download ROM (.ngp)</a>
         <a href="/play/sk/" class="play-link" id="play-link" hidden>&#127918; Play Sokoban in Browser</a>
         <a href="/admin/game/?slug=sk" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
@@ -164,9 +199,13 @@
   <main>
     <section class="panel">
       <h2>Submit a score</h2>
+
+      <!-- Members only -- gates the whole scan mechanism (camera + file fallback), not just the
+           final submit step; defaults hidden in markup so it never flashes before auth resolves. -->
       <div id="scan-signin-required">
         <button type="button" class="btn-primary" id="scan-signin-btn">Sign In</button>
       </div>
+
       <div id="idle-view" hidden>
         <button class="btn-primary" id="btn-scan">Scan QR Code</button>
         <div id="scan-live" hidden>
@@ -183,10 +222,12 @@
         </div>
         <div id="form-msg"></div>
       </div>
+
       <div id="confirm-view">
         <div class="confirm-score">
           <div class="who" id="confirm-initials">AAA</div>
-          <div class="what" id="confirm-score">-</div>
+          <div class="what" id="confirm-score">0 LV</div>
+          <div class="sub" id="confirm-sub"></div>
           <div class="src" id="confirm-src">From a scanned QR code</div>
         </div>
         <div id="confirm-scorecard"></div>
@@ -194,6 +235,7 @@
         <button class="btn-secondary" id="btn-back">Cancel</button>
         <div id="confirm-msg"></div>
       </div>
+
       <div id="success-view">
         <div class="success-icon">&#127881;</div>
         <p id="success-text">Score submitted to the leaderboard.</p>
@@ -203,6 +245,7 @@
 
     <section class="panel">
       <h2>Leaderboard</h2>
+      <p class="hint">Ranked by levels solved, then fewest total moves over par (par = the fewest moves the solver found for each level), then fewest total moves. Each level earns up to 3 stars, the same as on the cartridge. One entry per player &mdash; your best submission counts.</p>
       <div id="board-status"></div>
       <div id="board"></div>
     </section>
@@ -218,6 +261,11 @@
   "use strict";
   const QR_GAME_CODE = 'SK';
   const GAME_SLUG = 'sk';
+  // Which mechanism produced the payload about to be submitted: a real camera/photo scan (the
+  // default, including the on-device QR's own deep link) vs the in-browser player's Screen
+  // Capture API flow (play/webplayer.js's capture hand-off, which redirects here with
+  // ?src=capture before boot() strips the query string via history.replaceState()). Read once at
+  // load, before that happens -- see admin/game/index.html's scan-source breakdown.
   const SUBMIT_SOURCE = new URLSearchParams(location.search).get('src') === 'capture' ? 'capture' : 'qr';
 
   const el = (id)=>document.getElementById(id);
@@ -229,36 +277,83 @@
   const btnScan = el('btn-scan'), scanLive = el('scan-live'), scanFallback = el('scan-fallback');
   const scanVideo = el('scan-video'), scanFile = el('scan-file');
 
-  let db = null, pending = null, unsubscribeBoard = null;
+  let db = null, pending = null, unsubscribeBoard = null, gameData = null;
+
+  // ---- Sokoban payload (Sokoban/GAME_SPEC.md "QR payload" + Sokoban/submission-template.json) ----
+  // 56 chars after the NGPC-DEV.COM/SK/ prefix:
+  //   SK | ver(1) | initials(3) | result(1) | levels solved(2) | total moves(5) | total pushes(5)
+  //   | play time s(5) | over par per level(30: 0-9A-Z = 0-35, Z = 35+, '-' = unsolved) | checksum(2)
+  // Checksum = (sum of the QR-alphanumeric index of chars 0-53) mod 1296, as 2 base-36 digits.
+  // Verified here, then dropped -- same convention as DDMR/RVNG/HGS's CRC (never stored).
+  const SK_LEN = 56;
+  const QR_ALNUM = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
+  // Par = fewest moves per level, from the game's own level build (Sokoban tools/sk_par_cache.json).
+  // Levels 22, 27, 28, 29 are the best route the solver found (not proven optimal), so a player
+  // can beat them -- the cartridge then sends '0' over par. Keyed by payload format version: a
+  // new level set bumps the version and gets its own entry here, never an in-place edit.
+  // Keep in sync with auth.js's own SK_PAR copy (each-page-keeps-its-own-copy convention).
+  const SK_PAR = {
+    '1': [2, 11, 37, 31, 45, 67, 25, 26, 21, 40, 63, 56, 56, 35, 65, 59, 73, 68, 112, 137, 133, 92, 65, 118, 161, 174, 195, 192, 127, 302]
+  };
+  const SK_UNPROVEN = { '1': [22, 27, 28, 29] };
+  function skOverValue(c){ return c === '-' ? null : parseInt(c, 36); }
+  // Stars, exactly as the cartridge's stars_for(): 3 at par (over 0), 2 within
+  // par + clamp(floor(par/4), 4, 30), else 1. The 30 cap keeps 'Z' (35+) always exactly 1 star.
+  function skStarsFor(par, over){
+    if(over === 0) return 3;
+    const slack = Math.min(30, Math.max(4, Math.floor(par/4)));
+    return over <= slack ? 2 : 1;
+  }
+  // Per-level breakdown + totals from a 30-char over-par string; null if undecodable.
+  function skSummarize(ver, overPar){
+    const pars = SK_PAR[ver];
+    if(!pars || typeof overPar !== 'string' || !/^[0-9A-Z-]{30}$/.test(overPar)) return null;
+    const levels = [];
+    let stars = 0, overTotal = 0, solved = 0;
+    for(let i=0;i<30;i++){
+      const over = skOverValue(overPar[i]);
+      if(over === null){ levels.push({level:i+1, par:pars[i], solved:false, over:null, stars:0}); continue; }
+      const st = skStarsFor(pars[i], over);
+      solved++; stars += st; overTotal += over;
+      levels.push({level:i+1, par:pars[i], solved:true, over:over, stars:st,
+        capped: over === 35, maybeUnder: over === 0 && (SK_UNPROVEN[ver]||[]).indexOf(i+1) >= 0});
+    }
+    return {levels:levels, stars:stars, overTotal:overTotal, solved:solved};
+  }
 
   function parseSokobanPayload(text){
-    if(text.length !== 56) return {error:"That code is the wrong length — rescan with the whole code in frame."};
-    const formatVersionStr = text.slice(2,3);
-    if(!/^\d{1}$/.test(formatVersionStr)) return {error:"That code has an unreadable format version."};
-    const formatVersion = parseInt(formatVersionStr,10);
-    const initials = text.slice(3,6);
-    if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
-    const resultStr = text.slice(6,7);
-    if(!/^\d{1}$/.test(resultStr)) return {error:"That code has an unreadable result."};
-    const result = parseInt(resultStr,10);
-    const levelsSolvedStr = text.slice(7,9);
-    if(!/^\d{2}$/.test(levelsSolvedStr)) return {error:"That code has an unreadable levels solved."};
-    const levelsSolved = parseInt(levelsSolvedStr,10);
-    const totalMovesStr = text.slice(9,14);
-    if(!/^\d{5}$/.test(totalMovesStr)) return {error:"That code has an unreadable total moves."};
-    const totalMoves = parseInt(totalMovesStr,10);
-    const totalPushesStr = text.slice(14,19);
-    if(!/^\d{5}$/.test(totalPushesStr)) return {error:"That code has an unreadable total pushes."};
-    const totalPushes = parseInt(totalPushesStr,10);
-    const playTimeStr = text.slice(19,24);
-    if(!/^\d{5}$/.test(playTimeStr)) return {error:"That code has an unreadable play time."};
-    const playTime = parseInt(playTimeStr,10);
-    const overParLevels130 = text.slice(24,54);
-    if(!/^[A-Z]{30}$/.test(overParLevels130)) return {error:"That code's over par, levels 1-30 didn't look right."};
-    const checksumStr = text.slice(54,56);
-    if(!/^\d{2}$/.test(checksumStr)) return {error:"That code has an unreadable checksum."};
-    const checksum = parseInt(checksumStr,10);
-    return { game:QR_GAME_CODE, formatVersion, initials, result, levelsSolved, totalMoves, totalPushes, playTime, overParLevels130, checksum };
+    if(text.length !== SK_LEN){
+      return {error: text.length < SK_LEN ? "That code is too short — rescan with the whole code in frame."
+                                          : "That code is too long to be a Sokoban score — rescan just the one code."};
+    }
+    if(!/^SK[0-9][A-Z]{3}[0-9A-Z][0-9]{17}[0-9A-Z-]{30}[0-9A-Z]{2}$/.test(text)){
+      return {error:"That code doesn't look like a Sokoban score."};
+    }
+    let sum = 0;
+    for(let i=0;i<54;i++) sum += QR_ALNUM.indexOf(text[i]);
+    if(sum % 1296 !== parseInt(text.slice(54,56), 36)){
+      return {error:"That code didn't scan cleanly (checksum mismatch) — rescan it."};
+    }
+    const formatVersion = text[2];
+    if(!SK_PAR[formatVersion]){
+      return {error:"That code is from a newer Sokoban build (format "+formatVersion+") than this page knows yet."};
+    }
+    const result = text[6];
+    if(result !== '1') return {error:"Only 1 PLAYER codes (from SCORES on the cartridge) go on this board."};
+    const levelsSolved = parseInt(text.slice(7,9),10);
+    const totalMoves = parseInt(text.slice(9,14),10);
+    const totalPushes = parseInt(text.slice(14,19),10);
+    const playTime = parseInt(text.slice(19,24),10);
+    const overPar = text.slice(24,54);
+    const sum2 = skSummarize(formatVersion, overPar);
+    if(!sum2 || levelsSolved < 1 || sum2.solved !== levelsSolved){
+      return {error:"That code's level data doesn't add up — rescan it."};
+    }
+    return {
+      game:QR_GAME_CODE, formatVersion:formatVersion, initials:text.slice(3,6), result:result,
+      levelsSolved:levelsSolved, totalMoves:totalMoves, totalPushes:totalPushes, playTime:playTime,
+      overPar:overPar, overParTotal:sum2.overTotal, stars:sum2.stars
+    };
   }
 
   function parsePayload(text){
@@ -277,59 +372,132 @@
   function payloadFromEntry(){
     const raw = location.hash ? location.hash.slice(1) : lastPathSegment(location.pathname);
     const last = decodeURIComponent(lastPathSegment(raw));
-    if(last.length < 2) return null;
+    if(last.length !== SK_LEN) return null;
     const result = parsePayload(last);
     return result.error ? null : result;
   }
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
-  function formatDisplayValue(o){ return String(o.levelsSolved).padStart(2,'0'); }
-
-  // TODO -- the submission's own "scorecard reconstruction" field asked for something this
-  // generator can't safely auto-implement from free text. The developer's exact request:
-  //   "Per-level detail comes from the 30 over-par chars plus this par table (fewest moves per level, from the game's level build; levels 22, 27, 28, 29 are the best route the solver found, every other par is proven move-optimal):
-  //   PAR = [2, 11, 37, 31, 45, 67, 25, 26, 21, 40, 63, 56, 56, 35, 65, 59, 73, 68, 112, 137, 133, 92, 65, 118, 161, 174, 195, 192, 127, 302]
-  //   For level i (1-30), c = char i of the over-par field:
-  //     '-'  -> unsolved: 0 stars, no moves
-  //     else -> over = value of c ('0'-'9' = 0-9, 'A'-'Z' = 10-35)
-  //             best moves = PAR[i] + over, EXACT when 1 <= over <= 34, or over = 0 on a proven-par level. On levels 22/27/28/29, over = 0 means best <= PAR (the player may have beaten the solver). 'Z' means PAR[i] + 35 or more.
-  //     stars: over == 0 -> 3; over <= slack -> 2; otherwise 1; where slack = clamp(floor(PAR[i] / 4), 4, 30). Because slack never exceeds 30, 'Z' is always 1 star, so stars are always exact.
-  //   Totals: stars = sum over the 30 levels (max 90); over-par total = sum of the over values ('-' counts 0). Show the transmitted Total moves / pushes / play time as-is. Do NOT cross-check Total moves against sum(PAR + over): it is legitimately lower when a player beats an unproven par, and higher when a level is 'Z'. Valid sanity check: Levels solved == number of non-'-' over-par chars.
-  //   Ranking (sortField covers only the first key): Levels solved DESC, then over-par total ASC, then Total moves ASC, then earlier submission."
-  // Implement it by hand (likely inside renderScorecardHTML and/or formatDisplayValue below),
-  // then delete this comment.
-
-  function renderScorecardHTML(data){
-    const rows = '<tr><td>Format Version</td><td class="tk-val tnum">'+data.formatVersion+'</td></tr>'+
-      '<tr><td>Result</td><td class="tk-val tnum">'+data.result+'</td></tr>'+
-      '<tr><td>Levels Solved</td><td class="tk-val tnum">'+data.levelsSolved+'</td></tr>'+
-      '<tr><td>Total Moves</td><td class="tk-val tnum">'+data.totalMoves+'</td></tr>'+
-      '<tr><td>Total Pushes</td><td class="tk-val tnum">'+data.totalPushes+'</td></tr>'+
-      '<tr><td>Play Time</td><td class="tk-val tnum">'+data.playTime+'</td></tr>'+
-      '<tr><td>Over Par, Levels 1-30</td><td class="tk-val tnum">'+data.overParLevels130+'</td></tr>'+
-      '<tr><td>Checksum</td><td class="tk-val tnum">'+data.checksum+'</td></tr>';
-    return '<table class="tk-sheet">'+rows+'</table>';
+  // Reads games/sk.display (set graphically from admin/game/'s "Leaderboard Display" panel) --
+  // see ms/index.html's own getDisplaySettings() for the full rationale. Only inlineField/
+  // inlinePrefix/inlineLabels and rowDetailExpand apply here: the score cell is always
+  // levels solved + over par + stars (the ranking itself), so scoreFormat is ignored.
+  function fmtTime(seconds){
+    const m = Math.floor(seconds/60), s = seconds%60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
+  function parseInlineLabels(str){
+    const map = {};
+    (str||'').split(',').forEach(pair=>{
+      const idx = pair.indexOf(':');
+      if(idx < 0) return;
+      map[pair.slice(0,idx).trim()] = pair.slice(idx+1).trim();
+    });
+    return map;
+  }
+  function getDisplaySettings(){
+    const d = (gameData && gameData.display) || {};
+    return {
+      scoreFormat: d.scoreFormat || 'raw',
+      inlineField: d.inlineField !== undefined ? d.inlineField : '',
+      inlinePrefix: d.inlinePrefix || '',
+      inlineLabels: parseInlineLabels(d.inlineLabels),
+      rowDetailExpand: d.rowDetailExpand !== undefined ? !!d.rowDetailExpand : true,
+    };
+  }
+  // H:MM:SS (or M:SS under an hour) -- play time can reach 99999 s.
+  function fmtClock(seconds){
+    const h = Math.floor(seconds/3600), m = Math.floor((seconds%3600)/60), sec = seconds%60;
+    return (h ? h+':'+String(m).padStart(2,'0') : String(m)) + ':' + String(sec).padStart(2,'0');
   }
 
-  async function renderBoard(docs){
-    if(!docs.length){ boardEl.innerHTML = '<div class="empty-state">No scores yet — be the first on the board.</div>'; return; }
+  function skStarsHTML(n){ return n ? '<span class="sk-stars">'+'★'.repeat(n)+'</span>' : '&ndash;'; }
+  function skLevelTitle(L){
+    if(!L.solved) return 'Level '+L.level+': not solved (par '+L.par+')';
+    let best;
+    if(L.capped) best = (L.par+35)+'+ moves';
+    else if(L.maybeUnder) best = 'par or better';
+    else best = (L.par+L.over)+' moves';
+    return 'Level '+L.level+': '+best+', par '+L.par+', '+L.stars+' star'+(L.stars===1?'':'s');
+  }
+  function renderSokobanScorecardHTML(data){
+    const sum = skSummarize(data.formatVersion, data.overPar);
+    if(!sum) return '';
+    const grid = sum.levels.map(function(L){
+      const overTxt = !L.solved ? '' : (L.over === 0 ? 'PAR' : ('+'+(L.capped ? '35+' : L.over)));
+      return '<div class="sc-frame'+(L.solved?'':' sk-unsolved')+'" title="'+escapeHtml(skLevelTitle(L))+'">'+
+        '<div class="sc-marks">'+L.level+'</div>'+
+        '<div class="sc-total">'+skStarsHTML(L.stars)+(overTxt?'<span class="sk-over">'+overTxt+'</span>':'')+'</div>'+
+      '</div>';
+    }).join('');
+    const rows = '<tr><td>Levels solved</td><td class="tk-val tnum">'+sum.solved+' / 30</td></tr>'+
+      '<tr><td>Stars</td><td class="tk-val tnum">'+sum.stars+' / 90</td></tr>'+
+      '<tr><td>Moves over par</td><td class="tk-val tnum">+'+sum.overTotal+'</td></tr>'+
+      '<tr><td>Total moves</td><td class="tk-val tnum">'+(Number(data.totalMoves)||0)+'</td></tr>'+
+      '<tr><td>Total pushes</td><td class="tk-val tnum">'+(Number(data.totalPushes)||0)+'</td></tr>'+
+      '<tr><td>Play time</td><td class="tk-val tnum">'+fmtClock(Number(data.playTime)||0)+'</td></tr>';
+    return '<div class="scorecard-grid">'+grid+'</div>'+
+      '<div class="sk-legend">PAR = solved at par (3 stars) &middot; +N = moves over par &middot; unsolved levels show &ndash;.</div>'+
+      '<table class="tk-sheet">'+rows+'</table>';
+  }
+
+  // Board ranking (Sokoban/submission-template.json): levels solved DESC, moves over par ASC,
+  // total moves ASC, earlier submission first. Over-par and stars are recomputed from the stored
+  // 30-char string rather than trusting the stored totals. A doc that can't be decoded (unknown
+  // format version, malformed) is left off the board instead of breaking it.
+  function skRankKey(data){
+    const sum = skSummarize(data.formatVersion, data.overPar);
+    if(!sum || sum.solved < 1) return null;
+    return {solved:sum.solved, over:sum.overTotal, stars:sum.stars, moves:Number(data.totalMoves)||0, when:Number(data.submittedAt)||0};
+  }
+  function skCompare(a, b){
+    return (b.k.solved - a.k.solved) || (a.k.over - b.k.over) || (a.k.moves - b.k.moves) || (a.k.when - b.k.when);
+  }
+  // The cartridge's QR is cumulative (each level's lifetime best), so players resubmit as they
+  // progress -- keep only each player's best-ranked entry, then the top BOARD_SIZE.
+  const BOARD_SIZE = 25;
+  function rankDocs(docs){
+    const entries = [];
+    docs.forEach(function(d){ const data = d.data(); const k = skRankKey(data); if(k) entries.push({d:d, data:data, k:k}); });
+    entries.sort(skCompare);
+    const seen = new Set(), out = [];
+    for(const e of entries){
+      const who = e.data.uid || ('doc:'+e.d.id);
+      if(seen.has(who)) continue;
+      seen.add(who);
+      out.push(e);
+      if(out.length >= BOARD_SIZE) break;
+    }
+    return out;
+  }
+
+  async function renderBoard(allDocs){
+    const ranked = rankDocs(allDocs);
+    if(!ranked.length){ boardEl.innerHTML = '<div class="empty-state">No scores yet — be the first on the board.</div>'; return; }
+    const docs = ranked.map(function(e){ return e.d; });
+    const settings = getDisplaySettings();
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
       const data = d.data();
       const rank = i+1;
+      const k = ranked[i].k;
+      const hasDetail = settings.rowDetailExpand && typeof data.overPar === 'string';
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
-      const meta = [fmtWhen(data.submittedAt), usernameLine].filter(Boolean).join(' · ');
+      const inlineRaw = settings.inlineField ? data[settings.inlineField] : null;
+      const inlineLine = inlineRaw != null ? ((settings.inlinePrefix ? settings.inlinePrefix+' ' : '') + (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw))) : '';
+      const meta = [fmtWhen(data.submittedAt), inlineLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
-      const rowHtml = '<div class="row'+(rank===1?' top1':'')+' has-detail" data-detail="d'+i+'">'+
+      const rowHtml = '<div class="row'+(rank===1?' top1':'')+(hasDetail?' has-detail':'')+'"'+(hasDetail?' data-detail="d'+i+'"':'')+'>'+
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.levelsSolved!=null?String(data.levelsSolved):'-')+'</div>'+
+        '<div class="score-cell"><div class="score-val tnum">'+k.solved+' LV</div>'+
+          '<div class="score-sub tnum">+'+k.over+' &middot; '+k.stars+'<span class="sk-stars">★</span></div></div>'+
       '</div>';
-      const detailHtml = '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data)+'</div>';
+      const detailHtml = hasDetail ? '<div class="row-detail" id="d'+i+'" hidden>'+renderSokobanScorecardHTML(data)+'</div>' : '';
       return rowHtml + detailHtml;
     }).join('');
     docs.forEach((d,i)=>{
@@ -362,15 +530,20 @@
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('levelsSolved','desc').limit(25);
+    // Equality filters only, no orderBy/limit: a single Firestore orderBy can't express the
+    // 4-key ranking, and limit(25) on levels solved alone would cut ties arbitrarily -- rankDocs()
+    // sorts the whole (small) set instead. Two equality filters need no composite index (same as
+    // account/'s own query); approved==true is what lets the scores read rule allow a list().
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true);
     unsubscribeBoard = q.onSnapshot(
-      (snap)=>{ renderBoard(snap.docs); },
-      (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
+      (snap)=>{ boardStatusEl.textContent = ''; renderBoard(snap.docs); },
+      (err)=>{ console.error('SK board query failed:', err); boardStatusEl.textContent = friendlyDbError(err); }
     );
   }
 
   function initDb(){
-    if(!firebase || !firebase.firestore){ boardStatusEl.innerHTML = '<div class="msg err">Firestore module not available</div>'; return; }
+    if(!firebase){ boardStatusEl.innerHTML = '<div class="msg err">Firebase SDK failed to load</div>'; return; }
+    if(!firebase.firestore){ boardStatusEl.innerHTML = '<div class="msg err">Firestore module not available</div>'; return; }
     try{
       db = firebase.firestore();
       boardStatusEl.textContent = '';
@@ -382,8 +555,12 @@
 
   async function writeScore(data){
     if(!db) return {ok:false, error:new Error('db not initialized')};
-    try{ await db.collection('scores').add(data); return {ok:true}; }
-    catch(e){ return {ok:false, error:e}; }
+    try{
+      await db.collection('scores').add(data);
+      return {ok:true};
+    }catch(e){
+      return {ok:false, error:e};
+    }
   }
 
   function showStage(stage){
@@ -394,10 +571,11 @@
 
   function openConfirm(parsed){
     pending = parsed;
-    el('confirm-initials').textContent = parsed.initials || '';
-    el('confirm-score').textContent = formatDisplayValue(parsed);
-    el('confirm-src').textContent = 'From a scanned QR code';
-    el('confirm-scorecard').innerHTML = renderScorecardHTML(parsed);
+    el('confirm-initials').textContent = parsed.initials;
+    el('confirm-score').textContent = parsed.levelsSolved + ' LV';
+    el('confirm-sub').innerHTML = '+' + parsed.overParTotal + ' over par &middot; ' + parsed.stars + '/90 <span class="sk-stars">★</span>';
+    el('confirm-src').textContent = SUBMIT_SOURCE === 'capture' ? 'From the in-browser player' : 'From a scanned QR code';
+    el('confirm-scorecard').innerHTML = renderSokobanScorecardHTML(parsed);
     confirmMsg.innerHTML = '';
     showStage('confirm');
   }
@@ -405,7 +583,10 @@
   function handleScanResult(text){
     formMsg.innerHTML = '';
     const result = parsePayload(lastPathSegment(text));
-    if(result.error){ formMsg.innerHTML = '<div class="msg err">'+escapeHtml(result.error)+'</div>'; return; }
+    if(result.error){
+      formMsg.innerHTML = '<div class="msg err">'+escapeHtml(result.error)+'</div>';
+      return;
+    }
     resetScanUI();
     openConfirm(result);
   }
@@ -429,7 +610,7 @@
   async function startLiveScan(){
     formMsg.innerHTML = '';
     if(!window.zbarWasm && !getBarcodeDetector() && !window.jsQR){
-      formMsg.innerHTML = '<div class="msg err">QR scanning library failed to load — try reloading the page.</div>';
+      formMsg.innerHTML = '<div class="msg err">The QR scanning library failed to load — check your connection and reload the page.</div>';
       return;
     }
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
@@ -437,7 +618,10 @@
       return;
     }
     try{ cameraStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false }); }
-    catch(e){ showFallback('Camera access denied: '+escapeHtml(e.message)); return; }
+    catch(e){
+      showFallback('Camera access denied: '+escapeHtml(e.message));
+      return;
+    }
     scanVideo.srcObject = cameraStream;
     try{ await scanVideo.play(); }catch(e){}
     btnScan.hidden = true; scanFallback.hidden = true; scanLive.hidden = false;
@@ -452,13 +636,18 @@
     return barcodeDetector;
   }
 
-  async function decodeViaZbarWasm(source, w0, h0){
+  // Tries each resolution in turn and returns the first decode -- ported from ca/index.html's
+  // fix for a real user photo that decoded nothing at 1000px but cleanly at 500px (commit
+  // 512ace4: smaller can be better, don't only escalate upward). Single-code version.
+  async function decodeViaZbarWasm(source, w0, h0, scales){
     if(!window.zbarWasm || !w0 || !h0) return null;
-    const scale = Math.min(1, 1000/Math.max(w0,h0));
-    const w = Math.round(w0*scale), h = Math.round(h0*scale);
-    scanCanvas.width = w; scanCanvas.height = h;
-    scanCtx.drawImage(source, 0, 0, w, h);
-    try{ const symbols = await window.zbarWasm.scanImageData(scanCtx.getImageData(0, 0, w, h)); if(symbols && symbols.length) return symbols[0].decode(); }catch(e){}
+    for(const target of scales){
+      const scale = Math.min(1, target/Math.max(w0,h0));
+      const w = Math.round(w0*scale), h = Math.round(h0*scale);
+      scanCanvas.width = w; scanCanvas.height = h;
+      scanCtx.drawImage(source, 0, 0, w, h);
+      try{ const symbols = await window.zbarWasm.scanImageData(scanCtx.getImageData(0, 0, w, h)); if(symbols && symbols.length) return symbols[0].decode(); }catch(e){}
+    }
     return null;
   }
 
@@ -476,7 +665,7 @@
   }
 
   async function decodeSource(source, w0, h0, scales){
-    const viaZbar = await decodeViaZbarWasm(source, w0, h0);
+    const viaZbar = await decodeViaZbarWasm(source, w0, h0, scales);
     if(viaZbar) return viaZbar;
     const bd = getBarcodeDetector();
     if(bd){ try{ const r = await bd.detect(source); if(r && r.length) return r[0].rawValue; }catch(e){} }
@@ -536,6 +725,9 @@
   el('btn-confirm').addEventListener('click', async ()=>{
     if(!pending) return;
     if(!db){ confirmMsg.innerHTML = '<div class="msg err">Database not initialized</div>'; return; }
+    // Sign-in is required to submit (anonymous submission was retired) -- wait for auth to
+    // actually settle first, since a QR-scan deep link opens straight into this confirm screen
+    // and a fast click can otherwise race the still-resolving sign-in check.
     if(window.NGPC_AUTH) await NGPC_AUTH.authReady;
     const authedUser = window.NGPC_AUTH && NGPC_AUTH.currentUser;
     if(!authedUser || !authedUser.username){
@@ -548,18 +740,29 @@
     const btn = el('btn-confirm');
     btn.disabled = true;
     confirmMsg.innerHTML = '<div class="msg ok">Submitting…</div>';
-    const record = Object.assign({}, pending, {
+    const record = {
+      game: QR_GAME_CODE,
+      formatVersion: pending.formatVersion,
+      initials: pending.initials,
+      result: pending.result,
+      levelsSolved: pending.levelsSolved,
+      totalMoves: pending.totalMoves,
+      totalPushes: pending.totalPushes,
+      playTime: pending.playTime,
+      overPar: pending.overPar,
+      overParTotal: pending.overParTotal,
+      stars: pending.stars,
       source: SUBMIT_SOURCE,
       submittedAt: Date.now(),
       uid: authedUser.uid,
       username: authedUser.username,
       approved: !!authedUser.approved,
-    });
+    };
     try{
       const res = await writeScore(record);
       btn.disabled = false;
       if(res.ok){
-        el('success-text').textContent = (pending.initials||'') + ' — ' + formatDisplayValue(pending) + ' submitted to the leaderboard.';
+        el('success-text').textContent = pending.initials + ' — ' + pending.levelsSolved + ' levels, +' + pending.overParTotal + ' over par, ' + pending.stars + '/90 stars submitted to the leaderboard.';
         pending = null;
         showStage('success');
       } else {
@@ -573,13 +776,6 @@
 
   el('btn-again').addEventListener('click', ()=>{ pending = null; showStage('idle'); });
 
-  // Gates the WHOLE page (board, submit form, ROM download, art) behind devStatus !== 'coming-soon'
-  // OR the viewer being this game's own assigned developer or the site admin -- see access-gate's
-  // own markup comment. gameData is fetched once and reused both for this and for the ROM/art
-  // links below, instead of two separate reads of the same doc. This is enforcement in the loosest
-  // sense (a static site with no server can't truly hide a public Firestore doc from a determined
-  // visitor), but it does mean nobody else is ever shown or linked to this page's real content.
-  let gameData = null;
   let gateInitialized = false;
   function isAuthorizedViewer(user){
     if(!gameData || gameData.devStatus !== 'coming-soon') return true;
@@ -599,6 +795,8 @@
     }
   }
 
+  // The in-browser player is only offered to a signed-in visitor -- anonymous QR submission
+  // stays exactly as-is either way, this is purely about who sees the link.
   if(window.NGPC_AUTH){
     var romLinkEl = el('rom-link');
     var artEl = el('header-art');
@@ -608,8 +806,8 @@
     const gameDocPromise = NGPC_AUTH.db
       ? NGPC_AUTH.db.collection('games').doc(GAME_SLUG).get().then(function(doc){
           gameData = doc.exists ? doc.data() : {};
-          if(romLinkEl && gameData.romPath) romLinkEl.href = gameData.romPath;
-          if(artEl && gameData.titleImage) artEl.src = gameData.titleImage;
+          if(romLinkEl && gameData.romPath){ romLinkEl.href = gameData.romPath; romLinkEl.hidden = false; }
+          if(artEl && gameData.titleImage){ artEl.src = gameData.titleImage; artEl.hidden = false; }
           [gameData.extraScreenshot1Path, gameData.extraScreenshot2Path].forEach(function(url, i){
             if(!url) return;
             extraArtEls[i].src = url;
@@ -637,8 +835,6 @@
     });
     el('scan-signin-btn').addEventListener('click', ()=>NGPC_AUTH.openSignInModal('signin'));
   } else {
-    // auth.js itself failed to load -- none of this page's other gating works either in that
-    // case, so there's nothing to meaningfully lock; show the page rather than a dead end.
     gameData = { devStatus: 'final' };
     applyAccessGate(null);
   }

@@ -30,6 +30,7 @@ why it exists, how the QR flow works, and what's next.
 | `gd` | Gardenia | Third-party (Ahchay); scoped to one of 3 modes at a time |
 | `sd` | Sudoku | Score display is a formatted time (`M:SS`), scoped to one difficulty at a time; no on-device initials, identified by account username only |
 | `xn` | Xenon 2 | Third-party (Napomex); raw QR text has no URL wrapper at all, unlike every other game here |
+| `sk` | Sokoban | Hand-built page (the scaffold can't type its payload). Ranks levels solved, then moves over par (per-level par table + 1-3 stars, shared with `auth.js`), then total moves; equality-only query sorted client-side, one entry per player |
 
 Each game's own on-device QR encodes a 2-character routing code first (`BW`, `TT`, `OV`, ...) —
 `index.html`'s scan flow and `firestore.rules`' per-game score validators both key off that code.

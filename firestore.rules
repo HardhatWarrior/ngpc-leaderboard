@@ -553,7 +553,36 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data) || isFruityPalsRevengeScore(request.resource.data) || isHoratioGoesSnowboardingScore(request.resource.data) || isFurryScore(request.resource.data) || isCarcassonneScore(request.resource.data);
+      // Sokoban: game, formatVersion, initials, result, levelsSolved, totalMoves, totalPushes,
+      // playTime, overPar, overParTotal, stars, source, submittedAt, required uid/username -- the
+      // exact record sk/index.html's confirm handler writes. overPar is the cartridge's own 30-char
+      // per-level string (0-9A-Z = moves over par, '-' = unsolved); overParTotal/stars are derived
+      // from it client-side and only range-checked here (each solved level is 0-35 over par and
+      // 1-3 stars). The QR's base-36 checksum is verified client-side then discarded, same as
+      // DDMR/RVNG/HGS's CRC, so it's NOT in this doc shape. formatVersion and result are locked to
+      // '1' (format v1 = the current 30-level par table; '1' = solo) -- a new level set or a VS
+      // Link mode needs this republished, not just a page update. See Sokoban/GAME_SPEC.md.
+      function isSokobanScore(d) {
+        return d.game == 'SK'
+          && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'result', 'levelsSolved', 'totalMoves', 'totalPushes', 'playTime', 'overPar', 'overParTotal', 'stars', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.formatVersion is string && d.formatVersion == '1'
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.result is string && d.result == '1'
+          && d.levelsSolved is int && d.levelsSolved >= 1 && d.levelsSolved <= 30
+          && d.totalMoves is int && d.totalMoves >= 0 && d.totalMoves <= 99999
+          && d.totalPushes is int && d.totalPushes >= 0 && d.totalPushes <= 99999
+          && d.playTime is int && d.playTime >= 0 && d.playTime <= 99999
+          && d.overPar is string && d.overPar.matches('^[0-9A-Z-]{30}$')
+          && d.overParTotal is int && d.overParTotal >= 0 && d.overParTotal <= d.levelsSolved * 35
+          && d.stars is int && d.stars >= d.levelsSolved && d.stars <= d.levelsSolved * 3
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
+      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data) || isFruityPalsRevengeScore(request.resource.data) || isHoratioGoesSnowboardingScore(request.resource.data) || isFurryScore(request.resource.data) || isCarcassonneScore(request.resource.data) || isSokobanScore(request.resource.data);
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on

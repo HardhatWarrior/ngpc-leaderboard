@@ -795,6 +795,40 @@
         {field:'livesLeft', type:'int, 0–9'},
       ],
     },
+    sk: {
+      urlPrefix: 'NGPC-DEV.COM/SK/',
+      urlNote: 'Same scheme- and "WWW."-less QR_URL_PREFIX convention as every other in-house game. The whole payload is 0-9, A-Z and "-" only (base-36 checksum, not base-45), so the shared strip-to-last-"/" handling is safe.',
+      fields: [
+        {name:'Game code', width:'2', format:'fixed', notes:'"SK"'},
+        {name:'Format version', width:'1', format:'char', notes:'"1" = the current 30-level par table; a new level set bumps it'},
+        {name:'Initials', width:'3', format:'A-Z', notes:''},
+        {name:'Result', width:'1', format:'char', notes:'"1" = solo (the only mode that submits)'},
+        {name:'Levels solved', width:'2', format:'numeric, zero-padded', notes:'1–30; primary rank key'},
+        {name:'Total moves', width:'5', format:'numeric, zero-padded', notes:'sum of best moves over solved levels, capped 99999'},
+        {name:'Total pushes', width:'5', format:'numeric, zero-padded', notes:'capped 99999'},
+        {name:'Play time', width:'5', format:'numeric, zero-padded', notes:'seconds, capped 99999'},
+        {name:'Over par, levels 1-30', width:'30', format:'1 char per level: digit/letter or "-"', notes:'base-36 value 0–35 moves over par ("Z" = 35+), "-" = unsolved'},
+        {name:'Checksum', width:'2', format:'base-36', notes:'(sum of QR-alphanumeric index of chars 0–53) mod 1296; verified client-side, not stored'},
+      ],
+      totalLength: '16 (prefix) + 56 = 72 chars, fixed',
+      sortField: 'levels solved (desc), then moves over par (asc), then total moves (asc), then earliest',
+      scorecard: 'Per-level stars and best moves are reconstructed from the 30 over-par chars plus a par table keyed by format version (sk/index.html and auth.js SK_PAR): 3 stars at par, 2 within par + clamp(floor(par/4), 4, 30), else 1. Stars and the over-par total are recomputed from overPar for ranking, never trusted from the stored totals. One board entry per player (their best). Full spec: Sokoban/GAME_SPEC.md + submission-template.json.',
+      example: 'NGPC-DEV.COM/SK/SK1BOB103000570001200015070---------------------------YA',
+      exampleIsReal: true,
+      firestore: [
+        {field:'game', type:'"SK" (fixed)'},
+        {field:'formatVersion', type:'string, "1"'},
+        {field:'initials', type:'string, ^[A-Z]{3}$'},
+        {field:'result', type:'string, "1"'},
+        {field:'levelsSolved', type:'int, 1–30'},
+        {field:'totalMoves', type:'int, 0–99,999'},
+        {field:'totalPushes', type:'int, 0–99,999'},
+        {field:'playTime', type:'int, 0–99,999 (seconds)'},
+        {field:'overPar', type:'string, ^[0-9A-Z-]{30}$'},
+        {field:'overParTotal', type:'int, 0–35 × levelsSolved'},
+        {field:'stars', type:'int, levelsSolved–3 × levelsSolved'},
+      ],
+    },
   };
 
   // Renders straight from a gameSubmissions doc (payloadFields/totalLength/sortField/
@@ -1014,7 +1048,7 @@
     // per-page tracker every page already writes to via auth.js's trackPageView()) -- a play
     // page's folder name doesn't always match this game's own slug (e.g. bw's is /play/bowling/,
     // not /play/bw/), hence the lookup table rather than assuming 'play_'+slug.
-    const PLAY_FOLDER = { bw:'bowling', tt:'tetris', yz:'yahtzee', fk:'farkle', '2k':'2048', overrev:'overrev', gd:'gardenia', sd:'sd', xn:'xn' };
+    const PLAY_FOLDER = { bw:'bowling', tt:'tetris', yz:'yahtzee', fk:'farkle', '2k':'2048', overrev:'overrev', gd:'gardenia', sd:'sd', xn:'xn', sk:'sk' };
     // A game scaffolded via NGPC-Admin-Scripts/scaffold-game.js always has its play page at
     // /play/<slug>/, matching the leaderboard slug directly -- only the original hand-built games
     // (the PLAY_FOLDER table above) have a differently-named play folder.

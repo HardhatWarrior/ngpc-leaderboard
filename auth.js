@@ -659,6 +659,56 @@ window.NGPC_AUTH = (function(){
     return '<table class="fu-sheet">'+rows+'</table>';
   }
 
+  // Sokoban -- same SK_PAR table, star rule and per-level grid as sk/index.html's own copy (the
+  // each-page-keeps-its-own-copy convention). A score doc stores the cartridge's 30-char
+  // over-par string (overPar: 0-9A-Z = 0-35 moves over par, 'Z' = 35+, '-' = unsolved) plus
+  // formatVersion; stars and the over-par total are recomputed from it here, never trusted from
+  // the stored totals. SK_PAR is keyed by formatVersion because pars are tied to the level set.
+  const SK_PAR = {
+    '1': [2, 11, 37, 31, 45, 67, 25, 26, 21, 40, 63, 56, 56, 35, 65, 59, 73, 68, 112, 137, 133, 92, 65, 118, 161, 174, 195, 192, 127, 302]
+  };
+  function skSummary(data){
+    const pars = SK_PAR[data && data.formatVersion];
+    const op = data && data.overPar;
+    if(!pars || typeof op !== 'string' || !/^[0-9A-Z-]{30}$/.test(op)) return null;
+    const levels = [];
+    let stars = 0, overTotal = 0, solved = 0;
+    for(let i=0;i<30;i++){
+      if(op[i] === '-'){ levels.push({level:i+1, solved:false, stars:0, over:null}); continue; }
+      const over = parseInt(op[i], 36);
+      // Cartridge stars_for(): 3 at par, 2 within par + clamp(floor(par/4), 4, 30), else 1.
+      const st = over === 0 ? 3 : (over <= Math.min(30, Math.max(4, Math.floor(pars[i]/4))) ? 2 : 1);
+      solved++; stars += st; overTotal += over;
+      levels.push({level:i+1, solved:true, stars:st, over:over});
+    }
+    return {levels:levels, stars:stars, overTotal:overTotal, solved:solved};
+  }
+  function formatSkClock(seconds){
+    const h = Math.floor(seconds/3600), m = Math.floor((seconds%3600)/60), sec = seconds%60;
+    return (h ? h+':'+String(m).padStart(2,'0') : String(m)) + ':' + String(sec).padStart(2,'0');
+  }
+  // Reuses .scorecard-grid/.sc-frame/.sc-marks/.sc-total and .tk-sheet/.tk-val, which account/
+  // and user/ already style, so this needs no new CSS beyond the small .sk-* color touches.
+  function renderSokobanScorecardHTML(data){
+    const sum = skSummary(data);
+    if(!sum) return '';
+    const grid = sum.levels.map(function(L){
+      const stars = L.stars ? '<span class="sk-stars">'+'\u2605'.repeat(L.stars)+'</span>' : '&ndash;';
+      const overTxt = !L.solved ? '' : (L.over === 0 ? 'PAR' : ('+'+(L.over === 35 ? '35+' : L.over)));
+      return '<div class="sc-frame'+(L.solved?'':' sk-unsolved')+'">'+
+        '<div class="sc-marks">'+L.level+'</div>'+
+        '<div class="sc-total">'+stars+(overTxt?'<span class="sk-over">'+overTxt+'</span>':'')+'</div>'+
+      '</div>';
+    }).join('');
+    const rows = '<tr><td>Levels solved</td><td class="tk-val tnum">'+sum.solved+' / 30</td></tr>'+
+      '<tr><td>Stars</td><td class="tk-val tnum">'+sum.stars+' / 90</td></tr>'+
+      '<tr><td>Moves over par</td><td class="tk-val tnum">+'+sum.overTotal+'</td></tr>'+
+      '<tr><td>Total moves</td><td class="tk-val tnum">'+(Number(data.totalMoves)||0)+'</td></tr>'+
+      '<tr><td>Total pushes</td><td class="tk-val tnum">'+(Number(data.totalPushes)||0)+'</td></tr>'+
+      '<tr><td>Play time</td><td class="tk-val tnum">'+formatSkClock(Number(data.playTime)||0)+'</td></tr>';
+    return '<div class="scorecard-grid">'+grid+'</div><table class="tk-sheet">'+rows+'</table>';
+  }
+
   // True for a game whose row expands into a click-to-reveal detail (Bowling/Yahtzee/Farkle/
   // 2048/Over Rev/Sudoku/Xenon 2); false for Tetris, whose own leaderboard shows lines/level as
   // plain inline meta text instead -- scoreInlineMeta() covers that case.
@@ -671,6 +721,7 @@ window.NGPC_AUTH = (function(){
       case 'SD': return data.difficulty !== undefined && data.time !== undefined;
       case 'XN': return data.money !== undefined && data.checkpoint !== undefined;
       case 'FU': return data.totalScore !== undefined && data.startWorld !== undefined;
+      case 'SK': return skSummary(data) !== null;
       case 'OV':
         // Same "skip rather than crash" stance overrev/index.html's own board rendering takes on
         // a corrupted/legacy stored doc -- OverRevProtocol comes from overrev/protocol.js, which
@@ -689,6 +740,7 @@ window.NGPC_AUTH = (function(){
       case 'SD': return renderSudokuScorecardHTML(data);
       case 'XN': return renderXenon2ScorecardHTML(data);
       case 'FU': return renderFurryScorecardHTML(data);
+      case 'SK': return renderSokobanScorecardHTML(data);
       case 'OV':
         try{ return renderOverRevScorecardHTML(Object.assign({}, data, OverRevProtocol.decode(data.raw))); }
         catch(e){ return ''; }
@@ -710,6 +762,12 @@ window.NGPC_AUTH = (function(){
       // fields written directly to the score doc (see renderOverRevScorecardHTML's comment above).
       return data.course!=null ? (OV_COURSES[data.course]||'') : '';
     }
+    if(data.game==='SK'){
+      // Numbers only -- callers put this into innerHTML unescaped.
+      const sum = skSummary(data);
+      if(!sum) return '';
+      return sum.stars+'/90 stars'+(Number.isFinite(data.totalMoves) ? (' · '+data.totalMoves+' moves') : '');
+    }
     return '';
   }
   // The one place besides scoreHasDetail/scoreDetailHTML a page needs to special-case Over Rev:
@@ -721,12 +779,16 @@ window.NGPC_AUTH = (function(){
   // their headline value; a missed case here is exactly what showed a bare "-" for every Sudoku
   // (and later Minesweeper) row on the account page and homepage ticker before this existed.
   // Furry ranks by `totalScore`, not `score` -- same gap, caught before shipping this time.
+  // Sokoban has no `score` either (levels solved + moves over par) -- added up front too.
   function scoreValueDisplay(data){
     if(data.game === 'OV') return data.ticks!=null ? formatOvTicks(data.ticks) : '-';
     if(data.game === 'FK') return data.rounds!=null ? (data.rounds+' rounds') : '-';
     if(data.game === 'SD') return data.time!=null ? formatSdTime(data.time) : '-';
     if(data.game === 'MS') return data.time!=null ? formatSdTime(data.time) : '-';
     if(data.game === 'FU') return data.totalScore!=null ? data.totalScore : '-';
+    // Sokoban ranks levels solved, then moves over par -- ASCII only (the homepage ticker's
+    // Press Start 2P font has no star glyph).
+    if(data.game === 'SK'){ const sum = skSummary(data); return sum ? (sum.solved+' LV +'+sum.overTotal) : '-'; }
     return data.score!=null ? data.score : '-';
   }
 
