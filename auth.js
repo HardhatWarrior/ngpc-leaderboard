@@ -259,34 +259,14 @@ window.NGPC_AUTH = (function(){
 
   // ---- profile updates (account page) ----
 
-  async function updateUsername(newUsernameRaw){
-    const user = auth.currentUser;
-    if(!user) throw {code:'not-signed-in', message:'Sign in first.'};
-    const newUsername = (newUsernameRaw||'').trim();
-    if(!USERNAME_RE.test(newUsername)){
-      throw {code:'invalid-username', message:'Usernames are 3-16 characters: letters, numbers, underscore only.'};
-    }
-    const newLower = newUsername.toLowerCase();
-    const oldLower = currentUser && currentUser.usernameLower;
-    if(oldLower === newLower){
-      throw {code:'same-username', message:'That’s already your username.'};
-    }
-    try{
-      // Same all-or-nothing batch approach as signUp: release the old reservation, claim the
-      // new one, and update the profile in one shot. The new claim is what can actually fail
-      // (already taken by someone else), and a batch failure leaves the old reservation intact
-      // -- no window where the account has no username pointing at it.
-      const batch = db.batch();
-      if(oldLower) batch.delete(db.collection('usernames').doc(oldLower));
-      batch.set(db.collection('usernames').doc(newLower), {uid:user.uid});
-      batch.update(db.collection('users').doc(user.uid), {username:newUsername, usernameLower:newLower});
-      await batch.commit();
-    }catch(e){
-      if(e && e.code === 'permission-denied'){
-        throw {code:'username-taken', message:'That username is already taken.'};
-      }
-      throw e;
-    }
+  // Usernames are permanent: every score a player submits is listed under theirs, and sign-in maps
+  // it to the account's synthetic Auth email (a client-side rename never updated that email, so a
+  // renamed player could only sign in with the OLD name). firestore.rules now forbids changing
+  // users/{uid}.username or releasing a usernames/{name} reservation; an admin fixes a typo or a bad
+  // name with NGPC-Admin-Scripts/rename-user.js, which also moves the Auth email and rewrites every
+  // score. Kept (and exported) so any stale caller gets a clear message instead of a crash.
+  async function updateUsername(){
+    throw {code:'rename-disabled', message:'Usernames can\u2019t be changed. If yours needs fixing, ask the site admin.'};
   }
 
   // Lives at users/{uid}/private/contact, NOT on the public profile doc -- see firestore.rules'
@@ -421,6 +401,7 @@ window.NGPC_AUTH = (function(){
       case 'signup-rejected': return e.message;
       case 'dev-needs-email': return e.message;
       case 'same-username': return e.message;
+      case 'rename-disabled': return e.message;
       case 'not-signed-in': return e.message;
       case 'invalid-avatar': return e.message;
       case 'auth/email-already-in-use': return 'That username is already taken.';

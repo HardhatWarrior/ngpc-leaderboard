@@ -311,11 +311,7 @@
       </div>
       <div class="panel-body" id="username-body" hidden>
       <div class="current-value">Currently <b id="username-current">&mdash;</b></div>
-      <label>New username<input type="text" id="username-input" maxlength="16" autocomplete="username"></label>
-      <div class="row">
-        <button class="btn-primary" id="username-save">Save username</button>
-      </div>
-      <div id="username-msg"></div>
+      <p class="hint">Usernames are permanent &mdash; every score you submit is listed under yours. If it needs correcting (a typo, say), ask the site admin.</p>
       </div>
     </section>
 
@@ -539,26 +535,6 @@
     if(row){
       const detailId = row.dataset.detail;
       if(detailId) el(detailId).hidden = !el(detailId).hidden;
-    }
-  });
-
-  // ---- username ----
-  const usernameInput = el('username-input');
-  const usernameMsg = el('username-msg');
-  el('username-save').addEventListener('click', async ()=>{
-    const btn = el('username-save');
-    btn.disabled = true;
-    usernameMsg.innerHTML = '';
-    try{
-      await A.updateUsername(usernameInput.value);
-      await A.refreshProfile();
-      refreshFromProfile();
-      usernameInput.value = '';
-      usernameMsg.innerHTML = '<div class="msg ok">Username updated.</div>';
-    }catch(e){
-      usernameMsg.innerHTML = '<div class="msg err">'+A.escapeHtml(A.friendlyAuthError(e))+'</div>';
-    }finally{
-      btn.disabled = false;
     }
   });
 

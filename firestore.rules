@@ -41,13 +41,21 @@ service cloud.firestore {
     // batch write relies on it (no read-then-check race is possible).
     match /usernames/{usernameLower} {
       allow read: if true;
+      // ...and only as part of creating the profile that carries that name (auth.js signUp writes
+      // both in one batch, so getAfter() sees the new users doc) -- since usernames are permanent,
+      // an existing account can't reserve extra names. Paired with users/{uid}'s create check
+      // below, which is Firebase's standard unique-username pattern: each side requires the other.
       allow create: if request.auth != null
         && request.resource.data.keys().hasOnly(['uid'])
         && request.resource.data.uid == request.auth.uid
-        && usernameLower == usernameLower.lower();
-      // A username change (account page) releases the old reservation before claiming the new
-      // one -- only the uid that holds a reservation can release it.
-      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+        && usernameLower == usernameLower.lower()
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.usernameLower == usernameLower;
+      // Usernames are permanent (every score a player submits is listed under theirs, and
+      // sign-in maps it to the account's synthetic Auth email) -- reservations are never released
+      // by clients. A needed correction goes through NGPC-Admin-Scripts/rename-user.js, which uses
+      // the Admin SDK (bypasses these rules) to move the reservation, the profile, the Auth email
+      // and every score's denormalized username together.
+      allow delete: if false;
       allow update: if false;
     }
 
@@ -87,11 +95,17 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved', 'wantsDev'])
         && request.resource.data.createdAt is int
         && request.resource.data.approved == false
-        && isWellFormedProfile(request.resource.data);
+        && isWellFormedProfile(request.resource.data)
+        // The username must be reserved to THIS account in the same batch (see usernames above).
+        // Without this a client could create its profile under any name -- including someone
+        // else's -- skipping the reservation, and every score's username check
+        // (hasValidIdentity) would then accept that borrowed name.
+        && getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.usernameLower)).data.uid == uid;
 
       // Two distinct update paths, kept mutually exclusive by field scope:
-      //  - the owner can change username/avatar (account page) but never their own `approved`,
-      //    `isDeveloper`, or `admin` bits
+      //  - the owner can change their avatar (account page) but never their username (permanent --
+      //    see usernames/{usernameLower} above; admin-only via rename-user.js) or their own
+      //    `approved`, `isDeveloper`, or `admin` bits
       //  - the admin can flip `approved`/`wantsDev`/`isDeveloper`/`admin` on any account, never
       //    touch anything else about it. `admin` is the same site-wide privilege isAdmin() grants
       //    the hardcoded owner uid, just extendable to another account by the owner (or any other
@@ -100,6 +114,8 @@ service cloud.firestore {
         (request.auth.uid == uid
           && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved', 'wantsDev', 'isDeveloper', 'admin'])
           && request.resource.data.createdAt == resource.data.createdAt
+          && request.resource.data.username == resource.data.username
+          && request.resource.data.usernameLower == resource.data.usernameLower
           && request.resource.data.approved == resource.data.approved
           && request.resource.data.get('isDeveloper', false) == resource.data.get('isDeveloper', false)
           && request.resource.data.get('admin', false) == resource.data.get('admin', false)
@@ -742,7 +758,10 @@ service cloud.firestore {
            ])
         && request.resource.data.proposedName is string
         && request.resource.data.proposedCode is string && request.resource.data.proposedCode.matches('^[A-Z0-9]{2,6}$')
-        && request.resource.data.submittedAt is int;
+        && request.resource.data.submittedAt is int
+        // The scaffold bakes this into a game page's public "Created by" line, so it must be the
+        // submitter's real (permanent) username, not free text. Same users doc as isDeveloper.
+        && request.resource.data.submitterUsername == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username;
 
       // The submitter can still edit their own submission while it's pending (fix a typo before
       // review); once the admin has reviewed it (approved or rejected), it's a permanent record --
@@ -752,7 +771,8 @@ service cloud.firestore {
         || (request.auth.uid == resource.data.submitterUid
             && resource.data.status == 'pending'
             && request.resource.data.status == 'pending'
-            && request.resource.data.submitterUid == resource.data.submitterUid)
+            && request.resource.data.submitterUid == resource.data.submitterUid
+            && request.resource.data.get('submitterUsername', '') == resource.data.get('submitterUsername', ''))
       );
 
       allow delete: if request.auth != null
