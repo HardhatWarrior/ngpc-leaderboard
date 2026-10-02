@@ -165,18 +165,22 @@ service cloud.firestore {
       allow read: if !('uid' in resource.data) || resource.data.approved == true || isAdmin();
 
       // A score's uid/username pair is required (anonymous QR submission was retired) and can't
-      // be spoofed: uid must match the actual signed-in caller, and username is shape-checked even
-      // though it's just a denormalized copy of users/{uid}.username (not re-verified against that
-      // doc -- acceptable here since it can only ever be set to request.auth's OWN uid, so at
-      // worst a stale username after a future rename, not another user's identity). `approved`
-      // MUST match the submitter's actual current users/{uid}.approved at write time -- this one
-      // get() is fine because it's a single-document read on a create, not a list() query.
+      // be spoofed: uid must match the actual signed-in caller, and username must equal the
+      // caller's CURRENT users/{uid}.username -- it's a denormalized copy shown on every board as
+      // a profile link, and it used to be shape-checked only, so anyone could put another
+      // player's @handle on their own scores. Every page writes NGPC_AUTH.currentUser.username,
+      // which auth.js loads from that same field (audited 2026-10-01: all 181 existing scores
+      // matched exactly). A score written before a later rename keeps its old name (rules only
+      // check writes). `approved` MUST likewise match users/{uid}.approved at write time. Both
+      // read the same users doc, which Firestore counts as one get() per request -- fine because
+      // it's a single-document read on a write, not a list() query.
       function hasValidIdentity(d) {
         return ('uid' in d) && ('username' in d) && ('approved' in d)
           && request.auth != null && request.auth.uid == d.uid
           && d.username is string && d.username.matches('^[A-Za-z0-9_]{3,16}$')
           && d.approved is bool
-          && d.approved == get(/databases/$(database)/documents/users/$(d.uid)).data.approved;
+          && d.approved == get(/databases/$(database)/documents/users/$(d.uid)).data.approved
+          && d.username == get(/databases/$(database)/documents/users/$(d.uid)).data.username;
       }
 
       // Matches the object lb/index.html's writeScore() builds (game, initials, score, weight,
