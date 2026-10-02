@@ -562,6 +562,15 @@ service cloud.firestore {
       // DDMR/RVNG/HGS's CRC, so it's NOT in this doc shape. formatVersion and result are locked to
       // '1' (format v1 = the current 30-level par table; '1' = solo) -- a new level set or a VS
       // Link mode needs this republished, not just a page update. See Sokoban/GAME_SPEC.md.
+      // True if Sokoban score n ranks strictly above o -- the board's order: more levels solved,
+      // then fewer moves over par, then fewer total moves. Used to make an owner's update of their
+      // one SK entry keep-best on the server, not just in sk/index.html.
+      function skRanksBetter(n, o) {
+        return n.levelsSolved > o.levelsSolved
+          || (n.levelsSolved == o.levelsSolved
+            && (n.overParTotal < o.overParTotal
+              || (n.overParTotal == o.overParTotal && n.totalMoves < o.totalMoves)));
+      }
       function isSokobanScore(d) {
         return d.game == 'SK'
           && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'result', 'levelsSolved', 'totalMoves', 'totalPushes', 'playTime', 'overPar', 'overParTotal', 'stars', 'source', 'submittedAt', 'uid', 'username', 'approved'])
@@ -582,14 +591,32 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      allow create: if isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data) || isFruityPalsRevengeScore(request.resource.data) || isHoratioGoesSnowboardingScore(request.resource.data) || isFurryScore(request.resource.data) || isCarcassonneScore(request.resource.data) || isSokobanScore(request.resource.data);
+      // Sokoban keeps ONE entry per player at the fixed id scores/SK_<uid>, so the id itself is
+      // tied to the caller: an SK score may only be created at SK_<own uid>, and no other game's
+      // score may take an SK_ id (otherwise anyone could squat SK_<victim> and permanently block
+      // that player, since only the doc's owner may update or delete it). Auto-ids never contain
+      // '_', so every other game's add() is unaffected.
+      allow create: if (isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data) || isFruityPalsRevengeScore(request.resource.data) || isHoratioGoesSnowboardingScore(request.resource.data) || isFurryScore(request.resource.data) || isCarcassonneScore(request.resource.data)
+          || (isSokobanScore(request.resource.data) && scoreId == 'SK_' + request.auth.uid))
+        && !(scoreId.matches('^SK_.*') && request.resource.data.game != 'SK');
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
       // board visibility is immediate for past scores too, not just ones submitted from then on.
-      allow update: if isAdmin()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved'])
-        && request.resource.data.approved is bool;
+      // Second branch: Sokoban keeps ONE progressive entry per player (scores/SK_<uid>), so its
+      // owner may replace it with another fully valid Sokoban score that RANKS STRICTLY BETTER
+      // (skRanksBetter) -- keep-best is enforced here, so a worse code (reset or different cart),
+      // a rescan, or a stale cached page can never clobber a best. isSokobanScore() re-checks every
+      // field plus hasValidIdentity (uid == caller, approved == users/{uid}.approved).
+      allow update: if (isAdmin()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['approved'])
+          && request.resource.data.approved is bool)
+        || (request.auth != null
+          && scoreId == 'SK_' + request.auth.uid
+          && resource.data.game == 'SK'
+          && resource.data.uid == request.auth.uid
+          && isSokobanScore(request.resource.data)
+          && skRanksBetter(request.resource.data, resource.data));
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --
       // anonymous QR submissions have no uid at all, so resource.data.uid == request.auth.uid is
       // false for them (never true against a signed-in caller's uid), and they stay undeletable

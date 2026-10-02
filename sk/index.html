@@ -229,6 +229,7 @@
           <div class="what" id="confirm-score">0 LV</div>
           <div class="sub" id="confirm-sub"></div>
           <div class="src" id="confirm-src">From a scanned QR code</div>
+          <div class="src" id="confirm-current"></div>
         </div>
         <div id="confirm-scorecard"></div>
         <button class="btn-primary" id="btn-confirm">Submit score</button>
@@ -245,7 +246,7 @@
 
     <section class="panel">
       <h2>Leaderboard</h2>
-      <p class="hint">Ranked by levels solved, then fewest total moves over par (par = the fewest moves the solver found for each level), then fewest total moves. Each level earns up to 3 stars, the same as on the cartridge. One entry per player &mdash; your best submission counts.</p>
+      <p class="hint">Ranked by levels solved, then fewest total moves over par (par = the fewest moves the solver found for each level), then fewest total moves. Each level earns up to 3 stars, the same as on the cartridge. One entry per player: submitting a newer code from SCORES updates your entry whenever it ranks better, so it grows as you progress.</p>
       <div id="board-status"></div>
       <div id="board"></div>
     </section>
@@ -553,10 +554,45 @@
     }
   }
 
-  async function writeScore(data){
+  // ---- One entry per player, keep-best ("progressive") ----
+  // A player's Sokoban entry lives at scores/SK_<uid>: created by their first submit, then
+  // overwritten only when a new code RANKS BETTER (same order as the board). The cartridge's QR is
+  // cumulative (each level's lifetime best), so normal progress always qualifies; a worse code (a
+  // reset or different cart) or a rescan of the same one is refused with a message, so a best is
+  // never clobbered. firestore.rules lets the owner update their own SK doc with any valid
+  // Sokoban score (isSokobanScore); the keep-best decision is made here.
+  function myEntryId(uid){ return 'SK_' + uid; }
+  function skBetter(a, b){   // rank keys from skRankKey(); true if a ranks strictly above b
+    if(a.solved !== b.solved) return a.solved > b.solved;
+    if(a.over !== b.over) return a.over < b.over;
+    return a.moves < b.moves;
+  }
+  // The player's current SK entries: the per-player SK_<uid> doc, plus any random-ID docs left from
+  // before entries were per-player (they get cleaned up on the next successful write). A list
+  // query can only see approved docs (scores read rule) -- an unapproved player's entry isn't on
+  // the board either, and the write below simply replaces it.
+  // Returns null if the read itself failed. That's not fatal: firestore.rules enforces keep-best
+  // on every update (skRanksBetter), so the write below is still safe either way.
+  async function fetchMyEntries(uid){
+    const out = [];
+    if(!db || !uid) return out;
+    try{
+      const snap = await db.collection('scores').where('uid','==',uid).where('game','==',QR_GAME_CODE).where('approved','==',true).get();
+      snap.forEach(function(d){ out.push({id:d.id, data:d.data(), k:skRankKey(d.data())}); });
+    }catch(e){ console.warn('SK: could not read existing entries', e); return null; }
+    return out;
+  }
+  function bestOf(entries){
+    let best = null;
+    entries.forEach(function(e){ if(e.k && (!best || skBetter(e.k, best.k))) best = e; });
+    return best;
+  }
+  function describeKey(k){ return k.solved+' LV +'+k.over+', '+k.stars+'/90 stars'; }
+
+  async function writeScore(id, data){
     if(!db) return {ok:false, error:new Error('db not initialized')};
     try{
-      await db.collection('scores').add(data);
+      await db.collection('scores').doc(id).set(data);
       return {ok:true};
     }catch(e){
       return {ok:false, error:e};
@@ -577,7 +613,30 @@
     el('confirm-src').textContent = SUBMIT_SOURCE === 'capture' ? 'From the in-browser player' : 'From a scanned QR code';
     el('confirm-scorecard').innerHTML = renderSokobanScorecardHTML(parsed);
     confirmMsg.innerHTML = '';
+    el('btn-confirm').disabled = false;
     showStage('confirm');
+    showCurrentEntry(parsed);
+  }
+
+  // "Your board entry: ..." under the scanned code, so it's clear before submitting whether this
+  // code improves the entry. Best-effort: silent if signed out or the read fails.
+  let currentEntryToken = 0;
+  async function showCurrentEntry(parsed){
+    const out = el('confirm-current');
+    out.textContent = '';
+    const token = ++currentEntryToken;
+    if(window.NGPC_AUTH) await NGPC_AUTH.authReady;
+    const user = window.NGPC_AUTH && NGPC_AUTH.currentUser;
+    if(!user || !user.uid || !db) return;
+    // An account awaiting approval can't read its own (unapproved) entries, so don't guess.
+    if(!user.approved){ out.textContent = 'Your account is still awaiting approval, so your entry won’t show on the board yet.'; return; }
+    const mineNow = await fetchMyEntries(user.uid);
+    if(token !== currentEntryToken || pending !== parsed || mineNow === null) return;
+    const best = bestOf(mineNow);
+    const newKey = skRankKey(parsed);
+    if(!best){ out.textContent = 'This will be your first leaderboard entry.'; return; }
+    out.textContent = 'Your board entry: ' + describeKey(best.k) +
+      (skBetter(newKey, best.k) ? ' \u2014 this code improves it.' : ' \u2014 this code doesn\u2019t beat it.');
   }
 
   function handleScanResult(text){
@@ -738,39 +797,60 @@
       return;
     }
     const btn = el('btn-confirm');
+    if(btn.disabled) return;                 // already submitting this code
+    const sub = pending;                     // the code being submitted; pending can change if the
+                                             // player cancels or scans another code mid-submit
     btn.disabled = true;
     confirmMsg.innerHTML = '<div class="msg ok">Submitting…</div>';
-    const record = {
-      game: QR_GAME_CODE,
-      formatVersion: pending.formatVersion,
-      initials: pending.initials,
-      result: pending.result,
-      levelsSolved: pending.levelsSolved,
-      totalMoves: pending.totalMoves,
-      totalPushes: pending.totalPushes,
-      playTime: pending.playTime,
-      overPar: pending.overPar,
-      overParTotal: pending.overParTotal,
-      stars: pending.stars,
-      source: SUBMIT_SOURCE,
-      submittedAt: Date.now(),
-      uid: authedUser.uid,
-      username: authedUser.username,
-      approved: !!authedUser.approved,
-    };
     try{
-      const res = await writeScore(record);
-      btn.disabled = false;
+      const myId = myEntryId(authedUser.uid);
+      const mine = await fetchMyEntries(authedUser.uid);
+      if(pending !== sub) return;
+      const best = mine ? bestOf(mine) : null;
+      const newKey = skRankKey(sub);
+      if(best && !skBetter(newKey, best.k)){
+        confirmMsg.innerHTML = '<div class="msg err">Your leaderboard entry (' + escapeHtml(describeKey(best.k)) +
+          ') already ranks the same or better than this code (' + escapeHtml(describeKey(newKey)) + '), so nothing was changed.</div>';
+        return;
+      }
+      const record = {
+        game: QR_GAME_CODE,
+        formatVersion: sub.formatVersion,
+        initials: sub.initials,
+        result: sub.result,
+        levelsSolved: sub.levelsSolved,
+        totalMoves: sub.totalMoves,
+        totalPushes: sub.totalPushes,
+        playTime: sub.playTime,
+        overPar: sub.overPar,
+        overParTotal: sub.overParTotal,
+        stars: sub.stars,
+        source: SUBMIT_SOURCE,
+        submittedAt: Date.now(),
+        uid: authedUser.uid,
+        username: authedUser.username,
+        approved: !!authedUser.approved,
+      };
+      const res = await writeScore(myId, record);
       if(res.ok){
-        el('success-text').textContent = pending.initials + ' — ' + pending.levelsSolved + ' levels, +' + pending.overParTotal + ' over par, ' + pending.stars + '/90 stars submitted to the leaderboard.';
-        pending = null;
-        showStage('success');
+        // Older random-ID entries from before per-player entries existed -- the new SK_<uid> doc
+        // supersedes them (owners may delete their own scores).
+        (mine || []).forEach(function(e){ if(e.id !== myId) db.collection('scores').doc(e.id).delete().catch(function(){}); });
+        el('success-text').textContent = (best ? 'Leaderboard entry updated: ' : 'Added to the leaderboard: ') +
+          sub.initials + ' — ' + sub.levelsSolved + ' levels, +' + sub.overParTotal + ' over par, ' + sub.stars + '/90 stars.';
+        if(pending === sub){ pending = null; showStage('success'); }
+      } else if(res.error && res.error.code === 'permission-denied'){
+        // The rules only allow replacing your entry with a code that ranks strictly better, so
+        // this is almost always "your saved entry is already as good" -- including entries this
+        // page can't read yet (an account still awaiting approval).
+        confirmMsg.innerHTML = '<div class="msg err">Not saved: your existing leaderboard entry already ranks the same or better than this code.</div>';
       } else {
-        confirmMsg.innerHTML = '<div class="msg err">Write failed: '+escapeHtml(res.error?.message || 'unknown')+'</div>';
+        confirmMsg.innerHTML = '<div class="msg err">Write failed: '+escapeHtml((res.error && res.error.message) || 'unknown')+'</div>';
       }
     }catch(e){
-      btn.disabled = false;
       confirmMsg.innerHTML = '<div class="msg err">Submit error: '+escapeHtml(e.message)+'</div>';
+    }finally{
+      btn.disabled = false;
     }
   });
 
