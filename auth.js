@@ -771,9 +771,9 @@ window.NGPC_AUTH = (function(){
     if(data.game === 'SD') return data.time!=null ? formatSdTime(data.time) : '-';
     if(data.game === 'MS') return data.time!=null ? formatSdTime(data.time) : '-';
     if(data.game === 'FU') return data.totalScore!=null ? data.totalScore : '-';
-    // Sokoban ranks levels solved, then moves over par -- ASCII only (the homepage ticker's
+    // Sokoban ranks by stars, then moves over par -- ASCII only (the homepage ticker's
     // Press Start 2P font has no star glyph).
-    if(data.game === 'SK'){ const sum = skSummary(data); return sum ? (sum.solved+' LV +'+sum.overTotal) : '-'; }
+    if(data.game === 'SK'){ const sum = skSummary(data); return sum ? (sum.stars+' STARS') : '-'; }
     return data.score!=null ? data.score : '-';
   }
 

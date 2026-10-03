@@ -582,12 +582,12 @@ service cloud.firestore {
       // DDMR/RVNG/HGS's CRC, so it's NOT in this doc shape. formatVersion and result are locked to
       // '1' (format v1 = the current 30-level par table; '1' = solo) -- a new level set or a VS
       // Link mode needs this republished, not just a page update. See Sokoban/GAME_SPEC.md.
-      // True if Sokoban score n ranks strictly above o -- the board's order: more levels solved,
+      // True if Sokoban score n ranks strictly above o -- the board's order: more stars,
       // then fewer moves over par, then fewer total moves. Used to make an owner's update of their
       // one SK entry keep-best on the server, not just in sk/index.html.
       function skRanksBetter(n, o) {
-        return n.levelsSolved > o.levelsSolved
-          || (n.levelsSolved == o.levelsSolved
+        return n.stars > o.stars
+          || (n.stars == o.stars
             && (n.overParTotal < o.overParTotal
               || (n.overParTotal == o.overParTotal && n.totalMoves < o.totalMoves)));
       }

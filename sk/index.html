@@ -114,6 +114,8 @@
   .initials{ font-family:"Press Start 2P",monospace; font-size:14px; letter-spacing:.06em; color:var(--cream); display:flex; align-items:center; gap:8px; }
   .row-avatar{ width:48px; height:48px; border-radius:4px; border:1px solid var(--border); image-rendering:pixelated; flex:none; }
   .score-val{ font-family:"Press Start 2P",monospace; font-size:15px; color:var(--good); }
+  /* Press Start 2P has no star glyph: the big star rides in a plain font */
+  .sk-bigstar{ font-family:"IBM Plex Mono",monospace; color:#e8c547; margin-left:3px; }
   .row-meta{ font-size:10.5px; color:var(--dim); grid-column:2; margin-top:2px; }
   .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .row-meta a:hover{ color:var(--accent2); }
@@ -233,7 +235,7 @@
       <div id="confirm-view">
         <div class="confirm-score">
           <div class="who" id="confirm-initials">AAA</div>
-          <div class="what" id="confirm-score">0 LV</div>
+          <div class="what" id="confirm-score">0</div>
           <div class="sub" id="confirm-sub"></div>
           <div class="src" id="confirm-src">From a scanned QR code</div>
           <div class="src" id="confirm-current"></div>
@@ -253,7 +255,7 @@
 
     <section class="panel">
       <h2>Leaderboard</h2>
-      <p class="hint">Ranked by levels solved, then fewest total moves over par (par = the fewest moves the solver found for each level), then fewest total moves. Each level earns up to 3 stars, the same as on the cartridge (a level solved with the in-game HINT counts as 1 star). MASTER = all 30 levels solved; PERFECT = all 90 stars. One entry per player: submitting a newer code from SCORES updates your entry whenever it ranks better, so it grows as you progress.</p>
+      <p class="hint">Ranked by stars: each level earns up to 3, the same as on the cartridge, and a level solved with the in-game HINT counts as 1. Ties go to fewest total moves over par (par = the fewest moves the solver found for each level), then fewest total moves. MASTER = all 30 levels solved; PERFECT = all 90 stars. One entry per player: submitting a newer code from SCORES updates your entry whenever it ranks better, so it grows as you progress.</p>
       <div id="board-status"></div>
       <div id="board"></div>
     </section>
@@ -457,8 +459,9 @@
       '<table class="tk-sheet">'+rows+'</table>';
   }
 
-  // Board ranking (Sokoban/submission-template.json): levels solved DESC, moves over par ASC,
-  // total moves ASC, earlier submission first. Over-par and stars are recomputed from the stored
+  // Board ranking: stars DESC (user decision 2026-10-03, so hinted levels -- 1 star each --
+  // can't buy rank the way "levels solved first" let them), then moves over par ASC, total
+  // moves ASC, earlier submission first. Over-par and stars are recomputed from the stored
   // 30-char string rather than trusting the stored totals. A doc that can't be decoded (unknown
   // format version, malformed) is left off the board instead of breaking it.
   function skRankKey(data){
@@ -467,7 +470,7 @@
     return {solved:sum.solved, over:sum.overTotal, stars:sum.stars, moves:Number(data.totalMoves)||0, when:Number(data.submittedAt)||0};
   }
   function skCompare(a, b){
-    return (b.k.solved - a.k.solved) || (a.k.over - b.k.over) || (a.k.moves - b.k.moves) || (a.k.when - b.k.when);
+    return (b.k.stars - a.k.stars) || (a.k.over - b.k.over) || (a.k.moves - b.k.moves) || (a.k.when - b.k.when);
   }
   // The cartridge's QR is cumulative (each level's lifetime best), so players resubmit as they
   // progress -- keep only each player's best-ranked entry, then the top BOARD_SIZE.
@@ -509,8 +512,8 @@
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+skBadgeHTML(k.solved, k.stars)+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-cell"><div class="score-val tnum">'+k.solved+' LV</div>'+
-          '<div class="score-sub tnum">+'+k.over+' &middot; '+k.stars+'<span class="sk-stars">★</span></div></div>'+
+        '<div class="score-cell"><div class="score-val tnum">'+k.stars+'<span class="sk-bigstar">★</span></div>'+
+          '<div class="score-sub tnum">'+k.solved+' LV &middot; +'+k.over+'</div></div>'+
       '</div>';
       const detailHtml = hasDetail ? '<div class="row-detail" id="d'+i+'" hidden>'+renderSokobanScorecardHTML(data)+'</div>' : '';
       return rowHtml + detailHtml;
@@ -577,7 +580,7 @@
   // Sokoban score (isSokobanScore); the keep-best decision is made here.
   function myEntryId(uid){ return 'SK_' + uid; }
   function skBetter(a, b){   // rank keys from skRankKey(); true if a ranks strictly above b
-    if(a.solved !== b.solved) return a.solved > b.solved;
+    if(a.stars !== b.stars) return a.stars > b.stars;
     if(a.over !== b.over) return a.over < b.over;
     return a.moves < b.moves;
   }
@@ -601,7 +604,7 @@
     entries.forEach(function(e){ if(e.k && (!best || skBetter(e.k, best.k))) best = e; });
     return best;
   }
-  function describeKey(k){ return k.solved+' LV +'+k.over+', '+k.stars+'/90 stars'; }
+  function describeKey(k){ return k.stars+'/90 stars, '+k.solved+' LV +'+k.over; }
 
   async function writeScore(id, data){
     if(!db) return {ok:false, error:new Error('db not initialized')};
@@ -622,8 +625,8 @@
   function openConfirm(parsed){
     pending = parsed;
     el('confirm-initials').textContent = parsed.initials;
-    el('confirm-score').textContent = parsed.levelsSolved + ' LV';
-    el('confirm-sub').innerHTML = '+' + parsed.overParTotal + ' over par &middot; ' + parsed.stars + '/90 <span class="sk-stars">★</span>';
+    el('confirm-score').innerHTML = parsed.stars + '<span class="sk-bigstar">★</span>';   // numbers only
+    el('confirm-sub').textContent = parsed.stars + '/90 stars · ' + parsed.levelsSolved + ' levels · +' + parsed.overParTotal + ' over par';
     el('confirm-src').textContent = SUBMIT_SOURCE === 'capture' ? 'From the in-browser player' : 'From a scanned QR code';
     el('confirm-scorecard').innerHTML = renderSokobanScorecardHTML(parsed);
     confirmMsg.innerHTML = '';
@@ -851,7 +854,7 @@
         // supersedes them (owners may delete their own scores).
         (mine || []).forEach(function(e){ if(e.id !== myId) db.collection('scores').doc(e.id).delete().catch(function(){}); });
         el('success-text').textContent = (best ? 'Leaderboard entry updated: ' : 'Added to the leaderboard: ') +
-          sub.initials + ' — ' + sub.levelsSolved + ' levels, +' + sub.overParTotal + ' over par, ' + sub.stars + '/90 stars.';
+          sub.initials + ' — ' + sub.stars + '/90 stars, ' + sub.levelsSolved + ' levels, +' + sub.overParTotal + ' over par.';
         if(pending === sub){ pending = null; showStage('success'); }
       } else if(res.error && res.error.code === 'permission-denied'){
         // The rules only allow replacing your entry with a code that ranks strictly better, so
