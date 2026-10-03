@@ -228,6 +228,9 @@
   .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
 
   footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
+  /* Signed-out visitors get neither the ROM download nor the in-browser player -- body.signed-in
+     is toggled from the onAuthChange handler below. */
+  body:not(.signed-in) #rom-link, body:not(.signed-in) #play-link{ display:none; }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
@@ -1028,6 +1031,7 @@
       : Promise.resolve();
 
     NGPC_AUTH.onAuthChange((user)=>{
+      document.body.classList.toggle('signed-in', !!user);
       el('play-link').hidden = !user;
       // Members only -- gates the whole scan mechanism, not just the final submit step.
       el('idle-view').hidden = !user;
