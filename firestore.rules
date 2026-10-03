@@ -879,6 +879,18 @@ service cloud.firestore {
       );
     }
 
+    // scoresArchive/{id} -- where admin/game/'s "Reset leaderboard" moves a game's old scores (a copy of
+    // each score doc plus originalId/resetId/archivedAt) instead of destroying them. Admin-only on
+    // every operation; append-only (no update/delete) so an archive can't be quietly rewritten.
+    match /scoresArchive/{id} {
+      allow read: if isAdmin();
+      allow create: if isAdmin()
+        && request.resource.data.resetId is string
+        && request.resource.data.originalId is string
+        && request.resource.data.archivedAt is int;
+      allow update, delete: if false;
+    }
+
     // passwordResetRequests/{id} -- the ONLY client-writable step of the password reset flow (see
     // functions/index.js's handlePasswordResetRequest, which is what actually reacts to these).
     // Deliberately open to anyone, signed in or not -- "forgot password" has to work while signed

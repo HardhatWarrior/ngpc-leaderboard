@@ -290,6 +290,16 @@
       <div id="game-preview-msg"></div>
     </div>
 
+    <!-- Admin-only (shown from renderEditor's isAdmin branch). Moves every score for this game into
+         scoresArchive/ (kept as data, just off the live board) in one pass -- see the handler. -->
+    <div id="reset-panel" hidden style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
+      <div class="field-label">Reset leaderboard (admin only)</div>
+      <div class="current-value" style="margin-bottom:6px">Moves every submission for this game off the live board into an archive collection (<b>scoresArchive</b>) so the data is kept. Players can submit fresh scores right away. This can&rsquo;t be undone from this page.</div>
+      <input type="text" id="reset-confirm-input" placeholder="" autocomplete="off">
+      <button type="button" class="action btn-primary" id="reset-run" style="margin-top:10px" disabled>Archive &amp; reset</button>
+      <div id="reset-msg"></div>
+    </div>
+
     <div id="updated-badge-row" hidden style="margin-top:16px">
       <div class="current-value">This game currently shows an <b>UPDATED</b> badge on the main page (expires automatically 30 days after upload).</div>
       <button type="button" class="action" style="background:transparent;border:1px solid var(--border);color:var(--dim)" id="clear-updated">Turn off UPDATED badge now</button>
@@ -1468,6 +1478,48 @@
         }
       });
     })();
+
+    // Admin-only leaderboard reset: copy-then-delete in batches (set + delete = 2 ops per score, so
+    // 200 per batch stays well under Firestore's 500-op limit). Each batch is atomic, so a score is
+    // never lost -- an interrupted run just leaves the remainder on the board to be archived by
+    // running it again. Archive ids are prefixed with this run's resetId so repeated resets never
+    // collide. Sokoban's fixed SK_<uid> ids are fine: deleting them frees the id for a new score.
+    if(isAdmin){
+      const resetPanel = el('reset-panel');
+      const resetInput = el('reset-confirm-input');
+      const resetBtn = el('reset-run');
+      const resetMsg = el('reset-msg');
+      resetPanel.hidden = false;
+      resetInput.placeholder = 'Type '+gameCode+' to confirm';
+      resetInput.addEventListener('input', ()=>{ resetBtn.disabled = resetInput.value.trim().toUpperCase() !== gameCode.toUpperCase(); });
+      resetBtn.addEventListener('click', async ()=>{
+        if(resetInput.value.trim().toUpperCase() !== gameCode.toUpperCase()) return;
+        if(!confirm('Archive ALL '+gameCode+' scores and empty the live leaderboard?')) return;
+        resetBtn.disabled = true; resetInput.disabled = true;
+        const resetId = new Date().toISOString().replace(/[-:.TZ]/g,'').slice(0,14);
+        const archivedAt = Date.now();
+        let moved = 0;
+        try{
+          for(;;){
+            const snap = await db.collection('scores').where('game','==',gameCode).limit(200).get();
+            if(snap.empty) break;
+            const batch = db.batch();
+            snap.docs.forEach(d=>{
+              batch.set(db.collection('scoresArchive').doc(resetId+'_'+d.id), Object.assign({}, d.data(), {originalId:d.id, resetId, archivedAt}));
+              batch.delete(d.ref);
+            });
+            await batch.commit();
+            moved += snap.size;
+            resetMsg.innerHTML = '<div class="msg ok">Archived '+moved+' so far&hellip;</div>';
+          }
+          resetMsg.innerHTML = '<div class="msg ok">Done &mdash; '+moved+' score'+(moved===1?'':'s')+' archived (batch '+resetId+'). The live board is now empty.</div>';
+        }catch(e){
+          resetMsg.innerHTML = '<div class="msg err">Stopped after '+moved+' archived: '+escapeHtml(e.message||'unknown error')+' &mdash; run it again to finish.</div>';
+        }finally{
+          resetInput.value = ''; resetInput.disabled = false;
+        }
+      });
+    }
 
     // Title screen + up to two extra screenshots, each independently replaceable. titleImage
     // also doubles as the main page's own tile art (buildTile() in index.html), so replacing it
