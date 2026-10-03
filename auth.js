@@ -266,7 +266,7 @@ window.NGPC_AUTH = (function(){
   // name with NGPC-Admin-Scripts/rename-user.js, which also moves the Auth email and rewrites every
   // score. Kept (and exported) so any stale caller gets a clear message instead of a crash.
   async function updateUsername(){
-    throw {code:'rename-disabled', message:'Usernames can\u2019t be changed. If yours needs fixing, ask the site admin.'};
+    throw {code:'rename-disabled', message:'Usernames can\u2019t be changed. If yours needs fixing, email support@ngpc-dev.com.'};
   }
 
   // Lives at users/{uid}/private/contact, NOT on the public profile doc -- see firestore.rules'

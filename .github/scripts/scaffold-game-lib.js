@@ -445,7 +445,7 @@ function leaderboardTemplate(sub, plan, slug) {
     </section>
   </main>
 
-  <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com</footer>
+  <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com &middot; <a href="mailto:support@ngpc-dev.com" style="color:inherit">support@ngpc-dev.com</a></footer>
   </div>
 </div>
 
