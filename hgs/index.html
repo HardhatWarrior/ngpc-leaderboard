@@ -166,7 +166,7 @@
         <div class="game-version" id="game-version" hidden></div>
         <div class="created-by">Created by: <a href="/user/?u=ahchay">@AHCHAY</a></div>
         <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
-        <a href="/play/hgs/" class="play-link" id="play-link">&#127918; Play Horatio Goes Snowboarding in Browser</a>
+        <a href="/play/hgs/" class="play-link" id="play-link" hidden>&#127918; Play Horatio Goes Snowboarding in Browser</a>
         <a href="/admin/game/?slug=hgs" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
     </div>
@@ -664,6 +664,7 @@
       : Promise.resolve();
 
     NGPC_AUTH.onAuthChange((user)=>{
+      el('play-link').hidden = !user;
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();

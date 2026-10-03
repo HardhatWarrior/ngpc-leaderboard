@@ -389,7 +389,7 @@ function leaderboardTemplate(sub, plan, slug) {
         <div class="game-version" id="game-version" hidden></div>
         <div class="created-by">Created by: <a href="/user/?u=${sub.submitterUsername || ''}">@${(sub.submitterUsername || '').toUpperCase()}</a></div>
         <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
-        <a href="/play/${slug}/" class="play-link" id="play-link">&#127918; Play ${title} in Browser</a>
+        <a href="/play/${slug}/" class="play-link" id="play-link" hidden>&#127918; Play ${title} in Browser</a>
         <a href="/admin/game/?slug=${slug}" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
     </div>
@@ -799,6 +799,7 @@ ${scorecardFormulaNote}${scorecardBlock}
       : Promise.resolve();
 
     NGPC_AUTH.onAuthChange((user)=>{
+      el('play-link').hidden = !user;
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();

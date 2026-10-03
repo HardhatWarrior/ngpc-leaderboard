@@ -189,7 +189,7 @@
         <div class="game-version" id="game-version" hidden></div>
         <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
         <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
-        <a href="/play/sd/" class="play-link" id="play-link">&#127918; Play Sudoku in Browser</a>
+        <a href="/play/sd/" class="play-link" id="play-link" hidden>&#127918; Play Sudoku in Browser</a>
         <a href="/admin/game/?slug=sd" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
     </div>
@@ -744,6 +744,7 @@
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();
+      el('play-link').hidden = !user;
       gameDocPromise.then(()=>{
         applyAccessGate(user);
         var adminLinkEl = el('admin-link');
