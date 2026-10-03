@@ -561,7 +561,7 @@ window.NGPC_AUTH = (function(){
 
   // Over Rev's own catalog data, same convention every game page uses for its small constant
   // lookup tables (e.g. YZ_CATS above) -- mirrors overrev/index.html's embedded copy, which in
-  // turn mirrors overrev-leaderboard-kit/catalog.json (rules revision 1).
+  // turn mirrors overrev-leaderboard-kit/catalog.json (rules revision 1, 2026-10-03 release: 16 courses, 9 cars).
   const OV_COURSES = ['CYPRESS LANE','CITY CIRCUIT','CANYON RUN','COAST ROAD','NIGHT WORKS','VOLCANO PASS','RICE FIELDS','AUTUMN WOODS','SAKURA TEMPLE','SNOW PASS','SUNSET MESA','AURORA RIDGE','HARBOR DOCKS','SALT FLATS','DAM CREST','TRANQUILITY'];
   const OV_CARS = ['COMET','PROTO','GT','TURBO','WEDGE','BIKE','FORMULA','STINGER','HORNET'];
   // Kept for a future re-enable, but not rendered anywhere right now -- see renderOverRevScorecardHTML.

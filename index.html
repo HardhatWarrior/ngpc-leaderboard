@@ -372,8 +372,8 @@
   // overrev/index.html and overrev-leaderboard-kit/README.md) -- the ticker needs its own small
   // course-name lookup and tick-to-time formatter to show something meaningful for it, matching
   // the two fields already sitting on the doc rather than pulling in the full OverRevProtocol
-  // decoder just for this. Order mirrors overrev-leaderboard-kit/catalog.json exactly.
-  const OV_COURSES = ['Cypress Lane','City Circuit','Canyon Run','Coast Road','Night Works','Volcano Pass','Rice Fields','Autumn Woods','Sakura Temple','Snow Pass'];
+  // decoder just for this. Order mirrors overrev-leaderboard-kit/catalog.json (2026-10-03 release, 16 courses) exactly -- indices are wire IDs, never reorder.
+  const OV_COURSES = ['Cypress Lane','City Circuit','Canyon Run','Coast Road','Night Works','Volcano Pass','Rice Fields','Autumn Woods','Sakura Temple','Snow Pass','Sunset Mesa','Aurora Ridge','Harbor Docks','Salt Flats','Dam Crest','Tranquility'];
   function formatOvTicks(ticks){
     const seconds = Math.floor(ticks/60);
     return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0')+'.'+String(Math.floor((ticks%60)*100/60)).padStart(2,'0');
