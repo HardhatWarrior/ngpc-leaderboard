@@ -132,9 +132,9 @@
   .success-icon{ text-align:center; font-size:40px; margin-bottom:6px; }
   #success-view p{ text-align:center; color:var(--dim); font-size:13px; }
   footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
-  /* Signed-out visitors get neither the ROM download nor the in-browser player -- body.signed-in
+  /* Signed-out visitors don't get the ROM download (the in-browser player is open to everyone) -- body.signed-in
      is toggled from the onAuthChange handler below. */
-  body:not(.signed-in) #rom-link, body:not(.signed-in) #play-link{ display:none; }
+  body:not(.signed-in) #rom-link{ display:none; }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
@@ -169,7 +169,7 @@
         <div class="game-version" id="game-version" hidden></div>
         <div class="created-by">Created by: <a href="/user/?u=ahchay">@AHCHAY</a></div>
         <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
-        <a href="/play/ddmr/" class="play-link" id="play-link" hidden>&#127918; Play Don't Die Mr Robot in Browser</a>
+        <a href="/play/ddmr/" class="play-link" id="play-link">&#127918; Play Don't Die Mr Robot in Browser</a>
         <a href="/admin/game/?slug=ddmr" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
     </div>
@@ -649,7 +649,6 @@
 
     NGPC_AUTH.onAuthChange((user)=>{
       document.body.classList.toggle('signed-in', !!user);
-      el('play-link').hidden = !user;
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();

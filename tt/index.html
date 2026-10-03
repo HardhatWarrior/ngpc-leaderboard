@@ -212,9 +212,9 @@
   .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
 
   footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
-  /* Signed-out visitors get neither the ROM download nor the in-browser player -- body.signed-in
+  /* Signed-out visitors don't get the ROM download (the in-browser player is open to everyone) -- body.signed-in
      is toggled from the onAuthChange handler below. */
-  body:not(.signed-in) #rom-link, body:not(.signed-in) #play-link{ display:none; }
+  body:not(.signed-in) #rom-link{ display:none; }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
@@ -245,7 +245,7 @@
         <div class="game-version" id="game-version" hidden></div>
         <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
         <a href="/play/tetris/tetris.ngp" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
-        <a href="/play/tetris/" class="play-link" id="play-link" hidden>&#127918; Play Tetris in Browser</a>
+        <a href="/play/tetris/" class="play-link" id="play-link">&#127918; Play Tetris in Browser</a>
         <a href="/admin/game/?slug=tt" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
     </div>
@@ -907,7 +907,6 @@
 
     NGPC_AUTH.onAuthChange((user)=>{
       document.body.classList.toggle('signed-in', !!user);
-      el('play-link').hidden = !user;
       // Members only -- gates the whole scan mechanism, not just the final submit step.
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;

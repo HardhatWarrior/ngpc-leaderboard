@@ -322,8 +322,8 @@
       el('game').appendChild(player);
     }
 
-    // The player is hidden -- and neither backend's cores even requested -- until sign-in is
-    // confirmed, so a signed-out visitor never triggers either one's download.
+    // The player (and its cores) load once the viewer is allowed to see this game at all -- sign-in
+    // is no longer required just to play.
     let emulatorRequested = false;
     async function loadEmulator(){
       if(emulatorRequested) return;
@@ -366,10 +366,10 @@
           contentEl.hidden = true;
           return;
         }
-        gateEl.hidden = !!user;
-        gateEl.textContent = '🔒 Sign in (top right) to use the in-browser player.';
-        contentEl.hidden = !user;
-        if(user) loadEmulator();
+        // Open to everyone (signed in or not) -- signing in is only needed later, to submit a score.
+        gateEl.hidden = true;
+        contentEl.hidden = false;
+        loadEmulator();
       });
     }
     if(window.NGPC_AUTH){
