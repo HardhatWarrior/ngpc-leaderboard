@@ -174,7 +174,7 @@
         <div class="game-version" id="game-version" hidden></div>
         <div class="created-by">Created by: <a href="/user/?u=napomex">@NAPOMEX</a></div>
         <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
-        <a href="/play/xn/" class="play-link" id="play-link" hidden>&#127918; Play Xenon 2 in Browser</a>
+        <a href="/play/xn/" class="play-link" id="play-link">&#127918; Play Xenon 2 in Browser</a>
         <a href="/admin/game/?slug=xn" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
     </div>
@@ -690,7 +690,6 @@
       : Promise.resolve();
 
     NGPC_AUTH.onAuthChange((user)=>{
-      el('play-link').hidden = !user;
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();
