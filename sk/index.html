@@ -129,6 +129,10 @@
   .sc-total{ font-size:9.5px; margin-top:3px; color:var(--cream); font-weight:600; }
   .sc-frame.sk-unsolved .sc-total{ color:var(--dim); font-weight:400; }
   .sk-stars{ color:#e8c547; letter-spacing:-1px; }
+  /* Cartridge rewards: MASTER = all 30 levels solved, PERFECT = all 90 stars */
+  .sk-badge{ display:inline-block; vertical-align:middle; margin-left:6px; padding:1px 5px; border-radius:3px; font-family:"IBM Plex Mono",monospace; font-size:9px; font-weight:700; letter-spacing:.5px; line-height:1.4; }
+  .sk-badge.master{ color:#e8c547; border:1px solid #e8c547; }
+  .sk-badge.perfect{ color:#1a1407; background:#e8c547; border:1px solid #e8c547; }
   .sk-over{ display:block; font-family:"IBM Plex Mono",monospace; font-size:8.5px; color:var(--dim); margin-top:1px; }
   .tk-sheet{ width:100%; border-collapse:collapse; margin:14px 0; font-size:11.5px; }
   .tk-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
@@ -249,7 +253,7 @@
 
     <section class="panel">
       <h2>Leaderboard</h2>
-      <p class="hint">Ranked by levels solved, then fewest total moves over par (par = the fewest moves the solver found for each level), then fewest total moves. Each level earns up to 3 stars, the same as on the cartridge. One entry per player: submitting a newer code from SCORES updates your entry whenever it ranks better, so it grows as you progress.</p>
+      <p class="hint">Ranked by levels solved, then fewest total moves over par (par = the fewest moves the solver found for each level), then fewest total moves. Each level earns up to 3 stars, the same as on the cartridge (a level solved with the in-game HINT counts as 1 star). MASTER = all 30 levels solved; PERFECT = all 90 stars. One entry per player: submitting a newer code from SCORES updates your entry whenever it ranks better, so it grows as you progress.</p>
       <div id="board-status"></div>
       <div id="board"></div>
     </section>
@@ -417,6 +421,12 @@
   }
 
   function skStarsHTML(n){ return n ? '<span class="sk-stars">'+'★'.repeat(n)+'</span>' : '&ndash;'; }
+  // The cartridge's own reward marks (title screen MASTER / PERFECT)
+  function skBadgeHTML(solved, stars){
+    if(stars >= 90) return '<span class="sk-badge perfect" title="All 90 stars">PERFECT</span>';
+    if(solved >= 30) return '<span class="sk-badge master" title="All 30 levels solved">MASTER</span>';
+    return '';
+  }
   function skLevelTitle(L){
     if(!L.solved) return 'Level '+L.level+': not solved (par '+L.par+')';
     let best;
@@ -437,12 +447,13 @@
     }).join('');
     const rows = '<tr><td>Levels solved</td><td class="tk-val tnum">'+sum.solved+' / 30</td></tr>'+
       '<tr><td>Stars</td><td class="tk-val tnum">'+sum.stars+' / 90</td></tr>'+
+      (skBadgeHTML(sum.solved, sum.stars) ? '<tr><td>Award</td><td class="tk-val">'+skBadgeHTML(sum.solved, sum.stars)+'</td></tr>' : '')+
       '<tr><td>Moves over par</td><td class="tk-val tnum">+'+sum.overTotal+'</td></tr>'+
       '<tr><td>Total moves</td><td class="tk-val tnum">'+(Number(data.totalMoves)||0)+'</td></tr>'+
       '<tr><td>Total pushes</td><td class="tk-val tnum">'+(Number(data.totalPushes)||0)+'</td></tr>'+
       '<tr><td>Play time</td><td class="tk-val tnum">'+fmtClock(Number(data.playTime)||0)+'</td></tr>';
     return '<div class="scorecard-grid">'+grid+'</div>'+
-      '<div class="sk-legend">PAR = solved at par (3 stars) &middot; +N = moves over par &middot; unsolved levels show &ndash;.</div>'+
+      '<div class="sk-legend">PAR = solved at par (3 stars) &middot; +N = moves over par (+35+ also marks a level solved with the HINT: 1 star) &middot; unsolved levels show &ndash;.</div>'+
       '<table class="tk-sheet">'+rows+'</table>';
   }
 
@@ -496,7 +507,7 @@
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
       const rowHtml = '<div class="row'+(rank===1?' top1':'')+(hasDetail?' has-detail':'')+'"'+(hasDetail?' data-detail="d'+i+'"':'')+'>'+
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
-        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
+        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+skBadgeHTML(k.solved, k.stars)+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
         '<div class="score-cell"><div class="score-val tnum">'+k.solved+' LV</div>'+
           '<div class="score-sub tnum">+'+k.over+' &middot; '+k.stars+'<span class="sk-stars">★</span></div></div>'+

@@ -681,8 +681,12 @@ window.NGPC_AUTH = (function(){
         '<div class="sc-total">'+stars+(overTxt?'<span class="sk-over">'+overTxt+'</span>':'')+'</div>'+
       '</div>';
     }).join('');
+    // Cartridge reward marks: MASTER = all 30 solved, PERFECT = all 90 stars (sk/index.html skBadgeHTML)
+    const badge = sum.stars >= 90 ? '<span class="sk-badge perfect">PERFECT</span>'
+                : (sum.solved >= 30 ? '<span class="sk-badge master">MASTER</span>' : '');
     const rows = '<tr><td>Levels solved</td><td class="tk-val tnum">'+sum.solved+' / 30</td></tr>'+
       '<tr><td>Stars</td><td class="tk-val tnum">'+sum.stars+' / 90</td></tr>'+
+      (badge ? '<tr><td>Award</td><td class="tk-val">'+badge+'</td></tr>' : '')+
       '<tr><td>Moves over par</td><td class="tk-val tnum">+'+sum.overTotal+'</td></tr>'+
       '<tr><td>Total moves</td><td class="tk-val tnum">'+(Number(data.totalMoves)||0)+'</td></tr>'+
       '<tr><td>Total pushes</td><td class="tk-val tnum">'+(Number(data.totalPushes)||0)+'</td></tr>'+
