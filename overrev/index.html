@@ -290,7 +290,6 @@
   // own small constant lookup tables (e.g. Yahtzee's YZ_CATS).
   const COURSES = ['CYPRESS LANE','CITY CIRCUIT','CANYON RUN','COAST ROAD','NIGHT WORKS','VOLCANO PASS','RICE FIELDS','AUTUMN WOODS','SAKURA TEMPLE','SNOW PASS','SUNSET MESA','AURORA RIDGE','HARBOR DOCKS','SALT FLATS','DAM CREST','TRANQUILITY'];
   const CARS = ['COMET','PROTO','GT','TURBO','WEDGE','BIKE','FORMULA','STINGER','HORNET'];
-  // Kept for a future re-enable, but not rendered anywhere right now -- see renderOverRevScorecardHTML.
   const UPGRADE_NAMES = ['TOP SPEED','HANDLING','ACCELERATION','BRAKING'];
   const DIFFICULTY_NAMES = ['EASY','MEDIUM','HARD','ULTRA'];
 
@@ -379,11 +378,13 @@
   }
 
   function renderOverRevScorecardHTML(data){
-    // Upgrade levels (top speed/handling/acceleration/braking) are deliberately not shown --
-    // the data's still in data.upgrades/Firestore, just turned off site-wide for now.
+    // Upgrade levels (0-3 each) come from the decoded payload, or are unpacked from the stored `tune`
+    // byte (four 2-bit levels) when a doc hasn't been re-decoded -- per the kit, they're shown.
+    const ups = Array.isArray(data.upgrades) ? data.upgrades : [0,2,4,6].map(sh=>((data.tune||0)>>sh)&3);
     const rows = '<tr><td>Car</td><td class="ov-val">'+escapeHtml(CARS[data.car]||'?')+'</td></tr>'+
       '<tr><td>Difficulty</td><td class="ov-val">'+escapeHtml(DIFFICULTY_NAMES[data.difficulty]||'?')+'</td></tr>'+
       '<tr><td>Transmission</td><td class="ov-val">'+escapeHtml(data.transmission)+'</td></tr>'+
+      UPGRADE_NAMES.map((n,i)=>'<tr><td>'+n+'</td><td class="ov-val">'+ups[i]+' / 3</td></tr>').join('')+
       '<tr><td colspan="2">'+
         (data.won ? '<div class="ov-badge won">FINISHED</div>' : '')+
         (data.localRecord ? '<div class="ov-badge record">LOCAL RECORD</div>' : '')+
