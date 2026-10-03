@@ -352,17 +352,30 @@
     if(x+1<CA_BOARD_DIM && !check(x+1,y,CA_SIDE_E,CA_SIDE_W)) return false;
     return hasNeighbor;
   }
-  function caCountLegal(board, shapeId){
+  // Distinct-rotation count of a shape (1, 2 or 4) -- EXACTLY the console's
+  // carc_tile_rot_period(): 1 if all four edge features are equal, else 2 if
+  // edge[0]==edge[2] && edge[1]==edge[3], else 4. A 'G' (v2) header's move
+  // enumeration only visits rotations 0..period-1; an 'H' (v1) header always
+  // visits all 4.
+  function caRotPeriod(shapeId){
+    const e = CA_SHAPES[shapeId].edge;
+    if(e[0]===e[1] && e[1]===e[2] && e[2]===e[3]) return 1;
+    if(e[0]===e[2] && e[1]===e[3]) return 2;
+    return 4;
+  }
+  function caCountLegal(board, shapeId, dedupe){
     let count = 0;
-    for(let rot=0; rot<4; rot++){
+    const rots = dedupe ? caRotPeriod(shapeId) : 4;
+    for(let rot=0; rot<rots; rot++){
       const edge = caTileEdges(shapeId, rot);
       for(let y=0; y<CA_BOARD_DIM; y++) for(let x=0; x<CA_BOARD_DIM; x++) if(caCanPlace(board,edge,x,y)) count++;
     }
     return count;
   }
-  function caNthLegal(board, shapeId, m){
+  function caNthLegal(board, shapeId, m, dedupe){
     let seen = 0;
-    for(let rot=0; rot<4; rot++){
+    const rots = dedupe ? caRotPeriod(shapeId) : 4;
+    for(let rot=0; rot<rots; rot++){
       const edge = caTileEdges(shapeId, rot);
       for(let y=0; y<CA_BOARD_DIM; y++){
         for(let x=0; x<CA_BOARD_DIM; x++){
@@ -390,8 +403,14 @@
   // after the last '/' (the URL prefix always ends in one), then validates
   // and removes the 2-char game code.
   function caStripToPayload(rawScannedText){
-    const s = (rawScannedText||'').trim().toUpperCase();
-    if(!s) return null;
+    // Strip LEADING whitespace only -- never the end. A space is one of the 45
+    // valid QR alphanumeric characters (base-45 digit 36), so a payload whose
+    // final move character happens to be a space (roughly 1 game in 45) was
+    // having it silently trimmed here, which made the last tile decode as the
+    // wrong placement with no error. Any stray trailing junk is harmless: the
+    // move stream is consumed positionally and the tile count says when to stop.
+    const s = (rawScannedText||'').replace(/^\s+/, '').toUpperCase();
+    if(!s.trim()) return null;
     // Find the literal "NGPC-DEV.COM/" marker and take everything after
     // it -- NOT split('/') and take the last segment. The payload itself
     // is QR alphanumeric-mode data, which legitimately includes '/' as one
@@ -413,16 +432,18 @@
   }
 
   // Decodes a full submission from every scanned code's RAW text, in scan
-  // order (the header code -- kind 'H' -- is expected first, but this finds
+  // order (the header code -- kind 'G', or legacy 'H' -- is expected first, but this finds
   // it anywhere). Returns {ok:true, ...} or {ok:false, error}.
   function caDecodeSubmission(rawCodes){
     const parsed = rawCodes.map(caStripToPayload);
     const badIdx = parsed.findIndex((p)=>p===null);
     if(badIdx !== -1) return { ok:false, error: 'Code '+(badIdx+1)+' doesn\'t look like a "'+QR_GAME_CODE+'" leaderboard code.' };
-    const headerIdx = parsed.findIndex((p)=>p[0]==='H');
-    if(headerIdx === -1) return { ok:false, error: 'No header code ("H") found among the scanned codes.' };
+    const headerIdx = parsed.findIndex((p)=>p[0]==='H' || p[0]==='G');
+    if(headerIdx === -1) return { ok:false, error: 'No header code ("G"/"H") found among the scanned codes.' };
 
     const header = parsed[headerIdx];
+    // 'G' = v2 (rotation-deduped move enumeration), 'H' = v1 (legacy, all 4).
+    const dedupe = header[0] === 'G';
     if(header.length < 23) return { ok:false, error: 'Header code is truncated.' };
     let pos = 2;
     const deckSeed = caBase45Decode(header.slice(pos,pos+3)); pos+=3;
@@ -455,17 +476,17 @@
     let streamPos = 0, placed = 0;
     for(const shapeId of draws){
       if(placed >= tileCount) break;
-      const n = caCountLegal(board, shapeId);
+      const n = caCountLegal(board, shapeId, dedupe);
       if(n === 0) continue;
       let rot, x, y;
       if(n === 1){
-        const only = caNthLegal(board, shapeId, 0);
+        const only = caNthLegal(board, shapeId, 0, dedupe);
         rot = only.rotation; x = only.x; y = only.y;
       } else {
         const need = caCharsForCount(n);
         const m = caBase45Decode(moveStream.slice(streamPos, streamPos+need));
         streamPos += need;
-        const found = m===null ? null : caNthLegal(board, shapeId, m);
+        const found = m===null ? null : caNthLegal(board, shapeId, m, dedupe);
         if(!found) return { ok:false, error: 'Reconstruction desynced at tile '+(placed+1)+' of '+tileCount+' -- try re-scanning every code.' };
         rot = found.rotation; x = found.x; y = found.y;
       }
@@ -493,7 +514,7 @@
     const stripped = caStripToPayload(rawText);
     if(stripped === null) return { error: 'That doesn\'t look like a "'+QR_GAME_CODE+'" leaderboard code.' };
     const kind = stripped[0], more = stripped[1];
-    if(kind !== 'H' && kind !== 'C') return { error: 'That code has an unreadable code kind.' };
+    if(kind !== 'H' && kind !== 'G' && kind !== 'C') return { error: 'That code has an unreadable code kind.' };
     if(more !== '0' && more !== '1') return { error: 'That code has an unreadable "more codes" flag.' };
     return { kind, more };
   }
@@ -727,7 +748,7 @@
     // "scan the first code" error when a continuation shows up with
     // genuinely no header anywhere (neither already accumulated nor in
     // this same batch).
-    const header = probed.find((p)=>p.probe.kind === 'H');
+    const header = probed.find((p)=>p.probe.kind === 'H' || p.probe.kind === 'G');
     if(header) scannedCodes = [header.text];
     for(const p of probed){
       if(p.probe.kind !== 'C') continue;
