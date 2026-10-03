@@ -296,6 +296,42 @@ window.NGPC_AUTH = (function(){
     }catch(e){ return null; }
   }
 
+  // ---- default initials: a 1-3 char tag for places that can't show a full free-typed name (e.g.
+  // Over Rev's 1-8 char names on a board built for 3 initials). Stored on the public profile as
+  // users/{uid}.defaultInitials ONLY when the player overrides it; otherwise it's generated from
+  // their username here (no write needed). Generation: split the username into words on '_',
+  // digits and camelCase humps and take the first letters (up to 3); if that gives fewer than 3,
+  // top up from the first word's letters (preferring consonants). A run-together name like
+  // "hardhatwarrior" has no word boundaries to find, so it can't come out as HHW -- players can
+  // override it on the account page.
+  function generateInitials(username){
+    const name = String(username||'').trim();
+    if(!name) return '???';
+    const words = name.replace(/([a-z])([A-Z])/g,'$1 $2').split(/[^A-Za-z]+/).filter(Boolean);
+    let out = words.slice(0,3).map(w=>w[0].toUpperCase()).join('');
+    if(out.length < 3 && words.length){
+      const rest = words[0].slice(1).toUpperCase().split('');
+      const consonants = rest.filter(c=>!'AEIOU'.includes(c));
+      const fill = consonants.concat(rest.filter(c=>'AEIOU'.includes(c)));
+      out = (out + fill.join('')).slice(0,3);
+    }
+    return out || name.slice(0,3).toUpperCase();
+  }
+  const INITIALS_RE = /^[A-Za-z0-9]{1,3}$/;
+  async function updateDefaultInitials(raw){
+    const user = auth.currentUser;
+    if(!user) throw {code:'not-signed-in', message:'Sign in first.'};
+    const v = String(raw||'').trim().toUpperCase();
+    if(v && !INITIALS_RE.test(v)) throw {code:'invalid-initials', message:'Initials are 1-3 letters or numbers.'};
+    await db.collection('users').doc(user.uid).update({defaultInitials: v ? v : firebase.firestore.FieldValue.delete()});
+  }
+  // uid -> effective initials, filled as a side effect of fetchAvatars() (same users/ docs, so no
+  // extra reads) -- a board that has already called fetchAvatars() can read these synchronously.
+  const initialsCache = {};
+  function defaultInitialsOf(uid, usernameFallback){
+    return initialsCache[uid] || generateInitials(usernameFallback);
+  }
+
   const AVATAR_SIZE = 32;
   const AVATAR_CELLS = AVATAR_SIZE * AVATAR_SIZE;
 
@@ -351,6 +387,7 @@ window.NGPC_AUTH = (function(){
         snap.forEach(doc=>{
           const d = doc.data();
           if(Array.isArray(d.avatar) && d.avatar.length===AVATAR_CELLS) map[doc.id]=d.avatar;
+          initialsCache[doc.id] = (typeof d.defaultInitials==='string' && d.defaultInitials) ? d.defaultInitials : generateInitials(d.username);
         });
       }catch(e){ /* board still renders fine without avatars on a lookup failure */ }
     }));
@@ -797,6 +834,7 @@ window.NGPC_AUTH = (function(){
       usernameLower: data.usernameLower || null,
       recoveryEmail,
       avatar: Array.isArray(data.avatar) ? data.avatar : null,
+      defaultInitials: (typeof data.defaultInitials === 'string' && data.defaultInitials) ? data.defaultInitials : null,
       // Accounts created before this field existed have no `approved` key at all -- treat that
       // as approved (grandfathered in), same stance the one-time backfill script takes so a
       // pre-existing player's history doesn't vanish from the boards.
@@ -1066,6 +1104,7 @@ window.NGPC_AUTH = (function(){
     db, auth,
     signUp, signIn, signOut: signOutNow, onAuthChange, refreshProfile,
     updateUsername, updateRecoveryEmail, updateAvatar, fetchAvatars,
+    generateInitials, updateDefaultInitials, defaultInitialsOf,
     packColor, unpackColor, css255FromWord, renderAvatarToCanvas, drawAvatarCell,
     TRANSPARENT, isTransparent,
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,

@@ -77,7 +77,8 @@ service cloud.firestore {
           && (!('avatar' in d) || (d.avatar is list && d.avatar.size() == 1024))
           && (!('wantsDev' in d) || d.wantsDev is bool)
           && (!('isDeveloper' in d) || d.isDeveloper is bool)
-          && (!('admin' in d) || d.admin is bool);
+          && (!('admin' in d) || d.admin is bool)
+          && (!('defaultInitials' in d) || (d.defaultInitials is string && d.defaultInitials.matches('^[A-Z0-9]{1,3}$')));
       }
 
       // New accounts always start unapproved (approved:false) -- nobody can self-approve at
@@ -112,7 +113,7 @@ service cloud.firestore {
       //    admin) -- see admin/index.html's promote-admin/demote-admin toggle.
       allow update: if request.auth != null && (
         (request.auth.uid == uid
-          && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved', 'wantsDev', 'isDeveloper', 'admin'])
+          && request.resource.data.keys().hasOnly(['username', 'usernameLower', 'createdAt', 'avatar', 'approved', 'wantsDev', 'isDeveloper', 'admin', 'defaultInitials'])
           && request.resource.data.createdAt == resource.data.createdAt
           && request.resource.data.username == resource.data.username
           && request.resource.data.usernameLower == resource.data.usernameLower

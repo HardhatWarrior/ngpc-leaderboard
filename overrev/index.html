@@ -415,14 +415,19 @@
       const usernameLine = raw.username ? ('<a href="/user/?u='+encodeURIComponent(raw.username)+'">@'+escapeHtml(raw.username.toUpperCase())+'</a>') : '';
       const inlineRaw = settings.inlineField ? data[settings.inlineField] : null;
       const inlineLine = inlineRaw != null ? ((settings.inlinePrefix ? settings.inlinePrefix+' ' : '') + (settings.inlineLabels[String(inlineRaw)] || String(inlineRaw))) : null;
-      const meta = [COURSES[data.course], fmtWhen(raw.submittedAt), CARS[data.car], inlineLine, usernameLine].filter(Boolean).join(' · ');
+      // The board's big name slot is sized for 3-character initials; this game's QR carries a
+      // free-typed name up to 8 chars, so a longer one shows the submitter's default initials
+      // there (account page) and the full name moves into the meta line instead.
+      const longName = (data.name||'').length > 3;
+      const shownName = longName ? ((window.NGPC_AUTH && raw.uid) ? NGPC_AUTH.defaultInitialsOf(raw.uid, raw.username) : (data.name||'').slice(0,3)) : (data.name||'???');
+      const meta = [longName ? '\u201C'+data.name+'\u201D' : null, COURSES[data.course], fmtWhen(raw.submittedAt), CARS[data.car], inlineLine, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = raw.uid && avatars[raw.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
       const rowClass = 'row'+(settings.rowDetailExpand?' has-detail':'')+(rankByPerformance && rank===1?' top1':'');
       const rowAttr = settings.rowDetailExpand ? ' data-detail="d'+i+'"' : '';
       const rowHtml = '<div class="'+rowClass+'"'+rowAttr+'>'+
         '<div class="rank">'+(rankByPerformance && rank===1?'🏆':('#'+rank))+'</div>'+
-        '<div><div class="initials">'+avatarHtml+escapeHtml(data.name||'???')+'</div>'+
+        '<div><div class="initials">'+avatarHtml+escapeHtml(shownName)+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
         '<div class="score-val tnum">'+escapeHtml(fmtScoreValue(raw, data, settings))+'</div>'+
       '</div>';

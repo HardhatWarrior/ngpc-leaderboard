@@ -320,12 +320,29 @@
     </section>
 
     <section class="panel">
+      <div class="panel-header collapsed" data-toggle="initials-body" role="button" tabindex="0" aria-expanded="false">
+        <h2>Default Initials</h2>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="panel-body" id="initials-body" hidden>
+      <p class="hint">Used where a game can&rsquo;t show your full name &mdash; for example Over Rev lets you type up to 8 characters, but its board shows these 3-character initials. Leave blank to use the one generated from your username.</p>
+      <div class="current-value">Currently <b id="initials-current">&mdash;</b> <span id="initials-source" class="hint" style="margin:0"></span></div>
+      <label>Default initials (1&ndash;3 letters or numbers)<input type="text" id="initials-input" maxlength="3" autocomplete="off" style="text-transform:uppercase"></label>
+      <div class="row">
+        <button class="btn-primary" id="initials-save">Save initials</button>
+        <button class="btn-secondary" id="initials-clear">Use generated</button>
+      </div>
+      <div id="initials-msg"></div>
+      </div>
+    </section>
+
+    <section class="panel">
       <div class="panel-header collapsed" data-toggle="email-body" role="button" tabindex="0" aria-expanded="false">
         <h2>Recovery Email</h2>
         <span class="chevron">&#9660;</span>
       </div>
       <div class="panel-body" id="email-body" hidden>
-      <p class="hint">Optional. Stored on your account, but not currently wired up to send any reset email automatically.</p>
+      <p class="hint">Optional. Used to email you a password reset link (&ldquo;Forgot password?&rdquo; on the sign-in form) and account notices.</p>
       <div class="current-value">Currently <b id="email-current">not set</b></div>
       <label>Recovery email<input type="email" id="email-input" autocomplete="email"></label>
       <div class="row">
@@ -562,6 +579,27 @@
   }
   el('email-save').addEventListener('click', ()=>saveEmail(emailInput.value));
   el('email-clear').addEventListener('click', ()=>{ emailInput.value=''; saveEmail(''); });
+
+  // ---- default initials ----
+  const initialsInput = el('initials-input');
+  const initialsMsg = el('initials-msg');
+  async function saveInitials(value){
+    const btn = el('initials-save');
+    btn.disabled = true;
+    initialsMsg.innerHTML = '';
+    try{
+      await A.updateDefaultInitials(value);
+      await A.refreshProfile();
+      refreshFromProfile();
+      initialsMsg.innerHTML = '<div class="msg ok">Saved.</div>';
+    }catch(e){
+      initialsMsg.innerHTML = '<div class="msg err">'+A.escapeHtml(A.friendlyAuthError(e))+'</div>';
+    }finally{
+      btn.disabled = false;
+    }
+  }
+  el('initials-save').addEventListener('click', ()=>saveInitials(initialsInput.value));
+  el('initials-clear').addEventListener('click', ()=>{ initialsInput.value=''; saveInitials(''); });
 
   // ---- avatar editor ----
   const SIZE = A.AVATAR_SIZE;
@@ -951,6 +989,11 @@
     el('username-current').textContent = user.username ? user.username.toUpperCase() : '(unknown)';
     el('email-current').textContent = user.recoveryEmail || 'not set';
     emailInput.value = user.recoveryEmail || '';
+    const genInitials = A.generateInitials(user.username);
+    el('initials-current').textContent = user.defaultInitials || genInitials;
+    el('initials-source').textContent = user.defaultInitials ? '(set by you)' : '(generated from your username)';
+    initialsInput.value = user.defaultInitials || '';
+    initialsInput.placeholder = genInitials;
     if(Array.isArray(user.avatar) && user.avatar.length === A.AVATAR_CELLS){
       grid = user.avatar.slice();
       render();
