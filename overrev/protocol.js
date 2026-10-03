@@ -2,7 +2,7 @@
 (function (root) {
   'use strict';
   const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
-  // Accept old ROM text, a camera-scanned URL, or GitHub Pages' hash redirect.
+  // Current ROM emits a full HTTPS URL. Also accept old bare payloads and URL/hash handoffs.
   // Keep payload case unchanged: it is covered by the checksum.
   function extractPayload(input) {
     if (typeof input !== 'string' || input.length > 256) throw new Error('Résultat invalide.');
@@ -48,7 +48,7 @@
     const ticks = (data[6] << 16) | (data[7] << 8) | data[8];
     const event = (data[9] << 8) | data[10];
     if (rules !== 1) throw new Error('Cette révision du jeu n’est pas encore prise en charge.');
-    if (data[2] >= 10 || data[3] >= 8 || (flags & 128) || (flags & 3) !== 1 ||
+    if (data[2] >= 16 || data[3] >= 9 || (flags & 128) || (flags & 3) !== 1 ||
         ticks < 1 || ticks > 65535 || event !== 0) {
       throw new Error('Les paramètres de cette course ne sont pas pris en charge.');
     }

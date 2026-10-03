@@ -562,8 +562,8 @@ window.NGPC_AUTH = (function(){
   // Over Rev's own catalog data, same convention every game page uses for its small constant
   // lookup tables (e.g. YZ_CATS above) -- mirrors overrev/index.html's embedded copy, which in
   // turn mirrors overrev-leaderboard-kit/catalog.json (rules revision 1).
-  const OV_COURSES = ['CYPRESS LANE','CITY CIRCUIT','CANYON RUN','COAST ROAD','NIGHT WORKS','VOLCANO PASS','RICE FIELDS','AUTUMN WOODS','SAKURA TEMPLE','SNOW PASS'];
-  const OV_CARS = ['COMET','PROTO','GT','TURBO','WEDGE','BIKE','FORMULA','STINGER'];
+  const OV_COURSES = ['CYPRESS LANE','CITY CIRCUIT','CANYON RUN','COAST ROAD','NIGHT WORKS','VOLCANO PASS','RICE FIELDS','AUTUMN WOODS','SAKURA TEMPLE','SNOW PASS','SUNSET MESA','AURORA RIDGE','HARBOR DOCKS','SALT FLATS','DAM CREST','TRANQUILITY'];
+  const OV_CARS = ['COMET','PROTO','GT','TURBO','WEDGE','BIKE','FORMULA','STINGER','HORNET'];
   // Kept for a future re-enable, but not rendered anywhere right now -- see renderOverRevScorecardHTML.
   const OV_UPGRADE_NAMES = ['TOP SPEED','HANDLING','ACCELERATION','BRAKING'];
   const OV_DIFFICULTY_NAMES = ['EASY','MEDIUM','HARD','ULTRA'];

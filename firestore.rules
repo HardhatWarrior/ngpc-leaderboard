@@ -311,8 +311,8 @@ service cloud.firestore {
           && d.keys().hasOnly(['game', 'initials', 'rules', 'course', 'car', 'tune', 'mode', 'difficulty', 'transmission', 'ticks', 'won', 'localRecord', 'event', 'sequence', 'raw', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.initials is string && d.initials.matches('^[A-Z0-9]{1,8}$')
           && d.rules is int && d.rules == 1
-          && d.course is int && d.course >= 0 && d.course < 10
-          && d.car is int && d.car >= 0 && d.car < 8
+          && d.course is int && d.course >= 0 && d.course < 16
+          && d.car is int && d.car >= 0 && d.car < 9
           && d.tune is int && d.tune >= 0 && d.tune <= 255
           && d.mode is int && d.mode == 1
           && d.difficulty is int && d.difficulty >= 0 && d.difficulty <= 3
