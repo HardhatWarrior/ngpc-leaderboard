@@ -883,6 +883,8 @@ window.NGPC_AUTH = (function(){
     #acct-bar{ display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12px; color:var(--dim); margin-bottom:14px; }
     #acct-right{ display:flex; align-items:center; gap:8px; }
     #acct-avatar{ border-radius:3px; border:1px solid var(--border); display:block; image-rendering:pixelated; }
+    #acct-new{ background:var(--danger,#e5615a); color:#fff; font-size:9px; font-weight:700; letter-spacing:.06em; padding:2px 5px; border-radius:999px; text-decoration:none; line-height:1.3; }
+    #acct-new[hidden]{ display:none; }
     .acct-link{ background:none; border:none; color:var(--accent2); font:inherit; font-size:12px; cursor:pointer; padding:0; text-decoration:underline; width:auto; }
     #auth-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:1000; }
     #auth-overlay[hidden]{ display:none; }
@@ -1041,13 +1043,34 @@ window.NGPC_AUTH = (function(){
     const homeLink = isHome ? '' : '<a class="acct-link" href="/">&larr; All games</a>';
     bar.innerHTML = '<div id="acct-left">'+homeLink+'</div>'
       + '<div id="acct-right"><canvas id="acct-avatar" width="18" height="18" hidden></canvas>'
+      + '<a id="acct-new" href="/admin/" hidden>NEW!</a>'
       + '<a id="acct-status" class="acct-link">Signed out</a>'
       + '<button type="button" class="acct-link" id="acct-btn">Sign In / Sign Up</button></div>';
     shell.insertBefore(bar, shell.firstChild);
     const statusEl = bar.querySelector('#acct-status');
     const btnEl = bar.querySelector('#acct-btn');
     const avatarEl = bar.querySelector('#acct-avatar');
+    const newEl = bar.querySelector('#acct-new');
     let signedIn = false;
+    // Admins only: flag pending work (players awaiting approval, game submissions awaiting review)
+    // so it's visible from any page without opening /admin/. Two small capped reads per page load,
+    // both already allowed for an admin (users/ is public; gameSubmissions/ is admin-readable);
+    // any failure just leaves the badge hidden.
+    async function refreshAdminBadge(user){
+      newEl.hidden = true;
+      if(!isSiteAdmin(user)) return;
+      try{
+        const [players, games] = await Promise.all([
+          db.collection('users').where('approved','==',false).limit(50).get(),
+          db.collection('gameSubmissions').where('status','==','pending').limit(50).get(),
+        ]);
+        if(!currentUser || currentUser.uid !== user.uid) return; // signed out / switched meanwhile
+        const parts = [];
+        if(players.size) parts.push(players.size+' player'+(players.size===1?'':'s')+' awaiting approval');
+        if(games.size) parts.push(games.size+' game submission'+(games.size===1?'':'s')+' to review');
+        if(parts.length){ newEl.title = parts.join(' \u00b7 '); newEl.hidden = false; }
+      }catch(e){ /* leave hidden */ }
+    }
     btnEl.addEventListener('click', ()=>{
       if(signedIn) signOutNow();
       else modal.openModal('signin');
@@ -1060,6 +1083,7 @@ window.NGPC_AUTH = (function(){
         statusEl.textContent = 'Hi, ' + (user.username ? user.username.toUpperCase() : '(loading…)');
         statusEl.href = '/account/';
         btnEl.textContent = 'Sign Out';
+        refreshAdminBadge(user);
         if(user.avatar){
           renderAvatarToCanvas(avatarEl, user.avatar, 18/AVATAR_SIZE);
           avatarEl.hidden = false;
@@ -1071,6 +1095,7 @@ window.NGPC_AUTH = (function(){
         statusEl.removeAttribute('href');
         btnEl.textContent = 'Sign In / Sign Up';
         avatarEl.hidden = true;
+        newEl.hidden = true;
       }
     });
   }
