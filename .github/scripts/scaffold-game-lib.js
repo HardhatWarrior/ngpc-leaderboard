@@ -355,9 +355,6 @@ function leaderboardTemplate(sub, plan, slug) {
   .success-icon{ text-align:center; font-size:40px; margin-bottom:6px; }
   #success-view p{ text-align:center; color:var(--dim); font-size:13px; }
   footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
-  /* Signed-out visitors don't get the ROM download (the in-browser player is open to everyone) -- body.signed-in
-     is toggled from the onAuthChange handler below. */
-  body:not(.signed-in) #rom-link{ display:none; }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
@@ -802,7 +799,6 @@ ${scorecardFormulaNote}${scorecardBlock}
       : Promise.resolve();
 
     NGPC_AUTH.onAuthChange((user)=>{
-      document.body.classList.toggle('signed-in', !!user);
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();
