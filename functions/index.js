@@ -75,6 +75,9 @@ exports.sendMail = onDocumentCreated(
       await transporter.sendMail({
         from: SMTP_FROM,
         to: to.join(','),
+        // SMTP sends don't land in the mailbox's Sent folder, so BCC the support address to keep a
+        // copy of everything sent -- skipped when it's already a recipient (admin alerts go there).
+        bcc: to.some(a => String(a).toLowerCase() === SMTP_USER) ? undefined : SMTP_USER,
         subject: message.subject,
         text: message.text,
       });
