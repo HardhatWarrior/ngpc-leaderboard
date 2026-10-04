@@ -862,7 +862,7 @@ service cloud.firestore {
         (request.resource.data.keys().hasOnly(['to', 'message'])
           && request.resource.data.to is list
           && request.resource.data.to.size() == 1
-          && request.resource.data.to[0] == 'darekdavis@gmail.com'
+          && request.resource.data.to[0] == 'support@ngpc-dev.com'
           && request.resource.data.message is map
           && request.resource.data.message.keys().hasOnly(['subject', 'text'])
           && request.resource.data.message.subject is string

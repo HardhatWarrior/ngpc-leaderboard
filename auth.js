@@ -78,7 +78,7 @@ window.NGPC_AUTH = (function(){
   // own mail/{id} match block -- rules re-check it so a client can never redirect a notification
   // to an arbitrary address, this constant alone isn't a security boundary. Fire-and-forget: a
   // failed notification write should never block the signup/submission it's reporting on.
-  const ADMIN_NOTIFY_EMAIL = 'darekdavis@gmail.com';
+  const ADMIN_NOTIFY_EMAIL = 'support@ngpc-dev.com';
   function notifyAdmin(subject, text){
     try{
       db.collection('mail').add({

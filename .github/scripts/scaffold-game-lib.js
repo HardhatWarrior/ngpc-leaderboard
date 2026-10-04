@@ -950,7 +950,7 @@ async function checkScoreIndexAndNotify(db, sub, slug) {
     const link = m[0];
     try {
       await db.collection('mail').add({
-        to: ['darekdavis@gmail.com'],
+        to: ['support@ngpc-dev.com'],
         message: {
           subject: sub.proposedName + ' needs a one-time Firestore index before its leaderboard will load',
           text: 'The scaffolded leaderboard for "' + sub.proposedName + '" (/' + slug + '/) can\'t query its scores yet --'

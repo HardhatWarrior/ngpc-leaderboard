@@ -570,7 +570,7 @@
       if(!m) return {ok:false, notified:false, error:e.message};
       try{
         await db.collection('mail').add({
-          to: ['darekdavis@gmail.com'],
+          to: ['support@ngpc-dev.com'],
           message: {
             subject: 'Payload Editor: a leaderboard needs a one-time Firestore index',
             text: 'A payload edit set sort field "'+spec.sortField+'" ('+spec.sortDir+') for game "'+spec.code+'", '
