@@ -571,7 +571,7 @@
    * pixels recoloured the way the game shows a finished one. A segment is complete when flood-filling it across
    * matching neighbour tiles never runs off the placed tiles; a cloister when all 8 neighbours are placed. ---- */
   const CA_DONE = {"n":51,"segs":[[],[4],[1],[1,4],[1,2],[5],[5],[3],[3],[11],[11],[15],[11,4],[11,4],[1,2,4,8],[10],[6],[2,4,8],[1,2,4,8],[1,6],[1,12],[1,10],[3,12],[3,12],[],[],[],[],[2,8],[12],[4],[1,4],[10],[12]],"segType":[[],[0],[1],[1,1],[1,1],[1],[1],[1],[1],[1],[1],[1],[1,0],[1,0],[1,0,0,0],[0],[0],[0,0,0],[0,0,0,0],[1,0],[1,0],[1,0],[1,0],[1,0],[],[],[],[],[1,1],[1],[0],[1,0],[0],[0]],"segFrame":[[],[1],[3],[4,5],[6,7],[8],[9],[10],[11],[12],[13],[14],[15,16],[17,18],[19,20,21,22],[23],[24],[25,26,27],[28,29,30,31],[32,33],[34,35],[36,37],[38,39],[40,41],[],[],[],[],[42,43],[44],[45],[47,48],[49],[50]],"cloFrame":[0,2,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,46,-1,-1,-1]};
-  const CA_DONE_URL = '/ca/carc-done.png';
+  const CA_DONE_URL = '/ca/carc-done.png?v=3';
   function caRotMask(mask, rot){ rot &= 3; return ((mask << rot) | (mask >> (4-rot))) & 15; }
   function caComputeDone(tiles){
     const at = new Map();
@@ -619,7 +619,7 @@
   }
   let caBoardView = 'done';   // 'done' | 'plain' -- shared by every board on the page
 
-  const CA_TILE_STRIP_URL = '/ca/carc-tiles.png';
+  const CA_TILE_STRIP_URL = '/ca/carc-tiles.png?v=3';
 
   // Every tile is positioned/sized in PERCENTAGES of the container, not
   // fixed pixels -- deliberately NOT the full 26x26 board bounding box
