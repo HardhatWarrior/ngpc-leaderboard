@@ -338,21 +338,21 @@
   </section>
 
   <section class="panel" id="payload-panel" hidden>
-    <div class="panel-header" data-toggle="payload-body" role="button" tabindex="0" aria-expanded="true">
+    <div class="panel-header collapsed" data-toggle="payload-body" role="button" tabindex="0" aria-expanded="false">
       <h2>Payload Format</h2>
       <span class="chevron">&#9660;</span>
     </div>
-    <div class="panel-body" id="payload-body">
+    <div class="panel-body" id="payload-body" hidden>
       <p class="hint">Read-only reference -- how this game's on-device QR encodes a result and how the leaderboard turns it back into a score. Not editable here; changing it means changing the device firmware and the leaderboard page's own parsePayload() together.</p>
       <div id="payload-content"></div>
     </div>
   </section>
   <section class="panel" id="payload-missing-panel" hidden>
-    <div class="panel-header" data-toggle="payload-missing-body" role="button" tabindex="0" aria-expanded="true">
+    <div class="panel-header collapsed" data-toggle="payload-missing-body" role="button" tabindex="0" aria-expanded="false">
       <h2>Payload Format</h2>
       <span class="chevron">&#9660;</span>
     </div>
-    <div class="panel-body" id="payload-missing-body">
+    <div class="panel-body" id="payload-missing-body" hidden>
       <p class="hint" style="margin:0">No payload reference recorded for this game yet.</p>
     </div>
   </section>
