@@ -661,6 +661,8 @@
     }
     const ver = text[2];
     if(ver === '3') return parsePayloadV3(text);
+    // "BW9" + code: the cart's STATS CODE QR (bowling_114+), a link like the score QR's
+    if(ver === '9') return {statsCode: text.slice(3)};
     if(ver >= '0' && ver <= '9'){
       return {error:"That code is from a test build this page can't read — update Neo Bowling and bowl again."};
     }
@@ -852,7 +854,8 @@
 
   function handleScanResult(text){
     formMsg.innerHTML = '';
-    const seg = lastPathSegment(text).trim().toUpperCase();
+    let seg = lastPathSegment(text).trim().toUpperCase();
+    if(seg.startsWith('BW9')) seg = seg.slice(3);
     if(looksLikeStatsCode(seg)){
       resetScanUI();
       if(!statsPanelEl.hidden){
@@ -1179,6 +1182,7 @@
   const statsPanelEl = el('stats-panel');
   const HCP_MIN_GAMES = 5;   // same as the cart's HCP_MIN_GAMES
   let statsUser = null;
+  let pendingStatsCode = null;   // from a STATS CODE QR link, until the panel can take it
 
   function fmtAvg(avg10){ return Math.floor(avg10/10) + '.' + (avg10 % 10); }
   // floor((200 - avg) * 0.9), capped 90 -- spec section 4, the cart's avg_handicap()
@@ -1192,11 +1196,41 @@
     statsUser = user;
     const visible = careerVisible(user);
     statsPanelEl.hidden = !visible;
-    if(!visible) return;
+    if(!visible){
+      if(pendingStatsCode){
+        pendingStatsCode = null;
+        formMsg.innerHTML = '<div class="msg err">That\u2019s a stats code, not a score. Career stats aren\u2019t open on the site yet.</div>';
+      }
+      return;
+    }
     el('stats-preview-note').hidden = !!bwFeatures().careerStats;
     el('stats-signed-out').hidden = !!user;
+    el('stats-signed-out').textContent = pendingStatsCode
+      ? 'Sign in to save the stats code you scanned.'
+      : 'Sign in to see your average, handicap and career totals.';
     el('stats-body').hidden = !user;
     if(user) refreshStats();
+    if(pendingStatsCode){
+      statsPanelEl.scrollIntoView({behavior:'smooth', block:'start'});
+      if(user) offerLinkedCode();
+    }
+  }
+
+  // A STATS CODE QR opened with the phone's own camera: show what it holds and let the
+  // player press Save, rather than overwriting their stats on page load.
+  function offerLinkedCode(){
+    const code = pendingStatsCode;
+    pendingStatsCode = null;
+    el('career-code').value = code;
+    const msg = el('career-msg');
+    try{
+      const s = decodeStatsCode(code);
+      const avg = s.avgGames > 0 ? ', average ' + fmtAvg(s.avg10) : '';
+      msg.innerHTML = '<div class="msg ok">Stats code from your cart: ' + s.games + ' games' + escapeHtml(avg)
+        + '. Press ' + escapeHtml(el('career-save').textContent) + ' to keep it.</div>';
+    }catch(e){
+      msg.innerHTML = '<div class="msg err">'+escapeHtml(e.message)+'</div>';
+    }
   }
 
   function careerRows(rows){
@@ -1295,7 +1329,10 @@
     renderBoard([]); // real empty state as the floor -- never leave the board blank while db connects
     connectDb();
     const fromEntry = payloadFromEntry();
-    if(fromEntry){
+    if(fromEntry && fromEntry.statsCode){
+      pendingStatsCode = fromEntry.statsCode;
+      history.replaceState(null, '', '/bw/');
+    } else if(fromEntry){
       const total = totalFromRolls(fromEntry.rolls);
       if(total!=null && validScore(total)){
         openConfirm(fromEntry.initials, fromEntry.weight, fromEntry.rolls, total, v3Extra(fromEntry));
