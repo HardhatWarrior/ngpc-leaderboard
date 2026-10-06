@@ -165,6 +165,9 @@
   .spec-table{ width:100%; border-collapse:collapse; font-size:11.5px; }
   .spec-table th{ text-align:left; color:var(--dim); font-size:10px; text-transform:uppercase; padding:4px 6px; }
   .spec-table td{ padding:5px 6px; border-bottom:1px solid var(--border); color:var(--cream); }
+  /* Long unbreakable tokens (file names, format strings, field lists) otherwise set the table's
+     minimum width past the panel on a phone -- let any cell break anywhere instead. */
+  .spec-table th, .spec-table td{ overflow-wrap:anywhere; }
   .spec-note{ color:var(--dim); }
 
   footer{ text-align:center; color:var(--dim); font-size:11px; }
@@ -290,15 +293,6 @@
       <div id="game-preview-msg"></div>
     </div>
 
-    <!-- Admin-only (shown from renderEditor's isAdmin branch). Moves every score for this game into
-         scoresArchive/ (kept as data, just off the live board) in one pass -- see the handler. -->
-    <div id="reset-panel" hidden style="margin-top:20px;border-top:1px solid var(--border);padding-top:16px">
-      <div class="field-label">Reset leaderboard (admin only)</div>
-      <div class="current-value" style="margin-bottom:6px">Moves every submission for this game off the live board into an archive collection (<b>scoresArchive</b>) so the data is kept. Players can submit fresh scores right away. This can&rsquo;t be undone from this page.</div>
-      <input type="text" id="reset-confirm-input" placeholder="" autocomplete="off">
-      <button type="button" class="action btn-primary" id="reset-run" style="margin-top:10px" disabled>Archive &amp; reset</button>
-      <div id="reset-msg"></div>
-    </div>
 
     <div id="updated-badge-row" hidden style="margin-top:16px">
       <div class="current-value">This game currently shows an <b>UPDATED</b> badge on the main page (expires automatically 30 days after upload).</div>
@@ -341,60 +335,49 @@
       </div>
     </div>
 
-    <!-- Admin-only (see renderEditor's isAdmin gate) -- graphically controls a handful of display
-         choices a scaffolded leaderboard page reads from games/{slug}.display at render time
-         instead of having them hardcoded (see ms/index.html's own getDisplaySettings()). Only
-         games retrofitted to read this object are actually affected; an un-retrofitted page
-         ignores it entirely. -->
-    <div class="art-panel" id="display-panel" hidden style="margin-top:20px">
-      <div class="panel-header collapsed" data-toggle="display-body" role="button" tabindex="0" aria-expanded="false">
-        <h2 style="margin:0">Leaderboard Display <span class="spec-note">(admin only)</span></h2>
-        <span class="chevron">&#9660;</span>
-      </div>
-      <div class="panel-body" id="display-body" hidden style="margin-top:14px">
-        <div class="field-label">Score format</div>
-        <div class="status-row" id="display-score-format-row" style="margin-bottom:0">
-          <button type="button" class="status-btn" data-value="raw">Raw number</button>
-          <button type="button" class="status-btn" data-value="time">m:ss time</button>
-        </div>
-        <div class="field-label" style="margin-top:14px">Extra field shown inline</div>
-        <select id="display-inline-field"><option value="">(none)</option></select>
-        <div class="field-label" style="margin-top:10px">Label for it (optional, e.g. "Moves")</div>
-        <input type="text" id="display-inline-prefix" placeholder="Moves">
-        <div class="field-label" style="margin-top:10px">Labels for that field's values (optional, overrides the raw number/text)</div>
-        <input type="text" id="display-inline-labels" placeholder="0:Easy,1:Normal">
-        <div class="field-label" style="margin-top:14px">Tap a row to expand its detail card</div>
-        <div class="status-row" id="display-expand-row" style="margin-bottom:0">
-          <button type="button" class="status-btn" data-value="off">Off</button>
-          <button type="button" class="status-btn" data-value="on">On</button>
-        </div>
-        <button type="button" class="action btn-primary" id="display-save" style="margin-top:14px">Save</button>
-        <div id="display-msg"></div>
-      </div>
-    </div>
+  </section>
 
-    <!-- Bowling only, admin only: switches games/bw.bwFeatures {careerStats, tournaments}, read
-         by bw/index.html's bwFeatures(). Off = hidden from players (the admin and the game's
-         developer still see a marked preview of anything already built). -->
-    <div class="art-panel" id="bw-features-panel" hidden style="margin-top:20px">
-      <div class="panel-header collapsed" data-toggle="bw-features-body" role="button" tabindex="0" aria-expanded="false">
-        <h2 style="margin:0">Bowling features <span class="spec-note">(admin only)</span></h2>
-        <span class="chevron">&#9660;</span>
+  <section class="panel" id="payload-panel" hidden>
+    <div class="panel-header" data-toggle="payload-body" role="button" tabindex="0" aria-expanded="true">
+      <h2>Payload Format</h2>
+      <span class="chevron">&#9660;</span>
+    </div>
+    <div class="panel-body" id="payload-body">
+      <p class="hint">Read-only reference -- how this game's on-device QR encodes a result and how the leaderboard turns it back into a score. Not editable here; changing it means changing the device firmware and the leaderboard page's own parsePayload() together.</p>
+      <div id="payload-content"></div>
+    </div>
+  </section>
+  <section class="panel" id="payload-missing-panel" hidden>
+    <div class="panel-header" data-toggle="payload-missing-body" role="button" tabindex="0" aria-expanded="true">
+      <h2>Payload Format</h2>
+      <span class="chevron">&#9660;</span>
+    </div>
+    <div class="panel-body" id="payload-missing-body">
+      <p class="hint" style="margin:0">No payload reference recorded for this game yet.</p>
+    </div>
+  </section>
+
+  <!-- Bowling only, admin only: switches games/bw.bwFeatures {careerStats, tournaments}, read
+       by bw/index.html's bwFeatures(). Off = hidden from players (the admin and the game's
+       developer still see a marked preview of anything already built). -->
+  <section class="panel" id="bw-features-panel" hidden>
+    <div class="panel-header collapsed" data-toggle="bw-features-body" role="button" tabindex="0" aria-expanded="false">
+      <h2 style="margin:0">Bowling features <span class="spec-note">(admin only)</span></h2>
+      <span class="chevron">&#9660;</span>
+    </div>
+    <div class="panel-body" id="bw-features-body" hidden style="margin-top:14px">
+      <div class="field-label">Career stats (My stats panel on /bw/)</div>
+      <div class="status-row" id="bw-career-row" style="margin-bottom:0">
+        <button type="button" class="status-btn" data-value="off">Off</button>
+        <button type="button" class="status-btn" data-value="on">On</button>
       </div>
-      <div class="panel-body" id="bw-features-body" hidden style="margin-top:14px">
-        <div class="field-label">Career stats (My stats panel on /bw/)</div>
-        <div class="status-row" id="bw-career-row" style="margin-bottom:0">
-          <button type="button" class="status-btn" data-value="off">Off</button>
-          <button type="button" class="status-btn" data-value="on">On</button>
-        </div>
-        <div class="field-label" style="margin-top:14px">Tournaments (not built yet: switching on shows nothing until it is)</div>
-        <div class="status-row" id="bw-tourney-row" style="margin-bottom:0">
-          <button type="button" class="status-btn" data-value="off">Off</button>
-          <button type="button" class="status-btn" data-value="on">On</button>
-        </div>
-        <button type="button" class="action btn-primary" id="bw-features-save" style="margin-top:14px">Save</button>
-        <div id="bw-features-msg"></div>
+      <div class="field-label" style="margin-top:14px">Tournaments (not built yet: switching on shows nothing until it is)</div>
+      <div class="status-row" id="bw-tourney-row" style="margin-bottom:0">
+        <button type="button" class="status-btn" data-value="off">Off</button>
+        <button type="button" class="status-btn" data-value="on">On</button>
       </div>
+      <button type="button" class="action btn-primary" id="bw-features-save" style="margin-top:14px">Save</button>
+      <div id="bw-features-msg"></div>
     </div>
   </section>
 
@@ -424,23 +407,18 @@
     </div>
   </section>
 
-  <section class="panel" id="payload-panel" hidden>
-    <div class="panel-header" data-toggle="payload-body" role="button" tabindex="0" aria-expanded="true">
-      <h2>Payload Format</h2>
+  <!-- Admin-only (shown from renderEditor's isAdmin branch). Moves every score for this game into
+       scoresArchive/ (kept as data, just off the live board) in one pass -- see the handler. -->
+  <section class="panel" id="reset-panel" hidden>
+    <div class="panel-header collapsed" data-toggle="reset-body" role="button" tabindex="0" aria-expanded="false">
+      <h2 style="margin:0">Reset Leaderboard <span class="spec-note">(admin only)</span></h2>
       <span class="chevron">&#9660;</span>
     </div>
-    <div class="panel-body" id="payload-body">
-      <p class="hint">Read-only reference -- how this game's on-device QR encodes a result and how the leaderboard turns it back into a score. Not editable here; changing it means changing the device firmware and the leaderboard page's own parsePayload() together.</p>
-      <div id="payload-content"></div>
-    </div>
-  </section>
-  <section class="panel" id="payload-missing-panel" hidden>
-    <div class="panel-header" data-toggle="payload-missing-body" role="button" tabindex="0" aria-expanded="true">
-      <h2>Payload Format</h2>
-      <span class="chevron">&#9660;</span>
-    </div>
-    <div class="panel-body" id="payload-missing-body">
-      <p class="hint" style="margin:0">No payload reference recorded for this game yet.</p>
+    <div class="panel-body" id="reset-body" hidden style="margin-top:14px">
+      <div class="current-value" style="margin-bottom:6px">Moves every submission for this game off the live board into an archive collection (<b>scoresArchive</b>) so the data is kept. Players can submit fresh scores right away. This can&rsquo;t be undone from this page.</div>
+      <input type="text" id="reset-confirm-input" placeholder="" autocomplete="off">
+      <button type="button" class="action btn-primary" id="reset-run" style="margin-top:10px" disabled>Archive &amp; reset</button>
+      <div id="reset-msg"></div>
     </div>
   </section>
 
@@ -893,44 +871,6 @@
       + '<div class="spec-group"><div class="spec-label">Example payloads</div><div class="spec-mono">'+examplesHtml+'</div></div>';
   }
 
-  // Powers the Leaderboard Display panel's "Extra field shown inline" dropdown -- a free-text box
-  // here (the first version) invited exactly the confusion it caused: a non-technical admin typed
-  // a literal message into it expecting it to appear on the board, not realizing it needed to be
-  // an actual score-doc field NAME (e.g. "difficulty") for renderBoard()'s data[settings.inlineField]
-  // lookup to find anything. A dropdown of the game's own real fields makes a wrong value
-  // structurally impossible. Mirrors scaffold-game-lib.js's own camelCase()/isGameCodeField()/
-  // isInitialsField() field-naming rules so a submission-based game's options match the exact prop
-  // names its own generated leaderboard page actually stores.
-  function camelCaseField(name){
-    return String(name||'').trim()
-      .replace(/[^A-Za-z0-9]+(.)?/g, (_, c) => (c ? c.toUpperCase() : ''))
-      .replace(/^[A-Z]/, c => c.toLowerCase())
-      .replace(/^[0-9]/, c => '_' + c) || 'field';
-  }
-  async function getInlineFieldOptions(slug, db, gameData){
-    const spec = PAYLOAD_SPECS[slug];
-    if(spec){
-      return spec.firestore
-        // list<...> fields (Bowling's rolls, Yahtzee's categoryScores) are excluded -- the board's
-        // own data[settings.inlineField] lookup expects a single displayable value, and String()
-        // on an array would render as a garbled comma-joined dump, not a real bug crash but
-        // definitely not what "extra field shown inline" is for.
-        .filter(f => f.field !== 'game' && f.field !== 'initials' && !/^list</.test(f.type||''))
-        .map(f => ({prop: f.field, label: f.field}));
-    }
-    try{
-      let subSnap = await db.collection('gameSubmissions').where('reviewNote','==','Approved as games/'+slug).get();
-      if(subSnap.empty && gameData.code){
-        subSnap = await db.collection('gameSubmissions').where('proposedCode','==',gameData.code).get();
-      }
-      if(subSnap.empty) return [];
-      const sub = subSnap.docs[0].data();
-      return (sub.payloadFields||[])
-        .filter(f => !/game\s*code/i.test(f.name||'') && !/initial/i.test(f.name||''))
-        .map(f => ({prop: camelCaseField(f.name), label: f.name}));
-    }catch(e){ return []; }
-  }
-
   async function renderPayloadSpec(slug, db, gameData){
     const spec = PAYLOAD_SPECS[slug];
     if(spec){ renderPayloadSpecFromStatic(spec); return; }
@@ -1133,73 +1073,6 @@
 
     editPanel.hidden = false;
     renderPayloadSpec(slug, db, data);
-
-    // "only on my access level" -- explicitly admin-only, unlike the rest of this page (which a
-    // game's own assigned developer can also use). isAdmin already has unrestricted write access
-    // to games/{slug} in firestore.rules (only a non-admin developer is field-restricted there),
-    // so no rules change was needed -- gating is done here, in the UI, same as every other
-    // admin-only control already on this page.
-    if(isAdmin){
-      const displayPanel = el('display-panel');
-      displayPanel.hidden = false;
-      const scoreFormatRow = el('display-score-format-row');
-      const expandRow = el('display-expand-row');
-      const inlineFieldInput = el('display-inline-field');
-      const inlinePrefixInput = el('display-inline-prefix');
-      const inlineLabelsInput = el('display-inline-labels');
-      const displayMsg = el('display-msg');
-      const display = data.display || {};
-      let scoreFormat = display.scoreFormat === 'raw' ? 'raw' : 'time';
-      let expand = display.rowDetailExpand ? 'on' : 'off';
-      function paintDisplayButtons(){
-        scoreFormatRow.querySelectorAll('.status-btn').forEach(btn=>{
-          btn.classList.toggle('active', btn.dataset.value === scoreFormat);
-        });
-        expandRow.querySelectorAll('.status-btn').forEach(btn=>{
-          btn.classList.toggle('active', btn.dataset.value === expand);
-        });
-      }
-      getInlineFieldOptions(slug, db, data).then(opts=>{
-        opts.forEach(o=>{
-          const optEl = document.createElement('option');
-          optEl.value = o.prop; optEl.textContent = o.label;
-          inlineFieldInput.appendChild(optEl);
-        });
-        const wanted = display.inlineField !== undefined ? display.inlineField : '';
-        // Only select it if it's actually one of this game's real fields -- a stale/typo'd value
-        // saved before this became a dropdown (see the free-text-box confusion this replaced)
-        // falls back to "(none)" instead of silently matching nothing, same as the board's own
-        // data[settings.inlineField] lookup already does at render time.
-        if(wanted && opts.some(o=>o.prop===wanted)) inlineFieldInput.value = wanted;
-      });
-      inlinePrefixInput.value = display.inlinePrefix !== undefined ? display.inlinePrefix : '';
-      inlineLabelsInput.value = display.inlineLabels !== undefined ? display.inlineLabels : '';
-      paintDisplayButtons();
-      scoreFormatRow.querySelectorAll('.status-btn').forEach(btn=>{
-        btn.addEventListener('click', ()=>{ scoreFormat = btn.dataset.value; paintDisplayButtons(); });
-      });
-      expandRow.querySelectorAll('.status-btn').forEach(btn=>{
-        btn.addEventListener('click', ()=>{ expand = btn.dataset.value; paintDisplayButtons(); });
-      });
-      el('display-save').addEventListener('click', async ()=>{
-        const btn = el('display-save');
-        displayMsg.innerHTML = '';
-        btn.disabled = true;
-        try{
-          await docRef.update({ display: {
-            scoreFormat, rowDetailExpand: expand === 'on',
-            inlineField: inlineFieldInput.value.trim(),
-            inlinePrefix: inlinePrefixInput.value.trim(),
-            inlineLabels: inlineLabelsInput.value.trim(),
-          } });
-          displayMsg.innerHTML = '<div class="msg ok">Saved — reload the leaderboard page to see it (it only re-reads this on load, not live).</div>';
-        }catch(e){
-          displayMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
-        }finally{
-          btn.disabled = false;
-        }
-      });
-    }
 
     if(isAdmin && slug === 'bw'){
       el('bw-features-panel').hidden = false;
