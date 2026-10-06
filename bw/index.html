@@ -228,6 +228,25 @@
   .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
 
   footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
+
+  /* ---------- my stats ---------- */
+  .preview-note{ font-size:12px; color:var(--dim); border:1px dashed var(--border); border-radius:8px; padding:8px 10px; margin:6px 0 14px; }
+  .stat-tiles{ display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:10px; margin:10px 0 18px; }
+  .stat-tile{ background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px; min-width:0; }
+  .stat-label{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); }
+  .stat-val{ font-family:"Press Start 2P",monospace; font-size:17px; color:var(--cream); margin-top:8px; }
+  .stat-val.good{ color:var(--good); }
+  .stat-sub{ font-size:11px; color:var(--dim); margin-top:6px; }
+  .career-cols{ display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px 24px; }
+  .career-cols h3{ margin:0 0 6px; font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--cream); }
+  .career-table{ width:100%; border-collapse:collapse; font-size:13px; }
+  .career-table td{ padding:5px 0; border-top:1px solid var(--border); }
+  .career-table td:last-child{ text-align:right; font-family:"IBM Plex Mono",monospace; font-weight:600; }
+  .career-src{ font-size:11px; color:var(--dim); margin-top:10px; }
+  .code-entry{ display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
+  .code-entry input{ flex:1 1 220px; min-width:0; font:600 14px "IBM Plex Mono",monospace; letter-spacing:.06em; text-transform:uppercase;
+    background:var(--navy); color:var(--cream); border:1px solid var(--border); border-radius:8px; padding:11px 12px; }
+  .code-entry button{ width:auto; flex:0 0 auto; }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
@@ -309,6 +328,37 @@
         <button class="btn-primary" id="btn-confirm">Submit score</button>
         <button class="btn-secondary" id="btn-back">Cancel</button>
         <div id="confirm-msg"></div>
+      </div>
+    </section>
+
+    <!-- My stats -- shown to players only once games/bw.bwFeatures.careerStats is switched on
+         (Manage Game > Bowling features); the site admin / this game's developer sees it either
+         way, marked as a preview. Averages come from the player's own v3 score codes; full career
+         totals from the cart's OPTIONS > STATS CODE, saved to bw_career/{uid}. -->
+    <section class="panel" id="stats-panel" hidden>
+      <h2>My stats</h2>
+      <div class="preview-note" id="stats-preview-note" hidden>Preview: only you can see this. Players see it once Career stats is switched on under Manage Game &gt; Bowling features.</div>
+      <p class="hint" id="stats-signed-out">Sign in to see your average, handicap and career totals.</p>
+      <div id="stats-body" hidden>
+        <div class="stat-tiles">
+          <div class="stat-tile"><div class="stat-label">Average</div><div class="stat-val tnum" id="st-avg">&ndash;</div><div class="stat-sub" id="st-avg-sub"></div></div>
+          <div class="stat-tile"><div class="stat-label">Tournament handicap</div><div class="stat-val tnum" id="st-hcp">&ndash;</div><div class="stat-sub" id="st-hcp-sub"></div></div>
+          <div class="stat-tile"><div class="stat-label">Best game</div><div class="stat-val good tnum" id="st-best">&ndash;</div><div class="stat-sub" id="st-best-sub"></div></div>
+          <div class="stat-tile"><div class="stat-label">Scores submitted</div><div class="stat-val tnum" id="st-subs">0</div><div class="stat-sub" id="st-subs-sub"></div></div>
+        </div>
+        <div id="career-view" hidden>
+          <div class="career-cols">
+            <div><h3>1 player games</h3><table class="career-table tnum" id="career-1p"></table></div>
+            <div><h3>VS link matches</h3><table class="career-table tnum" id="career-vs"></table></div>
+          </div>
+          <div class="career-src" id="career-src"></div>
+        </div>
+        <p class="hint" id="career-empty" style="margin-top:4px">Add your career totals: on the cart open OPTIONS &gt; STATS CODE and type the code below, or scan its QR with Scan QR Code above.</p>
+        <form class="code-entry" id="career-form" autocomplete="off">
+          <input id="career-code" placeholder="Stats code, e.g. G8WP ENTB ..." aria-label="Stats code" spellcheck="false">
+          <button type="submit" class="btn-primary" id="career-save">Save stats code</button>
+        </form>
+        <div id="career-msg"></div>
       </div>
     </section>
 
@@ -471,10 +521,13 @@
     return parts.length ? parts[parts.length-1] : '';
   }
 
-  /* ---------- Tournaments (Bowling/TOURNAMENT_SITE_SPEC.md). Off until the owner is ready:
-     with this false the page shows nothing tournament-related. v3 codes are still parsed,
-     CRC-checked, and their cart average stored, so averages exist before the first event. ---------- */
-  const TOURNAMENTS_ENABLED = false;
+  /* ---------- Feature switches: games/bw.bwFeatures {careerStats, tournaments}, set by the admin
+     under Manage Game > Bowling features. Both default off. v3 codes are parsed, CRC-checked and
+     their cart average stored either way, so averages exist before any feature is shown. The
+     tournament UI (Bowling/TOURNAMENT_SITE_SPEC.md) isn't built yet; tournamentsEnabled() is
+     where it will hook in. ---------- */
+  function bwFeatures(){ return (gameData && gameData.bwFeatures) || {}; }
+  function tournamentsEnabled(){ return !!bwFeatures().tournaments; }
 
   /* Payload v3 (bowling_109+): BW 3 III WW AAAA GGG NN rolls CCCC -- a format-version digit
      where v1 had its first initial, the cart's average x10 and games in it, then a keyed
@@ -511,6 +564,53 @@
       return true;
     }
     return r.length === 2;
+  }
+
+  /* ---------- Stats carry-over code (the cart's OPTIONS > STATS CODE): same format as Neo
+     Bowling's xf_encode()/xf_decode() in main.c and Bowling/tools/bw_statscode.py, version 1.
+     5-bit symbols from XF_ALPHABET (no I/O/0/1), a 3-symbol keyed CRC at the end. ---------- */
+  const XF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const XF_SALT = "NGPCBW-CARRY-OVER";
+  function xfCrc(syms){
+    let crc = 0xFFFF;
+    const feed = b => { crc ^= b << 8; for(let i=0;i<8;i++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xFFFF : (crc << 1) & 0xFFFF; };
+    for(const ch of XF_SALT) feed(ch.charCodeAt(0));
+    syms.forEach(feed);
+    return crc & 0x7FFF;
+  }
+  // A version-1 code's first symbol is always E-H (bits 001x x), never the B of a score code.
+  function looksLikeStatsCode(text){ return /^[E-H][A-HJ-NP-Z2-9]{5,63}$/.test(text); }
+  function decodeStatsCode(raw){
+    const code = String(raw||'').toUpperCase().replace(/[\s-]/g,'');
+    if(!/^[A-HJ-NP-Z2-9]+$/.test(code)) throw new Error("A stats code only uses A-Z and 2-9, without I or O.");
+    if(code.length < 6 || code.length > 64) throw new Error("That's not the right length for a stats code.");
+    const syms = [...code].map(ch=>XF_ALPHABET.indexOf(ch));
+    const data = syms.slice(0,-3), c = xfCrc(data), chk = syms.slice(-3);
+    if(chk[0]!==((c>>10)&31) || chk[1]!==((c>>5)&31) || chk[2]!==(c&31)){
+      throw new Error("That code doesn't check out. Look for a mistyped character.");
+    }
+    const bits = [];
+    data.forEach(v=>{ for(let i=4;i>=0;i--) bits.push((v>>i)&1); });
+    let p = 0;
+    const get = n => { if(p+n > bits.length) throw new Error("That code ends too early."); let v=0; for(let i=0;i<n;i++) v=(v<<1)|bits[p++]; return v; };
+    const getVar = () => { const k = get(2); return k===0 ? 0 : get([6,10,16][k-1]); };
+    if(get(3) !== 1) throw new Error("That code is from a newer build than this page understands.");
+    const out = {version:1, code, hasBest:false, bestIni:'AAA', bestScore:0, bestColor:0, bestHcp:0};
+    if(get(1)){
+      out.hasBest = true;
+      out.bestScore = get(9);
+      out.bestIni = ''; for(let i=0;i<3;i++) out.bestIni += String.fromCharCode(65+get(5));
+      out.bestColor = get(4);
+      out.bestHcp = get(2)*10;
+    }
+    ['games','frames','strikes','spares','turkeys','vsGames','vsFrames','vsStrikes','vsSpares','vsTurkeys','vsWins','vsLosses','avg10','avgGames']
+      .forEach(k=>{ out[k] = getVar(); });
+    out.defIni = ''; for(let i=0;i<3;i++) out.defIni += String.fromCharCode(65+get(5));
+    get(1); // curve preview -- a cart option, not shown here
+    if(out.bestScore > 330 || out.avg10 > 3000 || !/^[A-Z]{3}$/.test(out.bestIni) || !/^[A-Z]{3}$/.test(out.defIni)){
+      throw new Error("That code holds values the game can't produce.");
+    }
+    return out;
   }
 
   function parseRollChars(rollChars){
@@ -752,7 +852,19 @@
 
   function handleScanResult(text){
     formMsg.innerHTML = '';
-    const result = parsePayload(lastPathSegment(text));
+    const seg = lastPathSegment(text).trim().toUpperCase();
+    if(looksLikeStatsCode(seg)){
+      resetScanUI();
+      if(!statsPanelEl.hidden){
+        el('career-code').value = seg;
+        statsPanelEl.scrollIntoView({behavior:'smooth', block:'start'});
+        saveCareerCode();
+      } else {
+        formMsg.innerHTML = '<div class="msg err">That\u2019s a stats code, not a score. Career stats aren\u2019t open on the site yet.</div>';
+      }
+      return;
+    }
+    const result = parsePayload(seg);
     if(result.error){
       formMsg.innerHTML = '<div class="msg err">'+escapeHtml(result.error)+'</div>';
       return;
@@ -1057,10 +1169,126 @@
       pending = null;
       showStage('idle');
       boardStatusEl.innerHTML = '<div class="msg ok">'+escapeHtml(toastText)+'</div>';
+      refreshStats();
     } else {
       confirmMsg.innerHTML = '<div class="msg err">'+friendlyDbError(res.error)+'</div>';
     }
   });
+
+  // ---- my stats ----
+  const statsPanelEl = el('stats-panel');
+  const HCP_MIN_GAMES = 5;   // same as the cart's HCP_MIN_GAMES
+  let statsUser = null;
+
+  function fmtAvg(avg10){ return Math.floor(avg10/10) + '.' + (avg10 % 10); }
+  // floor((200 - avg) * 0.9), capped 90 -- spec section 4, the cart's avg_handicap()
+  function handicapFor(avg10){ return Math.min(90, Math.floor(Math.max(0, 2000 - avg10) * 9 / 100)); }
+
+  function careerVisible(user){
+    return !!bwFeatures().careerStats || !!(user && window.NGPC_AUTH && NGPC_AUTH.isGameManager(user, gameData));
+  }
+
+  function renderStatsPanel(user){
+    statsUser = user;
+    const visible = careerVisible(user);
+    statsPanelEl.hidden = !visible;
+    if(!visible) return;
+    el('stats-preview-note').hidden = !!bwFeatures().careerStats;
+    el('stats-signed-out').hidden = !!user;
+    el('stats-body').hidden = !user;
+    if(user) refreshStats();
+  }
+
+  function careerRows(rows){
+    return rows.map(([label, v])=>'<tr><td>'+escapeHtml(label)+'</td><td>'+escapeHtml(String(v))+'</td></tr>').join('');
+  }
+
+  async function refreshStats(){
+    const user = statsUser;
+    if(!db || !user || statsPanelEl.hidden) return;
+    let scores = [], career = null;
+    try{
+      const [snap, cdoc] = await Promise.all([
+        db.collection('scores').where('game','==',QR_GAME_CODE).where('uid','==',user.uid).where('approved','==',true).get(),
+        db.collection('bw_career').doc(user.uid).get(),
+      ]);
+      scores = snap.docs.map(d=>d.data());
+      career = cdoc.exists ? cdoc.data() : null;
+    }catch(e){
+      el('career-msg').innerHTML = '<div class="msg err">'+friendlyDbError(e)+'</div>';
+      return;
+    }
+
+    // Average: whichever is newer -- the latest v3 score code or the saved stats code.
+    let avg = null;
+    scores.filter(d=>d.version===3 && Number.isInteger(d.avg10)).forEach(d=>{
+      if(!avg || d.submittedAt > avg.at) avg = {avg10:d.avg10, games:d.avgGames||0, at:d.submittedAt, from:'your latest score code'};
+    });
+    if(career && career.avgGames > 0 && (!avg || career.submittedAt > avg.at)){
+      avg = {avg10:career.avg10, games:career.avgGames, at:career.submittedAt, from:'your stats code'};
+    }
+    if(avg && avg.games > 0){
+      el('st-avg').textContent = fmtAvg(avg.avg10);
+      el('st-avg-sub').textContent = avg.games + ' game' + (avg.games===1?'':'s') + ' \u00b7 from ' + avg.from + ', ' + fmtWhen(avg.at);
+      if(avg.games >= HCP_MIN_GAMES){
+        el('st-hcp').textContent = String(handicapFor(avg.avg10));
+        el('st-hcp-sub').textContent = 'floor((200 \u2212 average) \u00d7 0.9), max 90';
+      } else {
+        el('st-hcp').textContent = '\u2013';
+        el('st-hcp-sub').textContent = 'after ' + HCP_MIN_GAMES + ' games (' + avg.games + ' so far)';
+      }
+    } else {
+      el('st-avg').textContent = '\u2013';
+      el('st-avg-sub').textContent = 'Submit a score from bowling_109 or later';
+      el('st-hcp').textContent = '\u2013';
+      el('st-hcp-sub').textContent = 'needs an average';
+    }
+
+    const best = scores.reduce((b,d)=> (!b || d.score > b.score) ? d : b, null);
+    el('st-best').textContent = best ? String(best.score) : '\u2013';
+    el('st-best-sub').textContent = best ? (best.initials + ' \u00b7 ' + fmtWhen(best.submittedAt)) : 'no submitted scores yet';
+    el('st-subs').textContent = String(scores.length);
+    el('st-subs-sub').textContent = scores.length ? 'approved scores on this board' : '';
+
+    el('career-view').hidden = !career;
+    el('career-empty').hidden = !!career;
+    el('career-save').textContent = career ? 'Update stats code' : 'Save stats code';
+    if(career){
+      el('career-1p').innerHTML = careerRows([
+        ['Games played', career.games], ['Frames', career.frames], ['Strikes', career.strikes],
+        ['Spares', career.spares], ['Turkeys', career.turkeys],
+        ['Best on the cart', career.hasBest ? (career.bestIni + ' ' + career.bestScore + (career.bestHcp ? ' (hcp +' + career.bestHcp + ')' : '')) : '\u2013'],
+      ]);
+      el('career-vs').innerHTML = careerRows([
+        ['Games played', career.vsGames], ['Frames', career.vsFrames], ['Strikes', career.vsStrikes],
+        ['Spares', career.vsSpares], ['Turkeys', career.vsTurkeys], ['Record', career.vsWins + '-' + career.vsLosses],
+      ]);
+      el('career-src').textContent = 'From your stats code, saved ' + fmtWhen(career.submittedAt) + '. Update it any time from OPTIONS > STATS CODE.';
+    }
+  }
+
+  async function saveCareerCode(){
+    const msg = el('career-msg');
+    msg.innerHTML = '';
+    let s;
+    try{ s = decodeStatsCode(el('career-code').value); }
+    catch(e){ msg.innerHTML = '<div class="msg err">'+escapeHtml(e.message)+'</div>'; return; }
+    const user = statsUser;
+    if(!db || !user || !user.username){ msg.innerHTML = '<div class="msg err">Sign in to save your stats.</div>'; return; }
+    const btn = el('career-save');
+    btn.disabled = true;
+    try{
+      await db.collection('bw_career').doc(user.uid).set(Object.assign({uid:user.uid, username:user.username, submittedAt:Date.now()}, s));
+      el('career-code').value = '';
+      msg.innerHTML = '<div class="msg ok">Stats saved.</div>';
+      await refreshStats();
+    }catch(e){
+      msg.innerHTML = '<div class="msg err">'+friendlyDbError(e)+'</div>';
+    }finally{
+      btn.disabled = false;
+    }
+  }
+  el('career-form').addEventListener('submit', (e)=>{ e.preventDefault(); saveCareerCode(); });
 
   // ---- boot ----
   function boot(){
@@ -1134,6 +1362,7 @@
         applyAccessGate(user);
         var adminLinkEl = el('admin-link');
         if(adminLinkEl) adminLinkEl.hidden = !NGPC_AUTH.isGameManager(user, gameData);
+        renderStatsPanel(user);
       });
     });
     el('scan-signin-btn').addEventListener('click', ()=>NGPC_AUTH.openSignInModal('signin'));

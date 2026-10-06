@@ -925,6 +925,39 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // bw_career/{uid} -- a player's Neo Bowling career totals, from the cart's OPTIONS > STATS
+    // CODE (decoded and checked in bw/index.html's decodeStatsCode(); the raw code is kept too).
+    // Public read like scores; only the owner writes their own doc, under their real username.
+    match /bw_career/{uid} {
+      function isU16(v) { return v is int && v >= 0 && v <= 65535; }
+      function isBowlingCareer(d) {
+        return d.keys().hasOnly(['uid', 'username', 'submittedAt', 'version', 'code', 'hasBest', 'bestIni', 'bestScore', 'bestColor', 'bestHcp',
+                                 'games', 'frames', 'strikes', 'spares', 'turkeys', 'vsGames', 'vsFrames', 'vsStrikes', 'vsSpares', 'vsTurkeys',
+                                 'vsWins', 'vsLosses', 'avg10', 'avgGames', 'defIni'])
+          && d.uid == uid
+          && d.username is string && d.username == get(/databases/$(database)/documents/users/$(uid)).data.username
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && d.version == 1
+          && d.code is string && d.code.matches('^[A-HJ-NP-Z2-9]{6,64}$')
+          && d.hasBest is bool
+          && d.bestIni is string && d.bestIni.matches('^[A-Z]{3}$')
+          && d.bestScore is int && d.bestScore >= 0 && d.bestScore <= 330
+          && d.bestColor is int && d.bestColor >= 0 && d.bestColor <= 15
+          && d.bestHcp in [0, 10, 20, 30]
+          && isU16(d.games) && isU16(d.frames) && isU16(d.strikes) && isU16(d.spares) && isU16(d.turkeys)
+          && isU16(d.vsGames) && isU16(d.vsFrames) && isU16(d.vsStrikes) && isU16(d.vsSpares) && isU16(d.vsTurkeys)
+          && isU16(d.vsWins) && isU16(d.vsLosses)
+          && d.avg10 is int && d.avg10 >= 0 && d.avg10 <= 3000
+          && isU16(d.avgGames)
+          && d.defIni is string && d.defIni.matches('^[A-Z]{3}$');
+      }
+      allow read: if true;
+      allow create, update: if request.auth != null && request.auth.uid == uid && isBowlingCareer(request.resource.data);
+      allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
+    }
+
     // Default-deny for every other collection -- Firestore denies unmatched
     // paths by default anyway, but this makes the intent explicit as the
     // schema grows (Phase 3 comments/, etc).
