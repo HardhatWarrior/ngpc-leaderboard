@@ -732,6 +732,20 @@ window.NGPC_AUTH = (function(){
     return '<div class="scorecard-grid">'+grid+'</div><table class="tk-sheet">'+rows+'</table>';
   }
 
+  // RED DRAGON -- a live per-hero snapshot (rd/index.html renderHeroDetailHTML), plain .tk-sheet
+  // rows only so account/ and user/ need no new CSS.
+  const RD_CLASSES = { K:'DEATH KNIGHT', M:'MYSTIC', T:'THIEF' };
+  function rdIsHero(data){ return typeof data.heroId === 'string' && Number.isFinite(data.level) && Number.isFinite(data.experience); }
+  function renderRedDragonHeroHTML(data){
+    const rows = '<tr><td>Class</td><td class="tk-val">'+escapeHtml(RD_CLASSES[data.cls]||'?')+'</td></tr>'+
+      '<tr><td>Level</td><td class="tk-val tnum">'+(Number(data.level)||0)+' / 12</td></tr>'+
+      '<tr><td>Experience</td><td class="tk-val tnum">'+(Number(data.experience)||0).toLocaleString('en-US')+'</td></tr>'+
+      '<tr><td>Dragon kills</td><td class="tk-val tnum">'+(Number(data.dragonKills)||0)+'</td></tr>'+
+      '<tr><td>Days played</td><td class="tk-val tnum">'+(Number(data.daysPlayed)||0)+'</td></tr>'+
+      '<tr><td>Today</td><td class="tk-val">'+(data.status === 'D' ? 'DEAD' : 'ALIVE')+'</td></tr>';
+    return '<table class="tk-sheet">'+rows+'</table>';
+  }
+
   // True for a game whose row expands into a click-to-reveal detail (Bowling/Yahtzee/Farkle/
   // 2048/Over Rev/Sudoku/Xenon 2); false for Tetris, whose own leaderboard shows lines/level as
   // plain inline meta text instead -- scoreInlineMeta() covers that case.
@@ -745,6 +759,7 @@ window.NGPC_AUTH = (function(){
       case 'XN': return data.money !== undefined && data.checkpoint !== undefined;
       case 'FU': return data.totalScore !== undefined && data.startWorld !== undefined;
       case 'SK': return skSummary(data) !== null;
+      case 'RD': return rdIsHero(data);
       case 'OV':
         // Same "skip rather than crash" stance overrev/index.html's own board rendering takes on
         // a corrupted/legacy stored doc -- OverRevProtocol comes from overrev/protocol.js, which
@@ -764,6 +779,7 @@ window.NGPC_AUTH = (function(){
       case 'XN': return renderXenon2ScorecardHTML(data);
       case 'FU': return renderFurryScorecardHTML(data);
       case 'SK': return renderSokobanScorecardHTML(data);
+      case 'RD': return rdIsHero(data) ? renderRedDragonHeroHTML(data) : '';
       case 'OV':
         try{ return renderOverRevScorecardHTML(Object.assign({}, data, OverRevProtocol.decode(data.raw))); }
         catch(e){ return ''; }
@@ -784,6 +800,11 @@ window.NGPC_AUTH = (function(){
       // Unlike the fuller detail view, this doesn't need OverRevProtocol -- course is one of the
       // fields written directly to the score doc (see renderOverRevScorecardHTML's comment above).
       return data.course!=null ? (OV_COURSES[data.course]||'') : '';
+    }
+    if(data.game==='RD'){
+      // Numbers + fixed class names only -- callers put this into innerHTML unescaped.
+      if(!rdIsHero(data)) return '';
+      return 'LV '+(Number(data.level)||0)+' '+(RD_CLASSES[data.cls]||'')+' · day '+(Number(data.daysPlayed)||0);
     }
     if(data.game==='SK'){
       // Numbers only -- callers put this into innerHTML unescaped.
@@ -812,6 +833,8 @@ window.NGPC_AUTH = (function(){
     // Sokoban ranks by stars, then moves over par -- ASCII only (the homepage ticker's
     // Press Start 2P font has no star glyph).
     if(data.game === 'SK'){ const sum = skSummary(data); return sum ? (sum.stars+' STARS') : '-'; }
+    // RED DRAGON ranks by experience (a live warrior list) -- no `score` field.
+    if(data.game === 'RD') return Number.isFinite(data.experience) ? (data.experience+' XP') : '-';
     return data.score!=null ? data.score : '-';
   }
 

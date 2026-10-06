@@ -619,14 +619,46 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
+      // RED DRAGON (Legend of the Red Dragon clone): game, formatVersion, heroId, initials (the
+      // hero's name, 1-8 letters), cls, level, experience, dragonKills, daysPlayed, status, source,
+      // submittedAt, required uid/username -- the exact record rd/index.html's confirm handler
+      // writes. The board is a live warrior list, not a best-score board: each hero keeps ONE doc
+      // at scores/RD_<uid>_<heroId> that its owner replaces with any upload from the same or a
+      // later cartridge day (rdIsNewer) -- experience may legitimately go DOWN (death, dragon
+      // reset). The QR's base-36 checksum is verified client-side then discarded. formatVersion is
+      // locked to '1'. See RedDragon/GAME_SPEC.md + submission-template.json.
+      function rdIsNewer(n, o) {
+        return n.heroId == o.heroId && n.daysPlayed >= o.daysPlayed;
+      }
+      function isRedDragonScore(d) {
+        return d.game == 'RD'
+          && d.keys().hasOnly(['game', 'formatVersion', 'heroId', 'initials', 'cls', 'level', 'experience', 'dragonKills', 'daysPlayed', 'status', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.formatVersion is string && d.formatVersion == '1'
+          && d.heroId is string && d.heroId.matches('^[0-9A-Z]{4}$')
+          && d.initials is string && d.initials.matches('^[A-Z]{1,8}$')
+          && d.cls is string && d.cls in ['K', 'M', 'T']
+          && d.level is int && d.level >= 1 && d.level <= 12
+          && d.experience is int && d.experience >= 0 && d.experience <= 2176782335
+          && d.dragonKills is int && d.dragonKills >= 0 && d.dragonKills <= 1295
+          && d.daysPlayed is int && d.daysPlayed >= 1 && d.daysPlayed <= 46655
+          && d.status is string && d.status in ['A', 'D']
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
       // Sokoban keeps ONE entry per player at the fixed id scores/SK_<uid>, so the id itself is
       // tied to the caller: an SK score may only be created at SK_<own uid>, and no other game's
       // score may take an SK_ id (otherwise anyone could squat SK_<victim> and permanently block
       // that player, since only the doc's owner may update or delete it). Auto-ids never contain
       // '_', so every other game's add() is unaffected.
       allow create: if (isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data) || isFruityPalsRevengeScore(request.resource.data) || isHoratioGoesSnowboardingScore(request.resource.data) || isFurryScore(request.resource.data) || isCarcassonneScore(request.resource.data)
-          || (isSokobanScore(request.resource.data) && scoreId == 'SK_' + request.auth.uid))
-        && !(scoreId.matches('^SK_.*') && request.resource.data.game != 'SK');
+          || (isSokobanScore(request.resource.data) && scoreId == 'SK_' + request.auth.uid)
+          || (isRedDragonScore(request.resource.data) && scoreId == 'RD_' + request.auth.uid + '_' + request.resource.data.heroId))
+        && !(scoreId.matches('^SK_.*') && request.resource.data.game != 'SK')
+        && !(scoreId.matches('^RD_.*') && request.resource.data.game != 'RD');
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
@@ -644,7 +676,16 @@ service cloud.firestore {
           && resource.data.game == 'SK'
           && resource.data.uid == request.auth.uid
           && isSokobanScore(request.resource.data)
-          && skRanksBetter(request.resource.data, resource.data));
+          && skRanksBetter(request.resource.data, resource.data))
+        // Third branch: RED DRAGON keeps ONE live entry per hero (scores/RD_<uid>_<heroId>); its
+        // owner may replace it with any valid upload of the SAME hero from the same or a later
+        // cartridge day (rdIsNewer), so a stale code can't roll the list back.
+        || (request.auth != null
+          && scoreId == 'RD_' + request.auth.uid + '_' + resource.data.heroId
+          && resource.data.game == 'RD'
+          && resource.data.uid == request.auth.uid
+          && isRedDragonScore(request.resource.data)
+          && rdIsNewer(request.resource.data, resource.data));
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --
       // anonymous QR submissions have no uid at all, so resource.data.uid == request.auth.uid is
       // false for them (never true against a signed-in caller's uid), and they stay undeletable
