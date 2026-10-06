@@ -18,8 +18,8 @@
 <style>
   :root{
     --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
-    --cream:#f4eedd; --dim:#93a0c9; --accent:#e0503a; --accent-ink:#1a0806;
-    --accent2:#e86a4f; --good:#4fbf8b; --danger:#e5615a;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#5c8fd6; --accent-ink:#0a1830;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
   }
   *{ box-sizing:border-box; } html,body{ height:auto; }
   body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif; padding-inline:20px; padding-block:28px; display:flex; justify-content:center; }
@@ -110,7 +110,7 @@
   .row{ display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:12px; padding:10px 8px; border-radius:8px; }
   .row ~ .row{ border-top:1px solid var(--border); }
   .rank{ font-family:"Press Start 2P",monospace; font-size:11px; color:var(--dim); text-align:center; }
-  .row.top1 .rank{ color:var(--accent); } .row.top1{ background:rgba(224,80,58,.10); }
+  .row.top1 .rank{ color:var(--accent); } .row.top1{ background:rgba(92,143,214,.10); }
   .initials{ font-family:"Press Start 2P",monospace; font-size:14px; letter-spacing:.06em; color:var(--cream); display:flex; align-items:center; gap:8px; }
   .row-avatar{ width:48px; height:48px; border-radius:4px; border:1px solid var(--border); image-rendering:pixelated; flex:none; }
   .score-val{ font-family:"Press Start 2P",monospace; font-size:15px; color:var(--good); }
@@ -124,20 +124,10 @@
   .tk-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
   .tk-sheet td.tk-val{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
   .rd-legend{ font-size:10.5px; color:var(--dim); line-height:1.5; margin:-6px 0 10px; }
-  .score-cell{ text-align:right; }
-  .score-sub{ font-family:"IBM Plex Mono",monospace; font-size:10.5px; color:var(--dim); margin-top:4px; white-space:nowrap; }
   .confirm-score .sub{ margin-top:10px; font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--cream); }
-  /* ANSI-ish class tag + alive/dead badge, echoing the cartridge's BBS-style colors */
-  .rd-badge{ display:inline-block; vertical-align:middle; margin-left:6px; padding:1px 5px; border-radius:3px; font-family:"IBM Plex Mono",monospace; font-size:9px; font-weight:700; letter-spacing:.5px; line-height:1.4; }
-  .rd-badge.alive{ color:#4fbf8b; border:1px solid #4fbf8b; }
-  .rd-badge.dead{ color:#1a0806; background:#e5615a; border:1px solid #e5615a; }
-  .rd-badge.dragon{ color:#e8c547; border:1px solid #e8c547; }
-  .rd-cls-K{ color:#e5615a; } .rd-cls-M{ color:#d77be0; } .rd-cls-T{ color:#e8c547; }
-  .row.stale{ opacity:.55; }
-  /* XP runs to 10 digits and names to 8 letters: let the name line wrap its badges and shrink
-     the pixel fonts on a phone so the row never forces a horizontal scroll. */
+  /* XP runs to 10 digits and names to 8 letters: shrink the pixel fonts on a phone so the row
+     never forces a horizontal scroll. */
   .row > div{ min-width:0; }
-  .initials{ flex-wrap:wrap; row-gap:4px; }
   @media (max-width:480px){
     .initials{ font-size:11px; }
     .score-val{ font-size:11px; }
@@ -149,7 +139,7 @@
   .file-btn{ display:block; text-align:center; cursor:pointer; }
   button{ font:inherit; border:none; border-radius:8px; padding:12px 16px; cursor:pointer; font-weight:600; font-size:13.5px; width:100%; }
   button:disabled{ opacity:.5; cursor:not-allowed; }
-  .btn-primary{ background:var(--accent); color:var(--accent-ink); } .btn-primary:hover:not(:disabled){ background:#ef6b55; }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); } .btn-primary:hover:not(:disabled){ background:#7aa6e3; }
   .btn-secondary{ background:transparent; border:1px solid var(--border); color:var(--cream); margin-top:8px; }
   .btn-secondary:hover:not(:disabled){ border-color:var(--accent2); }
   #confirm-view, #success-view{ display:none; }
@@ -249,7 +239,7 @@
 
     <section class="panel">
       <h2>Warriors of the realm</h2>
-      <p class="hint">The live warrior list, just like the BBS: every hero from every cartridge, ranked by experience (then level, then dragon kills). Pick <b>(U)PLOAD HERO</b> in the town square once a day and scan the code here to keep your hero current. Each upload replaces that hero's older one, so experience lost to a death, or reset by slaying the Red Dragon, shows here too. Heroes not uploaded for 3+ days are greyed out. Tap a row for full stats.</p>
+      <p class="hint">The live warrior list, just like the BBS: every hero from every cartridge, ranked by experience (then level, then dragon kills). Pick <b>(U)PLOAD HERO</b> in the town square once a day and scan the code here to keep your hero current. Each upload replaces that hero's older one, so experience lost to a death, or reset by slaying the Red Dragon, shows here too. Tap a row for full stats.</p>
       <div id="board-status"></div>
       <div id="board"></div>
     </section>
@@ -351,32 +341,18 @@
   }
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
-  const DAY_MS = 86400000;
-  function ageDays(ts){ return ts ? Math.max(0, Math.floor((Date.now() - ts)/DAY_MS)) : 999; }
-  function fmtAge(ts){
-    const d = ageDays(ts);
-    return d === 0 ? 'updated today' : (d === 1 ? 'updated yesterday' : 'updated '+d+' days ago');
-  }
-  const STALE_DAYS = 3;   // a hero not uploaded for this long is greyed out, like an idle BBS caller
-
-  function rdStatusBadge(status){
-    return status === 'D' ? '<span class="rd-badge dead" title="Killed today, back tomorrow">DEAD</span>'
-                          : '<span class="rd-badge alive" title="Alive">ALIVE</span>';
-  }
-  function rdDragonBadge(n){
-    n = Number(n)||0;
-    return n > 0 ? '<span class="rd-badge dragon" title="Times this hero slew the Red Dragon">'+n+'&times; DRAGON</span>' : '';
-  }
-  function rdClassHTML(c){ return '<span class="rd-cls-'+(RD_CLASSES[c]?c:'K')+'">'+(RD_CLASSES[c]||'?')+'</span>'; }
+  function rdClassName(c){ return RD_CLASSES[c] || '?'; }
+  function rdStatusText(status){ return status === 'D' ? 'DEAD' : 'ALIVE'; }
+  function rdDragonText(n){ n = Number(n)||0; return n > 0 ? (n+'\u00d7 DRAGON') : ''; }
   function fmtNum(n){ return (Number(n)||0).toLocaleString('en-US'); }
 
   function renderHeroDetailHTML(data){
-    const rows = '<tr><td>Class</td><td class="tk-val">'+rdClassHTML(data.cls)+'</td></tr>'+
+    const rows = '<tr><td>Class</td><td class="tk-val">'+rdClassName(data.cls)+'</td></tr>'+
       '<tr><td>Level</td><td class="tk-val tnum">'+(Number(data.level)||0)+' / 12</td></tr>'+
       '<tr><td>Experience</td><td class="tk-val tnum">'+fmtNum(data.experience)+'</td></tr>'+
       '<tr><td>Dragon kills</td><td class="tk-val tnum">'+(Number(data.dragonKills)||0)+'</td></tr>'+
       '<tr><td>Days played</td><td class="tk-val tnum">'+(Number(data.daysPlayed)||0)+'</td></tr>'+
-      '<tr><td>Today</td><td class="tk-val">'+rdStatusBadge(data.status)+'</td></tr>'+
+      '<tr><td>Today</td><td class="tk-val">'+rdStatusText(data.status)+'</td></tr>'+
       '<tr><td>Hero ID</td><td class="tk-val">'+escapeHtml(String(data.heroId||''))+'</td></tr>'+
       (data.submittedAt ? '<tr><td>Last upload</td><td class="tk-val">'+escapeHtml(fmtWhen(data.submittedAt))+'</td></tr>' : '');
     return '<table class="tk-sheet">'+rows+'</table>';
@@ -414,17 +390,16 @@
     boardEl.innerHTML = ranked.map((e,i)=>{
       const data = e.data;
       const rank = i+1;
-      const stale = ageDays(data.submittedAt) >= STALE_DAYS;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
-      const meta = ['LV '+(Number(data.level)||0)+' '+rdClassHTML(data.cls), 'day '+(Number(data.daysPlayed)||0), fmtAge(data.submittedAt), usernameLine].filter(Boolean).join(' &middot; ');
+      const meta = [fmtWhen(data.submittedAt), 'LV '+(Number(data.level)||0)+' '+rdClassName(data.cls), 'day '+(Number(data.daysPlayed)||0),
+                    data.status === 'D' ? 'DEAD' : '', rdDragonText(data.dragonKills), usernameLine].filter(Boolean).join(' &middot; ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
-      const rowHtml = '<div class="row has-detail'+(rank===1?' top1':'')+(stale?' stale':'')+'" data-detail="d'+i+'">'+
-        '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
-        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+rdStatusBadge(data.status)+rdDragonBadge(data.dragonKills)+'</div>'+
+      const rowHtml = '<div class="row has-detail'+(rank===1?' top1':'')+'" data-detail="d'+i+'">'+
+        '<div class="rank">'+(rank===1?'\uD83C\uDFC6':('#'+rank))+'</div>'+
+        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-cell"><div class="score-val tnum">'+fmtNum(data.experience)+'</div>'+
-          '<div class="score-sub tnum">EXPERIENCE</div></div>'+
+        '<div class="score-val tnum">'+fmtNum(data.experience)+'</div>'+
       '</div>';
       return rowHtml + '<div class="row-detail" id="d'+i+'" hidden>'+renderHeroDetailHTML(data)+'</div>';
     }).join('');
@@ -516,7 +491,7 @@
     pending = parsed;
     el('confirm-initials').textContent = parsed.initials;
     el('confirm-score').textContent = fmtNum(parsed.experience);
-    el('confirm-sub').innerHTML = 'LV ' + parsed.level + ' ' + rdClassHTML(parsed.cls) + ' &middot; day ' + parsed.daysPlayed + ' ' + rdStatusBadge(parsed.status) + rdDragonBadge(parsed.dragonKills);
+    el('confirm-sub').textContent = ['LV ' + parsed.level + ' ' + rdClassName(parsed.cls), 'day ' + parsed.daysPlayed, rdStatusText(parsed.status), rdDragonText(parsed.dragonKills)].filter(Boolean).join(' \u00b7 ');
     el('confirm-src').textContent = SUBMIT_SOURCE === 'capture' ? 'From the in-browser player' : 'From a scanned QR code';
     el('confirm-scorecard').innerHTML = renderHeroDetailHTML(parsed);
     confirmMsg.innerHTML = '';
