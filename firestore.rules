@@ -208,10 +208,17 @@ service cloud.firestore {
       // scan-source breakdown, the only place this distinction is surfaced.
       function isBowlingScore(d) {
         return d.game == 'BW'
-          && d.keys().hasOnly(['game', 'initials', 'score', 'weight', 'rolls', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.keys().hasOnly(['game', 'initials', 'score', 'weight', 'rolls', 'source', 'submittedAt', 'uid', 'username', 'approved',
+                               'version', 'avg10', 'avgGames', 'verified'])
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.score is int && d.score >= 0 && d.score <= 300
           && d.weight is int && d.weight >= 1 && d.weight <= 99
+          // optional, v3 QR codes only (bowling_109+): the cart's own average x10 and games in it,
+          // for the tournament handicap -- see Bowling/TOURNAMENT_SITE_SPEC.md
+          && (!('version' in d) || (d.version is int && d.version == 3))
+          && (!('avg10' in d) || (d.avg10 is int && d.avg10 >= 0 && d.avg10 <= 3000))
+          && (!('avgGames' in d) || (d.avgGames is int && d.avgGames >= 0 && d.avgGames <= 999))
+          && (!('verified' in d) || d.verified is bool)
           && d.rolls is list && d.rolls.size() >= 12 && d.rolls.size() <= 21
           && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int

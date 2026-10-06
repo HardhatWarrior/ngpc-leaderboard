@@ -471,14 +471,98 @@
     return parts.length ? parts[parts.length-1] : '';
   }
 
-  /* ---------- QR payload parser -- <2-char game code><3-char initials><2-digit weight lbs>
-     <2-digit roll count><one char per roll: 0-9 pins, A=strike/10>, matching ngpc_qr.c exactly. ---------- */
+  /* ---------- Tournaments (Bowling/TOURNAMENT_SITE_SPEC.md). Off until the owner is ready:
+     with this false the page shows nothing tournament-related. v3 codes are still parsed,
+     CRC-checked, and their cart average stored, so averages exist before the first event. ---------- */
+  const TOURNAMENTS_ENABLED = false;
+
+  /* Payload v3 (bowling_109+): BW 3 III WW AAAA GGG NN rolls CCCC -- a format-version digit
+     where v1 had its first initial, the cart's average x10 and games in it, then a keyed
+     CRC-16/CCITT-FALSE (salt first, then every body char from "BW" to the last roll) as 4
+     base-36 digits. The salt lives in this page for now, so the CRC stops typos and hand
+     edits, not someone who reads the source; the spec moves it server side later. */
+  const BW_SALT = "NGPCBW-LANE-60FT";
+  const B36 = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  function bwCrc(body){
+    let crc = 0xFFFF;
+    const feed = s => { for(const ch of s){ crc ^= ch.charCodeAt(0) << 8;
+      for(let i=0;i<8;i++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xFFFF : (crc << 1) & 0xFFFF; } };
+    feed(BW_SALT); feed(body);
+    return B36[Math.floor(crc/46656)] + B36[Math.floor(crc/1296)%36] + B36[Math.floor(crc/36)%36] + B36[crc%36];
+  }
+
+  /* Strict replay (spec section 2): every frame legal and exactly as many rolls as the game
+     needs. Only applied to v3 codes -- v1 handling is left exactly as it was. */
+  function rollsAreLegal(rolls){
+    let i = 0;
+    for(let f=0; f<9; f++){
+      if(i >= rolls.length) return false;
+      if(rolls[i] === 10){ i += 1; continue; }
+      if(i+1 >= rolls.length || rolls[i] + rolls[i+1] > 10) return false;
+      i += 2;
+    }
+    const r = rolls.slice(i);
+    if(r.length < 2) return false;
+    const [a, b] = r;
+    if(a < 10 && a + b > 10) return false;
+    if(a === 10 || a + b === 10){
+      if(r.length !== 3) return false;
+      if(a === 10 && b < 10 && b + r[2] > 10) return false;
+      return true;
+    }
+    return r.length === 2;
+  }
+
+  function parseRollChars(rollChars){
+    const rolls = [];
+    for(let i=0;i<rollChars.length;i++){
+      const c = rollChars[i];
+      if(c === 'A') rolls.push(10);
+      else if(c >= '0' && c <= '9') rolls.push(Number(c));
+      else return null;
+    }
+    return rolls;
+  }
+
+  function parsePayloadV3(text){
+    if(text.length < 33) return {error:"That code is too short to be a valid score."};
+    const initials = text.slice(3,6);
+    if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
+    const head = text.slice(6,17);
+    if(!/^\d{11}$/.test(head)) return {error:"That code's header didn't look right."};
+    const weight = parseInt(text.slice(6,8),10);
+    const avg10 = parseInt(text.slice(8,12),10);
+    const avgGames = parseInt(text.slice(12,15),10);
+    const rollCount = parseInt(text.slice(15,17),10);
+    if(rollCount < 12 || rollCount > 21) return {error:"That code has an impossible roll count."};
+    if(avg10 > 3000) return {error:"That code's average didn't look right."};
+    if(text.length !== 21 + rollCount){
+      return {error:"That code looks cut off — rescan with the whole code in frame."};
+    }
+    const body = text.slice(0, 17 + rollCount);
+    if(text.slice(17 + rollCount) !== bwCrc(body)){
+      return {error:"That code didn't pass its check — rescan it, and don't edit it by hand."};
+    }
+    const rolls = parseRollChars(text.slice(17, 17 + rollCount));
+    if(!rolls) return {error:"That code has an unreadable roll value."};
+    if(!rollsAreLegal(rolls)) return {error:"That code's rolls aren't a possible game."};
+    return {initials, weight, rolls, version:3, avg10, avgGames};
+  }
+
+  /* ---------- QR payload parser -- v1: <2-char game code><3-char initials><2-digit weight lbs>
+     <2-digit roll count><one char per roll: 0-9 pins, A=strike/10>; a digit after the game code
+     means a versioned payload (v3 above; v2 was one test build, never live). ---------- */
   function parsePayload(text){
     text = (text||'').trim().toUpperCase();
     if(text.length < 9) return {error:"That code is too short to be a valid score."};
     const gameCode = text.slice(0,2);
     if(gameCode !== QR_GAME_CODE){
       return {error:'This code is for a different game ("'+gameCode+'") — open that game’s own high scores page instead.'};
+    }
+    const ver = text[2];
+    if(ver === '3') return parsePayloadV3(text);
+    if(ver >= '0' && ver <= '9'){
+      return {error:"That code is from a test build this page can't read — update Neo Bowling and bowl again."};
     }
     const initials = text.slice(2,5);
     const weightStr = text.slice(5,7);
@@ -645,14 +729,19 @@
     confirmView.classList.toggle('show', stage==='confirm');
   }
 
-  function openConfirm(initials, weight, rolls, score){
-    pending = {initials, weight, rolls, score};
+  // extra = a v3 code's {version, avg10, avgGames, verified} (null for v1)
+  function openConfirm(initials, weight, rolls, score, extra){
+    pending = {initials, weight, rolls, score, extra: extra || null};
     el('confirm-initials').textContent = initials;
     el('confirm-score').textContent = String(score).padStart(3,'0');
-    el('confirm-src').textContent = weight + ' lb ball — from a scanned QR code';
+    el('confirm-src').textContent = weight + ' lb ball — from a scanned QR code' + (extra ? ' (verified)' : '');
     el('confirm-scorecard').innerHTML = renderScorecardHTML(rolls);
     confirmMsg.innerHTML = '';
     showStage('confirm');
+  }
+
+  function v3Extra(r){
+    return r.version === 3 ? {version:3, avg10:r.avg10, avgGames:r.avgGames, verified:true} : null;
   }
 
   function totalFromRolls(rolls){
@@ -674,7 +763,7 @@
       return;
     }
     resetScanUI();
-    openConfirm(result.initials, result.weight, result.rolls, total);
+    openConfirm(result.initials, result.weight, result.rolls, total, v3Extra(result));
   }
 
   // The on-device QR encodes a full URL (e.g. https://www.ngpc-dev.com/lb/<payload>), so a
@@ -948,7 +1037,16 @@
       username: authedUser.username,
       approved: !!authedUser.approved,
     };
-    const res = await writeScore(scoreDoc);
+    // v3 adds the cart's average (for future tournament handicaps). Until firestore.rules with
+    // those optional fields is published, the rules reject them -- fall back to the plain doc
+    // so the score still lands.
+    let res;
+    if(pending.extra){
+      res = await writeScore(Object.assign({}, scoreDoc, pending.extra));
+      if(!res.ok && res.error && res.error.code === 'permission-denied') res = await writeScore(scoreDoc);
+    } else {
+      res = await writeScore(scoreDoc);
+    }
     btn.disabled = false;
     if(res.ok){
       // Straight to the live board, not a "submitted!" interstitial requiring another click --
@@ -972,7 +1070,7 @@
     if(fromEntry){
       const total = totalFromRolls(fromEntry.rolls);
       if(total!=null && validScore(total)){
-        openConfirm(fromEntry.initials, fromEntry.weight, fromEntry.rolls, total);
+        openConfirm(fromEntry.initials, fromEntry.weight, fromEntry.rolls, total, v3Extra(fromEntry));
         // Strip back to the clean /lb/ URL (hash included) so a refresh or a re-shared link
         // can't replay the same scan as a fresh submission.
         history.replaceState(null, '', '/lb/');
