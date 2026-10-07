@@ -29,6 +29,7 @@
     --good:#4fbf8b;
     --danger:#e5615a;
     --pin-cream:#f4eedd;
+    --gold:#f2c14e;
   }
   *{ box-sizing:border-box; }
   html,body{ height:auto; }
@@ -247,6 +248,35 @@
   .code-entry input{ flex:1 1 220px; min-width:0; font:600 14px "IBM Plex Mono",monospace; letter-spacing:.06em; text-transform:uppercase;
     background:var(--navy); color:var(--cream); border:1px solid var(--border); border-radius:8px; padding:11px 12px; }
   .code-entry button{ width:auto; flex:0 0 auto; }
+
+  /* ---------- tournament ---------- */
+  .t-head{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; }
+  .t-head h2{ margin:0; }
+  .t-head select{ width:auto; max-width:100%; min-width:0; font:inherit; font-size:12.5px; color:var(--cream);
+    background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:7px 10px; }
+  .t-hero{ margin:12px 0 14px; padding:16px; border-radius:10px; border:1px solid var(--border);
+    background:linear-gradient(180deg,var(--panel2),var(--navy)); display:flex; flex-direction:column; gap:7px; }
+  .t-status{ align-self:flex-start; display:inline-flex; align-items:center; gap:6px; font-size:10px; letter-spacing:.14em;
+    text-transform:uppercase; border:1px solid var(--border); border-radius:999px; padding:3px 9px; color:var(--dim); }
+  .t-status.live{ color:var(--good); border-color:rgba(79,191,139,.5); }
+  .t-status.live::before{ content:""; width:7px; height:7px; border-radius:50%; background:var(--good); animation:tpulse 1.4s ease-in-out infinite; }
+  .t-status.upcoming{ color:var(--accent2); border-color:var(--accent2); }
+  @keyframes tpulse{ 50%{ opacity:.25; } }
+  @media (prefers-reduced-motion:reduce){ .t-status.live::before{ animation:none; } }
+  .t-name{ font-size:clamp(14px,4vw,19px); line-height:1.4; color:var(--cream); overflow-wrap:anywhere; }
+  .t-dates{ font-size:12px; color:var(--dim); }
+  .t-prize{ font-size:13px; color:var(--cream); overflow-wrap:anywhere; }
+  .t-prize b{ color:var(--gold); font-weight:600; }
+  .t-clock{ font-family:"IBM Plex Mono",monospace; font-size:13px; font-weight:600; color:var(--accent2); }
+  .t-toolbar{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+  .seg{ display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .seg button{ width:auto; border-radius:0; padding:7px 14px; font-size:12px; background:transparent; color:var(--dim); }
+  .seg button.active{ background:var(--accent); color:var(--accent-ink); }
+  .t-count{ font-size:12px; color:var(--dim); }
+  .row.mine{ box-shadow:inset 3px 0 0 var(--accent2); }
+  .t-check{ font-size:11px; color:var(--good); margin-top:-6px; }
+  .t-rules{ margin:14px 0 0; padding:12px 0 0 18px; border-top:1px solid var(--border); font-size:11.5px; line-height:1.55;
+    color:var(--dim); display:flex; flex-direction:column; gap:3px; }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
@@ -289,6 +319,39 @@
   </header>
 
   <main>
+    <!-- Tournament -- events from games/bw.bwTournaments (Manage Game > Bowling features >
+         Tournament events). Shown to players once games/bw.bwFeatures.tournaments is on; the
+         site admin / developer sees a marked preview either way. Each board is built here from
+         the approved, verified v3 scores submitted inside the event's window
+         (Bowling/TOURNAMENT_SITE_SPEC.md sections 3-4). Linkable as /bw/#tournament. -->
+    <section class="panel" id="tournament-panel" hidden>
+      <div class="t-head">
+        <h2>Tournament</h2>
+        <select id="t-pick" aria-label="Choose an event" hidden></select>
+      </div>
+      <div class="preview-note" id="t-preview-note" hidden>Preview: only you can see this. Players see it once Tournaments is switched on under Manage Game &gt; Bowling features.</div>
+      <div class="t-hero">
+        <div class="t-status" id="t-status"></div>
+        <div class="t-name px" id="t-name"></div>
+        <div class="t-dates" id="t-dates"></div>
+        <div class="t-prize" id="t-prize" hidden></div>
+        <div class="t-clock tnum" id="t-clock"></div>
+      </div>
+      <div class="t-toolbar">
+        <div class="seg" role="group" aria-label="Board type">
+          <button type="button" class="active" data-mode="hcp" aria-pressed="true">Handicap</button>
+          <button type="button" data-mode="scratch" aria-pressed="false">Scratch</button>
+        </div>
+        <div class="t-count tnum" id="t-count"></div>
+      </div>
+      <div id="t-board"></div>
+      <ul class="t-rules">
+        <li>Any verified score submitted between the start and the end counts (score codes from bowling_109 or later).</li>
+        <li>Your best game counts. Ties go to the longer strike streak, then more strikes, then the earlier game.</li>
+        <li>Handicap = (200 &minus; your cart&rsquo;s average) &times; 0.9, max 90, from the last score you submitted before the start. Under 5 games on the cart bowls scratch. It matches TOURNEY HCP on the cart.</li>
+      </ul>
+    </section>
+
     <section class="panel" id="submit-panel">
       <h2>Submit a score</h2>
 
@@ -524,8 +587,7 @@
   /* ---------- Feature switches: games/bw.bwFeatures {careerStats, tournaments}, set by the admin
      under Manage Game > Bowling features. Both default off. v3 codes are parsed, CRC-checked and
      their cart average stored either way, so averages exist before any feature is shown. The
-     tournament UI (Bowling/TOURNAMENT_SITE_SPEC.md) isn't built yet; tournamentsEnabled() is
-     where it will hook in. ---------- */
+     Tournament panel (renderTournament() below) follows tournamentsEnabled(). ---------- */
   function bwFeatures(){ return (gameData && gameData.bwFeatures) || {}; }
   function tournamentsEnabled(){ return !!bwFeatures().tournaments; }
 
@@ -1168,7 +1230,10 @@
       // the whole point of scanning was to see where this score landed. The toast below gets
       // naturally overwritten within a moment anyway, once the live query (this client is already
       // subscribed to it) picks up the write it just made and re-renders the board.
-      const toastText = pending.initials + ' — ' + pending.score + ' submitted!';
+      const live = liveEvents();
+      const toastText = pending.initials + ' — ' + pending.score + ' submitted!'
+        + (live.length ? (pending.extra ? ' Counted in ' + live.map(e=>e.name).join(' and ') + '.'
+                                        : ' Older score codes don\u2019t count in tournaments.') : '');
       pending = null;
       showStage('idle');
       boardStatusEl.innerHTML = '<div class="msg ok">'+escapeHtml(toastText)+'</div>';
@@ -1324,6 +1389,188 @@
   }
   el('career-form').addEventListener('submit', (e)=>{ e.preventDefault(); saveCareerCode(); });
 
+  // ---- tournament ----
+  const tPanel = el('tournament-panel');
+  let tScores = null;          // every approved Bowling score (data objects), live
+  let tUnsub = null, tTimer = null, tMode = 'hcp', tPickId = null, tViewer = null, tShownStatus = null, tScrolled = false;
+
+  function tEvents(){
+    const list = (gameData && gameData.bwTournaments) || [];
+    return list.filter(e=>e && e.id && e.name && e.startsAt < e.endsAt);
+  }
+  function tStatus(ev){ const now = Date.now(); return now < ev.startsAt ? 'upcoming' : now < ev.endsAt ? 'live' : 'final'; }
+  // live first, then the next upcoming, then finished ones newest first
+  function tOrdered(){
+    const order = {live:0, upcoming:1, final:2};
+    return tEvents().slice().sort((a,b)=>{
+      const sa = tStatus(a), sb = tStatus(b);
+      if(sa !== sb) return order[sa] - order[sb];
+      return sa === 'upcoming' ? a.startsAt - b.startsAt : b.startsAt - a.startsAt;
+    });
+  }
+  function liveEvents(){ return tournamentsEnabled() ? tEvents().filter(e=>tStatus(e)==='live') : []; }
+  function tournamentVisible(user){
+    return tournamentsEnabled() || !!(user && window.NGPC_AUTH && NGPC_AUTH.isGameManager(user, gameData));
+  }
+  function fmtFull(ms){
+    return new Date(ms).toLocaleString(undefined,{weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+  }
+  function fmtLeft(ms){
+    ms = Math.max(0, ms);
+    const t = Math.floor(ms/1000), d = Math.floor(t/86400), h = Math.floor(t%86400/3600), m = Math.floor(t%3600/60), sec = t%60;
+    return (d ? d + 'd ' : '') + h + 'h ' + String(m).padStart(2,'0') + 'm ' + String(sec).padStart(2,'0') + 's';
+  }
+
+  // Spec section 2: a strike is a 10 at a full rack -- the first ball of frames 1-9; in the
+  // 10th, ball 1, ball 2 after a strike, ball 3 after strike-strike or a spare.
+  function strikeStats(rolls){
+    let i = 0, run = 0, streak = 0, strikes = 0;
+    const ball = isStrike => { if(isStrike){ strikes++; run++; if(run > streak) streak = run; } else run = 0; };
+    for(let f=0; f<9 && i<rolls.length; f++){
+      if(rolls[i] === 10){ ball(true); i += 1; } else { ball(false); i += 2; }
+    }
+    const [a, b, c] = rolls.slice(i);
+    if(a === undefined) return {streak, strikes};
+    ball(a === 10);
+    if(b !== undefined && a === 10) ball(b === 10);
+    if(c !== undefined && ((a === 10 && b === 10) || (a < 10 && a + b === 10))) ball(c === 10);
+    return {streak, strikes};
+  }
+
+  function tKey(d){ return d.uid || ('@' + (d.username || d.initials)); }
+  function tCompare(a, b, mode){
+    const ka = mode === 'hcp' ? a.total : a.score, kb = mode === 'hcp' ? b.total : b.score;
+    return (kb - ka) || (b.streak - a.streak) || (b.strikes - a.strikes) || (a.at - b.at);
+  }
+  // Each player's best verified game inside the window, with the handicap snapshotted from
+  // their last v3 score submitted BEFORE the start (spec section 4) -- games bowled during the
+  // event never move it. The handicap is fixed per player, so the best game is the same on
+  // the Handicap and Scratch boards.
+  function tEntries(ev){
+    const snap = new Map();
+    tScores.forEach(d=>{
+      if(d.version !== 3 || !Number.isInteger(d.avg10) || !(d.submittedAt < ev.startsAt)) return;
+      const k = tKey(d), prev = snap.get(k);
+      if(!prev || d.submittedAt > prev.submittedAt) snap.set(k, d);
+    });
+    const best = new Map();
+    tScores.forEach(d=>{
+      if(d.version !== 3 || !d.verified || !Array.isArray(d.rolls) || !Number.isInteger(d.score)) return;
+      if(!(d.submittedAt >= ev.startsAt && d.submittedAt < ev.endsAt)) return;
+      const k = tKey(d), s = snap.get(k);
+      const hcp = (s && s.avgGames >= HCP_MIN_GAMES) ? handicapFor(s.avg10) : null;
+      const st = strikeStats(d.rolls);
+      const e = {d, k, score:d.score, hcp, total:d.score + (hcp || 0), streak:st.streak, strikes:st.strikes, at:d.submittedAt};
+      const prev = best.get(k);
+      if(!prev || tCompare(e, prev, 'hcp') < 0) best.set(k, e);
+    });
+    return [...best.values()];
+  }
+
+  function tCurrent(){ return tEvents().find(e=>e.id===tPickId) || null; }
+
+  function drawTBoard(){
+    const ev = tCurrent(), boardT = el('t-board'), countEl = el('t-count');
+    if(!ev) return;
+    const st = tStatus(ev);
+    if(st === 'upcoming'){
+      countEl.textContent = '';
+      boardT.innerHTML = '<div class="empty-state">Starts ' + escapeHtml(fmtFull(ev.startsAt)) + '. Every verified score you submit from then until the end counts.</div>';
+      return;
+    }
+    if(!tScores){ countEl.textContent = ''; boardT.innerHTML = '<div class="empty-state">Loading standings&hellip;</div>'; return; }
+    const rows = tEntries(ev).sort((a,b)=>tCompare(a, b, tMode));
+    countEl.textContent = rows.length + ' bowler' + (rows.length === 1 ? '' : 's');
+    if(!rows.length){
+      boardT.innerHTML = '<div class="empty-state">' + (st === 'live'
+        ? 'No scores yet. Bowl a game and submit it to take the lead.'
+        : 'Nobody submitted a score in this event.') + '</div>';
+      return;
+    }
+    const me = tViewer && tViewer.uid;
+    boardT.innerHTML = rows.map((e,i)=>{
+      const d = e.d, rank = i + 1;
+      const big = tMode === 'hcp' ? e.total : e.score;
+      const line1 = tMode === 'hcp'
+        ? (e.hcp != null ? e.score + ' + ' + e.hcp + ' hcp' : e.score + ' scratch (under 5 games)')
+        : (e.hcp != null ? 'hcp ' + e.hcp + ' not added' : 'scratch');
+      const line2 = e.streak + ' in a row · ' + e.strikes + ' strike' + (e.strikes === 1 ? '' : 's') + ' · ' + fmtWhen(e.at);
+      const user = d.username ? '<a href="/user/?u=' + encodeURIComponent(d.username) + '">@' + escapeHtml(d.username.toUpperCase()) + '</a>' : '';
+      return '<div class="row has-detail' + (rank === 1 ? ' top1' : '') + (me && d.uid === me ? ' mine' : '') + '" data-detail="t' + i + '">'
+        + '<div class="rank">' + (rank === 1 ? pinIconSVG() : ('#' + rank)) + '</div>'
+        + '<div><div class="initials">' + escapeHtml(d.initials || '???') + '</div>' + (user ? '<div class="row-meta">' + user + '</div>' : '') + '</div>'
+        + '<div class="score-col"><div class="score-val tnum">' + big + '</div>'
+        + '<div class="row-meta tnum">' + escapeHtml(line1) + '</div><div class="row-meta tnum">' + escapeHtml(line2) + '</div></div>'
+        + '</div>'
+        + '<div class="row-detail" id="t' + i + '" hidden>' + renderScorecardHTML(d.rolls)
+        + '<div class="t-check">Code checked &middot; ' + d.rolls.length + ' rolls replayed</div></div>';
+    }).join('');
+  }
+
+  function tTick(){
+    const ev = tCurrent();
+    if(!ev) return;
+    const st = tStatus(ev), now = Date.now();
+    if(st !== tShownStatus){ renderTournament(); return; }   // crossed the start or the end
+    el('t-clock').textContent = st === 'live' ? 'Ends in ' + fmtLeft(ev.endsAt - now)
+      : st === 'upcoming' ? 'Starts in ' + fmtLeft(ev.startsAt - now)
+      : 'Final standings';
+  }
+
+  function renderTournament(user){
+    if(user !== undefined) tViewer = user;
+    const list = tOrdered();
+    const visible = !!db && list.length > 0 && tournamentVisible(tViewer);
+    tPanel.hidden = !visible;
+    if(!visible){ if(tTimer){ clearInterval(tTimer); tTimer = null; } return; }
+    el('t-preview-note').hidden = tournamentsEnabled();
+    if(!list.find(e=>e.id===tPickId)) tPickId = list[0].id;
+    const pick = el('t-pick');
+    pick.hidden = list.length < 2;
+    pick.innerHTML = list.map(e=>'<option value="' + escapeHtml(e.id) + '"' + (e.id === tPickId ? ' selected' : '') + '>'
+      + escapeHtml(e.name) + ' (' + tStatus(e) + ')</option>').join('');
+    const ev = tCurrent(), st = tStatus(ev);
+    tShownStatus = st;
+    const stEl = el('t-status');
+    stEl.className = 't-status ' + st;
+    stEl.textContent = st === 'live' ? 'Live' : st === 'upcoming' ? 'Upcoming' : 'Final';
+    el('t-name').textContent = ev.name;
+    el('t-dates').textContent = fmtFull(ev.startsAt) + ' \u2013 ' + fmtFull(ev.endsAt);
+    const prizeEl = el('t-prize');
+    prizeEl.hidden = !ev.prize;
+    if(ev.prize) prizeEl.innerHTML = '<b>Prize:</b> ' + escapeHtml(ev.prize);
+    if(!tUnsub){
+      tUnsub = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).onSnapshot(
+        snap=>{ tScores = snap.docs.map(x=>x.data()); drawTBoard(); },
+        err=>{ el('t-board').innerHTML = '<div class="msg err">' + escapeHtml(friendlyDbError(err)) + '</div>'; }
+      );
+    }
+    drawTBoard();
+    tTick();
+    if(!tTimer) tTimer = setInterval(tTick, 1000);
+    if(!tScrolled && location.hash === '#tournament'){
+      tScrolled = true;
+      tPanel.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+  }
+
+  el('t-pick').addEventListener('change', e=>{ tPickId = e.target.value; renderTournament(); });
+  tPanel.querySelectorAll('.seg button').forEach(btn=>btn.addEventListener('click', ()=>{
+    tMode = btn.dataset.mode;
+    tPanel.querySelectorAll('.seg button').forEach(b=>{
+      b.classList.toggle('active', b === btn);
+      b.setAttribute('aria-pressed', String(b === btn));
+    });
+    drawTBoard();
+  }));
+  el('t-board').addEventListener('click', e=>{
+    if(e.target.closest('a')) return;
+    const row = e.target.closest('.row.has-detail');
+    if(!row) return;
+    const detail = el(row.dataset.detail);
+    if(detail) detail.hidden = !detail.hidden;
+  });
+
   // ---- boot ----
   function boot(){
     renderBoard([]); // real empty state as the floor -- never leave the board blank while db connects
@@ -1400,6 +1647,7 @@
         var adminLinkEl = el('admin-link');
         if(adminLinkEl) adminLinkEl.hidden = !NGPC_AUTH.isGameManager(user, gameData);
         renderStatsPanel(user);
+        renderTournament(user);
       });
     });
     el('scan-signin-btn').addEventListener('click', ()=>NGPC_AUTH.openSignInModal('signin'));

@@ -66,12 +66,29 @@
   .art-upload-btn{ font-size:12px; padding:8px 12px; }
   .art-timestamp{ font-size:10.5px; color:var(--dim); }
 
-  textarea, input[type=text], input[type=url], select{
+  textarea, input[type=text], input[type=url], input[type=datetime-local], select{
     width:100%; font:inherit; font-size:12.5px; color:var(--cream); background:var(--navy);
     border:1px solid var(--border); border-radius:8px; padding:9px 10px; margin-top:4px;
   }
   textarea{ resize:vertical; min-height:64px; }
   .field-label{ font-size:10.5px; color:var(--dim); text-transform:uppercase; letter-spacing:.05em; }
+  /* Bowling tournament events (bw-features-panel) */
+  .tourney-item .btn-secondary, .tourney-form .btn-secondary{ background:transparent; border:1px solid var(--border); color:var(--cream); }
+  .tourney-item .btn-secondary:hover:not(:disabled), .tourney-form .btn-secondary:hover:not(:disabled){ border-color:var(--accent2); }
+  .tourney-list{ display:flex; flex-direction:column; gap:8px; margin-top:6px; }
+  .tourney-item{ display:flex; flex-wrap:wrap; align-items:center; gap:8px 12px; background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:10px 12px; }
+  .tourney-item .t-main{ flex:1 1 220px; min-width:0; }
+  .tourney-item .t-name{ font-weight:600; overflow-wrap:anywhere; }
+  .tourney-item .t-meta{ font-size:11.5px; color:var(--dim); margin-top:2px; overflow-wrap:anywhere; }
+  .tourney-item .t-btns{ display:flex; gap:6px; }
+  .tourney-item .t-btns button{ width:auto; padding:6px 10px; font-size:12px; margin:0; }
+  .t-pill{ font-size:10px; letter-spacing:.08em; text-transform:uppercase; border:1px solid var(--border); border-radius:999px; padding:2px 8px; color:var(--dim); margin-left:6px; }
+  .t-pill.live{ color:var(--good); border-color:var(--good); }
+  .t-pill.upcoming{ color:var(--accent2); border-color:var(--accent2); }
+  .tourney-form{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px 14px; margin-top:12px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px; }
+  .tourney-form .t-wide{ grid-column:1 / -1; }
+  .tourney-form .t-actions{ grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:8px; }
+  .tourney-form .t-actions button{ width:auto; margin:0; }
   .field-count{ font-size:10.5px; color:var(--dim); text-align:right; margin-top:2px; }
   .payload-field-row{ display:grid; grid-template-columns:1.3fr 1fr 0.6fr auto; gap:6px; align-items:center; margin-bottom:6px; }
   .payload-field-row input, .payload-field-row select{ margin-top:0; }
@@ -371,13 +388,35 @@
         <button type="button" class="status-btn" data-value="off">Off</button>
         <button type="button" class="status-btn" data-value="on">On</button>
       </div>
-      <div class="field-label" style="margin-top:14px">Tournaments (not built yet: switching on shows nothing until it is)</div>
+      <div class="field-label" style="margin-top:14px">Tournaments (Tournament panel on /bw/; off = only you and the developer see it, as a preview)</div>
       <div class="status-row" id="bw-tourney-row" style="margin-bottom:0">
         <button type="button" class="status-btn" data-value="off">Off</button>
         <button type="button" class="status-btn" data-value="on">On</button>
       </div>
       <button type="button" class="action btn-primary" id="bw-features-save" style="margin-top:14px">Save</button>
       <div id="bw-features-msg"></div>
+
+      <!-- games/bw.bwTournaments: [{id, name, startsAt, endsAt, prize}] (ms timestamps). Saved
+           straight to the game doc on Add / Save / Delete, separately from the switches above.
+           bw/index.html builds each event's board from the verified v3 scores submitted inside
+           its window. -->
+      <div class="field-label" style="margin-top:22px">Tournament events (times in your local time zone)</div>
+      <div class="tourney-list" id="bw-tourney-list"></div>
+      <form class="tourney-form" id="bw-tourney-form" autocomplete="off">
+        <label class="t-wide"><span class="field-label">Name</span>
+          <input type="text" id="bw-t-name" maxlength="60" placeholder="e.g. Spring Classic" required></label>
+        <label><span class="field-label">Starts</span>
+          <input type="datetime-local" id="bw-t-start" required></label>
+        <label><span class="field-label">Ends</span>
+          <input type="datetime-local" id="bw-t-end" required></label>
+        <label class="t-wide"><span class="field-label">Prize (optional)</span>
+          <input type="text" id="bw-t-prize" maxlength="120" placeholder="e.g. Custom cart label + bragging rights"></label>
+        <div class="t-actions">
+          <button type="submit" class="action btn-primary" id="bw-t-save">Add event</button>
+          <button type="button" class="action btn-secondary" id="bw-t-cancel" hidden>Cancel edit</button>
+        </div>
+      </form>
+      <div id="bw-tourney-msg"></div>
     </div>
   </section>
 
@@ -464,6 +503,100 @@
     header.addEventListener('click', toggle);
     header.addEventListener('keydown', (e)=>{ if(e.key==='Enter'||e.key===' '){ e.preventDefault(); toggle(); } });
   });
+
+  /* ---- Bowling tournament events: games/bw.bwTournaments, edited from bw-features-panel ---- */
+  function initBwTournaments(docRef, data){
+    let events = Array.isArray(data.bwTournaments) ? data.bwTournaments.slice() : [];
+    let editingId = null, armedDelete = null;
+    const listEl = el('bw-tourney-list'), formEl = el('bw-tourney-form'), msgEl = el('bw-tourney-msg');
+    const pad = n => String(n).padStart(2,'0');
+    const toLocalInput = ms => { const d = new Date(ms); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes()); };
+    const fmt = ms => new Date(ms).toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+    function status(ev){ const now = Date.now(); return now < ev.startsAt ? 'upcoming' : now < ev.endsAt ? 'live' : 'final'; }
+    function render(){
+      events.sort((a,b)=>b.startsAt - a.startsAt);
+      listEl.innerHTML = events.length ? events.map(ev=>{
+        const st = status(ev);
+        return '<div class="tourney-item" data-id="'+escapeHtml(ev.id)+'"><div class="t-main">'
+          + '<div class="t-name">'+escapeHtml(ev.name)+'<span class="t-pill '+st+'">'+st+'</span></div>'
+          + '<div class="t-meta">'+escapeHtml(fmt(ev.startsAt))+' \u2013 '+escapeHtml(fmt(ev.endsAt))+'</div>'
+          + (ev.prize ? '<div class="t-meta">Prize: '+escapeHtml(ev.prize)+'</div>' : '')
+          + '</div><div class="t-btns">'
+          + '<button type="button" class="action btn-secondary" data-act="edit">Edit</button>'
+          + '<button type="button" class="action btn-secondary" data-act="delete">'+(armedDelete===ev.id?'Confirm delete':'Delete')+'</button>'
+          + '</div></div>';
+      }).join('') : '<p class="hint" style="margin:4px 0 0">No events yet. Add one below.</p>';
+    }
+    function resetForm(){
+      editingId = null;
+      formEl.reset();
+      el('bw-t-save').textContent = 'Add event';
+      el('bw-t-cancel').hidden = true;
+    }
+    async function persist(next, okText){
+      msgEl.innerHTML = '';
+      try{
+        await docRef.update({ bwTournaments: next });
+        events = next;
+        msgEl.innerHTML = '<div class="msg ok">'+escapeHtml(okText)+'</div>';
+        return true;
+      }catch(e){
+        msgEl.innerHTML = '<div class="msg err">Couldn\u2019t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+        return false;
+      }finally{ render(); }
+    }
+    listEl.addEventListener('click', async (e)=>{
+      const btn = e.target.closest('button[data-act]');
+      if(!btn) return;
+      const id = btn.closest('.tourney-item').dataset.id;
+      const ev = events.find(x=>x.id===id);
+      if(!ev) return;
+      if(btn.dataset.act === 'edit'){
+        armedDelete = null;
+        editingId = id;
+        el('bw-t-name').value = ev.name;
+        el('bw-t-start').value = toLocalInput(ev.startsAt);
+        el('bw-t-end').value = toLocalInput(ev.endsAt);
+        el('bw-t-prize').value = ev.prize || '';
+        el('bw-t-save').textContent = 'Save changes';
+        el('bw-t-cancel').hidden = false;
+        render();
+        formEl.scrollIntoView({behavior:'smooth', block:'nearest'});
+      } else if(armedDelete !== id){
+        armedDelete = id;   // a second click deletes
+        render();
+      } else {
+        armedDelete = null;
+        if(editingId === id) resetForm();
+        await persist(events.filter(x=>x.id!==id), 'Deleted \u201c'+ev.name+'\u201d.');
+      }
+    });
+    el('bw-t-cancel').addEventListener('click', ()=>{ resetForm(); msgEl.innerHTML = ''; });
+    formEl.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      msgEl.innerHTML = '';
+      const name = el('bw-t-name').value.trim();
+      const startsAt = new Date(el('bw-t-start').value).getTime();
+      const endsAt = new Date(el('bw-t-end').value).getTime();
+      const prize = el('bw-t-prize').value.trim();
+      if(!name || !isFinite(startsAt) || !isFinite(endsAt)){
+        msgEl.innerHTML = '<div class="msg err">Give the event a name, a start and an end.</div>'; return;
+      }
+      if(endsAt <= startsAt){
+        msgEl.innerHTML = '<div class="msg err">The end has to be after the start.</div>'; return;
+      }
+      const clash = events.find(x=>x.id!==editingId && startsAt < x.endsAt && x.startsAt < endsAt);
+      const ev = { id: editingId || ('t'+Date.now().toString(36)), name, startsAt, endsAt, prize };
+      const next = editingId ? events.map(x=>x.id===editingId ? ev : x) : events.concat([ev]);
+      const btn = el('bw-t-save');
+      btn.disabled = true;
+      const ok = await persist(next, (editingId ? 'Saved \u201c' : 'Added \u201c') + name + '\u201d.'
+        + (clash ? ' Note: it overlaps \u201c' + clash.name + '\u201d, so a game bowled in both windows counts in both.' : ''));
+      btn.disabled = false;
+      if(ok) resetForm();
+    });
+    render();
+  }
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -1135,6 +1268,7 @@
           btn.disabled = false;
         }
       });
+      initBwTournaments(docRef, data);
     }
 
     let currentStatus = data.devStatus || 'dev';
