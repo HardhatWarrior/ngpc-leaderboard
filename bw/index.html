@@ -428,7 +428,7 @@
         </div>
         <p class="hint" id="career-empty" style="margin-top:4px">Add your career totals: on the cart open OPTIONS &gt; STATS CODE and type the code below, or scan its QR with Scan QR Code above.</p>
         <form class="code-entry" id="career-form" autocomplete="off">
-          <input id="career-code" placeholder="Stats code, e.g. G8WP ENTB ..." aria-label="Stats code" spellcheck="false">
+          <input id="career-code" placeholder="Stats code, e.g. L8WP ENTB ..." aria-label="Stats code" spellcheck="false">
           <button type="submit" class="btn-primary" id="career-save">Save stats code</button>
         </form>
         <div id="career-msg"></div>
@@ -639,10 +639,18 @@
   }
 
   /* ---------- Stats carry-over code (the cart's OPTIONS > STATS CODE): same format as Neo
-     Bowling's xf_encode()/xf_decode() in main.c and Bowling/tools/bw_statscode.py, version 1.
-     5-bit symbols from XF_ALPHABET (no I/O/0/1), a 3-symbol keyed CRC at the end. ---------- */
+     Bowling's xf_encode()/xf_decode() in main.c and Bowling/tools/bw_statscode.py.
+     5-bit symbols from XF_ALPHABET (no I/O/0/1), a 3-symbol keyed CRC at the end.
+     Format version 1 (bowling_113 on): ball colours 0-5. Version 2 (the prize-ball builds):
+     colours 0-10 and a 3-bit prize level 0-5 after curve preview. Both stay readable. ---------- */
   const XF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const XF_SALT = "NGPCBW-CARRY-OVER";
+  // Ball colours by the cart's index; prize level n (1-5) unlocks BW_BALL_COLOURS[5+n].
+  const BW_BALL_COLOURS = ['BLUE','RED','GREEN','YELLOW','PINK','PURPLE','BLACK','BRONZE','SILVER','GOLD','CUSTOM'];
+  const XF_COLOUR_COUNT = {1:6, 2:11};
+  const BW_PRIZE_RAW = [175, 200, 225, 250, 275];   // raw (handicap-free) game each prize level needs
+  function prizeLevelFor(raw){ return BW_PRIZE_RAW.filter(t=>raw >= t).length; }
+  function prizeBallNames(level){ return BW_BALL_COLOURS.slice(6, 6 + level); }
   function xfCrc(syms){
     let crc = 0xFFFF;
     const feed = b => { crc ^= b << 8; for(let i=0;i<8;i++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xFFFF : (crc << 1) & 0xFFFF; };
@@ -650,8 +658,16 @@
     syms.forEach(feed);
     return crc & 0x7FFF;
   }
-  // A version-1 code's first symbol is always E-H (bits 001x x), never the B of a score code.
-  function looksLikeStatsCode(text){ return /^[E-H][A-HJ-NP-Z2-9]{5,63}$/.test(text); }
+  // The first symbol holds the 3 version bits: a v1 code starts E-H (001xx), a v2 code J-M
+  // (010xx), never the B of a score code.
+  function looksLikeStatsCode(text){ return /^[E-HJ-M][A-HJ-NP-Z2-9]{5,63}$/.test(text); }
+  // looksLikeStatsCode() and a good check, so another game's QR that happens to start E-H or
+  // J-M still gets the "different game" message.
+  function statsCodeChecks(text){
+    if(!looksLikeStatsCode(text)) return false;
+    const syms = [...text].map(ch=>XF_ALPHABET.indexOf(ch)), c = xfCrc(syms.slice(0,-3)), chk = syms.slice(-3);
+    return chk[0]===((c>>10)&31) && chk[1]===((c>>5)&31) && chk[2]===(c&31);
+  }
   function decodeStatsCode(raw){
     const code = String(raw||'').toUpperCase().replace(/[\s-]/g,'');
     if(!/^[A-HJ-NP-Z2-9]+$/.test(code)) throw new Error("A stats code only uses A-Z and 2-9, without I or O.");
@@ -666,7 +682,11 @@
     let p = 0;
     const get = n => { if(p+n > bits.length) throw new Error("That code ends too early."); let v=0; for(let i=0;i<n;i++) v=(v<<1)|bits[p++]; return v; };
     const getVar = () => { const k = get(2); return k===0 ? 0 : get([6,10,16][k-1]); };
-    if(get(3) !== 1) throw new Error("That code is from a newer build than this page understands.");
+    const codeVersion = get(3);
+    if(codeVersion > 2) throw new Error("That code is from a newer build than this page understands.");
+    if(codeVersion < 1) throw new Error("That isn't a Neo Bowling stats code.");
+    // version is the bw_career doc layout, which firestore.rules pins at 1. It is NOT the code's
+    // own format version (codeVersion below); the stored code carries that.
     const out = {version:1, code, hasBest:false, bestIni:'AAA', bestScore:0, bestColor:0, bestHcp:0};
     if(get(1)){
       out.hasBest = true;
@@ -678,19 +698,29 @@
     ['games','frames','strikes','spares','turkeys','vsGames','vsFrames','vsStrikes','vsSpares','vsTurkeys','vsWins','vsLosses','avg10','avgGames']
       .forEach(k=>{ out[k] = getVar(); });
     out.defIni = ''; for(let i=0;i<3;i++) out.defIni += String.fromCharCode(65+get(5));
-    // curve preview -- a cart option, not shown here; kept as a NON-enumerable property so
-    // Object.assign() into the bw_career doc (whose rules allow a fixed key list) never writes it,
-    // but encodeStatsCode() can still carry it through when the code is regenerated.
-    Object.defineProperty(out, 'curve', {value: get(1), enumerable: false});
-    if(out.bestScore > 330 || out.avg10 > 3000 || !/^[A-Z]{3}$/.test(out.bestIni) || !/^[A-Z]{3}$/.test(out.defIni)){
+    // Curve preview, prize level and code version aren't bw_career fields (its rules allow a fixed
+    // key list). They're NON-enumerable, so Object.assign() into the doc never writes them; they
+    // are re-read from the stored code, and encodeStatsCode() carries them through.
+    // A v1 code has no prize level: it's whatever the best game, less its handicap, unlocks.
+    const hide = (k, v) => Object.defineProperty(out, k, {value: v, enumerable: false});
+    hide('codeVersion', codeVersion);
+    hide('curve', get(1));
+    hide('prize', codeVersion >= 2 ? get(3) : (out.hasBest ? prizeLevelFor(out.bestScore - out.bestHcp) : 0));
+    // like the cart: nothing may be left but the last symbol's padding (whose bits it never reads)
+    if(p + 5 <= bits.length) throw new Error("That code has extra characters on the end.");
+    if(out.bestScore > 330 || out.avg10 > 3000 || !/^[A-Z]{3}$/.test(out.bestIni) || !/^[A-Z]{3}$/.test(out.defIni)
+       || out.bestColor >= XF_COLOUR_COUNT[codeVersion] || out.prize > 5){
       throw new Error("That code holds values the game can't produce.");
     }
     return out;
   }
 
   // Inverse of decodeStatsCode -- same bit layout as bw_statscode.py's encode() / the cart's
-  // xf_encode(). s uses the same field names decodeStatsCode returns, plus an optional curve (0/1).
-  function encodeStatsCode(s){
+  // xf_encode(). s uses the same field names decodeStatsCode returns, plus optional curve (0/1)
+  // and prize (0-5). version 2 (the default) carries the prize level; version 1 leaves it out,
+  // for builds before prize balls.
+  function encodeStatsCode(s, version){
+    version = version === 1 ? 1 : 2;
     const bits = [];
     const put = (v,n) => { for(let i=n-1;i>=0;i--) bits.push((v>>i)&1); };
     const putVar = v => {
@@ -699,9 +729,10 @@
       else if(v < 1024){ put(2,2); put(v,10); }
       else { put(3,2); put(v,16); }
     };
-    put(1,3);
+    put(version,3);
     put(s.hasBest ? 1 : 0, 1);
     if(s.hasBest){
+      if(s.bestColor >= XF_COLOUR_COUNT[version]) throw new Error("A version " + version + " code can't hold that ball colour.");
       put(s.bestScore,9);
       for(const ch of s.bestIni) put(ch.charCodeAt(0)-65,5);
       put(s.bestColor,4);
@@ -711,6 +742,7 @@
       .forEach(k=>putVar(s[k]));
     for(const ch of s.defIni) put(ch.charCodeAt(0)-65,5);
     put(s.curve ? 1 : 0, 1);
+    if(version >= 2) put(Math.min(5, s.prize || 0), 3);
     while(bits.length % 5) bits.push(0);
     const syms = [];
     for(let i=0;i<bits.length;i+=5) syms.push((bits[i]<<4)|(bits[i+1]<<3)|(bits[i+2]<<2)|(bits[i+3]<<1)|bits[i+4]);
@@ -961,8 +993,11 @@
   function handleScanResult(text){
     formMsg.innerHTML = '';
     let seg = lastPathSegment(text).trim().toUpperCase();
-    if(seg.startsWith('BW9')) seg = seg.slice(3);
-    if(looksLikeStatsCode(seg)){
+    const bw9 = seg.startsWith('BW9');
+    if(bw9) seg = seg.slice(3);
+    // BW9 is only ever the STATS CODE QR (a bad or newer code gets decodeStatsCode's message);
+    // a bare code also needs a good check, so another game's payload isn't taken for one.
+    if(bw9 || statsCodeChecks(seg)){
       resetScanUI();
       if(!statsPanelEl.hidden){
         el('career-code').value = seg;
@@ -1398,10 +1433,16 @@
     el('career-empty').hidden = !!career;
     el('career-save').textContent = career ? 'Update stats code' : 'Save stats code';
     if(career){
+      // Curve preview, prize level and the code's own format version are only in the stored code.
+      let fromCode = {curve:0, codeVersion: career.bestColor >= 6 ? 2 : 1,
+                      prize: career.hasBest ? prizeLevelFor(career.bestScore - career.bestHcp) : 0};
+      try{ const d = decodeStatsCode(career.code); fromCode = {curve:d.curve, codeVersion:d.codeVersion, prize:d.prize}; }
+      catch(e){ /* keep the fallback */ }
       el('career-1p').innerHTML = careerRows([
         ['Games played', career.games], ['Frames', career.frames], ['Strikes', career.strikes],
         ['Spares', career.spares], ['Turkeys', career.turkeys],
         ['Best on the cart', career.hasBest ? (career.bestIni + ' ' + career.bestScore + (career.bestHcp ? ' (hcp +' + career.bestHcp + ')' : '')) : '\u2013'],
+        ['Prize balls', prizeBallNames(fromCode.prize).join(', ') || '\u2013'],
       ]);
       el('career-vs').innerHTML = careerRows([
         ['Games played', career.vsGames], ['Frames', career.vsFrames], ['Strikes', career.vsStrikes],
@@ -1410,14 +1451,14 @@
       el('career-src').textContent = 'From your stats code, saved ' + fmtWhen(career.submittedAt) + '. Update it any time from OPTIONS > STATS CODE.';
       // Regenerate a current code: the saved career totals, with the average/game count swapped for
       // the most recent known (the newer of your latest v3 score code and the saved code), so a
-      // build that takes a typed code starts from where you actually are.
+      // build that takes a typed code starts from where you actually are. It keeps the saved code's
+      // format version, so a code saved from a build before prize balls still types into that build.
       try{
         const merged = Object.assign({}, career);
         if(avg && avg.games > 0){ merged.avg10 = avg.avg10; merged.avgGames = avg.games; }
-        let curve = 0;
-        try{ curve = decodeStatsCode(career.code).curve ? 1 : 0; }catch(e){ /* keep 0 */ }
-        merged.curve = curve;
-        const code = encodeStatsCode(merged);
+        merged.curve = fromCode.curve;
+        merged.prize = fromCode.prize;
+        const code = encodeStatsCode(merged, fromCode.codeVersion);
         statsCodeCurrent = code;
         el('career-code-val').textContent = (code.match(/.{1,4}/g) || []).join(' ');
         el('career-code-src').textContent = (avg && avg.games > 0 && avg.at > career.submittedAt)
