@@ -401,7 +401,7 @@
     <!-- My stats -- shown to players only once games/bw.bwFeatures.careerStats is switched on
          (Manage Game > Bowling features); the site admin / this game's developer sees it either
          way, marked as a preview. Averages come from the player's own v3 score codes; full career
-         totals from the cart's OPTIONS > STATS CODE, saved to bw_career/{uid}. -->
+         totals from the cart's HISCORES > STATS CODE, saved to bw_career/{uid}. -->
     <section class="panel" id="stats-panel" hidden>
       <h2>My stats</h2>
       <div class="preview-note" id="stats-preview-note" hidden>Preview: only you can see this. Players see it once Career stats is switched on under Manage Game &gt; Bowling features.</div>
@@ -426,7 +426,7 @@
             <div class="career-src" id="career-code-src" style="margin-top:8px"></div>
           </div>
         </div>
-        <p class="hint" id="career-empty" style="margin-top:4px">Add your career totals: on the cart open OPTIONS &gt; STATS CODE and type the code below, or scan its QR with Scan QR Code above.</p>
+        <p class="hint" id="career-empty" style="margin-top:4px">Add your career totals: on the cart choose HISCORES, press A for STATS CODE, and type the code below, or scan its QR with Scan QR Code above.</p>
         <form class="code-entry" id="career-form" autocomplete="off">
           <input id="career-code" placeholder="Stats code, e.g. L8WP ENTB ..." aria-label="Stats code" spellcheck="false">
           <button type="submit" class="btn-primary" id="career-save">Save stats code</button>
@@ -638,7 +638,7 @@
     return r.length === 2;
   }
 
-  /* ---------- Stats carry-over code (the cart's OPTIONS > STATS CODE): same format as Neo
+  /* ---------- Stats carry-over code (the cart's HISCORES > STATS CODE): same format as Neo
      Bowling's xf_encode()/xf_decode() in main.c and Bowling/tools/bw_statscode.py.
      5-bit symbols from XF_ALPHABET (no I/O/0/1), a 3-symbol keyed CRC at the end.
      Format version 1 (bowling_113 on): ball colours 0-5. Version 2 (the prize-ball builds):
@@ -1448,7 +1448,7 @@
         ['Games played', career.vsGames], ['Frames', career.vsFrames], ['Strikes', career.vsStrikes],
         ['Spares', career.vsSpares], ['Turkeys', career.vsTurkeys], ['Record', career.vsWins + '-' + career.vsLosses],
       ]);
-      el('career-src').textContent = 'From your stats code, saved ' + fmtWhen(career.submittedAt) + '. Update it any time from OPTIONS > STATS CODE.';
+      el('career-src').textContent = 'From your stats code, saved ' + fmtWhen(career.submittedAt) + '. Update it any time from HISCORES > STATS CODE on the cart.';
       // Regenerate a current code: the saved career totals, with the average/game count swapped for
       // the most recent known (the newer of your latest v3 score code and the saved code), so a
       // build that takes a typed code starts from where you actually are. It keeps the saved code's
@@ -1462,8 +1462,8 @@
         statsCodeCurrent = code;
         el('career-code-val').textContent = (code.match(/.{1,4}/g) || []).join(' ');
         el('career-code-src').textContent = (avg && avg.games > 0 && avg.at > career.submittedAt)
-          ? 'Includes your newer average from ' + fmtWhen(avg.at) + '. Type it into OPTIONS > STATS CODE > ENTER A CODE on a new build.'
-          : 'Type it into OPTIONS > STATS CODE > ENTER A CODE on a new build.';
+          ? 'Includes your newer average from ' + fmtWhen(avg.at) + '. Type it into HISCORES > STATS CODE > ENTER A CODE on a new build.'
+          : 'Type it into HISCORES > STATS CODE > ENTER A CODE on a new build.';
         el('career-code-out').hidden = false;
       }catch(e){ el('career-code-out').hidden = true; }
     }
