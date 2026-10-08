@@ -244,6 +244,10 @@
   .career-table td{ padding:5px 0; border-top:1px solid var(--border); }
   .career-table td:last-child{ text-align:right; font-family:"IBM Plex Mono",monospace; font-weight:600; }
   .career-src{ font-size:11px; color:var(--dim); margin-top:10px; }
+  .code-out{ margin-top:16px; background:var(--navy); border:1px solid var(--border); border-radius:10px; padding:12px 14px; }
+  .code-out[hidden]{ display:none; }
+  .code-val{ font:600 15px "IBM Plex Mono",monospace; letter-spacing:.08em; color:var(--cream); margin:6px 0 10px; overflow-wrap:anywhere; line-height:1.5; }
+  .code-out button{ width:auto; padding:8px 14px; }
   .code-entry{ display:flex; flex-wrap:wrap; gap:8px; margin-top:16px; }
   .code-entry input{ flex:1 1 220px; min-width:0; font:600 14px "IBM Plex Mono",monospace; letter-spacing:.06em; text-transform:uppercase;
     background:var(--navy); color:var(--cream); border:1px solid var(--border); border-radius:8px; padding:11px 12px; }
@@ -415,6 +419,12 @@
             <div><h3>VS link matches</h3><table class="career-table tnum" id="career-vs"></table></div>
           </div>
           <div class="career-src" id="career-src"></div>
+          <div class="code-out" id="career-code-out" hidden>
+            <div class="stat-label">Your current stats code</div>
+            <div class="code-val tnum" id="career-code-val"></div>
+            <button type="button" class="btn-secondary" id="career-code-copy">Copy code</button>
+            <div class="career-src" id="career-code-src" style="margin-top:8px"></div>
+          </div>
         </div>
         <p class="hint" id="career-empty" style="margin-top:4px">Add your career totals: on the cart open OPTIONS &gt; STATS CODE and type the code below, or scan its QR with Scan QR Code above.</p>
         <form class="code-entry" id="career-form" autocomplete="off">
@@ -668,11 +678,45 @@
     ['games','frames','strikes','spares','turkeys','vsGames','vsFrames','vsStrikes','vsSpares','vsTurkeys','vsWins','vsLosses','avg10','avgGames']
       .forEach(k=>{ out[k] = getVar(); });
     out.defIni = ''; for(let i=0;i<3;i++) out.defIni += String.fromCharCode(65+get(5));
-    get(1); // curve preview -- a cart option, not shown here
+    // curve preview -- a cart option, not shown here; kept as a NON-enumerable property so
+    // Object.assign() into the bw_career doc (whose rules allow a fixed key list) never writes it,
+    // but encodeStatsCode() can still carry it through when the code is regenerated.
+    Object.defineProperty(out, 'curve', {value: get(1), enumerable: false});
     if(out.bestScore > 330 || out.avg10 > 3000 || !/^[A-Z]{3}$/.test(out.bestIni) || !/^[A-Z]{3}$/.test(out.defIni)){
       throw new Error("That code holds values the game can't produce.");
     }
     return out;
+  }
+
+  // Inverse of decodeStatsCode -- same bit layout as bw_statscode.py's encode() / the cart's
+  // xf_encode(). s uses the same field names decodeStatsCode returns, plus an optional curve (0/1).
+  function encodeStatsCode(s){
+    const bits = [];
+    const put = (v,n) => { for(let i=n-1;i>=0;i--) bits.push((v>>i)&1); };
+    const putVar = v => {
+      if(v === 0) put(0,2);
+      else if(v < 64){ put(1,2); put(v,6); }
+      else if(v < 1024){ put(2,2); put(v,10); }
+      else { put(3,2); put(v,16); }
+    };
+    put(1,3);
+    put(s.hasBest ? 1 : 0, 1);
+    if(s.hasBest){
+      put(s.bestScore,9);
+      for(const ch of s.bestIni) put(ch.charCodeAt(0)-65,5);
+      put(s.bestColor,4);
+      put(Math.floor(s.bestHcp/10),2);
+    }
+    ['games','frames','strikes','spares','turkeys','vsGames','vsFrames','vsStrikes','vsSpares','vsTurkeys','vsWins','vsLosses','avg10','avgGames']
+      .forEach(k=>putVar(s[k]));
+    for(const ch of s.defIni) put(ch.charCodeAt(0)-65,5);
+    put(s.curve ? 1 : 0, 1);
+    while(bits.length % 5) bits.push(0);
+    const syms = [];
+    for(let i=0;i<bits.length;i+=5) syms.push((bits[i]<<4)|(bits[i+1]<<3)|(bits[i+2]<<2)|(bits[i+3]<<1)|bits[i+4]);
+    const c = xfCrc(syms);
+    syms.push((c>>10)&31, (c>>5)&31, c&31);
+    return syms.map(v=>XF_ALPHABET[v]).join('');
   }
 
   function parseRollChars(rollChars){
@@ -1298,6 +1342,7 @@
     }
   }
 
+  let statsCodeCurrent = '';
   function careerRows(rows){
     return rows.map(([label, v])=>'<tr><td>'+escapeHtml(label)+'</td><td>'+escapeHtml(String(v))+'</td></tr>').join('');
   }
@@ -1363,6 +1408,23 @@
         ['Spares', career.vsSpares], ['Turkeys', career.vsTurkeys], ['Record', career.vsWins + '-' + career.vsLosses],
       ]);
       el('career-src').textContent = 'From your stats code, saved ' + fmtWhen(career.submittedAt) + '. Update it any time from OPTIONS > STATS CODE.';
+      // Regenerate a current code: the saved career totals, with the average/game count swapped for
+      // the most recent known (the newer of your latest v3 score code and the saved code), so a
+      // build that takes a typed code starts from where you actually are.
+      try{
+        const merged = Object.assign({}, career);
+        if(avg && avg.games > 0){ merged.avg10 = avg.avg10; merged.avgGames = avg.games; }
+        let curve = 0;
+        try{ curve = decodeStatsCode(career.code).curve ? 1 : 0; }catch(e){ /* keep 0 */ }
+        merged.curve = curve;
+        const code = encodeStatsCode(merged);
+        statsCodeCurrent = code;
+        el('career-code-val').textContent = (code.match(/.{1,4}/g) || []).join(' ');
+        el('career-code-src').textContent = (avg && avg.games > 0 && avg.at > career.submittedAt)
+          ? 'Includes your newer average from ' + fmtWhen(avg.at) + '. Type it into OPTIONS > STATS CODE > ENTER A CODE on a new build.'
+          : 'Type it into OPTIONS > STATS CODE > ENTER A CODE on a new build.';
+        el('career-code-out').hidden = false;
+      }catch(e){ el('career-code-out').hidden = true; }
     }
   }
 
@@ -1388,6 +1450,12 @@
     }
   }
   el('career-form').addEventListener('submit', (e)=>{ e.preventDefault(); saveCareerCode(); });
+  el('career-code-copy').addEventListener('click', async ()=>{
+    const b = el('career-code-copy');
+    try{ await navigator.clipboard.writeText(statsCodeCurrent); b.textContent = 'Copied'; }
+    catch(e){ b.textContent = 'Select and copy it above'; }
+    setTimeout(()=>{ b.textContent = 'Copy code'; }, 1800);
+  });
 
   // ---- tournament ----
   const tPanel = el('tournament-panel');
