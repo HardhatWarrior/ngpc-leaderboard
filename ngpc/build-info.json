@@ -1,10 +1,10 @@
 {
-  "desktop_commit": "b2f8318b817dff486bf78c18c997459c36e0940c",
+  "desktop_commit": "af7b0214dc1c810c301b9dcf527a0d546a98e72b",
   "source_sha256": {
     "cpp/src/apu.cpp": "2c9123b0f3d67393ec075b3f7eab7829f2bdcdac0df4a67f26a9ff16edef09d4",
     "cpp/src/core.cpp": "8c43e91cf7c5ec6fae14d4dca474588299fd732b7ac653af9f52db69be10bfaa",
     "cpp/src/execute.cpp": "b403ca392b3b878cdf9d84955499df3cc0f24c611e8bbb937d097f667ec383a0",
-    "cpp/src/memory.cpp": "4b2c4c6f377577f8c238522b74af932e13cd367d12cfa315a406f5a87fd27124",
+    "cpp/src/memory.cpp": "24485830f08a4221f60261a2c09aae58f3738d34cfaee876330fc787bf3c07fe",
     "cpp/src/mem_family.cpp": "d4682107a76695ad72c7c4f4144e989a374266ddd63f9bbe049178ff29970012",
     "cpp/src/reg_family.cpp": "29f9a333512b98a4d215f7331be3774e504772e1aa48428f96068044854a1f1e",
     "cpp/src/render.cpp": "4c01074453dd83338dd2d89c0e4427fa55b00b80f44404ed72f15a69e5786842",
@@ -20,6 +20,11 @@
       "bytes": 510,
       "gzip_bytes": 363,
       "sha256": "d7bceb4d8a158a07e385fdd35182896039808306118fd8cfc6a73adf5ffbd9b0"
+    },
+    "effects.js": {
+      "bytes": 6093,
+      "gzip_bytes": 2408,
+      "sha256": "2ee921ac81c7a0b34f76c96d30a8149e891b88203d078662b0e2d2057d38fbce"
     },
     "embed.html": {
       "bytes": 523,
@@ -52,24 +57,19 @@
       "sha256": "030389b854ff6f4bcb3e453a5b821e7db48d5849c1b84a610b35e3571af938d7"
     },
     "ngpcraft.wasm": {
-      "bytes": 122388,
-      "gzip_bytes": 29044,
-      "sha256": "4a1af729687a53aeab8e58a9a170cd459d1adaa45b3432d941677b604254d703"
+      "bytes": 122405,
+      "gzip_bytes": 29038,
+      "sha256": "7c1bed34738fbf13c5baa8d1b9ed2551247cd4b343882d100fe80d9ffc527509"
     },
     "player.js": {
-      "bytes": 34302,
-      "gzip_bytes": 10410,
-      "sha256": "bd73f7cfc88252220ef07d0eb8a18a6b7c4a2bd59d1061573d507068ee020724"
+      "bytes": 34506,
+      "gzip_bytes": 10466,
+      "sha256": "8ef37dea5c123d36f4c8c5e05b506bea1b485d11f70e51d0af4737b873bf75bb"
     },
     "THIRD_PARTY_NOTICES.txt": {
       "bytes": 61934,
       "gzip_bytes": 9109,
       "sha256": "da72ea24dc9136aea969147424a35b428e7431bdd5b94de53c63caf6bea41424"
-    },
-    "effects.js": {
-      "bytes": 6093,
-      "gzip_bytes": 2408,
-      "sha256": "2ee921ac81c7a0b34f76c96d30a8149e891b88203d078662b0e2d2057d38fbce"
     }
   }
 }

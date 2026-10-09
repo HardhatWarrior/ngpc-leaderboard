@@ -26,7 +26,7 @@ export class NgpCraftPlayer extends HTMLElement {
       details{margin-top:14px;color:#b9c8dc}summary{cursor:pointer}.hint{line-height:1.6;margin:14px 0 0;font-size:12px;color:#a7b5cc}
       [hidden]{display:none!important}.settings{background:#1c2739;border:1px solid #41526d;border-radius:12px;padding:16px;margin-top:14px}.settings h2{font-size:16px;margin:0 0 12px}.setting-row{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:12px 0}.setting-row input[type=range]{width:130px;accent-color:#78e0ba}.setting-row input[type=checkbox]{accent-color:#78e0ba}.setting-row select{font:inherit;color:inherit;background:#26334a;padding:8px;border:1px solid #41526d;border-radius:7px}.bindings{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.binding{display:flex;justify-content:space-between;align-items:center;gap:8px}.binding button{min-width:78px;max-width:70%;overflow-wrap:anywhere}.binding button[aria-pressed=true]{border-color:#78e0ba;color:#78e0ba}.settings-note{line-height:1.5;min-height:3em;color:#b9c8dc;font-size:12px}
       :host(:fullscreen){max-width:none;width:100%;height:100%;background:#080d15;display:grid;place-items:center;--fullscreen-ui:320px} :host(:fullscreen) section{max-width:none;width:100%;height:100%;overflow:auto;display:flex;flex-direction:column;align-items:center;border:0;border-radius:0;padding:12px}
-      :host(:fullscreen) header,:host(:fullscreen) .save-panel,:host(:fullscreen) .controls-hint{display:none}
+      :host(:fullscreen) header,:host(:fullscreen) .controls-hint{display:none}
       :host(:fullscreen) canvas{flex-shrink:0;width:min(calc(100vw - 24px),calc((100dvh - var(--fullscreen-ui)) * 160 / 152));max-width:100%;margin:auto 0 0}
       :host(:fullscreen) .touch{width:min(100%,540px);margin-bottom:auto}:host(:fullscreen) .status{margin-top:8px}:host(:fullscreen) .settings{position:absolute;z-index:2;top:12px;right:12px;width:min(440px,calc(100% - 24px));max-height:calc(100% - 24px);overflow:auto;box-shadow:0 8px 40px #0009}
       @media(max-width:380px){section{padding:12px}.bar{gap:5px}button,.file{padding:8px}.dpad{grid-template-columns:repeat(3,38px)}}
@@ -85,10 +85,12 @@ export class NgpCraftPlayer extends HTMLElement {
           <div class="dpad"><span></span><button data-bit="1" aria-label="Up">▲</button><span></span><button data-bit="4" aria-label="Left">◀</button><span></span><button data-bit="8" aria-label="Right">▶</button><span></span><button data-bit="2" aria-label="Down">▼</button></div>
           <div class="actions"><button data-bit="64">Option</button><button data-bit="16">A</button><button data-bit="32">B</button></div>
         </div>
-        <details class="save-panel"><summary>Game save</summary><div class="bar"><button class="export" disabled>Export</button><label class="file">Import<input class="save" type="file" accept=".ngpsav"></label></div><p class="hint">Your game save is stored in this browser. Export it to keep a backup.</p></details>
+        <details class="save-panel"><summary>Game save</summary><div class="bar"><button class="export" disabled>Export save</button><button class="import-save" type="button">Import save?</button><input class="save" type="file" accept=".ngpsav" hidden></div><p class="hint">Your game save is stored in this browser. Export it to keep a backup.</p></details>
         <p class="hint controls-hint"><span class="key-hint"></span><br>Double-click the screen for fullscreen.<br>Local ROMs are never uploaded. Standard gamepads and touch controls are supported.</p>
       </section>`;
     this.$ = selector => this.shadowRoot.querySelector(selector);
+    this.$('.save-panel').open=true;
+    this.$('.settings').insertBefore(this.$('.save-panel'),this.$('.settings>.bar'));
     this.canvas = this.$('canvas');
     this.context = this.canvas.getContext('2d', {alpha:false});
     this.frame = new ImageData(160,152);
@@ -144,6 +146,7 @@ export class NgpCraftPlayer extends HTMLElement {
       on(b,'blur',()=>{if(this.captureBit===+b.dataset.bind)this.cancelBinding();});
     }
     on(this.$('.export'),'click',()=>this.exportSave());
+    on(this.$('.import-save'),'click',()=>this.$('.save').click());
     on(this.$('.save'),'change',task(async()=>{
       const file=this.$('.save').files[0]; if(!file)return;
       if(!this.loaded)throw Error('Open a game before importing its save.');
