@@ -243,6 +243,57 @@
     await import('/ngpc/player.js');
     player = document.querySelector('ngpcraft-player');
     player.addEventListener('ngpc-ready', ()=>{ btnSubmit.disabled = false; });
+    applyMobileFixes(player);
+  }
+
+  // Phone fixes for the upstream full player (vendored under /ngpc/, deliberately not patched there
+  // so it stays a clean copy of github.com/Tixul/NgpCraft_web_emulator):
+  //  1. Its Open ROM file input restricts "accept" to .ngp/.ngc/.npc/.bin. iOS (and some Android
+  //     pickers) can't map those extensions to a file type and grey out every file, so a ROM can't
+  //     be chosen -- Play and Restart then stay disabled forever. Dropping the filter lets any file
+  //     be picked (the player itself validates the ROM size/contents).
+  //  2. Its Fullscreen button needs the browser Fullscreen API, which iPhone Safari doesn't have
+  //     ("Fullscreen is unavailable in this browser"). The compact <ngpcraft-embed> used on the real
+  //     game pages already falls back to a CSS "expanded" overlay; do the same here by re-using the
+  //     player's own :fullscreen styles under [expanded] and toggling that attribute instead.
+  //  3. Start playing as soon as a ROM finishes loading -- the file-picker tap is already the user
+  //     gesture audio needs, and it saves a second tap on Play.
+  function applyMobileFixes(p){
+    const root = p.shadowRoot;
+    if(!root) return;
+    const rom = root.querySelector('input.rom');
+    if(rom) rom.removeAttribute('accept');
+
+    const css = Array.from(root.querySelectorAll('style')).map(st=>st.textContent).join('\n');
+    const rules = css.match(/[^{}]*:host\(:fullscreen[^{}]*\{[^{}]*\}/g) || [];
+    const extra = document.createElement('style');
+    extra.textContent =
+      rules.map(r=>r.replace(/:host\(:fullscreen\)/g, ':host([expanded])').replace(/:host\(:fullscreen\[/g, ':host([expanded][')).join('\n') +
+      '\n:host([expanded]){position:fixed;inset:0;z-index:2147483000;width:100%;height:100dvh;max-width:none;border-radius:0}';
+    root.append(extra);
+
+    p.toggleFullscreen = async function(){
+      if(document.fullscreenElement === this){ await document.exitFullscreen(); return; }
+      if(!this.hasAttribute('expanded') && this.requestFullscreen && document.fullscreenEnabled){
+        try{ await this.requestFullscreen(); return; }catch(e){ /* fall through to the CSS overlay */ }
+      }
+      const on = !this.hasAttribute('expanded');
+      document.documentElement.style.overflow = on ? 'hidden' : '';
+      this.toggleAttribute('expanded', on);
+      this.updateFullscreen();
+    };
+    const baseUpdate = p.updateFullscreen.bind(p);
+    p.updateFullscreen = function(){
+      baseUpdate();
+      const active = this.hasAttribute('expanded') || document.fullscreenElement === this;
+      const full = this.$('.full');
+      full.textContent = active ? 'Exit fullscreen' : 'Fullscreen';
+      full.setAttribute('aria-pressed', String(active));
+    };
+    p.addEventListener('keydown', e=>{ if(e.code==='Escape' && p.hasAttribute('expanded')){ e.preventDefault(); p.toggleFullscreen(); } });
+
+    // deferred a tick: the player is still 'locked' while it dispatches ngpc-ready, and play() refuses then
+    p.addEventListener('ngpc-ready', ()=>{ setTimeout(()=>p.play().catch(()=>{}), 0); });
   }
 
   function applyAuthState(user){
