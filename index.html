@@ -332,6 +332,11 @@
          NGPC-Admin-Scripts/seed-games.js or a future "add game" admin control). -->
   </div>
 
+  <div id="solo-link" hidden style="text-align:center">
+    <a href="/games/" style="color:var(--accent2);font-size:13px;font-weight:600">Single-player games &rarr;</a>
+    <div style="color:var(--dim);font-size:11.5px;margin-top:3px">No QR code or leaderboard &mdash; just play.</div>
+  </div>
+
   <div class="grid-heading">Or search for a player</div>
 
   <div id="search-wrap">
@@ -547,7 +552,13 @@
       // tile off this grid entirely while leaving everything else (leaderboard, ROM, scores)
       // untouched -- 'inactive' still renders the tile, just unclickable (see buildTile()).
       // Missing the field at all falls back to the old `active` boolean it replaced.
-      renderGrid(games.filter(g=>(g.visibility || (g.active === false ? 'hidden' : 'active')) !== 'hidden'));
+      const visibleGames = games.filter(g=>(g.visibility || (g.active === false ? 'hidden' : 'active')) !== 'hidden');
+      // games/{slug}.section === 'solo' marks a non-QR, single-player game -- it has no leaderboard
+      // to browse, so it lives on /games/ instead of this grid. This page only advertises that
+      // space (a small link under the grid) once at least one such game is actually visible, so
+      // an empty section never gets a link to nowhere.
+      renderGrid(visibleGames.filter(g=>g.section !== 'solo'));
+      el('solo-link').hidden = !visibleGames.some(g=>g.section === 'solo');
       gridStatusEl.textContent = '';
     }catch(e){
       gridStatusEl.textContent = 'Couldn’t load the games list right now — try refreshing.';
