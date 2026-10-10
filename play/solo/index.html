@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Play</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<!-- No zbar-wasm/jsQR here: webplayer.js's QR decode stack is only used by the leaderboard games'
+     Submit Score flow, and a solo game never captures a QR code (init({solo:true})). -->
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:auto; }
+  body{
+    margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+    padding-inline:20px; padding-block:32px; display:flex; justify-content:center;
+  }
+  html.maximizing, html.maximizing body{ height:100%; overflow:hidden; }
+  .px{ font-family:"Press Start 2P",monospace; }
+  #shell{ width:100%; max-width:520px; display:flex; flex-direction:column; gap:18px; align-items:center; }
+
+  header{ text-align:center; display:flex; flex-direction:column; gap:8px; }
+  header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); line-height:1.5; }
+  header p{ margin:0; color:var(--dim); font-size:13px; line-height:1.5; }
+
+  #player-panel{
+    width:100%; max-width:480px; aspect-ratio:160/152; position:relative;
+    background:#000; border:1px solid var(--border); border-radius:14px; overflow:hidden;
+  }
+  #game{ width:100%; height:100%; }
+  #player-panel.maximized{
+    position:fixed; inset:0; z-index:9999;
+    width:100vw; height:100vh; max-width:none; aspect-ratio:auto; border-radius:0; border:none;
+  }
+  #btn-maximize{
+    position:absolute; left:10px; top:10px; z-index:5; width:34px; height:34px;
+    border:none; border-radius:8px; cursor:pointer; background:rgba(0,0,0,.55); color:#fff;
+    font-size:16px; line-height:1; display:flex; align-items:center; justify-content:center;
+  }
+  @media (max-width: 600px){
+    body{ padding-inline:10px; padding-block:20px; }
+  }
+
+  /* webplayer.js writes into #btn-submit/#submit-msg whether or not they're shown -- solo mode
+     just hides them, so they stay in the markup like every other play page's. */
+  #btn-submit, #submit-msg{ display:none; }
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; text-align:center; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+
+  #signin-gate{ width:100%; max-width:480px; text-align:center; padding:24px; color:var(--dim); }
+  #player-content{ width:100%; display:flex; flex-direction:column; gap:18px; align-items:center; }
+  #player-content[hidden], #signin-gate[hidden]{ display:none; }
+
+  #rom-row{ font-size:12px; }
+  #rom-row a, footer a{ color:var(--accent2); text-decoration:underline; text-underline-offset:2px; }
+  #rom-row a:hover, footer a:hover{ color:var(--cream); }
+  footer{ text-align:center; color:var(--dim); font-size:11px; }
+  #play-count{ text-align:center; color:var(--dim); font-size:11px; margin-top:-6px; }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <h1 class="px" id="game-title">LOADING&hellip;</h1>
+    <p id="game-desc"></p>
+  </header>
+
+  <div id="play-count"></div>
+
+  <div id="signin-gate">Loading&hellip;</div>
+
+  <div id="player-content" hidden>
+    <div id="player-panel">
+      <button type="button" id="btn-maximize" title="Full screen">&#10530;</button>
+      <div id="game"></div>
+    </div>
+
+    <button type="button" id="btn-submit">Submit Score</button>
+    <div id="submit-msg"></div>
+
+    <div id="rom-row" hidden><a id="rom-link" href="#" download>&#128190; Download ROM (.ngp)</a></div>
+  </div>
+
+  <footer><a href="/games/">&larr; All single-player games</a></footer>
+</div>
+
+<script src="/auth.js"></script>
+<!-- ONE page for every single-player game: ?g=<slug> picks which games/{slug} doc (section:'solo')
+     to play, so adding a game from /admin/add-game/ is playable the instant its doc exists -- no
+     per-game folder, no repo commit, no waiting on the scaffold Action. The shared webplayer.js
+     does the actual ROM resolution, coming-soon access gate, and emulator mounting (EmulatorJS
+     or NgpCraft per games/{slug}.emulator), same as every /play/<slug>/ page, in solo mode. -->
+<script src="/play/webplayer.js"></script>
+<script>
+(async function(){
+  "use strict";
+  const el = (id)=>document.getElementById(id);
+  const slug = (new URLSearchParams(location.search).get('g') || '').toLowerCase();
+
+  function fail(text){
+    el('game-title').textContent = 'NOT FOUND';
+    el('signin-gate').hidden = false;
+    el('signin-gate').textContent = text;
+  }
+  if(!/^[a-z0-9-]{2,20}$/.test(slug)){ fail('No game selected — pick one from the single-player games page.'); return; }
+  if(!window.NGPC_AUTH || !NGPC_AUTH.db){ fail('The player isn’t available right now (a required library failed to load).'); return; }
+
+  let data = null;
+  try{
+    const doc = await NGPC_AUTH.db.collection('games').doc(slug).get();
+    data = doc.exists ? doc.data() : null;
+  }catch(e){ /* falls through to the not-found message */ }
+  if(!data || data.section !== 'solo'){ fail('That game isn’t available.'); return; }
+
+  const name = data.name || slug;
+  document.title = name;
+  el('game-title').textContent = name.toUpperCase();
+  el('game-desc').textContent = data.description || '';
+  if(data.romPath){
+    el('rom-link').href = data.romPath;
+    el('rom-row').hidden = false;
+  }
+
+  // This one page serves every solo game, so auth.js's own path-keyed page-view tracker (which
+  // can only ever see "/play/solo/") counts them all together -- bump a per-game key too, same
+  // doc shape trackPageView() writes (see firestore.rules' pageViews match block), and have the
+  // "Played N times" readout read that one instead.
+  const countKey = 'play_solo_' + slug;
+  NGPC_AUTH.db.collection('pageViews').doc(countKey).set(
+    { path: countKey, total: firebase.firestore.FieldValue.increment(1), lastViewedAt: Date.now() },
+    { merge: true }
+  ).catch(()=>{ /* decorative -- a blocked write must never affect the page */ });
+
+  NGPCWebPlayer.init({ slug, title: name, solo: true, countKey });
+})();
+</script>
+</body>
+</html>

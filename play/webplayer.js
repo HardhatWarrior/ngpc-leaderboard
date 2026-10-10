@@ -111,6 +111,13 @@
     const slug = opts.slug;
     const title = opts.title;
     const staticRomUrl = opts.staticRomUrl || null;
+    // Single-player (non-QR) game: no leaderboard to submit to, so no Submit Score button, no QR
+    // capture/decode wiring on either backend. See play/solo/index.html, the one page that uses it.
+    const solo = !!opts.solo;
+    // Which pageViews/{key} doc the "Played N times" readout reads. Defaults to this page's own
+    // path key; play/solo/ is ONE page serving many games, so it passes a per-game key instead of
+    // every solo game sharing (and mislabeling) the one 'play_solo' total.
+    const countKey = opts.countKey || null;
 
     const gateEl = el('signin-gate');
     const contentEl = el('player-content');
@@ -124,11 +131,16 @@
     (function(){
       const countEl = el('play-count');
       if(!countEl || !window.NGPC_AUTH || !NGPC_AUTH.db) return;
-      NGPC_AUTH.db.collection('pageViews').doc(NGPC_AUTH.pathKeyFromLocation()).get().then(doc=>{
+      NGPC_AUTH.db.collection('pageViews').doc(countKey || NGPC_AUTH.pathKeyFromLocation()).get().then(doc=>{
         const total = (doc.exists && doc.data().total) || 0;
         countEl.textContent = 'Played ' + total.toLocaleString() + ' time' + (total===1?'':'s');
       }).catch(()=>{ /* decorative -- leave blank on error */ });
     })();
+
+    if(solo){
+      btnSubmit.hidden = true;
+      msgEl.hidden = true;
+    }
 
     let fsBtn = null;
     let isMaximized = false;
@@ -293,12 +305,16 @@
       const loaderScript = document.createElement('script');
       loaderScript.src = '../emulatorjs/data/loader.js';
       document.body.appendChild(loaderScript);
-      const pollId = setInterval(()=>{ if(injectFullscreenButton()) clearInterval(pollId); }, 300);
-      setTimeout(()=>clearInterval(pollId), 30000); // give up quietly if EJS never finishes booting
+      // fsBtn is only the floating Submit Score button shown while maximized -- nothing to inject
+      // or position for a solo game.
+      if(!solo){
+        const pollId = setInterval(()=>{ if(injectFullscreenButton()) clearInterval(pollId); }, 300);
+        setTimeout(()=>clearInterval(pollId), 30000); // give up quietly if EJS never finishes booting
+      }
       btnMaximize.addEventListener('click', ()=>setMaximized(!isMaximized));
       document.addEventListener('keydown', (e)=>{ if(e.key === 'Escape' && isMaximized) setMaximized(false); });
-      window.addEventListener('resize', ()=>{ if(isMaximized) positionFsBtn(); });
-      btnSubmit.addEventListener('click', captureFromEmulatorJS);
+      window.addEventListener('resize', ()=>{ if(isMaximized && !solo) positionFsBtn(); });
+      if(!solo) btnSubmit.addEventListener('click', captureFromEmulatorJS);
     }
 
     /* ---------- NgpCraft backend -- github.com/Tixul/NgpCraft_web_emulator. Its own compact
@@ -314,11 +330,18 @@
       const player = document.createElement('ngpcraft-embed');
       player.setAttribute('rom', gameUrl);
       player.setAttribute('game-title', title);
-      player.setAttribute('capture-label', 'Submit Score');
-      player.addEventListener('ngpc-capture', (event)=>{
-        event.preventDefault(); // suppress the component's own default PNG-download behavior
-        decodeAndRoute(event.detail.canvas);
-      });
+      if(solo){
+        // The embed builds its Capture button in its own constructor (open shadow root), so it's
+        // already there to hide -- there's nothing to capture a score for on a solo game.
+        const captureBtn = player.shadowRoot && player.shadowRoot.querySelector('.capture');
+        if(captureBtn) captureBtn.style.display = 'none';
+      } else {
+        player.setAttribute('capture-label', 'Submit Score');
+        player.addEventListener('ngpc-capture', (event)=>{
+          event.preventDefault(); // suppress the component's own default PNG-download behavior
+          decodeAndRoute(event.detail.canvas);
+        });
+      }
       el('game').appendChild(player);
     }
 

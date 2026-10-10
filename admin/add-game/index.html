@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Add a Game</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{
+    margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+    padding-inline:20px; padding-block:28px; display:flex; justify-content:center;
+  }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; }
+  #shell{ width:100%; max-width:640px; display:flex; flex-direction:column; gap:22px; }
+
+  header{ text-align:center; display:flex; flex-direction:column; gap:6px; }
+  header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
+  header p{ margin:0; color:var(--dim); font-size:13px; line-height:1.5; }
+
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  .panel[hidden], #denied[hidden]{ display:none; }
+  .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  .panel .hint{ margin:0 0 14px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+  .panel .hint a{ color:var(--accent2); }
+  #denied{ text-align:center; color:var(--dim); font-size:13.5px; padding:40px 0; }
+
+  label{ display:block; font-size:11.5px; color:var(--dim); margin-bottom:14px; }
+  label b{ display:block; margin-bottom:4px; color:var(--cream); font-weight:600; }
+  label .sub{ display:block; margin-top:4px; font-size:11px; }
+  input[type=text], input[type=file], textarea, select{
+    display:block; width:100%; margin-top:2px; background:var(--navy); border:1px solid var(--border);
+    color:var(--cream); border-radius:7px; padding:9px 10px; font:inherit; font-size:13px;
+  }
+  textarea{ resize:vertical; min-height:70px; }
+  input:focus, textarea:focus, select:focus{ outline:none; border-color:var(--accent2); }
+  .two{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
+  @media (max-width:560px){ .two{ grid-template-columns:1fr; } }
+
+  button{
+    font:inherit; border:none; border-radius:8px; padding:11px 16px; cursor:pointer;
+    font-weight:600; font-size:13px; width:auto;
+  }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); }
+  .btn-primary:hover:not(:disabled){ background:#c14259; }
+
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; margin-top:12px; line-height:1.55; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+  .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
+  .msg.info{ background:rgba(92,143,214,.12); color:var(--dim); border:1px solid var(--border); }
+  .msg a{ color:inherit; text-decoration:underline; text-underline-offset:2px; }
+
+  footer{ text-align:center; color:var(--dim); font-size:11px; }
+  footer a{ color:var(--accent2); }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <h1 class="px">ADD A GAME</h1>
+    <p>Single-player (non-QR) games. No approval step &mdash; submitting this creates the tile on <a href="/games/" style="color:var(--accent2)">/games/</a> and its play page immediately.</p>
+  </header>
+
+  <div id="denied" hidden></div>
+
+  <section class="panel" id="form-panel" hidden>
+    <h2>Game Details</h2>
+    <p class="hint">The play page is <code>/play/solo/?g=&lt;slug&gt;</code> &mdash; one shared player page that loads whichever game the slug names, so there are no files to generate or commit. After adding, change its dev status, visibility, or NEW badge from the <a href="/admin/">Games table</a> or <a href="/admin/game/">Manage Game</a>.</p>
+
+    <div class="two">
+      <label><b>Name</b>
+        <input type="text" id="g-name" maxlength="40" placeholder="Sokoban" autocomplete="off">
+      </label>
+      <label><b>Slug</b>
+        <input type="text" id="g-slug" maxlength="20" placeholder="sokoban" autocomplete="off">
+        <span class="sub">2&ndash;20 lowercase letters, digits, hyphens. Can't be changed later.</span>
+      </label>
+    </div>
+
+    <label><b>Description <span style="font-weight:400;color:var(--dim)">(optional)</span></b>
+      <textarea id="g-desc" maxlength="240" placeholder="One or two lines shown under the title on the play page."></textarea>
+    </label>
+
+    <div class="two">
+      <label><b>Title screen image</b>
+        <input type="file" id="g-image" accept="image/png,image/jpeg,image/gif,image/webp">
+        <span class="sub">A 160&times;152 screenshot, same as every other tile. Under 4 MB.</span>
+      </label>
+      <label><b>ROM</b>
+        <input type="file" id="g-rom" accept=".ngp,.ngc">
+        <span class="sub">.ngp or .ngc, under 4 MB.</span>
+      </label>
+    </div>
+
+    <div class="two">
+      <label><b>Web player</b>
+        <select id="g-emulator">
+          <option value="emulatorjs">EmulatorJS (long-standing default)</option>
+          <option value="ngpcraft">NgpCraft (lighter, purpose-built)</option>
+        </select>
+      </label>
+      <label><b>Starting status</b>
+        <select id="g-status">
+          <option value="dev">In Development (NEW badge for 30 days)</option>
+          <option value="beta">Beta (NEW badge for 30 days)</option>
+          <option value="final">Final (NEW badge for 30 days)</option>
+          <option value="coming-soon">Coming Soon (tile unclickable, no NEW yet)</option>
+        </select>
+      </label>
+    </div>
+
+    <button type="button" class="btn-primary" id="g-add">Add game</button>
+    <div id="g-msg"></div>
+  </section>
+
+  <footer><a href="/admin/">&larr; Admin</a></footer>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  const el = (id)=>document.getElementById(id);
+  const deniedEl = el('denied');
+  const formPanel = el('form-panel');
+  const msgEl = el('g-msg');
+  const MAX_BYTES = 4 * 1024 * 1024; // storage.rules' own size cap on both upload paths used here
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  // Suggest a slug from the name until the admin edits the slug field themselves -- after that,
+  // leave it alone (they may want something shorter than the name's own slugification).
+  let slugTouched = false;
+  el('g-slug').addEventListener('input', ()=>{ slugTouched = true; });
+  el('g-name').addEventListener('input', ()=>{
+    if(slugTouched) return;
+    el('g-slug').value = el('g-name').value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 20);
+  });
+
+  async function upload(path, file){
+    const ref = firebase.storage().ref().child(path);
+    await ref.put(file);
+    return ref.getDownloadURL();
+  }
+
+  async function addGame(db, user){
+    const name = el('g-name').value.trim();
+    const slug = el('g-slug').value.trim().toLowerCase();
+    const description = el('g-desc').value.trim();
+    const imageFile = el('g-image').files[0];
+    const romFile = el('g-rom').files[0];
+    const emulator = el('g-emulator').value;
+    const devStatus = el('g-status').value;
+
+    if(!name){ msgEl.innerHTML = '<div class="msg err">Enter a name.</div>'; return; }
+    if(!/^[a-z0-9-]{2,20}$/.test(slug)){ msgEl.innerHTML = '<div class="msg err">Slug must be 2&ndash;20 lowercase letters, digits, or hyphens.</div>'; return; }
+    if(!imageFile){ msgEl.innerHTML = '<div class="msg err">Choose a title screen image.</div>'; return; }
+    if(!romFile || !/\.(ngp|ngc)$/i.test(romFile.name)){ msgEl.innerHTML = '<div class="msg err">Choose a .ngp or .ngc ROM.</div>'; return; }
+    if(imageFile.size >= MAX_BYTES || romFile.size >= MAX_BYTES){ msgEl.innerHTML = '<div class="msg err">Files must be under 4 MB each.</div>'; return; }
+
+    const btn = el('g-add');
+    btn.disabled = true;
+    try{
+      // Uniqueness check first, and the doc is created LAST -- a failed upload then leaves nothing
+      // behind on the main site, instead of a tile pointing at a ROM that never finished uploading.
+      msgEl.innerHTML = '<div class="msg info">Checking slug&hellip;</div>';
+      if((await db.collection('games').doc(slug).get()).exists){
+        msgEl.innerHTML = '<div class="msg err">A game already exists at that slug.</div>';
+        return;
+      }
+
+      msgEl.innerHTML = '<div class="msg info">Uploading ROM and image&hellip;</div>';
+      const imgExt = (imageFile.name.match(/\.[a-z0-9]+$/i) || ['.png'])[0].toLowerCase();
+      // Same two paths the rest of the site already uses: roms/{slug}/ is what admin/game/'s own
+      // "Upload ROM" writes (so a later ROM re-upload there just works), and the image goes under
+      // submissions/{uid}/ because storage.rules' roms/ block only accepts .ngp/.ngc files.
+      const [romPath, titleImage] = await Promise.all([
+        upload('roms/'+slug+'/'+romFile.name, romFile),
+        upload('submissions/'+user.uid+'/'+slug+'/title'+imgExt, imageFile),
+      ]);
+
+      msgEl.innerHTML = '<div class="msg info">Creating the game&hellip;</div>';
+      const now = Date.now();
+      await db.collection('games').doc(slug).set({
+        name,
+        section: 'solo',
+        description: description || null,
+        titleImage,
+        leaderboardPath: '/play/solo/?g='+slug,
+        romPath, romFileName: romFile.name,
+        emulator,
+        devStatus,
+        visibility: 'active',
+        addedAt: now, romUpdatedAt: now,
+        // Coming Soon suppresses NEW entirely; leaving it later starts NEW fresh (see
+        // admin/game/index.html's status handler), so don't start the clock here.
+        newUntil: devStatus === 'coming-soon' ? null : now + 30*24*60*60*1000,
+        updatedUntil: null,
+      });
+
+      msgEl.innerHTML = '<div class="msg ok">Added <b>'+escapeHtml(name)+'</b>. '
+        + '<a href="/play/solo/?g='+encodeURIComponent(slug)+'" target="_blank" rel="noopener">Open its play page</a> &middot; '
+        + '<a href="/games/" target="_blank" rel="noopener">See the tile</a> &middot; '
+        + '<a href="/admin/game/?slug='+encodeURIComponent(slug)+'">Manage</a></div>';
+      ['g-name','g-slug','g-desc'].forEach(id=>{ el(id).value = ''; });
+      el('g-image').value = ''; el('g-rom').value = '';
+      slugTouched = false;
+    }catch(e){
+      msgEl.innerHTML = '<div class="msg err">Couldn’t add the game: '+escapeHtml(e.message||'unknown error')
+        +'. If this mentions the storage bucket, Firebase Storage may not be enabled for this project.</div>';
+    }finally{
+      btn.disabled = false;
+    }
+  }
+
+  async function boot(){
+    if(!window.NGPC_AUTH){
+      deniedEl.hidden = false;
+      deniedEl.textContent = 'This page isn’t available right now (a required library failed to load).';
+      return;
+    }
+    await NGPC_AUTH.authReady;
+    const user = NGPC_AUTH.currentUser;
+    // Client-side gate only (like every page here) -- the real boundary is firestore.rules/
+    // storage.rules, where creating a games/ doc and writing roms/{slug}/ are admin-only.
+    if(!user || !NGPC_AUTH.isSiteAdmin(user)){
+      deniedEl.hidden = false;
+      deniedEl.textContent = 'Not authorized. Sign in as the site admin to view this page.';
+      return;
+    }
+    formPanel.hidden = false;
+    el('g-add').addEventListener('click', ()=>addGame(NGPC_AUTH.db, user));
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

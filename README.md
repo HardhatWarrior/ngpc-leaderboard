@@ -78,9 +78,14 @@ firmware updated still lands somewhere real.
 - **`tile_editor/`** — a separate but linked tool (2bpp tile/sprite editor, tilemap builder, and a
   true-color variant) a developer can use to design their avatar or game art, with an
   "Import from Tile Editor" path into the avatar editor.
-- **`games/index.html`** — an inert, hand-written, **not linked from anywhere on the live site**
-  placeholder (hardcoded to 7 of the 9 current games). Predates the real Firestore-backed grid on
-  `index.html`; likely safe to delete, kept for now in case it's a work-in-progress redesign.
+- **`games/index.html`** — the **single-player (non-QR) games** page: the same tile grid as the
+  main page, but listing only `games/{slug}` docs with `section: 'solo'`. The main page filters
+  those docs out of its own grid and shows a "Single-player games →" link only once at least one
+  visible solo game exists.
+- **`play/solo/index.html?g=<slug>`** — the one shared player page for every solo game (see
+  **Adding a single-player game** below). Same gating/ROM-resolution/emulator-mounting as the
+  per-game `play/<folder>/` pages (it runs `play/webplayer.js` in `solo` mode: no Submit Score, no
+  QR capture), with its own per-game "Played N times" counter (`pageViews/play_solo_<slug>`).
 
 ### Admin-only pages (gated on a single hardcoded admin UID, both client-side UI and
 `firestore.rules`' `isAdmin()`)
@@ -89,6 +94,8 @@ firmware updated still lands somewhere real.
   **NEW badge** toggle), the **Games** table (dev status, developer, ROM-download/play counts), the
   homepage grid-hide toggle, and a collapsible **Site Stats** panel (page views: total/today/last-
   7-days/top pages).
+- **`admin/add-game/index.html`** — adds a single-player game with no approval step (see
+  **Adding a single-player game** below).
 - **`admin/game/index.html`** — shared by the admin and a game's own assigned developer: dev
   status (`coming-soon` / `dev` / `beta` / `final`), ROM upload, and a read-only payload-format
   reference per game.
@@ -178,7 +185,21 @@ Two independent, non-overlapping layers:
   page load) — feeds admin's own **Site Stats** panel (total/today/last-7-days/top pages) and each
   play page's public "Played N times" readout, entirely independent of Cloudflare.
 
-## Adding a new game
+## Adding a single-player game
+
+For a game with no QR code and no leaderboard: **`/admin/add-game/`** (admin only). Fill in a name,
+slug, optional description, a title-screen image, the ROM, which web player to use, and a starting
+status, and it uploads the files to Firebase Storage and writes the `games/{slug}` doc
+(`section: 'solo'`, `leaderboardPath: '/play/solo/?g=<slug>'`) in one step — the tile shows up on
+`/games/` and the game is playable at `/play/solo/?g=<slug>` immediately. There is nothing to
+generate or commit: unlike a QR game's per-game `play/<folder>/index.html` (scaffolded by the
+**Scaffold approved games** Action, which only runs on a push), every solo game shares the one
+`play/solo/` page, which reads its game's doc at load. Status, visibility, pinning, the NEW
+badge, and the Main/Solo **Section** toggle are managed from the admin **Games** table, and ROM
+re-uploads from `/admin/game/`. No `firestore.rules`/`storage.rules` change is involved —
+the admin already has write access to `games/{slug}` and `roms/{slug}/`.
+
+## Adding a new QR (leaderboard) game
 
 1. On-device QR payload starts with that game's own 2-char routing code (own choice, unique).
 2. New leaderboard page at `<slug>/index.html` — copy an existing one close to its own shape
