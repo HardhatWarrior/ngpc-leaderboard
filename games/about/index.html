@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Game</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
+  }
+  *{ box-sizing:border-box; }
+  html,body{ height:auto; }
+  body{
+    margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+    padding-inline:20px; padding-block:28px; display:flex; justify-content:center;
+  }
+  .px{ font-family:"Press Start 2P",monospace; }
+  #shell{ width:100%; max-width:960px; display:flex; flex-direction:column; gap:22px; }
+
+  /* Header panel -- copied from the leaderboard pages' own (bw/, sd/, ...) so a single-player
+     game's page reads as the same kind of page: screenshot(s) left, title + links right-justified.
+     No scan/leaderboard panels below it, since there's no QR or board for these games. */
+  header{ background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--border); border-radius:14px; padding:22px 22px 18px; display:flex; flex-direction:column; gap:14px; position:relative; overflow:hidden; }
+  header::before{ content:""; position:absolute; inset:0; background:radial-gradient(circle at 85% -10%, rgba(92,143,214,.28), transparent 55%); pointer-events:none; }
+  .eyebrow{ position:relative; font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase; }
+  .header-row{ position:relative; display:flex; flex-direction:row; justify-content:space-between; gap:16px; align-items:flex-start; }
+  .title-block{ display:flex; flex-direction:column; align-items:flex-end; text-align:right; gap:5px; min-width:0; }
+  .title-block h1{ margin:0; font-size:clamp(18px,5vw,28px); line-height:1.2; color:var(--cream); overflow-wrap:break-word; }
+  .game-version{ font-size:11px; color:var(--dim); }
+  .link{
+    display:inline-flex; align-items:center; gap:5px; width:auto;
+    font-weight:600; text-decoration:underline; text-underline-offset:2px; font-size:11.5px;
+  }
+  .play-link{ color:var(--accent2); margin-top:4px; }
+  .play-link:hover{ color:var(--cream); }
+  .rom-link, .manual-link, .admin-link{ color:var(--dim); font-size:11px; }
+  .rom-link:hover, .manual-link:hover, .admin-link:hover{ color:var(--accent2); }
+  .admin-link{ margin-top:2px; }
+  .link[hidden]{ display:none; }
+
+  .art-strip{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; flex:none; min-width:0; }
+  /* width/height="160"/"152" HTML attributes are a fallback size only -- height:auto must be
+     explicit or they win over aspect-ratio and squish the image (same fix as the leaderboard pages). */
+  .header-art, .extra-art{
+    position:relative; width:130px; height:auto; flex:none; aspect-ratio:160/152;
+    image-rendering:pixelated; border-radius:8px; border:1px solid var(--border);
+    box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain;
+  }
+  .extra-art[hidden]{ display:none; }
+  @media (max-width:600px){ .extra-art{ display:none; } }
+
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:20px 22px; }
+  .panel[hidden], #gate[hidden], #page[hidden]{ display:none; }
+  .panel h2{ margin:0 0 10px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  .panel p{ margin:0 0 10px; line-height:1.65; font-size:13.5px; white-space:pre-line; overflow-wrap:anywhere; }
+  .panel p:last-child{ margin-bottom:0; }
+  .panel a{ color:var(--accent2); text-decoration:underline; text-underline-offset:2px; overflow-wrap:anywhere; }
+  .panel a:hover{ color:var(--cream); }
+
+  #gate{ text-align:center; color:var(--dim); font-size:13.5px; padding:40px 0; }
+  footer{ text-align:center; color:var(--dim); font-size:11px; }
+  footer a{ color:var(--accent2); }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</head>
+<body>
+
+<div id="shell">
+  <div id="gate">Loading&hellip;</div>
+
+  <div id="page" hidden>
+    <header>
+      <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
+      <div class="header-row">
+        <div class="art-strip">
+          <img src="" alt="" class="header-art" id="header-art" width="160" height="152">
+          <img src="" alt="" class="extra-art" id="extra-art-1" hidden>
+          <img src="" alt="" class="extra-art" id="extra-art-2" hidden>
+        </div>
+        <div class="title-block">
+          <h1 id="game-title"></h1>
+          <div class="game-version" id="game-version" hidden></div>
+          <a href="#" class="link rom-link" id="rom-link" download hidden>&#128190; Download ROM (.ngp)</a>
+          <a href="#" class="link play-link" id="play-link" hidden>&#127918; Play in Browser</a>
+          <a href="#" class="link manual-link" id="manual-link" target="_blank" rel="noopener" hidden>&#128214; Manual</a>
+          <a href="#" class="link admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
+        </div>
+      </div>
+    </header>
+
+    <section class="panel" id="about-panel" style="margin-top:22px" hidden>
+      <h2>About</h2>
+      <p id="game-desc"></p>
+      <p id="game-site" hidden><a href="#" id="game-site-link" target="_blank" rel="noopener"></a></p>
+    </section>
+  </div>
+
+  <footer><a href="/games/">&larr; All single-player games</a></footer>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  const el = (id)=>document.getElementById(id);
+  const slug = (new URLSearchParams(location.search).get('g') || '').toLowerCase();
+  // Defense in depth: manualUrl/siteUrl are rules-restricted to http(s) already, but this page
+  // writes them straight into an href, so refuse anything else here too.
+  const safeUrl = (u)=>/^https?:\/\/.+/i.test(u || '') ? u : null;
+
+  function fail(text){
+    el('gate').hidden = false;
+    el('gate').textContent = text;
+  }
+  if(!/^[a-z0-9-]{2,20}$/.test(slug)){ fail('No game selected — pick one from the single-player games page.'); return; }
+  if(!window.NGPC_AUTH || !NGPC_AUTH.db){ fail('This page isn’t available right now (a required library failed to load).'); return; }
+
+  NGPC_AUTH.db.collection('games').doc(slug).get().then(function(doc){
+    const data = doc.exists ? doc.data() : null;
+    if(!data || data.section !== 'solo'){ fail('That game isn’t available.'); return; }
+
+    document.title = data.name || slug;
+    el('game-title').textContent = data.name || slug;
+    el('header-art').alt = (data.name || slug) + ' title screen';
+    el('header-art').src = data.titleImage || '';
+    [data.extraScreenshot1Path, data.extraScreenshot2Path].forEach(function(url, i){
+      if(!url) return;
+      el('extra-art-'+(i+1)).src = url;
+      el('extra-art-'+(i+1)).hidden = false;
+    });
+    if(data.version){ el('game-version').textContent = data.version; el('game-version').hidden = false; }
+
+    const romEl = el('rom-link');
+    if(data.romPath){
+      romEl.href = data.romPath;
+      romEl.hidden = false;
+      romEl.addEventListener('click', function(){ NGPC_AUTH.trackRomDownload(slug); });
+      // No ROM, nothing to play either -- play/solo/ would just show its "no ROM" message.
+      el('play-link').href = '/play/solo/?g=' + encodeURIComponent(slug);
+      el('play-link').hidden = false;
+    }
+    const manual = safeUrl(data.manualUrl);
+    if(manual){ el('manual-link').href = manual; el('manual-link').hidden = false; }
+
+    const site = safeUrl(data.siteUrl);
+    if(data.description || site){
+      if(data.description) el('game-desc').textContent = data.description; else el('game-desc').hidden = true;
+      if(site){ el('game-site-link').href = site; el('game-site-link').textContent = site; el('game-site').hidden = false; }
+      el('about-panel').hidden = false;
+    }
+
+    // Same access gate as every other game's pages: while coming-soon, only the site admin, this
+    // game's own developer, or a preview tester sees the real page (the tile is already
+    // unclickable, but this URL is guessable).
+    NGPC_AUTH.onAuthChange(function(user){
+      const allowed = data.devStatus !== 'coming-soon' || NGPC_AUTH.canPreviewGame(user, data);
+      if(!allowed){
+        el('page').hidden = true;
+        fail('This game isn’t public yet — check back once it’s live.');
+        return;
+      }
+      el('gate').hidden = true;
+      el('page').hidden = false;
+      const adminEl = el('admin-link');
+      adminEl.href = '/admin/game/?slug=' + encodeURIComponent(slug);
+      adminEl.hidden = !NGPC_AUTH.isGameManager(user, data);
+    });
+  }).catch(function(){ fail('Couldn’t load this game right now — try refreshing.'); });
+})();
+</script>
+</body>
+</html>

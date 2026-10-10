@@ -94,10 +94,13 @@
     <button type="button" id="btn-submit">Submit Score</button>
     <div id="submit-msg"></div>
 
-    <div id="rom-row" hidden><a id="rom-link" href="#" download>&#128190; Download ROM (.ngp)</a></div>
+    <div id="rom-row" hidden>
+      <a id="rom-link" href="#" download>&#128190; Download ROM (.ngp)</a>
+      <span id="manual-sep" hidden> &middot; </span><a id="manual-link" href="#" target="_blank" rel="noopener" hidden>&#128214; Manual</a>
+    </div>
   </div>
 
-  <footer><a href="/games/">&larr; All single-player games</a></footer>
+  <footer><a id="back-link" href="/games/">&larr; All single-player games</a></footer>
 </div>
 
 <script src="/auth.js"></script>
@@ -135,7 +138,18 @@
   if(data.romPath){
     el('rom-link').href = data.romPath;
     el('rom-row').hidden = false;
+    el('rom-link').addEventListener('click', ()=>NGPC_AUTH.trackRomDownload(slug));
+  } else {
+    el('rom-link').hidden = true;
   }
+  if(/^https?:\/\/.+/i.test(data.manualUrl || '')){
+    el('manual-link').href = data.manualUrl;
+    el('manual-link').hidden = false;
+    el('manual-sep').hidden = !data.romPath;
+    el('rom-row').hidden = false;
+  }
+  el('back-link').href = '/games/about/?g=' + encodeURIComponent(slug);
+  el('back-link').textContent = '\u2190 ' + name;
 
   // This one page serves every solo game, so auth.js's own path-keyed page-view tracker (which
   // can only ever see "/play/solo/") counts them all together -- bump a per-game key too, same

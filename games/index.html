@@ -152,9 +152,7 @@
 
   // Same tile builder as index.html's buildTile(), minus the Most-Recent/Most-Active sort metadata
   // (data-game/data-added/data-pinned-at) that only that page's sort toggle reads. Solo games have
-  // no `code` (no QR routing) and no leaderboard -- a tile's destination is games/{slug}.leaderboardPath
-  // (the field's existing name; here it just means "the page this tile opens"), falling back to
-  // /<slug>/, same as every other tile.
+  // no `code` (no QR routing) and no leaderboard -- see the href logic below for where a tile goes.
   function buildTile(slug, data){
     const a = document.createElement('a');
     a.className = 'tile';
@@ -163,7 +161,13 @@
       a.classList.add('disabled');
       a.setAttribute('aria-disabled', 'true');
     } else {
-      a.href = data.leaderboardPath || ('/'+slug+'/');
+      // A solo game's tile opens its about page (games/about/) -- the same kind of landing page
+      // every leaderboard game has, with Play / Download / Manual links -- not the player itself.
+      // The stored leaderboardPath is only honored when it points somewhere else on purpose (e.g.
+      // a QR game moved to this section keeps opening its own leaderboard); a missing one, or the
+      // /play/solo/ path an earlier version of the add-game form stored, means "the about page".
+      const stored = data.leaderboardPath;
+      a.href = (!stored || stored.indexOf('/play/solo/') === 0) ? '/games/about/?g='+encodeURIComponent(slug) : stored;
     }
 
     const art = document.createElement('div');

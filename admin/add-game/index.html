@@ -77,14 +77,14 @@
 <div id="shell">
   <header>
     <h1 class="px">ADD A GAME</h1>
-    <p>Single-player (non-QR) games. No approval step &mdash; submitting this creates the tile on <a href="/games/" style="color:var(--accent2)">/games/</a> and its play page immediately.</p>
+    <p>Single-player (non-QR) games. No approval step &mdash; submitting this creates the tile on <a href="/games/" style="color:var(--accent2)">/games/</a>, its about page, and its play page immediately.</p>
   </header>
 
   <div id="denied" hidden></div>
 
   <section class="panel" id="form-panel" hidden>
     <h2>Game Details</h2>
-    <p class="hint">The play page is <code>/play/solo/?g=&lt;slug&gt;</code> &mdash; one shared player page that loads whichever game the slug names, so there are no files to generate or commit. After adding, change its dev status, visibility, or NEW badge from the <a href="/admin/">Games table</a> or <a href="/admin/game/">Manage Game</a>.</p>
+    <p class="hint">The tile opens <code>/games/about/?g=&lt;slug&gt;</code> (title, Download ROM / Play in Browser / Manual links), which links to <code>/play/solo/?g=&lt;slug&gt;</code> &mdash; both are shared pages that load whichever game the slug names, so there are no files to generate or commit. After adding, change its dev status, visibility, or NEW badge from the <a href="/admin/">Games table</a> or <a href="/admin/game/">Manage Game</a>.</p>
 
     <div class="two">
       <label><b>Name</b>
@@ -98,6 +98,11 @@
 
     <label><b>Description <span style="font-weight:400;color:var(--dim)">(optional)</span></b>
       <textarea id="g-desc" maxlength="240" placeholder="One or two lines shown under the title on the play page."></textarea>
+    </label>
+
+    <label><b>Manual link <span style="font-weight:400;color:var(--dim)">(optional)</span></b>
+      <input type="text" id="g-manual" maxlength="300" placeholder="https://example.com/manual.pdf" autocomplete="off">
+      <span class="sub">Shown as a &ldquo;Manual&rdquo; link on the game's page. Must start with http:// or https://.</span>
     </label>
 
     <div class="two">
@@ -170,11 +175,13 @@
     const description = el('g-desc').value.trim();
     const imageFile = el('g-image').files[0];
     const romFile = el('g-rom').files[0];
+    const manualUrl = el('g-manual').value.trim();
     const emulator = el('g-emulator').value;
     const devStatus = el('g-status').value;
 
     if(!name){ msgEl.innerHTML = '<div class="msg err">Enter a name.</div>'; return; }
     if(!/^[a-z0-9-]{2,20}$/.test(slug)){ msgEl.innerHTML = '<div class="msg err">Slug must be 2&ndash;20 lowercase letters, digits, or hyphens.</div>'; return; }
+    if(manualUrl && !/^https?:\/\/.+/i.test(manualUrl)){ msgEl.innerHTML = '<div class="msg err">The manual link must start with http:// or https://.</div>'; return; }
     if(!imageFile){ msgEl.innerHTML = '<div class="msg err">Choose a title screen image.</div>'; return; }
     if(!romFile || !/\.(ngp|ngc)$/i.test(romFile.name)){ msgEl.innerHTML = '<div class="msg err">Choose a .ngp or .ngc ROM.</div>'; return; }
     if(imageFile.size >= MAX_BYTES || romFile.size >= MAX_BYTES){ msgEl.innerHTML = '<div class="msg err">Files must be under 4 MB each.</div>'; return; }
@@ -206,8 +213,9 @@
         name,
         section: 'solo',
         description: description || null,
+        manualUrl: manualUrl || null,
         titleImage,
-        leaderboardPath: '/play/solo/?g='+slug,
+        leaderboardPath: '/games/about/?g='+slug,
         romPath, romFileName: romFile.name,
         emulator,
         devStatus,
@@ -220,10 +228,11 @@
       });
 
       msgEl.innerHTML = '<div class="msg ok">Added <b>'+escapeHtml(name)+'</b>. '
-        + '<a href="/play/solo/?g='+encodeURIComponent(slug)+'" target="_blank" rel="noopener">Open its play page</a> &middot; '
+        + '<a href="/games/about/?g='+encodeURIComponent(slug)+'" target="_blank" rel="noopener">Open its page</a> &middot; '
+        + '<a href="/play/solo/?g='+encodeURIComponent(slug)+'" target="_blank" rel="noopener">Play page</a> &middot; '
         + '<a href="/games/" target="_blank" rel="noopener">See the tile</a> &middot; '
         + '<a href="/admin/game/?slug='+encodeURIComponent(slug)+'">Manage</a></div>';
-      ['g-name','g-slug','g-desc'].forEach(id=>{ el(id).value = ''; });
+      ['g-name','g-slug','g-desc','g-manual'].forEach(id=>{ el(id).value = ''; });
       el('g-image').value = ''; el('g-rom').value = '';
       slugTouched = false;
     }catch(e){

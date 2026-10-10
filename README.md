@@ -82,6 +82,10 @@ firmware updated still lands somewhere real.
   main page, but listing only `games/{slug}` docs with `section: 'solo'`. The main page filters
   those docs out of its own grid and shows a "Single-player games →" link only once at least one
   visible solo game exists.
+- **`games/about/index.html?g=<slug>`** — a solo game's landing page, what its tile opens: the
+  same header panel as a leaderboard game (screenshots left, title + Download ROM / Play in Browser
+  / Manual links right-justified), plus an About panel (description, site link). Gated like every
+  other game page while the game is `coming-soon`.
 - **`play/solo/index.html?g=<slug>`** — the one shared player page for every solo game (see
   **Adding a single-player game** below). Same gating/ROM-resolution/emulator-mounting as the
   per-game `play/<folder>/` pages (it runs `play/webplayer.js` in `solo` mode: no Submit Score, no
@@ -190,11 +194,14 @@ Two independent, non-overlapping layers:
 For a game with no QR code and no leaderboard: **`/admin/add-game/`** (admin only). Fill in a name,
 slug, optional description, a title-screen image, the ROM, which web player to use, and a starting
 status, and it uploads the files to Firebase Storage and writes the `games/{slug}` doc
-(`section: 'solo'`, `leaderboardPath: '/play/solo/?g=<slug>'`) in one step — the tile shows up on
-`/games/` and the game is playable at `/play/solo/?g=<slug>` immediately. There is nothing to
+(`section: 'solo'`, `leaderboardPath: '/games/about/?g=<slug>'`) in one step — the tile shows up on
+`/games/`, opens `/games/about/?g=<slug>` (links to play, download, and the manual), and the game
+is playable at `/play/solo/?g=<slug>` immediately. The optional **manual link** is stored as
+`manualUrl` (http/https only); it can be edited later from `/admin/game/` next to the site link,
+and a game's own developer can set it too once the updated `firestore.rules` is published. There is nothing to
 generate or commit: unlike a QR game's per-game `play/<folder>/index.html` (scaffolded by the
 **Scaffold approved games** Action, which only runs on a push), every solo game shares the one
-`play/solo/` page, which reads its game's doc at load. Status, visibility, pinning, the NEW
+`games/about/` and `play/solo/` pages, which read their game's doc at load. Status, visibility, pinning, the NEW
 badge, and the Main/Solo **Section** toggle are managed from the admin **Games** table, and ROM
 re-uploads from `/admin/game/`. No `firestore.rules`/`storage.rules` change is involved —
 the admin already has write access to `games/{slug}` and `roms/{slug}/`.

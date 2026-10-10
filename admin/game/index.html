@@ -283,6 +283,8 @@
       <div class="field-count" id="game-desc-count">0 / 300</div>
       <div class="field-label" style="margin-top:12px">Your site / social link</div>
       <input type="url" id="game-site-input" maxlength="300" placeholder="https://example.com (optional)">
+      <div class="field-label" style="margin-top:12px">Manual link</div>
+      <input type="url" id="game-manual-input" maxlength="300" placeholder="https://example.com/manual.pdf (optional)">
       <div class="field-label" style="margin-top:12px">Version</div>
       <input type="text" id="game-version-input" maxlength="20" placeholder="e.g. v1.2 (optional)">
       <label style="margin-top:8px;display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);cursor:pointer">
@@ -1428,11 +1430,13 @@
     const descInput = el('game-desc-input');
     const descCount = el('game-desc-count');
     const siteInput = el('game-site-input');
+    const manualInput = el('game-manual-input');
     const versionInput = el('game-version-input');
     const versionTileInput = el('game-version-tile-input');
     const linksMsg = el('game-links-msg');
     descInput.value = data.description || '';
     siteInput.value = data.siteUrl || '';
+    manualInput.value = data.manualUrl || '';
     versionInput.value = data.version || '';
     versionTileInput.checked = !!data.showVersionOnTile;
     function paintDescCount(){ descCount.textContent = descInput.value.length + ' / 300'; }
@@ -1445,15 +1449,26 @@
         linksMsg.innerHTML = '<div class="msg err">Site link must start with http:// or https://.</div>';
         return;
       }
+      const manual = manualInput.value.trim();
+      if(manual && !/^https?:\/\/.+/i.test(manual)){
+        linksMsg.innerHTML = '<div class="msg err">Manual link must start with http:// or https://.</div>';
+        return;
+      }
       linksMsg.innerHTML = '';
       btn.disabled = true;
       try{
-        await docRef.update({
+        const update = {
           description: descInput.value.trim(),
           siteUrl: url,
           version: versionInput.value.trim(),
           showVersionOnTile: versionTileInput.checked,
-        });
+        };
+        // Only written when it actually changed -- a developer whose rules haven't picked up the
+        // manualUrl field yet (see firestore.rules) would otherwise fail every Save here, even one
+        // that never touched this field.
+        if(manual !== (data.manualUrl || '')) update.manualUrl = manual;
+        await docRef.update(update);
+        data.manualUrl = manual;
         linksMsg.innerHTML = '<div class="msg ok">Saved.</div>';
       }catch(e){
         linksMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';

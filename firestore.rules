@@ -750,12 +750,15 @@ service cloud.firestore {
           // devStatus 'coming-soon', without granting them any ability to edit the game itself
           // (see auth.js's canPreviewGame(), which every access-gated leaderboard/play page's
           // isAuthorizedViewer() checks alongside isGameManager). Capped at 20 entries -- this is
-          // a short early-access list, not a general permissions system.
+          // a short early-access list, not a general permissions system. manualUrl -- a link to
+          // the game's manual (PDF, wiki page, anywhere), shown on a single-player game's about
+          // page (games/about/); same http(s)-only restriction as siteUrl, for the same reason.
           || (isAssignedDev(resource.data)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'visibility', 'emulator', 'version', 'showVersionOnTile', 'previewTesters'])
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'visibility', 'emulator', 'version', 'showVersionOnTile', 'previewTesters', 'manualUrl'])
               && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final']
               && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 300))
               && (!('siteUrl' in request.resource.data) || (request.resource.data.siteUrl is string && (request.resource.data.siteUrl == '' || request.resource.data.siteUrl.matches('^https?://.+'))))
+              && (!('manualUrl' in request.resource.data) || (request.resource.data.manualUrl is string && (request.resource.data.manualUrl == '' || request.resource.data.manualUrl.matches('^https?://.+'))))
               && (!('visibility' in request.resource.data) || request.resource.data.visibility in ['active', 'inactive', 'hidden'])
               && (!('emulator' in request.resource.data) || request.resource.data.emulator in ['emulatorjs', 'ngpcraft'])
               && (!('version' in request.resource.data) || (request.resource.data.version is string && request.resource.data.version.size() <= 20))
