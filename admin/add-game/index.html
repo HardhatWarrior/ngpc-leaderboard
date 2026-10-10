@@ -100,9 +100,9 @@
       <textarea id="g-desc" maxlength="240" placeholder="One or two lines shown under the title on the play page."></textarea>
     </label>
 
-    <label><b>Manual link <span style="font-weight:400;color:var(--dim)">(optional)</span></b>
-      <input type="text" id="g-manual" maxlength="300" placeholder="https://example.com/manual.pdf" autocomplete="off">
-      <span class="sub">Shown as a &ldquo;Manual&rdquo; link on the game's page. Must start with http:// or https://.</span>
+    <label><b>Manual <span style="font-weight:400;color:var(--dim)">(optional PDF)</span></b>
+      <input type="file" id="g-manual" accept=".pdf,application/pdf">
+      <span class="sub">Shown as a &ldquo;Manual&rdquo; link on the game's page. PDF, under 8 MB.</span>
     </label>
 
     <div class="two">
@@ -148,7 +148,8 @@
   const deniedEl = el('denied');
   const formPanel = el('form-panel');
   const msgEl = el('g-msg');
-  const MAX_BYTES = 4 * 1024 * 1024; // storage.rules' own size cap on both upload paths used here
+  const MAX_BYTES = 4 * 1024 * 1024; // storage.rules' size cap on roms/ (the image's own cap is looser, 8 MB, but one limit is simpler)
+  const MAX_MANUAL_BYTES = 8 * 1024 * 1024; // storage.rules' cap on the submissions/{uid}/ path the manual goes to
 
   function escapeHtml(s){
     return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -175,13 +176,13 @@
     const description = el('g-desc').value.trim();
     const imageFile = el('g-image').files[0];
     const romFile = el('g-rom').files[0];
-    const manualUrl = el('g-manual').value.trim();
+    const manualFile = el('g-manual').files[0];
     const emulator = el('g-emulator').value;
     const devStatus = el('g-status').value;
 
     if(!name){ msgEl.innerHTML = '<div class="msg err">Enter a name.</div>'; return; }
     if(!/^[a-z0-9-]{2,20}$/.test(slug)){ msgEl.innerHTML = '<div class="msg err">Slug must be 2&ndash;20 lowercase letters, digits, or hyphens.</div>'; return; }
-    if(manualUrl && !/^https?:\/\/.+/i.test(manualUrl)){ msgEl.innerHTML = '<div class="msg err">The manual link must start with http:// or https://.</div>'; return; }
+    if(manualFile && (!/\.pdf$/i.test(manualFile.name) || manualFile.size >= MAX_MANUAL_BYTES)){ msgEl.innerHTML = '<div class="msg err">The manual must be a PDF under 8 MB.</div>'; return; }
     if(!imageFile){ msgEl.innerHTML = '<div class="msg err">Choose a title screen image.</div>'; return; }
     if(!romFile || !/\.(ngp|ngc)$/i.test(romFile.name)){ msgEl.innerHTML = '<div class="msg err">Choose a .ngp or .ngc ROM.</div>'; return; }
     if(imageFile.size >= MAX_BYTES || romFile.size >= MAX_BYTES){ msgEl.innerHTML = '<div class="msg err">Files must be under 4 MB each.</div>'; return; }
@@ -197,14 +198,15 @@
         return;
       }
 
-      msgEl.innerHTML = '<div class="msg info">Uploading ROM and image&hellip;</div>';
+      msgEl.innerHTML = '<div class="msg info">Uploading files&hellip;</div>';
       const imgExt = (imageFile.name.match(/\.[a-z0-9]+$/i) || ['.png'])[0].toLowerCase();
       // Same two paths the rest of the site already uses: roms/{slug}/ is what admin/game/'s own
       // "Upload ROM" writes (so a later ROM re-upload there just works), and the image goes under
       // submissions/{uid}/ because storage.rules' roms/ block only accepts .ngp/.ngc files.
-      const [romPath, titleImage] = await Promise.all([
+      const [romPath, titleImage, manualUrl] = await Promise.all([
         upload('roms/'+slug+'/'+romFile.name, romFile),
         upload('submissions/'+user.uid+'/'+slug+'/title'+imgExt, imageFile),
+        manualFile ? upload('submissions/'+user.uid+'/'+slug+'/manual.pdf', manualFile) : Promise.resolve(null),
       ]);
 
       msgEl.innerHTML = '<div class="msg info">Creating the game&hellip;</div>';
@@ -213,7 +215,7 @@
         name,
         section: 'solo',
         description: description || null,
-        manualUrl: manualUrl || null,
+        manualUrl,
         titleImage,
         leaderboardPath: '/games/about/?g='+slug,
         romPath, romFileName: romFile.name,
@@ -232,8 +234,8 @@
         + '<a href="/play/solo/?g='+encodeURIComponent(slug)+'" target="_blank" rel="noopener">Play page</a> &middot; '
         + '<a href="/games/" target="_blank" rel="noopener">See the tile</a> &middot; '
         + '<a href="/admin/game/?slug='+encodeURIComponent(slug)+'">Manage</a></div>';
-      ['g-name','g-slug','g-desc','g-manual'].forEach(id=>{ el(id).value = ''; });
-      el('g-image').value = ''; el('g-rom').value = '';
+      ['g-name','g-slug','g-desc'].forEach(id=>{ el(id).value = ''; });
+      el('g-image').value = ''; el('g-rom').value = ''; el('g-manual').value = '';
       slugTouched = false;
     }catch(e){
       msgEl.innerHTML = '<div class="msg err">Couldn’t add the game: '+escapeHtml(e.message||'unknown error')

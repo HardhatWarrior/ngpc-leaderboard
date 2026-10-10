@@ -283,8 +283,6 @@
       <div class="field-count" id="game-desc-count">0 / 300</div>
       <div class="field-label" style="margin-top:12px">Your site / social link</div>
       <input type="url" id="game-site-input" maxlength="300" placeholder="https://example.com (optional)">
-      <div class="field-label" style="margin-top:12px">Manual link</div>
-      <input type="url" id="game-manual-input" maxlength="300" placeholder="https://example.com/manual.pdf (optional)">
       <div class="field-label" style="margin-top:12px">Version</div>
       <input type="text" id="game-version-input" maxlength="20" placeholder="e.g. v1.2 (optional)">
       <label style="margin-top:8px;display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--dim);cursor:pointer">
@@ -292,6 +290,20 @@
       </label>
       <button type="button" class="action btn-primary" id="game-links-save" style="margin-top:10px">Save</button>
       <div id="game-links-msg"></div>
+    </div>
+
+    <!-- Manual: an uploaded PDF, shown as a "Manual" link on a single-player game's about/play
+         pages (games/about/, play/solo/). Uploads and removals apply immediately -- they are not
+         part of the Save button above. -->
+    <div style="margin-top:20px">
+      <div class="field-label">Manual (PDF)</div>
+      <div class="current-value" id="game-manual-current">No manual uploaded.</div>
+      <input type="file" id="game-manual-file" accept=".pdf,application/pdf">
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button type="button" class="action btn-primary" id="game-manual-upload" disabled>Upload manual</button>
+        <button type="button" class="action" style="background:transparent;border:1px solid var(--border);color:var(--dim)" id="game-manual-remove" hidden>Remove manual</button>
+      </div>
+      <div id="game-manual-msg"></div>
     </div>
 
     <!-- Lets a developer (or admin) grant OTHER accounts early access to this game's leaderboard
@@ -1430,13 +1442,11 @@
     const descInput = el('game-desc-input');
     const descCount = el('game-desc-count');
     const siteInput = el('game-site-input');
-    const manualInput = el('game-manual-input');
     const versionInput = el('game-version-input');
     const versionTileInput = el('game-version-tile-input');
     const linksMsg = el('game-links-msg');
     descInput.value = data.description || '';
     siteInput.value = data.siteUrl || '';
-    manualInput.value = data.manualUrl || '';
     versionInput.value = data.version || '';
     versionTileInput.checked = !!data.showVersionOnTile;
     function paintDescCount(){ descCount.textContent = descInput.value.length + ' / 300'; }
@@ -1449,26 +1459,15 @@
         linksMsg.innerHTML = '<div class="msg err">Site link must start with http:// or https://.</div>';
         return;
       }
-      const manual = manualInput.value.trim();
-      if(manual && !/^https?:\/\/.+/i.test(manual)){
-        linksMsg.innerHTML = '<div class="msg err">Manual link must start with http:// or https://.</div>';
-        return;
-      }
       linksMsg.innerHTML = '';
       btn.disabled = true;
       try{
-        const update = {
+        await docRef.update({
           description: descInput.value.trim(),
           siteUrl: url,
           version: versionInput.value.trim(),
           showVersionOnTile: versionTileInput.checked,
-        };
-        // Only written when it actually changed -- a developer whose rules haven't picked up the
-        // manualUrl field yet (see firestore.rules) would otherwise fail every Save here, even one
-        // that never touched this field.
-        if(manual !== (data.manualUrl || '')) update.manualUrl = manual;
-        await docRef.update(update);
-        data.manualUrl = manual;
+        });
         linksMsg.innerHTML = '<div class="msg ok">Saved.</div>';
       }catch(e){
         linksMsg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
@@ -1476,6 +1475,70 @@
         btn.disabled = false;
       }
     });
+
+    // Manual upload. Goes to submissions/{uid}/{slug}/manual.pdf -- the one Storage path storage.rules
+    // lets any signed-in user write under their OWN uid (8 MB cap), so a game's developer can
+    // upload without a rules change; the public reads it through the download URL stored in
+    // games/{slug}.manualUrl, same as every other uploaded asset on the site.
+    (function(){
+      const currentEl = el('game-manual-current');
+      const fileEl = el('game-manual-file');
+      const uploadBtn = el('game-manual-upload');
+      const removeBtn = el('game-manual-remove');
+      const msgEl = el('game-manual-msg');
+      const manualRef = ()=>firebase.storage().ref().child('submissions/'+user.uid+'/'+slug+'/manual.pdf');
+      function paint(){
+        if(data.manualUrl){
+          currentEl.innerHTML = 'Current: <a href="'+escapeHtml(data.manualUrl)+'" target="_blank" rel="noopener" style="color:var(--accent2)">view manual</a>';
+          uploadBtn.textContent = 'Replace manual';
+          removeBtn.hidden = false;
+        } else {
+          currentEl.textContent = 'No manual uploaded.';
+          uploadBtn.textContent = 'Upload manual';
+          removeBtn.hidden = true;
+        }
+      }
+      paint();
+      fileEl.addEventListener('change', ()=>{ uploadBtn.disabled = !fileEl.files.length; });
+      uploadBtn.addEventListener('click', async ()=>{
+        const file = fileEl.files[0];
+        if(!file) return;
+        if(!/\.pdf$/i.test(file.name)){ msgEl.innerHTML = '<div class="msg err">Only PDF files are accepted.</div>'; return; }
+        if(file.size >= 8*1024*1024){ msgEl.innerHTML = '<div class="msg err">Manuals must be under 8 MB.</div>'; return; }
+        uploadBtn.disabled = true;
+        msgEl.innerHTML = '<div class="msg ok">Uploading…</div>';
+        try{
+          if(!window.firebase.storage) throw new Error('Storage SDK failed to load');
+          const ref = manualRef();
+          await ref.put(file, {contentType: 'application/pdf'});
+          const url = await ref.getDownloadURL();
+          await docRef.update({manualUrl: url});
+          data.manualUrl = url;
+          paint();
+          fileEl.value = '';
+          msgEl.innerHTML = '<div class="msg ok">Uploaded.</div>';
+        }catch(e){
+          msgEl.innerHTML = '<div class="msg err">Upload failed: '+escapeHtml(e.message||'unknown error')+'</div>';
+        }finally{
+          uploadBtn.disabled = !fileEl.files.length;
+        }
+      });
+      removeBtn.addEventListener('click', async ()=>{
+        if(!confirm('Remove this game\u2019s manual?')) return;
+        removeBtn.disabled = true;
+        try{
+          await docRef.update({manualUrl: ''});
+          data.manualUrl = '';
+          manualRef().delete().catch(()=>{ /* best effort -- the link is already gone from the game */ });
+          paint();
+          msgEl.innerHTML = '<div class="msg ok">Removed.</div>';
+        }catch(e){
+          msgEl.innerHTML = '<div class="msg err">Couldn\u2019t remove: '+escapeHtml(e.message||'unknown error')+'</div>';
+        }finally{
+          removeBtn.disabled = false;
+        }
+      });
+    })();
 
     // Preview access: stored as uids (previewTesters), picked here as chips over an autocomplete
     // of real usernames -- avoids the old plain-text field's typo/comma-splitting fragility

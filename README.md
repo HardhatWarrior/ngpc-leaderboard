@@ -196,9 +196,10 @@ slug, optional description, a title-screen image, the ROM, which web player to u
 status, and it uploads the files to Firebase Storage and writes the `games/{slug}` doc
 (`section: 'solo'`, `leaderboardPath: '/games/about/?g=<slug>'`) in one step — the tile shows up on
 `/games/`, opens `/games/about/?g=<slug>` (links to play, download, and the manual), and the game
-is playable at `/play/solo/?g=<slug>` immediately. The optional **manual link** is stored as
-`manualUrl` (http/https only); it can be edited later from `/admin/game/` next to the site link,
-and a game's own developer can set it too once the updated `firestore.rules` is published. There is nothing to
+is playable at `/play/solo/?g=<slug>` immediately. The optional **manual** is an uploaded PDF (Storage,
+`submissions/{uid}/{slug}/manual.pdf`, 8 MB cap) whose download URL is stored as `manualUrl`
+(http/https only per `firestore.rules`); it can be replaced or removed later from `/admin/game/`,
+which a game's own developer can do too. There is nothing to
 generate or commit: unlike a QR game's per-game `play/<folder>/index.html` (scaffolded by the
 **Scaffold approved games** Action, which only runs on a push), every solo game shares the one
 `games/about/` and `play/solo/` pages, which read their game's doc at load. Status, visibility, pinning, the NEW
