@@ -54,6 +54,23 @@
   .msg.ok{ background:rgba(79,191,139,.15); color:var(--good); border:1px solid rgba(79,191,139,.35); }
   .msg.info{ background:rgba(92,143,214,.12); color:var(--dim); border:1px solid var(--border); }
   a{ color:var(--accent2); }
+  #emu-switch{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  #emu-switch .emu-label{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); margin-right:2px; }
+  #emu-switch button{
+    font:inherit; font-size:12.5px; font-weight:600; padding:8px 14px; border-radius:8px; cursor:pointer;
+    background:transparent; border:1px solid var(--border); color:var(--cream);
+  }
+  #emu-switch button.active{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  #emu-note{ font-size:11.5px; color:var(--dim); line-height:1.5; }
+  #ejs-panel{ display:flex; flex-direction:column; gap:12px; }
+  #ejs-panel[hidden]{ display:none; }
+  .ejs-open{
+    display:block; text-align:center; cursor:pointer; font-weight:600; font-size:13.5px; padding:13px 20px;
+    border-radius:8px; background:var(--panel2); border:1px solid var(--border); color:var(--cream);
+  }
+  .ejs-open input{ display:none; }
+  .ejs-open[hidden]{ display:none; }
+  #ejs-game{ width:100%; aspect-ratio:160/152; max-height:70vh; background:#000; border-radius:10px; overflow:hidden; }
   footer{ text-align:center; color:var(--dim); font-size:11px; }
 </style>
 <!-- Cloudflare Web Analytics -->
@@ -76,7 +93,19 @@
   <div id="signin-gate">&#128274; Sign in (top right) to use this page.</div>
 
   <div id="player-content" hidden>
+    <div id="emu-switch" role="group" aria-label="Emulator">
+      <span class="emu-label">Emulator</span>
+      <button type="button" data-emu="ngpcraft">NgpCraft</button>
+      <button type="button" data-emu="ejs">EmulatorJS</button>
+    </div>
+    <div id="emu-note"></div>
+
     <ngpcraft-player></ngpcraft-player>
+
+    <div id="ejs-panel" hidden>
+      <label class="ejs-open" id="ejs-open-label">Open ROM<input type="file" id="ejs-rom"></label>
+      <div id="ejs-game" hidden></div>
+    </div>
 
     <button type="button" id="btn-submit" disabled>Submit Score</button>
     <div id="submit-msg"></div>
@@ -189,13 +218,14 @@
   let player = null;
 
   async function captureAndSubmit(){
-    if(captureBusy || !player) return;
+    if(captureBusy || (EMU === 'ngpcraft' && !player)) return;
     captureBusy = true;
     btnSubmit.disabled = true;
     showMsg('info', 'Looking for a QR code…');
 
     try{
-      const canvas = player.captureFrame();
+      const canvas = EMU === 'ejs' ? await grabEmulatorJSFrame() : player.captureFrame();
+      if(!canvas) throw new Error('The game isn\u2019t running yet.');
       const value = await decodeSource(canvas, canvas.width, canvas.height, [700, 1100, 1500, 2000]);
       if(!value){
         showMsg('err', 'No QR code found on screen — make sure the in-game QR code is fully visible and try again.');
@@ -236,14 +266,86 @@
   // rather than a static <script> tag, so a signed-out visitor never triggers the WASM download
   // at all. No fixed ROM: the element's own built-in "Open ROM" file picker is the whole point
   // of this page, so nothing is set on it beyond letting it mount.
+  /* ---------- emulator choice ----------
+     Two backends, picked with the switch at the top: the NgpCraft Web Emulator (default; the full
+     <ngpcraft-player>) or EmulatorJS (same one the real /play/<slug>/ pages use when a game's
+     "emulator" is set to emulatorjs). EmulatorJS is a page-wide singleton, so switching reloads the
+     page rather than trying to tear one down and mount the other. The choice is remembered. */
+  const EMU_KEY = 'ngpcTestEmulator';
+  function chooseEmulator(){
+    const q = new URLSearchParams(location.search).get('emu');
+    if(q === 'ejs' || q === 'ngpcraft'){ try{ localStorage.setItem(EMU_KEY, q); }catch(e){} return q; }
+    try{ return localStorage.getItem(EMU_KEY) === 'ejs' ? 'ejs' : 'ngpcraft'; }catch(e){ return 'ngpcraft'; }
+  }
+  const EMU = chooseEmulator();
+  document.querySelectorAll('#emu-switch button').forEach(btn=>{
+    btn.classList.toggle('active', btn.dataset.emu === EMU);
+    btn.addEventListener('click', ()=>{
+      if(btn.dataset.emu === EMU) return;
+      try{ localStorage.setItem(EMU_KEY, btn.dataset.emu); }catch(e){}
+      location.replace(location.pathname); // drop any ?emu= so the saved choice wins
+    });
+  });
+  el('emu-note').textContent = EMU === 'ejs'
+    ? 'EmulatorJS: true fullscreen on phones (use its own fullscreen button). Pick a ROM to start; reload to open a different one.'
+    : 'NgpCraft: more accurate and lighter. On phones its Fullscreen fills the screen with the game shrunk to fit above the on-screen controls.';
+
   let emulatorRequested = false;
   async function loadEmulator(){
     if(emulatorRequested) return;
     emulatorRequested = true;
+    if(EMU === 'ejs'){ setupEmulatorJS(); return; }
     await import('/ngpc/player.js');
     player = document.querySelector('ngpcraft-player');
     player.addEventListener('ngpc-ready', ()=>{ btnSubmit.disabled = false; });
     applyMobileFixes(player);
+  }
+
+  /* ---------- EmulatorJS backend ---------- */
+  const NATIVE_ASPECT = 160/152;
+  function setupEmulatorJS(){
+    document.querySelector('ngpcraft-player').style.display = 'none';
+    el('ejs-panel').hidden = false;
+    el('ejs-rom').addEventListener('change', (e)=>{
+      const file = e.target.files && e.target.files[0];
+      if(!file) return;
+      el('ejs-open-label').hidden = true;
+      const game = el('ejs-game');
+      game.hidden = false;
+      window.EJS_player = '#ejs-game';
+      window.EJS_gameUrl = URL.createObjectURL(file);
+      window.EJS_gameName = file.name.replace(/\.[^.]+$/, '');
+      window.EJS_pathtodata = '/play/emulatorjs/data/';
+      window.EJS_core = 'ngp';
+      const loader = document.createElement('script');
+      loader.src = '/play/emulatorjs/data/loader.js';
+      document.body.appendChild(loader);
+      // Submit Score only makes sense once EmulatorJS has actually created its canvas.
+      const poll = setInterval(()=>{
+        if(window.EJS_emulator && EJS_emulator.canvas){ clearInterval(poll); btnSubmit.disabled = false; }
+      }, 500);
+      setTimeout(()=>clearInterval(poll), 60000);
+    });
+  }
+  // Same one-frame deferral + crop as play/webplayer.js's grabEmulatorJSFrame(): the canvas is
+  // WebGL-backed without preserveDrawingBuffer, so it can only be read inside a rAF callback.
+  function grabEmulatorJSFrame(){
+    const canvas = window.EJS_emulator && EJS_emulator.canvas;
+    if(!canvas || !canvas.width || !canvas.height) return Promise.resolve(null);
+    return new Promise(resolve=>{
+      let done = false;
+      const draw = ()=>{
+        if(done) return; done = true;
+        const visH = Math.min(canvas.height, canvas.width / NATIVE_ASPECT);
+        const visW = Math.min(canvas.width, canvas.height * NATIVE_ASPECT);
+        const out = document.createElement('canvas');
+        out.width = visW; out.height = visH;
+        out.getContext('2d', {alpha:false}).drawImage(canvas, 0, 0, visW, visH, 0, 0, visW, visH);
+        resolve(out);
+      };
+      requestAnimationFrame(draw);
+      setTimeout(draw, 500); // rAF doesn't run in a hidden tab -- don't hang forever waiting on it
+    });
   }
 
   // Phone fixes for the upstream full player (vendored under /ngpc/, deliberately not patched there
@@ -252,10 +354,11 @@
   //     pickers) can't map those extensions to a file type and grey out every file, so a ROM can't
   //     be chosen -- Play and Restart then stay disabled forever. Dropping the filter lets any file
   //     be picked (the player itself validates the ROM size/contents).
-  //  2. Its Fullscreen button needs the browser Fullscreen API, which iPhone Safari doesn't have
-  //     ("Fullscreen is unavailable in this browser"). The compact <ngpcraft-embed> used on the real
-  //     game pages already falls back to a CSS "expanded" overlay; do the same here by re-using the
-  //     player's own :fullscreen styles under [expanded] and toggling that attribute instead.
+  //  2. Its own Fullscreen makes the *player* the fullscreen element and then shrinks the game to
+  //     leave 320px for controls; on iPhone Safari the Fullscreen API doesn't exist at all. Instead
+  //     the player is switched into an "expanded" fixed overlay with this page's own layout --
+  //     game as large as fits, touch controls overlaid -- and, where supported, the whole page is
+  //     put into real browser fullscreen too (hides the address bar on Android).
   //  3. Start playing as soon as a ROM finishes loading -- the file-picker tap is already the user
   //     gesture audio needs, and it saves a second tap on Play.
   function applyMobileFixes(p){
@@ -264,28 +367,64 @@
     const rom = root.querySelector('input.rom');
     if(rom) rom.removeAttribute('accept');
 
-    const css = Array.from(root.querySelectorAll('style')).map(st=>st.textContent).join('\n');
-    const rules = css.match(/[^{}]*:host\(:fullscreen[^{}]*\{[^{}]*\}/g) || [];
     const extra = document.createElement('style');
-    extra.textContent =
-      rules.map(r=>r.replace(/:host\(:fullscreen\)/g, ':host([expanded])').replace(/:host\(:fullscreen\[/g, ':host([expanded][')).join('\n') +
-      '\n:host([expanded]){position:fixed;inset:0;z-index:2147483000;width:100%;height:100dvh;max-width:none;border-radius:0}';
+    extra.textContent = `
+      /* more room between the on-screen buttons than upstream's tight 2px / 10px gaps */
+      .dpad{ gap:10px; }
+      .actions{ gap:18px 24px; }
+      :host([expanded]){ position:fixed !important; inset:0; z-index:2147483000; display:block;
+        width:100% !important; height:100dvh; max-width:none !important; border-radius:0; background:#080d15; }
+      :host([expanded]) section{ position:absolute; inset:0; width:100%; height:100%; max-width:none; padding:0; margin:0;
+        border:0; border-radius:0; overflow:hidden; display:block; background:#080d15; }
+      :host([expanded]) header, :host([expanded]) .controls-hint{ display:none; }
+      :host([expanded]) canvas.game-screen{ position:absolute; top:0; left:50%; transform:translateX(-50%);
+        height:100%; width:auto; aspect-ratio:160/152; max-width:100%; margin:0; object-fit:contain; }
+      @media (orientation:portrait){
+        :host([expanded]) canvas.game-screen{ top:max(8px, env(safe-area-inset-top,0px)); width:100%; height:auto;
+          max-height:calc(100% - 230px - env(safe-area-inset-bottom,0px)); }
+      }
+      :host([expanded]) .touch{ position:absolute; left:max(12px, env(safe-area-inset-left,0px));
+        right:max(12px, env(safe-area-inset-right,0px)); bottom:max(16px, env(safe-area-inset-bottom,0px));
+        width:auto; max-width:none; margin:0; z-index:3; pointer-events:none; }
+      :host([expanded]) .touch .dpad, :host([expanded]) .touch .actions{ pointer-events:auto; }
+      :host([expanded]) .status{ position:absolute; top:8px; left:8px; right:64px; z-index:2; }
+      /* the player only applies these under (pointer:coarse); repeated unconditionally so an iPad with a
+         trackpad or a desktop window behaves the same as a phone */
+      :host([expanded]) .quick-menu{ display:grid; place-items:center; position:absolute; z-index:4;
+        top:max(8px, env(safe-area-inset-top,0px)); right:max(8px, env(safe-area-inset-right,0px)); width:44px; height:44px;
+        padding:10px; border-radius:50%; background:#111b2c99; border:1px solid #ffffff30; color:#fff; opacity:.65; }
+      :host([expanded]) section>.bar{ display:none; }
+      :host([expanded][menu-open]) section>.bar{ display:flex; position:absolute; z-index:4; top:60px;
+        right:max(8px, env(safe-area-inset-right,0px)); left:auto; bottom:auto; width:200px; max-height:calc(100% - 76px);
+        height:auto; overflow:auto; margin:0; padding:10px; gap:6px; flex-direction:column; align-items:stretch;
+        border:1px solid #53647c; border-radius:12px; background:#172235f5; box-shadow:0 8px 30px #0006; }
+      :host([expanded][menu-open]) section>.bar button{ margin:0; min-height:44px; font-size:14px; }
+      :host([expanded]) section>.bar>.file{ display:none; }
+      :host([expanded]) .settings{ z-index:5; position:absolute; top:12px; right:12px;
+        width:min(440px, calc(100% - 24px)); max-height:calc(100% - 24px); overflow:auto; }
+    `;
     root.append(extra);
 
-    p.toggleFullscreen = async function(){
-      if(document.fullscreenElement === this){ await document.exitFullscreen(); return; }
-      if(!this.hasAttribute('expanded') && this.requestFullscreen && document.fullscreenEnabled){
-        try{ await this.requestFullscreen(); return; }catch(e){ /* fall through to the CSS overlay */ }
-      }
-      const on = !this.hasAttribute('expanded');
+    function setExpanded(on){
       document.documentElement.style.overflow = on ? 'hidden' : '';
-      this.toggleAttribute('expanded', on);
-      this.updateFullscreen();
+      p.toggleAttribute('expanded', on);
+      p.updateFullscreen();
+    }
+    p.toggleFullscreen = async function(){
+      const on = !this.hasAttribute('expanded');
+      setExpanded(on);
+      try{
+        if(on && !document.fullscreenElement && document.documentElement.requestFullscreen) await document.documentElement.requestFullscreen();
+        else if(!on && document.fullscreenElement) await document.exitFullscreen();
+      }catch(e){ /* browser refused real fullscreen -- the overlay alone is still fine */ }
     };
+    document.addEventListener('fullscreenchange', ()=>{
+      if(!document.fullscreenElement && p.hasAttribute('expanded')) setExpanded(false);
+    });
     const baseUpdate = p.updateFullscreen.bind(p);
     p.updateFullscreen = function(){
       baseUpdate();
-      const active = this.hasAttribute('expanded') || document.fullscreenElement === this;
+      const active = this.hasAttribute('expanded');
       const full = this.$('.full');
       full.textContent = active ? 'Exit fullscreen' : 'Fullscreen';
       full.setAttribute('aria-pressed', String(active));
