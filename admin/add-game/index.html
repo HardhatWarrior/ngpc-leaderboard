@@ -100,6 +100,12 @@
       <textarea id="g-desc" maxlength="240" placeholder="One or two lines shown under the title on the play page."></textarea>
     </label>
 
+    <label><b>Developer <span style="font-weight:400;color:var(--dim)">(optional)</span></b>
+      <input type="text" id="g-dev" list="g-dev-list" placeholder="Start typing a username" autocomplete="off">
+      <datalist id="g-dev-list"></datalist>
+      <span class="sub">The account that made the game. It can manage the game from Manage Game and is credited on its page. Leave blank to manage it yourself.</span>
+    </label>
+
     <label><b>Manual <span style="font-weight:400;color:var(--dim)">(optional PDF)</span></b>
       <input type="file" id="g-manual" accept=".pdf,application/pdf">
       <span class="sub">Shown as a &ldquo;Manual&rdquo; link on the game's page. PDF, under 8 MB.</span>
@@ -170,12 +176,32 @@
     return ref.getDownloadURL();
   }
 
+  // username (lowercased) -> {uid, username}, filled once at boot from the publicly readable users/
+  // collection -- the Developer field only ever resolves to a real account this way, so a typo can't
+  // store a uid nothing matches.
+  const usersByName = new Map();
+  async function loadUsers(db){
+    try{
+      const snap = await db.collection('users').get();
+      const names = [];
+      snap.forEach(doc=>{
+        const name = doc.data().username;
+        if(!name) return;
+        usersByName.set(name.toLowerCase(), {uid: doc.id, username: name});
+        names.push(name);
+      });
+      names.sort((a, b)=>a.localeCompare(b));
+      el('g-dev-list').innerHTML = names.map(n=>'<option value="'+escapeHtml(n)+'"></option>').join('');
+    }catch(e){ /* the field then just can't resolve anyone -- a typed name is rejected below */ }
+  }
+
   async function addGame(db, user){
     const name = el('g-name').value.trim();
     const slug = el('g-slug').value.trim().toLowerCase();
     const description = el('g-desc').value.trim();
     const imageFile = el('g-image').files[0];
     const romFile = el('g-rom').files[0];
+    const devName = el('g-dev').value.trim().replace(/^@/, '');
     const manualFile = el('g-manual').files[0];
     const emulator = el('g-emulator').value;
     const devStatus = el('g-status').value;
@@ -183,6 +209,8 @@
     if(!name){ msgEl.innerHTML = '<div class="msg err">Enter a name.</div>'; return; }
     if(!/^[a-z0-9-]{2,20}$/.test(slug)){ msgEl.innerHTML = '<div class="msg err">Slug must be 2&ndash;20 lowercase letters, digits, or hyphens.</div>'; return; }
     if(manualFile && (!/\.pdf$/i.test(manualFile.name) || manualFile.size >= MAX_MANUAL_BYTES)){ msgEl.innerHTML = '<div class="msg err">The manual must be a PDF under 8 MB.</div>'; return; }
+    const developer = devName ? usersByName.get(devName.toLowerCase()) : null;
+    if(devName && !developer){ msgEl.innerHTML = '<div class="msg err">No account named &ldquo;'+escapeHtml(devName)+'&rdquo; &mdash; pick one from the list, or leave Developer blank.</div>'; return; }
     if(!imageFile){ msgEl.innerHTML = '<div class="msg err">Choose a title screen image.</div>'; return; }
     if(!romFile || !/\.(ngp|ngc)$/i.test(romFile.name)){ msgEl.innerHTML = '<div class="msg err">Choose a .ngp or .ngc ROM.</div>'; return; }
     if(imageFile.size >= MAX_BYTES || romFile.size >= MAX_BYTES){ msgEl.innerHTML = '<div class="msg err">Files must be under 4 MB each.</div>'; return; }
@@ -220,6 +248,7 @@
         leaderboardPath: '/games/about/?g='+slug,
         romPath, romFileName: romFile.name,
         emulator,
+        developerUid: developer ? developer.uid : null,
         devStatus,
         visibility: 'active',
         addedAt: now, romUpdatedAt: now,
@@ -234,7 +263,7 @@
         + '<a href="/play/solo/?g='+encodeURIComponent(slug)+'" target="_blank" rel="noopener">Play page</a> &middot; '
         + '<a href="/games/" target="_blank" rel="noopener">See the tile</a> &middot; '
         + '<a href="/admin/game/?slug='+encodeURIComponent(slug)+'">Manage</a></div>';
-      ['g-name','g-slug','g-desc'].forEach(id=>{ el(id).value = ''; });
+      ['g-name','g-slug','g-desc','g-dev'].forEach(id=>{ el(id).value = ''; });
       el('g-image').value = ''; el('g-rom').value = ''; el('g-manual').value = '';
       slugTouched = false;
     }catch(e){
@@ -261,6 +290,7 @@
       return;
     }
     formPanel.hidden = false;
+    loadUsers(NGPC_AUTH.db);
     el('g-add').addEventListener('click', ()=>addGame(NGPC_AUTH.db, user));
   }
   boot();

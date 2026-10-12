@@ -306,6 +306,19 @@
       <div id="game-manual-msg"></div>
     </div>
 
+    <!-- Admin only: who the game's developer is (games/{slug}.developerUid) -- the account that can
+         manage this page, is credited on a single-player game's about page, and gets coming-soon
+         preview access. Set automatically when a submission is approved; this is how a game added
+         without one (e.g. from /admin/add-game/) gets assigned or reassigned afterward. -->
+    <div id="game-dev-block" style="margin-top:20px" hidden>
+      <div class="field-label">Developer</div>
+      <div class="current-value" id="game-dev-current"></div>
+      <input type="text" id="game-dev-input" list="game-dev-list" placeholder="Start typing a username (blank = none)" autocomplete="off">
+      <datalist id="game-dev-list"></datalist>
+      <button type="button" class="action btn-primary" id="game-dev-save" style="margin-top:8px">Save developer</button>
+      <div id="game-dev-msg"></div>
+    </div>
+
     <!-- Lets a developer (or admin) grant OTHER accounts early access to this game's leaderboard
          and play page while it's still devStatus 'coming-soon' -- e.g. another dev they want
          testing it before it goes live. Stored as an array of uids on games/{slug}.previewTesters,
@@ -1539,6 +1552,59 @@
         }
       });
     })();
+
+    // Developer assignment (admin only -- firestore.rules never lets a developer change their own
+    // developerUid). Same publicly readable users/ list the preview-access chips below use.
+    if(isAdmin){
+      (async function(){
+        const blockEl = el('game-dev-block');
+        const currentEl = el('game-dev-current');
+        const inputEl = el('game-dev-input');
+        const saveBtn = el('game-dev-save');
+        const msgEl = el('game-dev-msg');
+        const byName = new Map(), byUid = new Map();
+        try{
+          const snap = await db.collection('users').get();
+          const names = [];
+          snap.forEach(doc=>{
+            const name = doc.data().username;
+            if(!name) return;
+            byName.set(name.toLowerCase(), doc.id);
+            byUid.set(doc.id, name);
+            names.push(name);
+          });
+          names.sort((a, b)=>a.localeCompare(b));
+          el('game-dev-list').innerHTML = names.map(n=>'<option value="'+escapeHtml(n)+'"></option>').join('');
+        }catch(e){ /* leave the list empty; a typed name just won't resolve */ }
+        function paint(){
+          const name = data.developerUid ? (byUid.get(data.developerUid) || '(unknown account)') : null;
+          currentEl.innerHTML = name ? 'Current: <b>'+escapeHtml(name)+'</b>' : 'No developer assigned (managed by the site admin).';
+          inputEl.value = name && byUid.has(data.developerUid) ? name : '';
+        }
+        paint();
+        blockEl.hidden = false;
+        saveBtn.addEventListener('click', async ()=>{
+          const typed = inputEl.value.trim().replace(/^@/, '');
+          const uid = typed ? byName.get(typed.toLowerCase()) : null;
+          if(typed && !uid){
+            msgEl.innerHTML = '<div class="msg err">No account named \u201c'+escapeHtml(typed)+'\u201d \u2014 pick one from the list.</div>';
+            return;
+          }
+          saveBtn.disabled = true;
+          msgEl.innerHTML = '';
+          try{
+            await docRef.update({developerUid: uid || null});
+            data.developerUid = uid || null;
+            paint();
+            msgEl.innerHTML = '<div class="msg ok">Saved.</div>';
+          }catch(e){
+            msgEl.innerHTML = '<div class="msg err">Couldn\u2019t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+          }finally{
+            saveBtn.disabled = false;
+          }
+        });
+      })();
+    }
 
     // Preview access: stored as uids (previewTesters), picked here as chips over an autocomplete
     // of real usernames -- avoids the old plain-text field's typo/comma-splitting fragility

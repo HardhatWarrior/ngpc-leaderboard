@@ -192,7 +192,8 @@ Two independent, non-overlapping layers:
 ## Adding a single-player game
 
 For a game with no QR code and no leaderboard: **`/admin/add-game/`** (admin only). Fill in a name,
-slug, optional description, a title-screen image, the ROM, which web player to use, and a starting
+slug, optional developer (any account — it can then manage the game and is credited on its page),
+optional description, a title-screen image, the ROM, which web player to use, and a starting
 status, and it uploads the files to Firebase Storage and writes the `games/{slug}` doc
 (`section: 'solo'`, `leaderboardPath: '/games/about/?g=<slug>'`) in one step — the tile shows up on
 `/games/`, opens `/games/about/?g=<slug>` (links to play, download, and the manual), and the game

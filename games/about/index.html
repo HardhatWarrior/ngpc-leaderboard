@@ -38,6 +38,10 @@
   .title-block{ display:flex; flex-direction:column; align-items:flex-end; text-align:right; gap:5px; min-width:0; }
   .title-block h1{ margin:0; font-size:clamp(18px,5vw,28px); line-height:1.2; color:var(--cream); overflow-wrap:break-word; }
   .game-version{ font-size:11px; color:var(--dim); }
+  .created-by{ font-size:11px; color:var(--dim); }
+  .created-by a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
+  .created-by a:hover{ color:var(--accent2); }
+  .created-by[hidden]{ display:none; }
   .link{
     display:inline-flex; align-items:center; gap:5px; width:auto;
     font-weight:600; text-decoration:underline; text-underline-offset:2px; font-size:11.5px;
@@ -93,6 +97,7 @@
         <div class="title-block">
           <h1 id="game-title"></h1>
           <div class="game-version" id="game-version" hidden></div>
+          <div class="created-by" id="created-by" hidden>Created by: <a href="#" id="created-by-link"></a></div>
           <a href="#" class="link rom-link" id="rom-link" download hidden>&#128190; Download ROM (.ngp)</a>
           <a href="#" class="link play-link" id="play-link" hidden>&#127918; Play in Browser</a>
           <a href="#" class="link manual-link" id="manual-link" target="_blank" rel="noopener" hidden>&#128214; Manual</a>
@@ -142,6 +147,17 @@
       el('extra-art-'+(i+1)).hidden = false;
     });
     if(data.version){ el('game-version').textContent = data.version; el('game-version').hidden = false; }
+    // Credit the developer, if one is assigned -- looked up by uid (users/ is publicly readable)
+    // rather than copying a username onto the game doc, so a later rename can't leave it stale.
+    if(data.developerUid){
+      NGPC_AUTH.db.collection('users').doc(data.developerUid).get().then(function(u){
+        const name = u.exists ? u.data().username : null;
+        if(!name) return;
+        el('created-by-link').textContent = '@' + name.toUpperCase();
+        el('created-by-link').href = '/user/?u=' + encodeURIComponent(name.toLowerCase());
+        el('created-by').hidden = false;
+      }).catch(function(){ /* decorative -- just no credit line */ });
+    }
 
     const romEl = el('rom-link');
     if(data.romPath){
