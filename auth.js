@@ -904,8 +904,11 @@ window.NGPC_AUTH = (function(){
   // ---- injected UI: account bar (top of #shell) + sign-in/up modal (document.body) ----
   const STYLE = `
     #acct-bar{ display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12px; color:var(--dim); margin-bottom:14px; }
-    #acct-right{ display:flex; align-items:center; gap:8px; }
+    #acct-right{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
+    #acct-right .acct-link{ white-space:nowrap; }
     #acct-avatar{ border-radius:3px; border:1px solid var(--border); display:block; image-rendering:pixelated; }
+    #acct-owner{ display:flex; align-items:center; gap:10px; margin-right:4px; }
+    #acct-owner[hidden]{ display:none; }
     #acct-new{ background:var(--danger,#e5615a); color:#fff; font-size:9px; font-weight:700; letter-spacing:.06em; padding:2px 5px; border-radius:999px; text-decoration:none; line-height:1.3; }
     #acct-new[hidden]{ display:none; }
     .acct-link{ background:none; border:none; color:var(--accent2); font:inherit; font-size:12px; cursor:pointer; padding:0; text-decoration:underline; width:auto; }
@@ -1065,7 +1068,8 @@ window.NGPC_AUTH = (function(){
     const isHome = location.pathname === '/' || location.pathname === '/index.html';
     const homeLink = isHome ? '' : '<a class="acct-link" href="/">&larr; All games</a>';
     bar.innerHTML = '<div id="acct-left">'+homeLink+'</div>'
-      + '<div id="acct-right"><canvas id="acct-avatar" width="18" height="18" hidden></canvas>'
+      + '<div id="acct-right"><span id="acct-owner" hidden><a class="acct-link" href="/games/">Single-Player</a><a class="acct-link" href="/play/test/">Test Player</a></span>'
+      + '<canvas id="acct-avatar" width="18" height="18" hidden></canvas>'
       + '<a id="acct-new" href="/admin/" hidden>NEW!</a>'
       + '<a id="acct-status" class="acct-link">Signed out</a>'
       + '<button type="button" class="acct-link" id="acct-btn">Sign In / Sign Up</button></div>';
@@ -1074,6 +1078,10 @@ window.NGPC_AUTH = (function(){
     const btnEl = bar.querySelector('#acct-btn');
     const avatarEl = bar.querySelector('#acct-avatar');
     const newEl = bar.querySelector('#acct-new');
+    const ownerEl = bar.querySelector('#acct-owner');
+    // Owner-only shortcuts to pages not linked anywhere else yet (the hardcoded owner uid, not the
+    // broader admin flag) -- each link is hidden on its own page, where it'd point at itself.
+    ownerEl.querySelectorAll('a').forEach(a=>{ if(a.getAttribute('href') === location.pathname) a.hidden = true; });
     let signedIn = false;
     // Admins only: flag pending work (players awaiting approval, game submissions awaiting review)
     // so it's visible from any page without opening /admin/. Two small capped reads per page load,
@@ -1107,6 +1115,7 @@ window.NGPC_AUTH = (function(){
         statusEl.href = '/account/';
         btnEl.textContent = 'Sign Out';
         refreshAdminBadge(user);
+        ownerEl.hidden = user.uid !== ADMIN_UID;
         if(user.avatar){
           renderAvatarToCanvas(avatarEl, user.avatar, 18/AVATAR_SIZE);
           avatarEl.hidden = false;
@@ -1119,6 +1128,7 @@ window.NGPC_AUTH = (function(){
         btnEl.textContent = 'Sign In / Sign Up';
         avatarEl.hidden = true;
         newEl.hidden = true;
+        ownerEl.hidden = true;
       }
     });
   }
