@@ -798,7 +798,18 @@
       return {error:'This code is for a different game ("'+gameCode+'") — open that game’s own high scores page instead.'};
     }
     const ver = text[2];
-    if(ver === '3') return parsePayloadV3(text);
+    // bowling_136+: the score QR also carries the cart's stats code after a '-' (score part
+    // unchanged, so its CRC still covers exactly the score). A stats part that fails its own
+    // check is dropped; it never blocks the score.
+    if(ver === '3'){
+      const dash = text.indexOf('-');
+      if(dash < 0) return parsePayloadV3(text);
+      const r = parsePayloadV3(text.slice(0, dash));
+      if(r.error) return r;
+      const sc = text.slice(dash + 1);
+      if(statsCodeChecks(sc)) r.statsCode = sc;
+      return r;
+    }
     // "BW9" + code: the cart's STATS CODE QR (bowling_114+), a link like the score QR's
     if(ver === '9') return {statsCode: text.slice(3)};
     if(ver >= '0' && ver <= '9'){
@@ -969,12 +980,15 @@
     confirmView.classList.toggle('show', stage==='confirm');
   }
 
-  // extra = a v3 code's {version, avg10, avgGames, verified} (null for v1)
-  function openConfirm(initials, weight, rolls, score, extra){
-    pending = {initials, weight, rolls, score, extra: extra || null};
+  // extra = a v3 code's {version, avg10, avgGames, verified} (null for v1) -- written into the
+  // score doc, so it must only hold score fields. statsCode = the stats code a bowling_136+
+  // score QR carries (saved with the score, see saveCareerFromScore()).
+  function openConfirm(initials, weight, rolls, score, extra, statsCode){
+    pending = {initials, weight, rolls, score, extra: extra || null, statsCode: statsCode || null};
     el('confirm-initials').textContent = initials;
     el('confirm-score').textContent = String(score).padStart(3,'0');
-    el('confirm-src').textContent = weight + ' lb ball — from a scanned QR code' + (extra ? ' (verified)' : '');
+    el('confirm-src').textContent = weight + ' lb ball — from a scanned QR code' + (extra ? ' (verified)' : '')
+      + (statsCode ? ', with the cart’s stats code' : '');
     el('confirm-scorecard').innerHTML = renderScorecardHTML(rolls);
     confirmMsg.innerHTML = '';
     showStage('confirm');
@@ -1019,7 +1033,7 @@
       return;
     }
     resetScanUI();
-    openConfirm(result.initials, result.weight, result.rolls, total, v3Extra(result));
+    openConfirm(result.initials, result.weight, result.rolls, total, v3Extra(result), result.statsCode);
   }
 
   // The on-device QR encodes a full URL (e.g. https://www.ngpc-dev.com/lb/<payload>), so a
@@ -1278,15 +1292,20 @@
       if(signinBtn) signinBtn.addEventListener('click', ()=>{ if(window.NGPC_AUTH) NGPC_AUTH.openSignInModal('signin'); });
       return;
     }
+    // This submission, snapshotted: Back clears pending (and a new scan replaces it) while the
+    // writes below are in flight, so Back is also held off until they finish.
+    const p = pending;
     const btn = el('btn-confirm');
+    const back = el('btn-back');
     btn.disabled = true;
+    back.disabled = true;
     confirmMsg.innerHTML = '';
     const scoreDoc = {
       game: QR_GAME_CODE,
-      initials: pending.initials,
-      score: pending.score,
-      weight: pending.weight,
-      rolls: pending.rolls,
+      initials: p.initials,
+      score: p.score,
+      weight: p.weight,
+      rolls: p.rolls,
       source: SUBMIT_SOURCE,
       submittedAt: Date.now(),
       uid: authedUser.uid,
@@ -1297,29 +1316,32 @@
     // those optional fields is published, the rules reject them -- fall back to the plain doc
     // so the score still lands.
     let res;
-    if(pending.extra){
-      res = await writeScore(Object.assign({}, scoreDoc, pending.extra));
+    if(p.extra){
+      res = await writeScore(Object.assign({}, scoreDoc, p.extra));
       if(!res.ok && res.error && res.error.code === 'permission-denied') res = await writeScore(scoreDoc);
     } else {
       res = await writeScore(scoreDoc);
     }
-    btn.disabled = false;
     if(res.ok){
       // Straight to the live board, not a "submitted!" interstitial requiring another click --
       // the whole point of scanning was to see where this score landed. The toast below gets
       // naturally overwritten within a moment anyway, once the live query (this client is already
       // subscribed to it) picks up the write it just made and re-renders the board.
       const live = liveEvents();
-      const toastText = pending.initials + ' — ' + pending.score + ' submitted!'
-        + (live.length ? (pending.extra ? ' Counted in ' + live.map(e=>e.name).join(' and ') + '.'
-                                        : ' Older score codes don\u2019t count in tournaments.') : '');
-      pending = null;
-      showStage('idle');
+      // the stats code a bowling_136+ score QR carries, saved with the score (one scan does both)
+      const statsNote = p.statsCode ? await saveCareerFromScore(p.statsCode, p.initials, authedUser) : '';
+      const toastText = p.initials + ' — ' + p.score + ' submitted!'
+        + (live.length ? (p.extra ? ' Counted in ' + live.map(e=>e.name).join(' and ') + '.'
+                                        : ' Older score codes don\u2019t count in tournaments.') : '')
+        + statsNote;
+      if(pending === p){ pending = null; showStage('idle'); }
       boardStatusEl.innerHTML = '<div class="msg ok">'+escapeHtml(toastText)+'</div>';
       refreshStats();
     } else {
       confirmMsg.innerHTML = '<div class="msg err">'+friendlyDbError(res.error)+'</div>';
     }
+    btn.disabled = false;
+    back.disabled = false;
   });
 
   // ---- my stats ----
@@ -1488,6 +1510,35 @@
       msg.innerHTML = '<div class="msg err">'+friendlyDbError(e)+'</div>';
     }finally{
       btn.disabled = false;
+    }
+  }
+  // The stats code a bowling_136+ score QR carries, saved right after its score so one scan
+  // does both. Only when career stats are open, and only when the code's default initials (the
+  // cart owner's) match the score's: a friend's score from your cart gets the usual Save offer
+  // in My stats instead of landing their stats on your cart's. Never over a saved code with more
+  // games (an older cart, or a reset one) -- the Save button below still replaces it on purpose.
+  // Returns a note for the submit toast (plain text).
+  async function saveCareerFromScore(code, initials, user){
+    if(!db || !user || !user.username || !careerVisible(user)) return '';
+    let s;
+    try{ s = decodeStatsCode(code); }catch(e){ return ''; }
+    if(s.defIni !== initials){
+      pendingStatsCode = code;
+      renderStatsPanel(user);
+      return s.defIni === 'AAA'
+        ? ' This cart has no initials set (OPTIONS > INITIALS), so check its stats in My stats to save them.'
+        : ' The stats from this cart are ' + s.defIni + '\u2019s \u2014 check them in My stats to save them.';
+    }
+    try{
+      const cur = await db.collection('bw_career').doc(user.uid).get();
+      const d = cur.exists ? cur.data() : null;
+      if(d && ((d.games || 0) > s.games || (d.vsGames || 0) > s.vsGames)){
+        return ' Your saved career stats have more games, so they were kept.';
+      }
+      await db.collection('bw_career').doc(user.uid).set(Object.assign({uid:user.uid, username:user.username, submittedAt:Date.now()}, s));
+      return ' Career stats saved.';
+    }catch(e){
+      return ' Career stats weren\u2019t saved: ' + friendlyDbError(e);
     }
   }
   el('career-form').addEventListener('submit', (e)=>{ e.preventDefault(); saveCareerCode(); });
@@ -1685,13 +1736,13 @@
     renderBoard([]); // real empty state as the floor -- never leave the board blank while db connects
     connectDb();
     const fromEntry = payloadFromEntry();
-    if(fromEntry && fromEntry.statsCode){
+    if(fromEntry && fromEntry.statsCode && !fromEntry.rolls){
       pendingStatsCode = fromEntry.statsCode;
       history.replaceState(null, '', '/bw/');
     } else if(fromEntry){
       const total = totalFromRolls(fromEntry.rolls);
       if(total!=null && validScore(total)){
-        openConfirm(fromEntry.initials, fromEntry.weight, fromEntry.rolls, total, v3Extra(fromEntry));
+        openConfirm(fromEntry.initials, fromEntry.weight, fromEntry.rolls, total, v3Extra(fromEntry), fromEntry.statsCode);
         // Strip back to the clean /lb/ URL (hash included) so a refresh or a re-shared link
         // can't replay the same scan as a fresh submission.
         history.replaceState(null, '', '/lb/');
