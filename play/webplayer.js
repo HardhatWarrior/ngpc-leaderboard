@@ -20,6 +20,11 @@
  */
 (function(){
   "use strict";
+
+  // iPhone/iPad: Web Audio is silenced by the hardware ring/silent switch unless the page declares
+  // its audio as "playback" (Audio Session API, Safari/WebKit 16.4+; Edge and Chrome on iOS are the
+  // same WebKit engine). Harmless no-op everywhere else.
+  try{ if(navigator.audioSession) navigator.audioSession.type = 'playback'; }catch(e){}
   function el(id){ return document.getElementById(id); }
 
   function escapeHtml(s){

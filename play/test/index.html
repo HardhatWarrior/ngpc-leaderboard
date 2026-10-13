@@ -271,6 +271,11 @@
      <ngpcraft-player>) or EmulatorJS (same one the real /play/<slug>/ pages use when a game's
      "emulator" is set to emulatorjs). EmulatorJS is a page-wide singleton, so switching reloads the
      page rather than trying to tear one down and mount the other. The choice is remembered. */
+  // iPhone/iPad: Web Audio is silenced by the hardware ring/silent switch unless the page declares
+  // its audio as "playback" (Audio Session API, Safari/WebKit 16.4+; Edge and Chrome on iOS are the
+  // same WebKit engine). Harmless no-op everywhere else.
+  try{ if(navigator.audioSession) navigator.audioSession.type = 'playback'; }catch(e){}
+
   const EMU_KEY = 'ngpcTestEmulator';
   function chooseEmulator(){
     const q = new URLSearchParams(location.search).get('emu');
