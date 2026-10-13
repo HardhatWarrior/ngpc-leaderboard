@@ -181,18 +181,37 @@
   .row.has-detail:hover{ background:rgba(92,143,214,.08); }
   .row-detail{ padding:2px 8px 14px; }
 
-  /* real per-game scorecard grid -- used in the confirm step and expanded leaderboard rows */
-  .scorecard-grid{ display:grid; grid-template-columns:repeat(10,1fr); gap:3px; margin:14px 0; }
-  .sc-frame{
-    background:var(--navy); border:1px solid var(--border); border-radius:4px;
-    padding:3px 1px 4px; text-align:center; min-width:0;
+  /* real per-game scorecard -- a traditional paper-style strip (same as the tournament mockup,
+     Bowling/tools/tournament_mock.html): frame numbers on top, the balls in the top-right of each
+     box (X red, / gold), the running total under them. Used in the confirm step and in expanded
+     leaderboard and tournament rows. The 10th frame is wider: it holds up to three balls. */
+  .scorecard-grid{
+    display:grid; grid-template-columns:repeat(9,minmax(0,1fr)) minmax(0,1.45fr);
+    border:1px solid var(--border); border-radius:6px; overflow:hidden; max-width:620px; margin:14px 0;
+  }
+  .sc-frame{ border-left:1px solid var(--border); min-width:0; }
+  .sc-frame:first-child{ border-left:0; }
+  .sc-n{
+    font-family:"IBM Plex Mono",monospace; font-size:9.5px; color:var(--dim); text-align:center;
+    padding:2px 0; border-bottom:1px solid var(--border);
   }
   .sc-marks{
-    display:flex; justify-content:center; gap:2px; min-height:11px;
-    font-family:"IBM Plex Mono",monospace; font-size:9px; font-weight:600; color:var(--accent2);
+    display:flex; justify-content:flex-end; gap:2px; padding:3px 3px; min-height:22px;
+    font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--cream);
   }
-  .sc-marks span{ min-width:7px; }
-  .sc-total{ font-size:9.5px; margin-top:3px; color:var(--cream); font-weight:600; }
+  .sc-marks span{ width:12px; text-align:center; }
+  .sc-marks .x{ color:var(--danger); font-weight:600; }
+  .sc-marks .sp{ color:var(--gold); font-weight:600; }
+  .sc-total{
+    text-align:center; font-family:"IBM Plex Mono",monospace; font-size:12.5px; padding:2px 0 4px;
+    color:var(--cream);
+  }
+  .sc-check{ font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--good); margin:-6px 0 0; }
+  @media (max-width:420px){
+    .sc-marks{ font-size:11px; gap:1px; padding:3px 2px; }
+    .sc-marks span{ width:10px; }
+    .sc-total{ font-size:11.5px; }
+  }
 
   /* ---------- QR scan ---------- */
   .scan-video-wrap{
@@ -278,7 +297,6 @@
   .seg button.active{ background:var(--accent); color:var(--accent-ink); }
   .t-count{ font-size:12px; color:var(--dim); }
   .row.mine{ box-shadow:inset 3px 0 0 var(--accent2); }
-  .t-check{ font-size:11px; color:var(--good); margin-top:-6px; }
   .t-rules{ margin:14px 0 0; padding:12px 0 0 18px; border-top:1px solid var(--border); font-size:11.5px; line-height:1.55;
     color:var(--dim); display:flex; flex-direction:column; gap:3px; }
 </style>
@@ -561,7 +579,8 @@
         marks[frame] = [m1, m2];
         if(!needThird) break;
         if(ri+2 >= rolls.length) break;
-        marks[frame].push(markChar(rolls[ri+2]));
+        const r3 = rolls[ri+2];
+        marks[frame].push((r1===10 && r2!==10 && r2+r3===10) ? '/' : markChar(r3));
         break; // 10th frame is always last
       }
     }
@@ -573,13 +592,22 @@
     const marks = frameMarks(rolls);
     let html = '<div class="scorecard-grid">';
     for(let f=0; f<SCORE_MAX_FRAMES; f++){
-      const m = marks[f] || [];
-      html += '<div class="sc-frame">'+
-        '<div class="sc-marks">'+m.map(c=>'<span>'+escapeHtml(c)+'</span>').join('')+'</div>'+
+      let m = marks[f] || [];
+      // a strike in frames 1-9 goes in the right-hand box, the left one stays empty (paper style)
+      if(f < 9 && m.length === 1 && m[0] === 'X') m = ['', 'X'];
+      html += '<div class="sc-frame"><div class="sc-n">'+(f+1)+'</div>'+
+        '<div class="sc-marks">'+m.map(c=>'<span class="'+(c==='X'?'x':c==='/'?'sp':'')+'">'+escapeHtml(c)+'</span>').join('')+'</div>'+
         '<div class="sc-total tnum">'+(scores[f]!=null ? scores[f] : '')+'</div>'+
       '</div>';
     }
     return html + '</div>';
+  }
+
+  // The line under a checked (v3) score's card, as in the tournament mockup.
+  function scoreCheckHTML(rolls){
+    const st = strikeStats(rolls);
+    return '<div class="sc-check">\u2713 code checked \u00b7 ' + rolls.length + ' rolls replayed \u00b7 streak '
+      + st.streak + ', ' + st.strikes + ' strike' + (st.strikes === 1 ? '' : 's') + '</div>';
   }
 
   /* The on-device QR now encodes a full URL (e.g. https://www.ngpc-dev.com/lb/BWBOB...), not just
@@ -911,7 +939,8 @@
         '<div class="score-col"><div class="score-val tnum">'+(data.score!=null?fmtScoreValue(data.score, settings):'-')+'</div>'+
           (scoreMeta ? '<div class="row-meta">'+scoreMeta+'</div>' : '')+'</div>'+
       '</div>';
-      const detailHtml = hasDetail ? '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data.rolls)+'</div>' : '';
+      const detailHtml = hasDetail ? '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data.rolls)
+        + (data.verified ? scoreCheckHTML(data.rolls) : '') + '</div>' : '';
       return rowHtml + detailHtml;
     }).join('');
     // <canvas> content can't come in through innerHTML -- draw each one in after insertion.
@@ -1663,7 +1692,7 @@
         + '<div class="row-meta tnum">' + escapeHtml(line1) + '</div><div class="row-meta tnum">' + escapeHtml(line2) + '</div></div>'
         + '</div>'
         + '<div class="row-detail" id="t' + i + '" hidden>' + renderScorecardHTML(d.rolls)
-        + '<div class="t-check">Code checked &middot; ' + d.rolls.length + ' rolls replayed</div></div>';
+        + scoreCheckHTML(d.rolls) + '</div>';
     }).join('');
   }
 
