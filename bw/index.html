@@ -145,6 +145,17 @@
     margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2);
   }
   .panel .hint{ margin:0 0 16px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+  /* a collapsible panel's heading (My stats): the whole line is the button */
+  .panel h2 .panel-toggle{ display:flex; align-items:center; gap:10px; width:100%; padding:2px 0; margin:0;
+    background:none; border:0; border-radius:4px; color:inherit; font:inherit; letter-spacing:inherit; text-transform:inherit;
+    text-align:left; cursor:pointer; }
+  .panel h2 .panel-toggle:focus-visible{ outline:2px solid var(--accent2); outline-offset:3px; }
+  .panel-toggle-sum{ margin-left:auto; color:var(--dim); letter-spacing:.04em; text-transform:none; font-weight:500; }
+  .panel-toggle-chev{ color:var(--dim); font-size:13px; transition:transform .15s; }
+  .panel-toggle[aria-expanded="true"] .panel-toggle-chev{ transform:rotate(90deg); }
+  .panel-toggle[aria-expanded="true"] .panel-toggle-sum{ visibility:hidden; }
+  #stats-content{ margin-top:10px; }
+  @media (prefers-reduced-motion:reduce){ .panel-toggle-chev{ transition:none; } }
 
   /* ---------- leaderboard ---------- */
   #board-status{ font-size:12px; color:var(--dim); margin-bottom:10px; min-height:1.4em; }
@@ -387,42 +398,7 @@
   </header>
 
   <main>
-    <!-- Tournament -- events from games/bw.bwTournaments (Manage Game > Bowling features >
-         Tournament events). Shown to players once games/bw.bwFeatures.tournaments is on; the
-         site admin / developer sees a marked preview either way. Each board is built here from
-         the approved, verified v3 scores submitted inside the event's window
-         (Bowling/TOURNAMENT_SITE_SPEC.md sections 3-4). Linkable as /bw/#tournament. -->
-    <section class="panel" id="tournament-panel" hidden>
-      <div class="t-head">
-        <h2>Tournament</h2>
-        <select id="t-pick" aria-label="Choose an event" hidden></select>
-      </div>
-      <div class="preview-note" id="t-preview-note" hidden>Preview: only you can see this. Players see it once Tournaments is switched on under Manage Game &gt; Bowling features.</div>
-      <div class="t-evhead">
-        <div class="t-evinfo">
-          <h3 class="t-name" id="t-name"></h3>
-          <div class="t-dates"><span id="t-dates"></span> &middot; best game counts &middot; <span class="t-status" id="t-status"></span></div>
-          <div class="t-clock tnum" id="t-clock"></div>
-          <div class="t-prize" id="t-prize" hidden></div>
-        </div>
-        <div class="t-tools">
-          <div class="t-toggle" role="group" aria-label="Ranking">
-            <button type="button" data-mode="hcp" aria-pressed="true">HANDICAP</button>
-            <button type="button" data-mode="scratch" aria-pressed="false">SCRATCH</button>
-          </div>
-          <div class="t-count tnum" id="t-count"></div>
-        </div>
-      </div>
-      <div class="t-boardwrap" id="t-board"></div>
-      <ul class="t-rules">
-        <li><b>Total</b> = best game + handicap</li>
-        <li><b>Handicap</b> = 90% of (200 &minus; average), max 90</li>
-        <li>Average from your last score before the start; under <b>5 games</b> bowls scratch</li>
-        <li>Ties: <b>longest strike streak</b>, then <b>strikes</b>, then earliest</li>
-        <li>Same as <b>TOURNEY HCP</b> on the cart</li>
-      </ul>
-    </section>
-
+    <!-- Submit a score first: scanning a QR is why most visitors are here -->
     <section class="panel" id="submit-panel">
       <h2>Submit a score</h2>
 
@@ -466,12 +442,51 @@
       </div>
     </section>
 
+    <!-- Tournament -- events from games/bw.bwTournaments (Manage Game > Bowling features >
+         Tournament events). Shown to players once games/bw.bwFeatures.tournaments is on; the
+         site admin / developer sees a marked preview either way. Each board is built here from
+         the approved, verified v3 scores submitted inside the event's window
+         (Bowling/TOURNAMENT_SITE_SPEC.md sections 3-4). Linkable as /bw/#tournament. -->
+    <section class="panel" id="tournament-panel" hidden>
+      <div class="t-head">
+        <h2>Tournament</h2>
+        <select id="t-pick" aria-label="Choose an event" hidden></select>
+      </div>
+      <div class="preview-note" id="t-preview-note" hidden>Preview: only you can see this. Players see it once Tournaments is switched on under Manage Game &gt; Bowling features.</div>
+      <div class="t-evhead">
+        <div class="t-evinfo">
+          <h3 class="t-name" id="t-name"></h3>
+          <div class="t-dates"><span id="t-dates"></span> &middot; best game counts &middot; <span class="t-status" id="t-status"></span></div>
+          <div class="t-clock tnum" id="t-clock"></div>
+          <div class="t-prize" id="t-prize" hidden></div>
+        </div>
+        <div class="t-tools">
+          <div class="t-toggle" role="group" aria-label="Ranking">
+            <button type="button" data-mode="hcp" aria-pressed="true">HANDICAP</button>
+            <button type="button" data-mode="scratch" aria-pressed="false">SCRATCH</button>
+          </div>
+          <div class="t-count tnum" id="t-count"></div>
+        </div>
+      </div>
+      <div class="t-boardwrap" id="t-board"></div>
+      <ul class="t-rules">
+        <li><b>Total</b> = best game + handicap</li>
+        <li><b>Handicap</b> = 90% of (200 &minus; average), max 90</li>
+        <li>Average from your last score before the start; under <b>5 games</b> bowls scratch</li>
+        <li>Ties: <b>longest strike streak</b>, then <b>strikes</b>, then earliest</li>
+        <li>Same as <b>TOURNEY HCP</b> on the cart</li>
+      </ul>
+    </section>
+
     <!-- My stats -- shown to players only once games/bw.bwFeatures.careerStats is switched on
          (Manage Game > Bowling features); the site admin / this game's developer sees it either
          way, marked as a preview. Averages come from the player's own v3 score codes; full career
          totals from the cart's HISCORES > STATS CODE, saved to bw_career/{uid}. -->
     <section class="panel" id="stats-panel" hidden>
-      <h2>My stats</h2>
+      <h2><button type="button" class="panel-toggle" id="stats-toggle" aria-expanded="false" aria-controls="stats-content">
+        <span>My stats</span><span class="panel-toggle-sum tnum" id="stats-summary"></span><span class="panel-toggle-chev" aria-hidden="true">&#9656;</span>
+      </button></h2>
+      <div id="stats-content" hidden>
       <div class="preview-note" id="stats-preview-note" hidden>Preview: only you can see this. Players see it once Career stats is switched on under Manage Game &gt; Bowling features.</div>
       <p class="hint" id="stats-signed-out">Sign in to see your average, handicap and career totals.</p>
       <div id="stats-body" hidden>
@@ -500,6 +515,7 @@
           <button type="submit" class="btn-primary" id="career-save">Save stats code</button>
         </form>
         <div id="career-msg"></div>
+      </div>
       </div>
     </section>
 
@@ -1079,6 +1095,7 @@
       resetScanUI();
       if(!statsPanelEl.hidden){
         el('career-code').value = seg;
+        statsExpand(true);
         statsPanelEl.scrollIntoView({behavior:'smooth', block:'start'});
         saveCareerCode();
       } else {
@@ -1405,6 +1422,12 @@
 
   // ---- my stats ----
   const statsPanelEl = el('stats-panel');
+  // My stats starts collapsed; statsExpand(true) when a stats code arrives that wants a Save
+  function statsExpand(open){
+    el('stats-content').hidden = !open;
+    el('stats-toggle').setAttribute('aria-expanded', String(!!open));
+  }
+  el('stats-toggle').addEventListener('click', ()=>statsExpand(el('stats-content').hidden));
   const HCP_MIN_GAMES = 5;   // same as the cart's HCP_MIN_GAMES
   let statsUser = null;
   let pendingStatsCode = null;   // from a STATS CODE QR link, until the panel can take it
@@ -1436,6 +1459,7 @@
     el('stats-body').hidden = !user;
     if(user) refreshStats();
     if(pendingStatsCode){
+      statsExpand(true);
       statsPanelEl.scrollIntoView({behavior:'smooth', block:'start'});
       if(user) offerLinkedCode();
     }
@@ -1487,6 +1511,9 @@
     if(career && career.avgGames > 0 && (!avg || career.submittedAt > avg.at)){
       avg = {avg10:career.avg10, games:career.avgGames, at:career.submittedAt, from:'your stats code'};
     }
+    el('stats-summary').textContent = (avg && avg.games > 0)
+      ? 'avg ' + fmtAvg(avg.avg10) + (avg.games >= HCP_MIN_GAMES ? ' \u00b7 hcp ' + handicapFor(avg.avg10) : '')
+      : '';
     if(avg && avg.games > 0){
       el('st-avg').textContent = fmtAvg(avg.avg10);
       el('st-avg-sub').textContent = avg.games + ' game' + (avg.games===1?'':'s') + ' \u00b7 from ' + avg.from + ', ' + fmtWhen(avg.at);
