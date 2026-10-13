@@ -419,7 +419,6 @@
         <li><b>Handicap</b> = 90% of (200 &minus; average), max 90</li>
         <li>Average from your last score before the start; under <b>5 games</b> bowls scratch</li>
         <li>Ties: <b>longest strike streak</b>, then <b>strikes</b>, then earliest</li>
-        <li>Verified scores from <b>bowling_109</b> on</li>
         <li>Same as <b>TOURNEY HCP</b> on the cart</li>
       </ul>
     </section>
@@ -449,9 +448,10 @@
           <input type="file" accept="image/*" id="scan-file" hidden>
           <button class="btn-secondary" id="btn-cancel-fallback">Cancel</button>
         </div>
-
-        <div id="form-msg"></div>
       </div>
+
+      <!-- outside #idle-view (hidden until sign-in) so a link's "older version" note shows to anyone -->
+      <div id="form-msg"></div>
 
       <div id="confirm-view">
         <div class="confirm-score">
@@ -679,7 +679,7 @@
   function bwFeatures(){ return (gameData && gameData.bwFeatures) || {}; }
   function tournamentsEnabled(){ return !!bwFeatures().tournaments; }
 
-  /* Payload v3 (bowling_109+): BW 3 III WW AAAA GGG NN rolls CCCC -- a format-version digit
+  /* Payload v3: BW 3 III WW AAAA GGG NN rolls CCCC -- a format-version digit
      where v1 had its first initial, the cart's average x10 and games in it, then a keyed
      CRC-16/CCITT-FALSE (salt first, then every body char from "BW" to the last roll) as 4
      base-36 digits. The salt lives in this page for now, so the CRC stops typos and hand
@@ -695,7 +695,7 @@
   }
 
   /* Strict replay (spec section 2): every frame legal and exactly as many rolls as the game
-     needs. Only applied to v3 codes -- v1 handling is left exactly as it was. */
+     needs. */
   function rollsAreLegal(rolls){
     let i = 0;
     for(let f=0; f<9; f++){
@@ -719,7 +719,7 @@
   /* ---------- Stats carry-over code (the cart's HISCORES > STATS CODE): same format as Neo
      Bowling's xf_encode()/xf_decode() in main.c and Bowling/tools/bw_statscode.py.
      5-bit symbols from XF_ALPHABET (no I/O/0/1), a 3-symbol keyed CRC at the end.
-     Format version 1 (bowling_113 on): ball colours 0-5. Version 2 (the prize-ball builds):
+     Format version 1 (the first stats codes): ball colours 0-5. Version 2 (the prize-ball builds):
      colours 0-10 and a 3-bit prize level 0-5 after curve preview. Both stay readable. ---------- */
   const XF_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const XF_SALT = "NGPCBW-CARRY-OVER";
@@ -865,54 +865,39 @@
     return {initials, weight, rolls, version:3, avg10, avgGames};
   }
 
-  /* ---------- QR payload parser -- v1: <2-char game code><3-char initials><2-digit weight lbs>
-     <2-digit roll count><one char per roll: 0-9 pins, A=strike/10>; a digit after the game code
-     means a versioned payload (v3 above; v2 was one test build, never live). ---------- */
+  /* ---------- QR payload parser -- accepts only the current score code: "BW3" + the v3 score
+     above + '-' + the cart's stats code (the CRC covers the score part; the stats code has its
+     own check), or "BW9" + a stats code alone (the STATS CODE QR). Older score codes -- v3 with
+     no stats code, v1 (initials straight after "BW"), test-build digits -- get OLD_CODE_MSG. -- */
+  const OLD_CODE_MSG = "This score code is from an older version of Neo Bowling and can\u2019t be submitted. "
+    + "Update the game to bowling_136 or later, then bowl again.";
   function parsePayload(text){
     text = (text||'').trim().toUpperCase();
     if(text.length < 9) return {error:"That code is too short to be a valid score."};
     const gameCode = text.slice(0,2);
     if(gameCode !== QR_GAME_CODE){
-      return {error:'This code is for a different game ("'+gameCode+'") — open that game’s own high scores page instead.'};
+      return {error:'This code is for a different game ("'+gameCode+'") \u2014 open that game\u2019s own high scores page instead.'};
     }
     const ver = text[2];
-    // bowling_136+: the score QR also carries the cart's stats code after a '-' (score part
-    // unchanged, so its CRC still covers exactly the score). A stats part that fails its own
-    // check is dropped; it never blocks the score.
-    if(ver === '3'){
-      const dash = text.indexOf('-');
-      if(dash < 0) return parsePayloadV3(text);
-      const r = parsePayloadV3(text.slice(0, dash));
-      if(r.error) return r;
-      const sc = text.slice(dash + 1);
-      if(statsCodeChecks(sc)) r.statsCode = sc;
-      return r;
-    }
-    // "BW9" + code: the cart's STATS CODE QR (bowling_114+), a link like the score QR's
+    // the STATS CODE QR: a link like the score QR's, "BW9" + the code
     if(ver === '9') return {statsCode: text.slice(3)};
-    if(ver >= '0' && ver <= '9'){
-      return {error:"That code is from a test build this page can't read — update Neo Bowling and bowl again."};
+    // older score codes: a test build's digit, or v1 (initials, weight, roll count, rolls)
+    if(ver >= '0' && ver <= '9' && ver !== '3') return {error: OLD_CODE_MSG, oldCode: true};
+    if(ver !== '3'){
+      return /^BW[A-Z]{3}\d{4}[0-9A]{12,21}$/.test(text.split('-')[0]) ? {error: OLD_CODE_MSG, oldCode: true}
+        : {error:"That code didn\u2019t look right \u2014 rescan it."};
     }
-    const initials = text.slice(2,5);
-    const weightStr = text.slice(5,7);
-    const rollCountStr = text.slice(7,9);
-    if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
-    if(!/^\d{2}$/.test(weightStr) || !/^\d{2}$/.test(rollCountStr)) return {error:"That code's header didn't look right."};
-    const weight = parseInt(weightStr,10);
-    const rollCount = parseInt(rollCountStr,10);
-    if(rollCount < 12 || rollCount > 21) return {error:"That code has an impossible roll count."};
-    const rollChars = text.slice(9, 9+rollCount);
-    if(rollChars.length !== rollCount){
-      return {error:"That code looks cut off — rescan with the whole code in frame."};
+    const dash = text.indexOf('-');
+    if(dash < 0){                       // a v3 score with no stats code: an older version's
+      const old = parsePayloadV3(text);
+      return old.error ? old : {error: OLD_CODE_MSG, oldCode: true};
     }
-    const rolls = [];
-    for(let i=0;i<rollChars.length;i++){
-      const c = rollChars[i];
-      if(c === 'A') rolls.push(10);
-      else if(c >= '0' && c <= '9') rolls.push(Number(c));
-      else return {error:"That code has an unreadable roll value."};
-    }
-    return {initials, weight, rolls};
+    const r = parsePayloadV3(text.slice(0, dash));
+    if(r.error) return r;
+    const sc = text.slice(dash + 1);
+    if(!statsCodeChecks(sc)) return {error:"That code didn\u2019t pass its check \u2014 rescan it, and don\u2019t edit it by hand."};
+    r.statsCode = sc;
+    return r;
   }
 
   function pinIconSVG(){
@@ -1059,14 +1044,14 @@
     confirmView.classList.toggle('show', stage==='confirm');
   }
 
-  // extra = a v3 code's {version, avg10, avgGames, verified} (null for v1) -- written into the
-  // score doc, so it must only hold score fields. statsCode = the stats code a bowling_136+
-  // score QR carries (saved with the score, see saveCareerFromScore()).
+  // extra = the code's {version, avg10, avgGames, verified} -- written into the
+  // score doc, so it must only hold score fields. statsCode = the stats code the score QR
+  // carries (saved with the score, see saveCareerFromScore()).
   function openConfirm(initials, weight, rolls, score, extra, statsCode){
     pending = {initials, weight, rolls, score, extra: extra || null, statsCode: statsCode || null};
     el('confirm-initials').textContent = initials;
     el('confirm-score').textContent = String(score).padStart(3,'0');
-    el('confirm-src').textContent = weight + ' lb ball — from a scanned QR code' + (extra ? ' (verified)' : '')
+    el('confirm-src').textContent = weight + ' lb ball — from a scanned QR code (verified)'
       + (statsCode ? ', with the cart’s stats code' : '');
     el('confirm-scorecard').innerHTML = renderScorecardHTML(rolls);
     confirmMsg.innerHTML = '';
@@ -1074,7 +1059,7 @@
   }
 
   function v3Extra(r){
-    return r.version === 3 ? {version:3, avg10:r.avg10, avgGames:r.avgGames, verified:true} : null;
+    return {version:3, avg10:r.avg10, avgGames:r.avgGames, verified:true};
   }
 
   function totalFromRolls(rolls){
@@ -1125,14 +1110,17 @@
   // Case-insensitive on purpose either way: QR alphanumeric mode is uppercase-only, so this
   // necessarily arrives here as ALL-CAPS text, which parsePayload already upper-cases internally
   // anyway. Still works standalone via this page's own camera/photo scan (below, which runs the
-  // same decoded text through lastPathSegment() too) for any older/bare-payload QR with no URL
+  // same decoded text through lastPathSegment() too) for a bare payload with no URL
   // involved.
   function payloadFromEntry(){
     const raw = location.hash ? location.hash.slice(1) : lastPathSegment(location.pathname);
     const last = decodeURIComponent(lastPathSegment(raw));
     if(last.length < 9) return null;
     const result = parsePayload(last);
-    return result.error ? null : result;
+    // an older cart's score link, or a damaged current one, gets its note; anything else odd in
+    // the URL (#tournament and the like) is ignored
+    if(result.error) return (result.oldCode || /^BW3/i.test(last)) ? result : null;
+    return result;
   }
 
   /* ---------- camera scan (getUserMedia + jsQR), falling back to a native camera/file
@@ -1391,27 +1379,19 @@
       username: authedUser.username,
       approved: !!authedUser.approved,
     };
-    // v3 adds the cart's average (for future tournament handicaps). Until firestore.rules with
-    // those optional fields is published, the rules reject them -- fall back to the plain doc
-    // so the score still lands.
-    let res;
-    if(p.extra){
-      res = await writeScore(Object.assign({}, scoreDoc, p.extra));
-      if(!res.ok && res.error && res.error.code === 'permission-denied') res = await writeScore(scoreDoc);
-    } else {
-      res = await writeScore(scoreDoc);
-    }
+    // with the code's version, the cart's average and its verified flag (tournaments and
+    // handicaps read them)
+    const res = await writeScore(Object.assign({}, scoreDoc, p.extra));
     if(res.ok){
       // Straight to the live board, not a "submitted!" interstitial requiring another click --
       // the whole point of scanning was to see where this score landed. The toast below gets
       // naturally overwritten within a moment anyway, once the live query (this client is already
       // subscribed to it) picks up the write it just made and re-renders the board.
       const live = liveEvents();
-      // the stats code a bowling_136+ score QR carries, saved with the score (one scan does both)
+      // the stats code the score QR carries, saved with the score (one scan does both)
       const statsNote = p.statsCode ? await saveCareerFromScore(p.statsCode, p.initials, authedUser) : '';
       const toastText = p.initials + ' — ' + p.score + ' submitted!'
-        + (live.length ? (p.extra ? ' Counted in ' + live.map(e=>e.name).join(' and ') + '.'
-                                        : ' Older score codes don\u2019t count in tournaments.') : '')
+        + (live.length ? ' Counted in ' + live.map(e=>e.name).join(' and ') + '.' : '')
         + statsNote;
       if(pending === p){ pending = null; showStage('idle'); }
       boardStatusEl.innerHTML = '<div class="msg ok">'+escapeHtml(toastText)+'</div>';
@@ -1519,7 +1499,7 @@
       }
     } else {
       el('st-avg').textContent = '\u2013';
-      el('st-avg-sub').textContent = 'Submit a score from bowling_109 or later';
+      el('st-avg-sub').textContent = 'Submit a score to see it here';
       el('st-hcp').textContent = '\u2013';
       el('st-hcp-sub').textContent = 'needs an average';
     }
@@ -1591,7 +1571,7 @@
       btn.disabled = false;
     }
   }
-  // The stats code a bowling_136+ score QR carries, saved right after its score so one scan
+  // The stats code the score QR carries, saved right after its score so one scan
   // does both. Only when career stats are open, and only when the code's default initials (the
   // cart owner's) match the score's: a friend's score from your cart gets the usual Save offer
   // in My stats instead of landing their stats on your cart's. Never over a saved code with more
@@ -1835,16 +1815,19 @@
     renderBoard([]); // real empty state as the floor -- never leave the board blank while db connects
     connectDb();
     const fromEntry = payloadFromEntry();
-    if(fromEntry && fromEntry.statsCode && !fromEntry.rolls){
+    if(fromEntry && fromEntry.error){
+      formMsg.innerHTML = '<div class="msg err">'+escapeHtml(fromEntry.error)+'</div>';
+      history.replaceState(null, '', '/bw/');
+    } else if(fromEntry && fromEntry.statsCode && !fromEntry.rolls){
       pendingStatsCode = fromEntry.statsCode;
       history.replaceState(null, '', '/bw/');
     } else if(fromEntry){
       const total = totalFromRolls(fromEntry.rolls);
       if(total!=null && validScore(total)){
         openConfirm(fromEntry.initials, fromEntry.weight, fromEntry.rolls, total, v3Extra(fromEntry), fromEntry.statsCode);
-        // Strip back to the clean /lb/ URL (hash included) so a refresh or a re-shared link
+        // Strip back to the clean /bw/ URL (hash included) so a refresh or a re-shared link
         // can't replay the same scan as a fresh submission.
-        history.replaceState(null, '', '/lb/');
+        history.replaceState(null, '', '/bw/');
       }
     }
   }
