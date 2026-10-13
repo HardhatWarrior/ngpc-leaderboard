@@ -443,8 +443,8 @@
     </section>
 
     <!-- Tournament -- events from games/bw.bwTournaments (Manage Game > Bowling features >
-         Tournament events). Shown to players once games/bw.bwFeatures.tournaments is on; the
-         site admin / developer sees a marked preview either way. Each board is built here from
+         Tournament events). Shown to everyone when Tournaments is On, to the Preview access
+         testers when it is Testers (featureLevel()); the site admin / developer always see it. Each board is built here from
          the approved, verified v3 scores submitted inside the event's window
          (Bowling/TOURNAMENT_SITE_SPEC.md sections 3-4). Linkable as /bw/#tournament. -->
     <section class="panel" id="tournament-panel" hidden>
@@ -478,9 +478,9 @@
       </ul>
     </section>
 
-    <!-- My stats -- shown to players only once games/bw.bwFeatures.careerStats is switched on
-         (Manage Game > Bowling features); the site admin / this game's developer sees it either
-         way, marked as a preview. Averages come from the player's own v3 score codes; full career
+    <!-- My stats -- shown to everyone when Career stats is On (Manage Game > Bowling features),
+         to the Preview access testers when it is Testers; the site admin / this game's developer
+         always see it, marked as a preview. Averages come from the player's own v3 score codes; full career
          totals from the cart's HISCORES > STATS CODE, saved to bw_career/{uid}. -->
     <section class="panel" id="stats-panel" hidden>
       <h2><button type="button" class="panel-toggle" id="stats-toggle" aria-expanded="false" aria-controls="stats-content">
@@ -693,7 +693,34 @@
      their cart average stored either way, so averages exist before any feature is shown. The
      Tournament panel (renderTournament() below) follows tournamentsEnabled(). ---------- */
   function bwFeatures(){ return (gameData && gameData.bwFeatures) || {}; }
-  function tournamentsEnabled(){ return !!bwFeatures().tournaments; }
+  // Each feature is Off, Testers or On: bwFeatures.<k> === true is On (for everyone);
+  // bwFeatures.<k>Testers === true is Testers (the game's Preview access list --
+  // games/bw.previewTesters, auth.js canPreviewGame() -- plus the admin and developer);
+  // anything else is Off. Testers is a separate flag on purpose: an older cached copy of this
+  // page (or of Manage Game) only knows <k>, sees false and keeps the feature hidden.
+  function featureLevel(k){
+    const f = bwFeatures();
+    if(f[k] === true) return 'on';
+    return (f[k + 'Testers'] === true || f[k] === 'testers') ? 'testers' : 'off';
+  }
+  function featureVisible(k, user){
+    const lvl = featureLevel(k);
+    if(lvl === 'on') return true;
+    if(!user || !window.NGPC_AUTH) return false;
+    if(NGPC_AUTH.isGameManager(user, gameData)) return true;
+    return lvl === 'testers' && NGPC_AUTH.canPreviewGame(user, gameData);
+  }
+  // the note on a panel only some accounts can see yet (a tester gets no admin instructions)
+  function featureNote(k, label, user){
+    const mgr = !!(user && window.NGPC_AUTH && NGPC_AUTH.isGameManager(user, gameData));
+    if(featureLevel(k) === 'testers'){
+      return mgr ? 'Testing: only you and the testers under Preview access can see this. Everyone sees it once '
+                   + label + ' is set to On under Manage Game > Bowling features.'
+                 : 'Testing: only invited testers can see this. It isn\u2019t public yet.';
+    }
+    return 'Preview: only you can see this. Players see it once ' + label + ' is switched on under Manage Game > Bowling features.';
+  }
+  function tournamentsEnabled(){ return featureLevel('tournaments') === 'on'; }
 
   /* Payload v3: BW 3 III WW AAAA GGG NN rolls CCCC -- a format-version digit
      where v1 had its first initial, the cart's average x10 and games in it, then a keyed
@@ -1404,7 +1431,7 @@
       // the whole point of scanning was to see where this score landed. The toast below gets
       // naturally overwritten within a moment anyway, once the live query (this client is already
       // subscribed to it) picks up the write it just made and re-renders the board.
-      const live = liveEvents();
+      const live = liveEvents(authedUser);
       // the stats code the score QR carries, saved with the score (one scan does both)
       const statsNote = p.statsCode ? await saveCareerFromScore(p.statsCode, p.initials, authedUser) : '';
       const toastText = p.initials + ' — ' + p.score + ' submitted!'
@@ -1437,7 +1464,7 @@
   function handicapFor(avg10){ return Math.min(90, Math.floor(Math.max(0, 2000 - avg10) * 9 / 100)); }
 
   function careerVisible(user){
-    return !!bwFeatures().careerStats || !!(user && window.NGPC_AUTH && NGPC_AUTH.isGameManager(user, gameData));
+    return featureVisible('careerStats', user);
   }
 
   function renderStatsPanel(user){
@@ -1451,7 +1478,8 @@
       }
       return;
     }
-    el('stats-preview-note').hidden = !!bwFeatures().careerStats;
+    el('stats-preview-note').hidden = featureLevel('careerStats') === 'on';
+    el('stats-preview-note').textContent = featureNote('careerStats', 'Career stats', user);
     el('stats-signed-out').hidden = !!user;
     el('stats-signed-out').textContent = pendingStatsCode
       ? 'Sign in to save the stats code you scanned.'
@@ -1655,9 +1683,10 @@
       return sa === 'upcoming' ? a.startsAt - b.startsAt : b.startsAt - a.startsAt;
     });
   }
-  function liveEvents(){ return tournamentsEnabled() ? tEvents().filter(e=>tStatus(e)==='live') : []; }
+  // live events the submitting player can see (the "Counted in ..." toast)
+  function liveEvents(user){ return tournamentVisible(user) ? tEvents().filter(e=>tStatus(e)==='live') : []; }
   function tournamentVisible(user){
-    return tournamentsEnabled() || !!(user && window.NGPC_AUTH && NGPC_AUTH.isGameManager(user, gameData));
+    return featureVisible('tournaments', user);
   }
   function fmtFull(ms){
     return new Date(ms).toLocaleString(undefined,{weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
@@ -1780,6 +1809,7 @@
     tPanel.hidden = !visible;
     if(!visible){ if(tTimer){ clearInterval(tTimer); tTimer = null; } return; }
     el('t-preview-note').hidden = tournamentsEnabled();
+    el('t-preview-note').textContent = featureNote('tournaments', 'Tournaments', tViewer);
     if(!list.find(e=>e.id===tPickId)) tPickId = list[0].id;
     const pick = el('t-pick');
     pick.hidden = list.length < 2;
