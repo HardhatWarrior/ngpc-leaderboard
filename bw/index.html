@@ -277,28 +277,74 @@
   .t-head h2{ margin:0; }
   .t-head select{ width:auto; max-width:100%; min-width:0; font:inherit; font-size:12.5px; color:var(--cream);
     background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:7px 10px; }
-  .t-hero{ margin:12px 0 14px; padding:16px; border-radius:10px; border:1px solid var(--border);
-    background:linear-gradient(180deg,var(--panel2),var(--navy)); display:flex; flex-direction:column; gap:7px; }
-  .t-status{ align-self:flex-start; display:inline-flex; align-items:center; gap:6px; font-size:10px; letter-spacing:.14em;
-    text-transform:uppercase; border:1px solid var(--border); border-radius:999px; padding:3px 9px; color:var(--dim); }
-  .t-status.live{ color:var(--good); border-color:rgba(79,191,139,.5); }
-  .t-status.live::before{ content:""; width:7px; height:7px; border-radius:50%; background:var(--good); animation:tpulse 1.4s ease-in-out infinite; }
+  /* event header, toggle, table board and rule chips -- as in the tournament mockup
+     (Bowling/tools/tournament_mock.html) */
+  /* main is a 1fr grid: without min-width:0 the table's width would stretch the whole panel past
+     a phone screen instead of scrolling inside .t-boardwrap */
+  #tournament-panel{ min-width:0; }
+  .t-evhead{ display:flex; flex-wrap:wrap; gap:12px 24px; align-items:flex-end; justify-content:space-between; margin:12px 0 14px; }
+  .t-evinfo{ min-width:0; }
+  .t-name{ margin:0; font-family:"Press Start 2P",monospace; font-size:14px; font-weight:400; line-height:1.5;
+    color:var(--cream); overflow-wrap:anywhere; }
+  .t-dates{ font-size:12px; color:var(--dim); margin-top:4px; line-height:1.9; }
+  .t-status{ font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:600; letter-spacing:.08em;
+    padding:3px 8px; border-radius:999px; border:1px solid var(--border); color:var(--dim); white-space:nowrap; }
+  .t-status.live{ color:var(--danger); border-color:var(--danger); }
   .t-status.upcoming{ color:var(--accent2); border-color:var(--accent2); }
-  @keyframes tpulse{ 50%{ opacity:.25; } }
-  @media (prefers-reduced-motion:reduce){ .t-status.live::before{ animation:none; } }
-  .t-name{ font-size:clamp(14px,4vw,19px); line-height:1.4; color:var(--cream); overflow-wrap:anywhere; }
-  .t-dates{ font-size:12px; color:var(--dim); }
-  .t-prize{ font-size:13px; color:var(--cream); overflow-wrap:anywhere; }
+  .t-status.final{ color:var(--gold); border-color:var(--gold); }
+  .t-clock{ font-family:"IBM Plex Mono",monospace; font-size:12.5px; font-weight:600; color:var(--accent2); margin-top:4px; }
+  .t-prize{ font-size:13px; color:var(--cream); margin-top:6px; overflow-wrap:anywhere; }
   .t-prize b{ color:var(--gold); font-weight:600; }
-  .t-clock{ font-family:"IBM Plex Mono",monospace; font-size:13px; font-weight:600; color:var(--accent2); }
-  .t-toolbar{ display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
-  .seg{ display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
-  .seg button{ width:auto; border-radius:0; padding:7px 14px; font-size:12px; background:transparent; color:var(--dim); }
-  .seg button.active{ background:var(--accent); color:var(--accent-ink); }
+  .t-tools{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; }
+  .t-tools[hidden]{ display:none; }
+  .t-toggle{ display:inline-flex; border:1px solid var(--border); border-radius:8px; overflow:hidden; }
+  .t-toggle button{ width:auto; border-radius:0; background:none; color:var(--dim); padding:7px 12px;
+    font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:600; }
+  .t-toggle button[aria-pressed="true"]{ background:var(--panel2); color:var(--cream); }
   .t-count{ font-size:12px; color:var(--dim); }
-  .row.mine{ box-shadow:inset 3px 0 0 var(--accent2); }
-  .t-rules{ margin:14px 0 0; padding:12px 0 0 18px; border-top:1px solid var(--border); font-size:11.5px; line-height:1.55;
-    color:var(--dim); display:flex; flex-direction:column; gap:3px; }
+  .t-boardwrap{ overflow-x:auto; }
+  .t-table{ width:100%; border-collapse:collapse; min-width:560px; }
+  .t-table th{ font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--dim); text-align:right; padding:6px 8px; border-bottom:1px solid var(--border); font-weight:600; }
+  .t-table td{ padding:9px 8px; text-align:right; border-bottom:1px solid rgba(55,66,110,.6);
+    font-variant-numeric:tabular-nums; font-size:13.5px; color:var(--cream); }
+  .t-table th.l, .t-table td.l{ text-align:left; }
+  .t-table th:first-child{ text-align:center; }
+  .t-table td.rank{ font-family:"Press Start 2P",monospace; font-size:11px; color:var(--dim); text-align:center; width:44px; }
+  .t-table tr.top td.rank{ color:var(--gold); }
+  .t-table td.who{ font-family:"Press Start 2P",monospace; font-size:12px; letter-spacing:.06em; }
+  .t-table td.who a{ color:var(--cream); text-decoration:underline dotted var(--border); text-underline-offset:4px; }
+  .t-table td.who a:hover{ color:var(--accent2); }
+  .t-table td.total{ font-family:"Press Start 2P",monospace; font-size:13px; color:var(--good); }
+  .t-table td.hcp{ color:var(--dim); }
+  .t-table td.tb{ font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--dim); }
+  .t-table td.when{ font-size:12px; color:var(--dim); }
+  .t-table tr.me td{ background:rgba(92,143,214,.12); }
+  .t-table tr.t-row{ cursor:pointer; }
+  .t-table tr.t-row:focus-visible{ outline:2px solid var(--accent2); outline-offset:-2px; }
+  @media (hover:hover){
+    .t-table tr.t-row:hover td{ background:rgba(92,143,214,.06); }
+    .t-table tr.me:hover td{ background:rgba(92,143,214,.16); }
+  }
+  .t-table tr.t-detail td{ background:var(--panel2); text-align:left; padding:9px 8px; }
+  .t-table tr.t-detail .scorecard-grid{ margin:0 0 14px; }
+  .t-when-m{ display:none; }
+  .t-rules{ display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 0; padding:0; list-style:none; }
+  .t-rules li{ font-size:11.5px; color:var(--dim); border:1px solid var(--border); border-radius:999px; padding:4px 10px; }
+  .t-rules b{ color:var(--cream); font-weight:600; }
+  /* below 660px a 560px table no longer fits the panel: drop the date and streak columns instead
+     of scrolling sideways (the open row shows both) */
+  @media (max-width:660px){
+    .t-evhead{ align-items:flex-start; }
+    .t-tools{ align-items:flex-start; }
+    .t-table{ min-width:0; }
+    .t-table .t-when, .t-table .t-tb{ display:none; }   /* streak / strikes: on the open row's check line */
+    .t-table th, .t-table td{ padding:8px 4px; white-space:nowrap; }
+    .t-table tr.t-detail td{ white-space:normal; padding:8px 6px; }
+    .t-table .t-when-m{ display:block; margin-top:2px; }
+    .t-table td.rank{ width:26px; }
+    .t-table td.total{ font-size:11.5px; }
+  }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
@@ -352,25 +398,29 @@
         <select id="t-pick" aria-label="Choose an event" hidden></select>
       </div>
       <div class="preview-note" id="t-preview-note" hidden>Preview: only you can see this. Players see it once Tournaments is switched on under Manage Game &gt; Bowling features.</div>
-      <div class="t-hero">
-        <div class="t-status" id="t-status"></div>
-        <div class="t-name px" id="t-name"></div>
-        <div class="t-dates" id="t-dates"></div>
-        <div class="t-prize" id="t-prize" hidden></div>
-        <div class="t-clock tnum" id="t-clock"></div>
-      </div>
-      <div class="t-toolbar">
-        <div class="seg" role="group" aria-label="Board type">
-          <button type="button" class="active" data-mode="hcp" aria-pressed="true">Handicap</button>
-          <button type="button" data-mode="scratch" aria-pressed="false">Scratch</button>
+      <div class="t-evhead">
+        <div class="t-evinfo">
+          <h3 class="t-name" id="t-name"></h3>
+          <div class="t-dates"><span id="t-dates"></span> &middot; best game counts &middot; <span class="t-status" id="t-status"></span></div>
+          <div class="t-clock tnum" id="t-clock"></div>
+          <div class="t-prize" id="t-prize" hidden></div>
         </div>
-        <div class="t-count tnum" id="t-count"></div>
+        <div class="t-tools">
+          <div class="t-toggle" role="group" aria-label="Ranking">
+            <button type="button" data-mode="hcp" aria-pressed="true">HANDICAP</button>
+            <button type="button" data-mode="scratch" aria-pressed="false">SCRATCH</button>
+          </div>
+          <div class="t-count tnum" id="t-count"></div>
+        </div>
       </div>
-      <div id="t-board"></div>
+      <div class="t-boardwrap" id="t-board"></div>
       <ul class="t-rules">
-        <li>Any verified score submitted between the start and the end counts (score codes from bowling_109 or later).</li>
-        <li>Your best game counts. Ties go to the longer strike streak, then more strikes, then the earlier game.</li>
-        <li>Handicap = (200 &minus; your cart&rsquo;s average) &times; 0.9, max 90, from the last score you submitted before the start. Under 5 games on the cart bowls scratch. It matches TOURNEY HCP on the cart.</li>
+        <li><b>Total</b> = best game + handicap</li>
+        <li><b>Handicap</b> = 90% of (200 &minus; average), max 90</li>
+        <li>Average from your last score before the start; under <b>5 games</b> bowls scratch</li>
+        <li>Ties: <b>longest strike streak</b>, then <b>strikes</b>, then earliest</li>
+        <li>Verified scores from <b>bowling_109</b> on</li>
+        <li>Same as <b>TOURNEY HCP</b> on the cart</li>
       </ul>
     </section>
 
@@ -1582,6 +1632,7 @@
   const tPanel = el('tournament-panel');
   let tScores = null;          // every approved Bowling score (data objects), live
   let tUnsub = null, tTimer = null, tMode = 'hcp', tPickId = null, tViewer = null, tShownStatus = null, tScrolled = false;
+  const tOpen = new Set();     // players (tKey) whose scorecard is open -- kept across live redraws
 
   function tEvents(){
     const list = (gameData && gameData.bwTournaments) || [];
@@ -1662,6 +1713,8 @@
     const ev = tCurrent(), boardT = el('t-board'), countEl = el('t-count');
     if(!ev) return;
     const st = tStatus(ev);
+    const tools = tPanel.querySelector('.t-tools');
+    if(tools) tools.hidden = true;       // the toggle and count only with a board to rank
     if(st === 'upcoming'){
       countEl.textContent = '';
       boardT.innerHTML = '<div class="empty-state">Starts ' + escapeHtml(fmtFull(ev.startsAt)) + '. Every verified score you submit from then until the end counts.</div>';
@@ -1676,24 +1729,31 @@
         : 'Nobody submitted a score in this event.') + '</div>';
       return;
     }
+    if(tools) tools.hidden = false;
     const me = tViewer && tViewer.uid;
-    boardT.innerHTML = rows.map((e,i)=>{
-      const d = e.d, rank = i + 1;
-      const big = tMode === 'hcp' ? e.total : e.score;
-      const line1 = tMode === 'hcp'
-        ? (e.hcp != null ? e.score + ' + ' + e.hcp + ' hcp' : e.score + ' scratch (under 5 games)')
-        : (e.hcp != null ? 'hcp ' + e.hcp + ' not added' : 'scratch');
-      const line2 = e.streak + ' in a row · ' + e.strikes + ' strike' + (e.strikes === 1 ? '' : 's') + ' · ' + fmtWhen(e.at);
-      const user = d.username ? '<a href="/user/?u=' + encodeURIComponent(d.username) + '">@' + escapeHtml(d.username.toUpperCase()) + '</a>' : '';
-      return '<div class="row has-detail' + (rank === 1 ? ' top1' : '') + (me && d.uid === me ? ' mine' : '') + '" data-detail="t' + i + '">'
-        + '<div class="rank">' + (rank === 1 ? pinIconSVG() : ('#' + rank)) + '</div>'
-        + '<div><div class="initials">' + escapeHtml(d.initials || '???') + '</div>' + (user ? '<div class="row-meta">' + user + '</div>' : '') + '</div>'
-        + '<div class="score-col"><div class="score-val tnum">' + big + '</div>'
-        + '<div class="row-meta tnum">' + escapeHtml(line1) + '</div><div class="row-meta tnum">' + escapeHtml(line2) + '</div></div>'
-        + '</div>'
-        + '<div class="row-detail" id="t' + i + '" hidden>' + renderScorecardHTML(d.rolls)
-        + scoreCheckHTML(d.rolls) + '</div>';
-    }).join('');
+    // the mockup's table: # | Player | Score | Hcp | Total | Streak / X | Best game; a row opens its
+    // scorecard. Scratch ranks by score and shows it as the Total too, as the mockup does.
+    let h = '<table class="t-table"><thead><tr><th>#</th><th class="l">Player</th><th>Score</th><th>Hcp</th><th>Total</th>'
+      + '<th class="t-tb" title="Longest strike streak / total strikes">Streak / X</th><th class="l t-when">Best game</th></tr></thead><tbody>';
+    rows.forEach((e,i)=>{
+      const d = e.d, rank = i + 1, ini = escapeHtml(d.initials || '???'), open = tOpen.has(e.k);
+      const who = d.username
+        ? '<a href="/user/?u=' + encodeURIComponent(d.username) + '" title="@' + escapeHtml(d.username.toUpperCase()) + '">' + ini + '</a>'
+        : ini;
+      h += '<tr class="t-row' + (rank === 1 ? ' top' : '') + (me && d.uid === me ? ' me' : '') + '" data-detail="t' + i + '" data-k="' + escapeHtml(e.k)
+        + '" tabindex="0" aria-expanded="' + open + '">'
+        + '<td class="rank">' + rank + '</td>'
+        + '<td class="who l">' + who + '</td>'
+        + '<td>' + e.score + '</td>'
+        + '<td class="hcp">' + (e.hcp != null ? '+' + e.hcp
+          : '<span title="No handicap: under 5 games, or no score before the start" aria-label="scratch, no handicap">&ndash;</span>') + '</td>'
+        + '<td class="total">' + (tMode === 'hcp' ? e.total : e.score) + '</td>'
+        + '<td class="tb t-tb">' + e.streak + ' / ' + e.strikes + '</td>'
+        + '<td class="when l t-when">' + escapeHtml(fmtWhen(e.at)) + '</td></tr>'
+        + '<tr class="t-detail" id="t' + i + '"' + (open ? '' : ' hidden') + '><td colspan="7">' + renderScorecardHTML(d.rolls)
+        + scoreCheckHTML(d.rolls) + '<div class="sc-check t-when-m">best game ' + escapeHtml(fmtWhen(e.at)) + '</div></td></tr>';
+    });
+    boardT.innerHTML = h + '</tbody></table>';
   }
 
   function tTick(){
@@ -1722,9 +1782,10 @@
     tShownStatus = st;
     const stEl = el('t-status');
     stEl.className = 't-status ' + st;
-    stEl.textContent = st === 'live' ? 'Live' : st === 'upcoming' ? 'Upcoming' : 'Final';
+    stEl.textContent = st === 'live' ? 'LIVE' : st === 'upcoming' ? 'UPCOMING' : 'FINAL';
     el('t-name').textContent = ev.name;
-    el('t-dates').textContent = fmtFull(ev.startsAt) + ' \u2013 ' + fmtFull(ev.endsAt);
+    el('t-dates').textContent = fmtWhen(ev.startsAt) + ' \u2013 ' + fmtWhen(ev.endsAt);
+    el('t-dates').title = fmtFull(ev.startsAt) + ' \u2013 ' + fmtFull(ev.endsAt);
     const prizeEl = el('t-prize');
     prizeEl.hidden = !ev.prize;
     if(ev.prize) prizeEl.innerHTML = '<b>Prize:</b> ' + escapeHtml(ev.prize);
@@ -1744,20 +1805,29 @@
   }
 
   el('t-pick').addEventListener('change', e=>{ tPickId = e.target.value; renderTournament(); });
-  tPanel.querySelectorAll('.seg button').forEach(btn=>btn.addEventListener('click', ()=>{
+  tPanel.querySelectorAll('.t-toggle button').forEach(btn=>btn.addEventListener('click', ()=>{
     tMode = btn.dataset.mode;
-    tPanel.querySelectorAll('.seg button').forEach(b=>{
-      b.classList.toggle('active', b === btn);
-      b.setAttribute('aria-pressed', String(b === btn));
-    });
+    tPanel.querySelectorAll('.t-toggle button').forEach(b=>b.setAttribute('aria-pressed', String(b === btn)));
     drawTBoard();
   }));
+  function tToggleRow(row){
+    const detail = el(row.dataset.detail);
+    if(!detail) return;
+    detail.hidden = !detail.hidden;
+    row.setAttribute('aria-expanded', String(!detail.hidden));
+    if(detail.hidden) tOpen.delete(row.dataset.k); else tOpen.add(row.dataset.k);
+  }
+  el('t-board').addEventListener('keydown', e=>{
+    if(e.key !== 'Enter' && e.key !== ' ') return;
+    const row = e.target.closest && e.target.closest('tr.t-row');
+    if(!row || e.target !== row) return;
+    e.preventDefault();
+    tToggleRow(row);
+  });
   el('t-board').addEventListener('click', e=>{
     if(e.target.closest('a')) return;
-    const row = e.target.closest('.row.has-detail');
-    if(!row) return;
-    const detail = el(row.dataset.detail);
-    if(detail) detail.hidden = !detail.hidden;
+    const row = e.target.closest('tr.t-row');
+    if(row) tToggleRow(row);
   });
 
   // ---- boot ----
