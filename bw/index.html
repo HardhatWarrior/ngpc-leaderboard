@@ -294,10 +294,12 @@
      a phone screen instead of scrolling inside .t-boardwrap */
   #tournament-panel{ min-width:0; }
   .t-evhead{ display:flex; flex-wrap:wrap; gap:12px 24px; align-items:flex-end; justify-content:space-between; margin:12px 0 14px; }
-  .t-evinfo{ min-width:0; }
+  .t-evinfo{ min-width:0; flex:1 1 300px; }
   .t-name{ margin:0; font-family:"Press Start 2P",monospace; font-size:14px; font-weight:400; line-height:1.5;
     color:var(--cream); overflow-wrap:anywhere; }
   .t-dates{ font-size:12px; color:var(--dim); margin-top:4px; line-height:1.9; }
+  .t-when{ white-space:nowrap; }
+  .t-tz{ font-size:11.5px; color:var(--dim); }
   .t-status{ font-family:"IBM Plex Mono",monospace; font-size:11px; font-weight:600; letter-spacing:.08em;
     padding:3px 8px; border-radius:999px; border:1px solid var(--border); color:var(--dim); white-space:nowrap; }
   .t-status.live{ color:var(--danger); border-color:var(--danger); }
@@ -456,7 +458,8 @@
       <div class="t-evhead">
         <div class="t-evinfo">
           <h3 class="t-name" id="t-name"></h3>
-          <div class="t-dates"><span id="t-dates"></span> &middot; best game counts &middot; <span class="t-status" id="t-status"></span></div>
+          <div class="t-dates"><span id="t-dates"></span> &middot; <span class="t-when">best game counts &middot; <span class="t-status" id="t-status"></span></span></div>
+          <div class="t-tz" id="t-tz"></div>
           <div class="t-clock tnum" id="t-clock"></div>
           <div class="t-prize" id="t-prize" hidden></div>
         </div>
@@ -1688,8 +1691,14 @@
   function tournamentVisible(user){
     return featureVisible('tournaments', user);
   }
+  // an event time in the viewer's own time zone, with the zone shown (e.g. Fri, Oct 3, 8:00 PM CDT):
+  // events are saved as exact moments, so each player sees the same moment in their local time
   function fmtFull(ms){
-    return new Date(ms).toLocaleString(undefined,{weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit'});
+    return new Date(ms).toLocaleString(undefined,{weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short'});
+  }
+  // the viewer's time zone name for the "Times are in your time zone" note (e.g. America/Chicago)
+  function tzName(){
+    try { return (Intl.DateTimeFormat().resolvedOptions().timeZone || '').replace(/_/g, ' '); } catch(e){ return ''; }
   }
   function fmtLeft(ms){
     ms = Math.max(0, ms);
@@ -1821,8 +1830,10 @@
     stEl.className = 't-status ' + st;
     stEl.textContent = st === 'live' ? 'LIVE' : st === 'upcoming' ? 'UPCOMING' : 'FINAL';
     el('t-name').textContent = ev.name;
-    el('t-dates').textContent = fmtWhen(ev.startsAt) + ' \u2013 ' + fmtWhen(ev.endsAt);
-    el('t-dates').title = fmtFull(ev.startsAt) + ' \u2013 ' + fmtFull(ev.endsAt);
+    el('t-dates').innerHTML = '<span class="t-when">' + escapeHtml(fmtFull(ev.startsAt)) + '</span> \u2013 <span class="t-when">'
+      + escapeHtml(fmtFull(ev.endsAt)) + '</span>';
+    const tz = tzName();
+    el('t-tz').textContent = 'Times are in your time zone' + (tz ? ' (' + tz + ')' : '') + '.';
     const prizeEl = el('t-prize');
     prizeEl.hidden = !ev.prize;
     if(ev.prize) prizeEl.innerHTML = '<b>Prize:</b> ' + escapeHtml(ev.prize);

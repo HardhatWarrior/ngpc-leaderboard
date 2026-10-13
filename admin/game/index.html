@@ -432,7 +432,7 @@
            straight to the game doc on Add / Save / Delete, separately from the switches above.
            bw/index.html builds each event's board from the verified v3 scores submitted inside
            its window. -->
-      <div class="field-label" style="margin-top:22px">Tournament events (times in your local time zone)</div>
+      <div class="field-label" style="margin-top:22px">Tournament events (times in your local time zone<span id="bw-t-tz"></span>; players see them in theirs)</div>
       <div class="tourney-list" id="bw-tourney-list"></div>
       <form class="tourney-form" id="bw-tourney-form" autocomplete="off">
         <label class="t-wide"><span class="field-label">Name</span>
@@ -543,7 +543,8 @@
     const listEl = el('bw-tourney-list'), formEl = el('bw-tourney-form'), msgEl = el('bw-tourney-msg');
     const pad = n => String(n).padStart(2,'0');
     const toLocalInput = ms => { const d = new Date(ms); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes()); };
-    const fmt = ms => new Date(ms).toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'});
+    const fmt = ms => new Date(ms).toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
+    try { const tz = Intl.DateTimeFormat().resolvedOptions().timeZone; if(tz) el('bw-t-tz').textContent = ', ' + tz.replace(/_/g, ' '); } catch(e){}
     function status(ev){ const now = Date.now(); return now < ev.startsAt ? 'upcoming' : now < ev.endsAt ? 'live' : 'final'; }
     function render(){
       events.sort((a,b)=>b.startsAt - a.startsAt);
