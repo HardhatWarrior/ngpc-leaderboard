@@ -264,14 +264,32 @@
 
   let db = null, pending = null, unsubscribeBoard = null, gameData = null;
 
-  // Payload: 2-char game code + 3 initials + 5-digit score + 4-digit move count, e.g.
-  // "NGPC-DEV.COM/2K/2KAAA012340042" -- matches 2048's own qr_build_payload() in src/main.c. Now
+  // Payload: 2-char game code + 3 initials + 5-digit score + 4-digit move count + 2-char
+  // checksum, e.g. "NGPC-DEV.COM/2K/2KAAA012340042" + checksum -- matches 2048's own
+  // qr_build_payload() in src/main.c. Now
   // wrapped in a real URL (prefix + repeated game code), same convention as every other game's own
   // QR, so a generic phone camera app can auto-open this leaderboard instead of just decoding
   // inert text -- lastPathSegment() below strips that wrapper off either way, so an older
   // cartridge build's bare (no-URL) payload still parses exactly the same as before.
+  //
+  // Since 2026-10-12 the cartridge appends a 2-char checksum (16 chars total): (sum of the
+  // QR-alphanumeric index of chars 0-13) mod 1296, as 2 base-36 digits -- same rule as Sokoban's
+  // QR (sk/index.html). Verified here, then dropped (never stored, so firestore.rules is
+  // unchanged). A 14-char code is from an older build with no checksum and is refused, otherwise
+  // the checksum would protect nothing.
+  const QR_ALNUM = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
+  function payloadChecksumOk(text){
+    const n = text.length - 2;
+    if(n < 1 || !/^[0-9A-Z]{2}$/.test(text.slice(n))) return false;
+    let sum = 0;
+    for(let i=0;i<n;i++){ const k = QR_ALNUM.indexOf(text[i]); if(k < 0) return false; sum += k; }
+    return sum % 1296 === parseInt(text.slice(n), 36);
+  }
   function parse2048Payload(text){
-    if(text.length !== 14) return {error:"That code is too short — rescan with the whole code in frame."};
+    if(text.length === 14) return {error:"That code is from an older 2048 build (no checksum) — update the cartridge or ROM, then rescan."};
+    if(text.length !== 16) return {error: text.length < 16 ? "That code is too short — rescan with the whole code in frame."
+                                                          : "That code is too long to be a 2048 score — rescan just the one code."};
+    if(!payloadChecksumOk(text)) return {error:"That code didn't scan cleanly (checksum mismatch) — rescan it."};
     const initials = text.slice(2,5);
     if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
     const scoreStr = text.slice(5,10);

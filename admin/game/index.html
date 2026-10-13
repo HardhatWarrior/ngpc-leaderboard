@@ -666,6 +666,8 @@
   // Seeds the Payload Editor when games/{slug}.payloadSpec hasn't been saved yet -- must exactly
   // match each retrofitted page's own DEFAULT_SPEC constant, or the editor would show a spec that
   // doesn't reflect what's actually live.
+  // MS note: since 2026-10-12 Minesweeper's QR ends with a 2-char checksum AFTER these fields;
+  // ms/index.html verifies and strips it before applying the spec, so it is not a spec field.
   const DEFAULT_PAYLOAD_SPECS = {
     tt: {
       code: 'TT',
@@ -854,11 +856,13 @@
         {name:'Initials', width:'3', format:'A-Z', notes:''},
         {name:'Score', width:'5', format:'numeric, zero-padded', notes:''},
         {name:'Moves', width:'4', format:'numeric, zero-padded', notes:''},
+        {name:'Checksum', width:'2', format:'base-36', notes:'since 2026-10-12: (sum of QR-alphanumeric index of chars 0–13) mod 1296, same rule as Sokoban; verified client-side, not stored. A 14-char code (older build, no checksum) is refused.'},
       ],
-      totalLength: '16 (prefix) + 2 + 3 + 5 + 4 = 30 chars, fixed',
+      totalLength: '16 (prefix) + 2 + 3 + 5 + 4 + 2 = 32 chars, fixed',
       sortField: 'score (descending)',
       scorecard: 'Both fields are final raw values — printed as-is, nothing derived.',
-      example: 'NGPC-DEV.COM/2K/2KAAA012340042',
+      // Decoded from the 2048 ROM's own on-screen QR (emulator, real game over), 2026-10-12.
+      example: 'NGPC-DEV.COM/2K/2KAAA00252004720',
       exampleIsReal: true,
       firestore: [
         {field:'game', type:'"2K" (fixed)'},
@@ -928,16 +932,16 @@
         {name:'Difficulty', width:'1', format:'E/M/H', notes:'key "DIFF"'},
         {name:'Time', width:'1–5', format:'numeric, no padding', notes:'seconds, includes the mistake-count time penalty; key "TIME"'},
         {name:'Mistakes', width:'3', format:'numeric, zero-padded', notes:'key "MISS", capped at 999'},
-        {name:'Seed', width:'5', format:'numeric, zero-padded', notes:'key "SEED", the on-device puzzle generator’s own seed, 00000–65535 (always exactly 5 digits, never shortened) — OPTIONAL: added after the original spec shipped, so a QR with no SEED- token at all still parses fine (an un-updated cartridge build).'},
+        {name:'Seed', width:'5', format:'numeric, zero-padded', notes:'key "SEED", the on-device puzzle generator’s own seed, 00000–65535 (always exactly 5 digits, never shortened). Every checksummed build sends it.'},
+        {name:'Checksum', width:'2', format:'base-36', notes:'since 2026-10-12: always the LAST token, " CK-" + 2 chars = (sum of QR-alphanumeric index of every char before those 2, the space and "CK-" included) mod 1296, same rule as Sokoban; verified client-side, not stored. A code with no CK- token (older build) is refused.'},
       ],
-      totalLength: '17 (prefix) + 2 (repeated code) + 3 (initials) + "DIFF-"+1 + " TIME-"+1–5 + " MISS-"+3 [+ " SEED-"+5] = 43–47 chars (54 max with seed), variable',
+      totalLength: '16 (prefix) + 2 (repeated code) + 3 (initials) + "DIFF-"+1 + " TIME-"+1–5 + " MISS-"+3 + " SEED-"+5 + " CK-"+2 = 56–60 chars, variable (time has no padding)',
       sortField: 'time (ascending — faster wins), scoped to one difficulty at a time — times aren’t comparable across difficulties',
       scorecard: 'Every field is a final raw value — printed as-is, no reconstruction. Initials are the row’s identity label (same convention as every other game here); the submitter’s site account/username is separate, shown alongside it.',
-      example: 'NGPC-DEV.COM/SD/ABCDIFF-E TIME-... MISS-... SEED-...',
-      // Was a real decoded scan before the initials field was added; the user's own description
-      // of the new format uses template placeholders ("..."), not a concrete decoded example --
-      // flip back to true once a real post-update scan is confirmed.
-      exampleIsReal: false,
+      // Decoded from the Sudoku ROM's own on-screen QR (emulator, test values for time/misses/
+      // seed injected into a scratch copy, real encoder), 2026-10-12.
+      example: 'NGPC-DEV.COM/SD/SDAAADIFF-H TIME-754 MISS-002 SEED-12345 CK-MJ',
+      exampleIsReal: true,
       firestore: [
         {field:'game', type:'"SD" (fixed)'},
         {field:'initials', type:'string, matches ^[A-Z0-9 .]{3}$ (OPTIONAL — omitted on a score submitted before this field existed)'},

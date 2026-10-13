@@ -268,10 +268,29 @@
     return result;
   }
 
+  // Since 2026-10-12 the cartridge appends a 2-char checksum after the spec's fields: (sum of the
+  // QR-alphanumeric index of every char before it) mod 1296, as 2 base-36 digits -- same rule as
+  // Sokoban's QR (sk/index.html). Checked and stripped here BEFORE the spec parse, so
+  // games/ms.payloadSpec (admin/game/'s Payload Editor) keeps describing only the real fields.
+  // Never stored, so firestore.rules is unchanged. A code with no checksum is from an older build
+  // and is refused, otherwise the checksum would protect nothing.
+  const QR_ALNUM = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
+  function payloadChecksumOk(text){
+    const n = text.length - 2;
+    if(n < 1 || !/^[0-9A-Z]{2}$/.test(text.slice(n))) return false;
+    let sum = 0;
+    for(let i=0;i<n;i++){ const k = QR_ALNUM.indexOf(text[i]); if(k < 0) return false; sum += k; }
+    return sum % 1296 === parseInt(text.slice(n), 36);
+  }
   function parsePayload(text){
     text = (text||'').trim().toUpperCase();
     if(text.length < 2) return {error:"That code is too short to be a valid score."};
-    return parseSpecPayload(text, getPayloadSpec());
+    const spec = getPayloadSpec();
+    const bodyLen = spec.code.length + spec.fields.reduce((sum,f)=>sum+(f.width||0), 0);
+    if(text.length === bodyLen) return {error:"That code is from an older Minesweeper build (no checksum) — update the cartridge or ROM, then rescan."};
+    if(text.length !== bodyLen + 2) return {error:"That code is the wrong length — rescan with the whole code in frame."};
+    if(!payloadChecksumOk(text)) return {error:"That code didn't scan cleanly (checksum mismatch) — rescan it."};
+    return parseSpecPayload(text.slice(0, bodyLen), spec);
   }
 
   function lastPathSegment(text){
