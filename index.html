@@ -28,6 +28,8 @@
     --accent2:#5c8fd6;
     --good:#4fbf8b;
     --danger:#e5615a;
+    --gold:#f2c14e;
+    --gold-ink:#2b1f00;
   }
   *{ box-sizing:border-box; }
   html,body{ height:auto; }
@@ -230,6 +232,45 @@
   }
   .dev-banner.dev{ background:rgba(214,158,23,.85); }
   .dev-banner.beta{ background:rgba(92,143,214,.82); }
+  /* The bands along the bottom of a tile's art, stacked: the tournament band (renderPromo())
+     above the dev-status banner, so neither covers the other or the corner ribbon. */
+  .tile-bands{ position:absolute; left:0; right:0; bottom:0; display:flex; flex-direction:column; pointer-events:none; }
+  .tile-bands .dev-banner{ position:static; }
+  .event-band{
+    background:var(--gold); color:var(--gold-ink);
+    font-family:"Press Start 2P",monospace; font-size:8px; letter-spacing:.06em;
+    text-align:center; padding:7px 4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  }
+  .event-band.live::before{
+    content:""; display:inline-block; width:6px; height:6px; border-radius:50%; background:#c42f28;
+    margin-right:7px; vertical-align:1px; animation:event-pulse 1.4s ease-in-out infinite;
+  }
+  .event-band.limited{ font-size:7px; }
+  @keyframes event-pulse{ 50%{ opacity:.25; } }
+
+  /* ---------- tournament bar (renderPromo()) ---------- */
+  .event-bar{
+    display:flex; flex-wrap:wrap; align-items:center; gap:8px 14px;
+    background:var(--panel); border:1px solid var(--gold); border-radius:12px; padding:12px 16px;
+    color:var(--cream); text-decoration:none;
+  }
+  .event-bar[hidden]{ display:none; }
+  .event-bar:hover, .event-bar:focus-visible{ background:var(--panel2); }
+  .event-bar:focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
+  .eb-tag{
+    font-family:"Press Start 2P",monospace; font-size:9px; letter-spacing:.06em; line-height:1;
+    padding:6px 9px; border-radius:999px; background:var(--gold); color:var(--gold-ink); flex:none;
+  }
+  .eb-tag.live{ background:var(--danger); color:#fff; }
+  .eb-main{ flex:1 1 220px; min-width:0; display:flex; flex-direction:column; gap:3px; }
+  .eb-name{ font-size:14px; font-weight:700; color:var(--cream); overflow-wrap:anywhere; }
+  .eb-sub{ font-size:12px; color:var(--dim); }
+  .eb-note{
+    font-size:10.5px; font-weight:600; letter-spacing:.06em; text-transform:uppercase; white-space:nowrap;
+    color:var(--gold); border:1px solid var(--gold); border-radius:999px; padding:3px 9px; flex:none;
+  }
+  .eb-go{ font-size:12.5px; font-weight:600; color:var(--accent2); white-space:nowrap; flex:none; margin-left:auto; }
+  @media (prefers-reduced-motion: reduce){ .event-band.live::before{ animation:none; } }
 
   /* Corner ribbon -- Coming Soon / NEW / UPDATED are mutually exclusive (see buildTile()'s single
      if/else-if chain), so all three share one top-left corner instead of fighting for space.
@@ -270,6 +311,16 @@
     <h1 class="px">NGPC HIGH SCORES</h1>
     <p>Scan the QR code your game shows after a completed run, or pick a game below to browse its board.</p>
   </header>
+
+  <!-- Tournament bar: a Bowling event that's live or starts soon, shown when Manage Game >
+       Bowling features > Main page: top bar is On, to whoever can see Tournaments -- see
+       renderPromo(). -->
+  <a class="event-bar" id="event-bar" href="/bw/#tournament" hidden>
+    <span class="eb-tag" id="eb-tag"></span>
+    <span class="eb-main"><span class="eb-name" id="eb-name"></span><span class="eb-sub" id="eb-sub"></span></span>
+    <span class="eb-note" id="eb-note" hidden></span>
+    <span class="eb-go">View board &rarr;</span>
+  </a>
 
   <div id="ticker-wrap">
     <div id="ticker-track"></div>
@@ -471,11 +522,15 @@
     // leaves "coming soon" the game goes straight to a fresh NEW ribbon instead (see
     // admin/game/index.html's own status-change handler, which sets newUntil at that same
     // moment), so this chain never actually needs to fall through past Coming Soon in practice.
+    // (inside .tile-bands, so renderPromo()'s tournament band can stack above it)
     if(data.devStatus === 'dev' || data.devStatus === 'beta'){
+      const bands = document.createElement('div');
+      bands.className = 'tile-bands';
       const banner = document.createElement('div');
       banner.className = 'dev-banner ' + data.devStatus;
       banner.textContent = data.devStatus === 'beta' ? 'BETA' : 'IN DEVELOPMENT';
-      art.appendChild(banner);
+      bands.appendChild(banner);
+      art.appendChild(bands);
     }
 
     const now = Date.now();
@@ -560,6 +615,12 @@
       // space (a small link under the grid) once at least one such game is actually visible, so
       // an empty section never gets a link to nowhere.
       renderGrid(visibleGames.filter(g=>g.section !== 'solo'));
+      // the game whose tournaments the ribbon / bar can announce (Bowling), while it's listed
+      // and playable
+      promoGame = visibleGames.find(g=>Array.isArray(g.bwTournaments) && g.code && g.section !== 'solo'
+        && g.devStatus !== 'coming-soon' && (g.visibility || 'active') === 'active') || null;
+      renderPromo();
+      schedulePromo();
       // The #solo-link block is currently commented out in the markup -- a missing element used to
       // throw here and land in the catch below, showing a false "couldn't load" even though the grid
       // had just rendered fine.
@@ -570,6 +631,91 @@
       gridStatusEl.textContent = 'Couldn’t load the games list right now — try refreshing.';
     }
   }
+
+  /* ---------- tournament promos: the tile ribbon and the top bar for a Bowling event that's live
+     or starts within PROMO_SOON_DAYS (games/{slug}.bwTournaments, ms timestamps). Each has its own
+     switch -- bwFeatures.tournamentRibbon / tournamentBar, Manage Game > Bowling features -- and
+     both follow the Tournaments level exactly as bw/index.html's featureLevel()/featureVisible()
+     do: On (tournaments true) = everyone; Testers (tournamentsTesters true) = the game's Preview
+     access list plus the admin and developer; anything else = Off, the admin and developer only,
+     as a preview. Anything unexpected reads as hidden. ---------- */
+  const PROMO_SOON_DAYS = 7;
+  let promoGame = null, promoUser = null, promoTimer = null;
+  function promoLevel(f){
+    if(f.tournaments === true) return 'on';
+    return (f.tournamentsTesters === true || f.tournaments === 'testers') ? 'testers' : 'off';
+  }
+  function promoVisible(g, lvl, user){
+    if(lvl === 'on') return true;
+    if(!user || !window.NGPC_AUTH) return false;
+    if(NGPC_AUTH.isGameManager(user, g)) return true;
+    return lvl === 'testers' && NGPC_AUTH.canPreviewGame(user, g);
+  }
+  // the event to announce: the one /bw/'s panel opens on (live, newest start first), else the
+  // next one starting within PROMO_SOON_DAYS
+  function promoEvent(g, now){
+    const list = g.bwTournaments.filter(e=>e && e.id && e.name && e.startsAt < e.endsAt);
+    const live = list.filter(e=>now >= e.startsAt && now < e.endsAt).sort((a,b)=>b.startsAt - a.startsAt);
+    if(live.length) return {ev: live[0], live: true};
+    const soon = list.filter(e=>now < e.startsAt && e.startsAt - now <= PROMO_SOON_DAYS * 86400000)
+      .sort((a,b)=>a.startsAt - b.startsAt);
+    return soon.length ? {ev: soon[0], live: false} : null;
+  }
+  function fmtPromoLeft(ms){
+    const m = Math.max(1, Math.ceil(ms / 60000)), d = Math.floor(m / 1440), h = Math.floor(m % 1440 / 60);
+    return d ? d + 'd ' + h + 'h' : h ? h + 'h ' + (m % 60) + 'm' : m + 'm';
+  }
+  // in the viewer's own time zone, with the zone shown (as on /bw/)
+  function fmtPromoWhen(ms){
+    return new Date(ms).toLocaleString(undefined,{weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short'});
+  }
+  function renderPromo(){
+    const g = promoGame, now = Date.now();
+    const f = (g && g.bwFeatures) || {};
+    const lvl = promoLevel(f);
+    const pick = g ? promoEvent(g, now) : null;
+    const show = !!(pick && promoVisible(g, lvl, promoUser));
+    tileEls.forEach(tile=>tile.querySelectorAll('.event-band').forEach(b=>b.remove()));
+    const tile = (show && f.tournamentRibbon === true) ? tileEls.find(x=>x.dataset.game === g.code) : null;
+    if(tile){
+      const art = tile.querySelector('.tile-art');
+      let bands = art.querySelector('.tile-bands');
+      if(!bands){ bands = document.createElement('div'); bands.className = 'tile-bands'; art.appendChild(bands); }
+      const band = document.createElement('div');
+      band.className = 'event-band' + (pick.live ? ' live' : '') + (lvl === 'on' ? '' : ' limited');
+      band.textContent = (pick.live ? 'TOURNAMENT LIVE' : 'TOURNAMENT SOON')
+        + (lvl === 'on' ? '' : lvl === 'testers' ? ' \u00b7 TESTERS' : ' \u00b7 PREVIEW');
+      bands.insertBefore(band, bands.firstChild);
+    }
+    const bar = el('event-bar');
+    bar.hidden = !(show && f.tournamentBar === true);
+    if(bar.hidden) return;
+    const ev = pick.ev, tag = el('eb-tag'), note = el('eb-note');
+    bar.href = (g.leaderboardPath || ('/' + g.slug + '/')) + '#tournament';
+    tag.textContent = pick.live ? 'LIVE' : 'SOON';
+    tag.classList.toggle('live', pick.live);
+    el('eb-name').textContent = ev.name;
+    el('eb-sub').textContent = (g.name || g.slug) + ' tournament \u00b7 '
+      + (pick.live ? 'Ends in ' + fmtPromoLeft(ev.endsAt - now) : 'Starts ' + fmtPromoWhen(ev.startsAt));
+    // who can see it while it isn't public yet
+    note.hidden = lvl === 'on';
+    note.textContent = lvl === 'testers' ? 'Testers only' : 'Preview';
+  }
+  // the next re-render: 30 s for the countdown, or sooner when an event starts, ends or comes
+  // within PROMO_SOON_DAYS, so LIVE / SOON flip on time
+  function schedulePromo(){
+    clearTimeout(promoTimer);
+    if(!promoGame) return;
+    const now = Date.now();
+    let next = now + 30000;
+    promoGame.bwTournaments.forEach(e=>{
+      if(e) [e.startsAt - PROMO_SOON_DAYS * 86400000, e.startsAt, e.endsAt].forEach(at=>{
+        if(typeof at === 'number' && at > now && at < next) next = at;
+      });
+    });
+    promoTimer = setTimeout(()=>{ renderPromo(); schedulePromo(); }, next - now + 250);
+  }
+  if(window.NGPC_AUTH) NGPC_AUTH.onAuthChange(user=>{ promoUser = user; renderPromo(); });
 
   function applySort(mode){
     const counts = countsCache[activePeriod];
@@ -982,6 +1128,7 @@
       periodToggleEl.hidden = true;
       gridStatusEl.hidden = true;
       gridEl.hidden = true;
+      loadGames();   // into the hidden grid: the tournament bar and the ticker's game names still use the list
       return;
     }
     loadGames().then(()=> applySort(sortMode));

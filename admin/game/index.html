@@ -405,7 +405,9 @@
        by bw/index.html's featureLevel(): <k> true = On for everyone; <k>Testers true = Testers
        (also the accounts under Preview access above); neither = Off (the admin and the game's
        developer still see a marked preview). Testers is its own flag so an older cached page
-       sees <k> false and stays hidden. -->
+       sees <k> false and stays hidden. tournamentRibbon / tournamentBar (true = on) switch the
+       main page's tile ribbon and top bar (index.html renderPromo()), which follow the
+       Tournaments level. -->
   <section class="panel" id="bw-features-panel" hidden>
     <div class="panel-header collapsed" data-toggle="bw-features-body" role="button" tabindex="0" aria-expanded="false">
       <h2 style="margin:0">Bowling features <span class="spec-note">(admin only)</span></h2>
@@ -425,6 +427,17 @@
         <button type="button" class="status-btn" data-value="testers">Testers</button>
         <button type="button" class="status-btn" data-value="on">On</button>
       </div>
+      <div class="field-label" style="margin-top:14px">Main page: tile ribbon (TOURNAMENT LIVE / SOON on the Neo Bowling tile)</div>
+      <div class="status-row" id="bw-ribbon-row" style="margin-bottom:0">
+        <button type="button" class="status-btn" data-value="off">Off</button>
+        <button type="button" class="status-btn" data-value="on">On</button>
+      </div>
+      <div class="field-label" style="margin-top:14px">Main page: top bar (event name, countdown, link to the board)</div>
+      <div class="status-row" id="bw-bar-row" style="margin-bottom:0">
+        <button type="button" class="status-btn" data-value="off">Off</button>
+        <button type="button" class="status-btn" data-value="on">On</button>
+      </div>
+      <div class="current-value" style="margin-top:8px">The ribbon and bar show while an event is live or starts within 7 days, to whoever can see Tournaments (Off / Testers / On above).</div>
       <button type="button" class="action btn-primary" id="bw-features-save" style="margin-top:14px">Save</button>
       <div id="bw-features-msg"></div>
 
@@ -1283,8 +1296,9 @@
       el('bw-features-panel').hidden = false;
       const f = data.bwFeatures || {};
       const lvl = k => f[k] === true ? 'on' : ((f[k + 'Testers'] === true || f[k] === 'testers') ? 'testers' : 'off');
-      const state = { career: lvl('careerStats'), tourney: lvl('tournaments') };
-      const rows = { career: el('bw-career-row'), tourney: el('bw-tourney-row') };
+      const onOff = k => f[k] === true ? 'on' : 'off';
+      const state = { career: lvl('careerStats'), tourney: lvl('tournaments'), ribbon: onOff('tournamentRibbon'), bar: onOff('tournamentBar') };
+      const rows = { career: el('bw-career-row'), tourney: el('bw-tourney-row'), ribbon: el('bw-ribbon-row'), bar: el('bw-bar-row') };
       function paintFeatureButtons(){
         Object.keys(rows).forEach(k=>rows[k].querySelectorAll('.status-btn').forEach(btn=>{
           btn.classList.toggle('active', btn.dataset.value === state[k]);
@@ -1302,8 +1316,9 @@
           // On = <k> true; Testers = <k>Testers true with <k> false (an old page sees Off)
           await docRef.update({ bwFeatures: {
             careerStats: state.career === 'on', careerStatsTesters: state.career === 'testers',
-            tournaments: state.tourney === 'on', tournamentsTesters: state.tourney === 'testers' } });
-          msg.innerHTML = '<div class="msg ok">Saved. Reload /bw/ to see it.</div>';
+            tournaments: state.tourney === 'on', tournamentsTesters: state.tourney === 'testers',
+            tournamentRibbon: state.ribbon === 'on', tournamentBar: state.bar === 'on' } });
+          msg.innerHTML = '<div class="msg ok">Saved. Reload /bw/ or the main page to see it.</div>';
         }catch(e){
           msg.innerHTML = '<div class="msg err">Couldn\u2019t save: '+escapeHtml(e.message||'unknown error')+'</div>';
         }finally{
