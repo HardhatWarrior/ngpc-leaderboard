@@ -560,7 +560,11 @@
       // space (a small link under the grid) once at least one such game is actually visible, so
       // an empty section never gets a link to nowhere.
       renderGrid(visibleGames.filter(g=>g.section !== 'solo'));
-      el('solo-link').hidden = !visibleGames.some(g=>g.section === 'solo');
+      // The #solo-link block is currently commented out in the markup -- a missing element used to
+      // throw here and land in the catch below, showing a false "couldn't load" even though the grid
+      // had just rendered fine.
+      const soloLinkEl = el('solo-link');
+      if(soloLinkEl) soloLinkEl.hidden = !visibleGames.some(g=>g.section === 'solo');
       gridStatusEl.textContent = '';
     }catch(e){
       gridStatusEl.textContent = 'Couldn’t load the games list right now — try refreshing.';
