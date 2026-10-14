@@ -293,6 +293,32 @@
   /* main is a 1fr grid: without min-width:0 the table's width would stretch the whole panel past
      a phone screen instead of scrolling inside .t-boardwrap */
   #tournament-panel{ min-width:0; }
+  /* ---------- "How it works" flyout: the tournament rules and requirements, out of the board's way ---------- */
+  .t-howto-btn{ width:auto; margin-top:10px; padding:6px 12px; border-radius:999px; background:transparent;
+    border:1px solid var(--border); color:var(--accent2); font-size:12px; font-weight:600; }
+  .t-howto-btn:hover{ border-color:var(--accent2); }
+  .t-howto-btn:focus-visible{ outline:2px solid var(--accent2); outline-offset:2px; }
+  dialog.t-howto{ position:fixed; inset:0 0 0 auto; margin:0; padding:0; width:min(460px, 100vw); max-width:100vw;
+    height:100%; max-height:none; border:0; border-left:1px solid var(--border); background:var(--panel); color:var(--cream);
+    box-shadow:-12px 0 32px rgba(0,0,0,.45); }
+  dialog.t-howto::backdrop{ background:rgba(6,9,20,.6); }
+  dialog.t-howto[open]{ animation:t-howto-in .2s ease-out; }
+  @keyframes t-howto-in{ from{ transform:translateX(28px); opacity:0; } }
+  body:has(dialog.t-howto[open]){ overflow:hidden; }
+  .t-howto-in{ display:flex; flex-direction:column; height:100%; }
+  .t-howto-head{ display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border);
+    padding:calc(14px + env(safe-area-inset-top, 0px)) 20px 14px; }
+  .panel .t-howto-head h2{ margin:0; }
+  .t-howto-x{ width:auto; margin-left:auto; padding:5px 11px; background:transparent; border:1px solid var(--border);
+    color:var(--cream); font-size:17px; line-height:1; }
+  .t-howto-x:focus-visible{ outline:2px solid var(--accent2); outline-offset:2px; }
+  .t-howto-body{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; font-size:13.5px; line-height:1.55;
+    padding:4px 20px calc(24px + env(safe-area-inset-bottom, 0px)); }
+  .t-howto-body h3{ margin:20px 0 8px; font-size:11.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--gold); }
+  .t-howto-body ul, .t-howto-body ol{ margin:0; padding-left:20px; display:flex; flex-direction:column; gap:6px; }
+  .t-howto-body p{ margin:10px 0 0; color:var(--dim); }
+  .t-howto-body b{ font-weight:600; }
+  @media (prefers-reduced-motion:reduce){ dialog.t-howto[open]{ animation:none; } }
   .t-evhead{ display:flex; flex-wrap:wrap; gap:12px 24px; align-items:flex-end; justify-content:space-between; margin:12px 0 14px; }
   .t-evinfo{ min-width:0; flex:1 1 300px; }
   .t-name{ margin:0; font-family:"Press Start 2P",monospace; font-size:14px; font-weight:400; line-height:1.5;
@@ -462,6 +488,7 @@
           <div class="t-tz" id="t-tz"></div>
           <div class="t-clock tnum" id="t-clock"></div>
           <div class="t-prize" id="t-prize" hidden></div>
+          <button type="button" class="t-howto-btn" id="t-howto-btn" aria-haspopup="dialog" aria-controls="t-howto">How it works &amp; what you need &rsaquo;</button>
         </div>
         <div class="t-tools">
           <div class="t-toggle" role="group" aria-label="Ranking">
@@ -479,6 +506,57 @@
         <li>Ties: <b>longest strike streak</b>, then <b>strikes</b>, then earliest</li>
         <li>Same as <b>TOURNEY HCP</b> on the cart</li>
       </ul>
+      <!-- the "How it works" flyout (opened by #t-howto-btn): rules and requirements, checked
+           against tEntries()/tCompare()/handicapFor() and the cart (1P-only SUBMIT SCORE, OPTION
+           shows the QR, avg_add_game). Keep it in step with those if the rules change. -->
+      <dialog class="t-howto" id="t-howto" aria-labelledby="t-howto-title">
+        <div class="t-howto-in">
+          <div class="t-howto-head">
+            <h2 id="t-howto-title">How tournaments work</h2>
+            <button type="button" class="t-howto-x" id="t-howto-close" aria-label="Close">&times;</button>
+          </div>
+          <div class="t-howto-body">
+            <h3>What you need</h3>
+            <ul>
+              <li>An up-to-date copy of Neo Bowling. Score codes from older versions are turned away when you scan.</li>
+              <li>An account on this site, signed in. New accounts are approved by the site admin. Scores you submit while waiting still count, and appear on the board once you&rsquo;re approved.</li>
+              <li>Your own cart, and a phone to scan with.</li>
+            </ul>
+            <h3>How to enter</h3>
+            <ol>
+              <li>Bowl a 1-player game. 2-player and VS Link games can&rsquo;t be submitted.</li>
+              <li>At <b>GAME OVER</b> pick <b>SUBMIT SCORE</b>, set your initials, press <b>OPTION</b> to show the QR code, and scan it.</li>
+              <li>Submit it here before the event ends. You&rsquo;ll see &ldquo;Counted in&rdquo; with the event&rsquo;s name.</li>
+            </ol>
+            <p>The QR code only exists on that GAME OVER screen. Once you pick PLAY AGAIN or TITLE, that game can&rsquo;t be submitted.</p>
+            <h3>Bowl as many games as you like</h3>
+            <ul>
+              <li>Only your best game during the event counts, so a bad game never hurts you.</li>
+              <li>A higher score replaces your entry. A lower one changes nothing.</li>
+              <li>If two of your games have the same score, the one with the longer strike streak counts, then the one with more strikes, then the earlier one.</li>
+              <li>Games during the event never change your handicap.</li>
+              <li>Every game you submit also goes on the all-time board.</li>
+            </ul>
+            <h3>Scoring</h3>
+            <ul>
+              <li>Ranked by handicap: <b>Total = best game + handicap</b>. Switch to Scratch to rank by score alone.</li>
+              <li><b>Handicap = 90% of (200 &minus; your average)</b>, rounded down, max 90. A 150 average gets +45. A 200 average or better gets no handicap.</li>
+              <li>Your cart keeps your average from every finished 1-player game, submitted or not. Anyone bowling on your cart changes it.</li>
+              <li>Your handicap is locked in from the last score you submitted before the event starts. <b>Tip:</b> submit a game before the start.</li>
+              <li>You bowl scratch (no handicap) if you submitted no score before the start, or if your cart had fewer than 5 games when you submitted it.</li>
+              <li><b>TOURNEY HCP</b> on the cart&rsquo;s CAREER STATS screen (from HISCORES on the title) uses the same formula, but it shows today&rsquo;s value.</li>
+              <li>Ties between players go to the longest strike streak in their best game, then most strikes, then whoever submitted first.</li>
+            </ul>
+            <h3>Good to know</h3>
+            <ul>
+              <li>What counts is when you submit, not when you bowled. Start and end times are shown in your own time zone.</li>
+              <li>Every score is checked: the code must be valid, and every ball is replayed to make sure the game is possible.</li>
+              <li>One entry per account.</li>
+              <li>Updating the game wipes the cart&rsquo;s save. Before you update, write down your <b>STATS CODE</b> (OPTIONS &gt; STATS CODE). Enter it on the new version with <b>A: ENTER A CODE</b>, or your average starts over.</li>
+            </ul>
+          </div>
+        </div>
+      </dialog>
     </section>
 
     <!-- My stats -- shown to everyone when Career stats is On (Manage Game > Bowling features),
@@ -1853,6 +1931,16 @@
   }
 
   el('t-pick').addEventListener('change', e=>{ tPickId = e.target.value; renderTournament(); });
+  // ---- "How it works" flyout (a modal <dialog>: Esc and the close button shut it, focus goes
+  // back to the button) ----
+  const howto = el('t-howto');
+  el('t-howto-btn').addEventListener('click', ()=>{
+    if(typeof howto.showModal === 'function') howto.showModal(); else howto.setAttribute('open', '');
+  });
+  const howtoClose = ()=>{ if(typeof howto.close === 'function') howto.close(); else howto.removeAttribute('open'); };
+  el('t-howto-close').addEventListener('click', howtoClose);
+  // a click on the dimmed backdrop lands on the <dialog> itself (its contents fill it)
+  howto.addEventListener('click', e=>{ if(e.target === howto) howtoClose(); });
   tPanel.querySelectorAll('.t-toggle button').forEach(btn=>btn.addEventListener('click', ()=>{
     tMode = btn.dataset.mode;
     tPanel.querySelectorAll('.t-toggle button').forEach(b=>b.setAttribute('aria-pressed', String(b === btn)));
