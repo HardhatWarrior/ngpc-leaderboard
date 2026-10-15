@@ -1030,6 +1030,39 @@
         {field:'stars', type:'int, levelsSolved–3 × levelsSolved'},
       ],
     },
+    persia: {
+      urlPrefix: 'NGPC-DEV.COM/PERSIA/',
+      urlNote: 'Bare NGPC-DEV.COM/PERSIA/ + payload, no scheme (QR alphanumeric mode, uppercase). Everything after the prefix is 0-9 and A-Z only (base 36), so the shared strip-to-last-"/" handling is safe. Two layouts share ONE board: v1 = finished 14-level run, v2 = forfeited run.',
+      fields: [
+        {name:'Game code', width:'6', format:'fixed', notes:'"PERSIA"'},
+        {name:'Format version', width:'1', format:'char', notes:'"1" = finished run (127 payload chars); "2" = forfeited run (130 payload chars)'},
+        {name:'Forfeit marker (v2 only)', width:'1', format:'fixed', notes:'"F"; absent in v1, every later offset shifts +3 in v2'},
+        {name:'Levels completed (v2 only)', width:'2', format:'base-36', notes:'00–0D = 0–13 fully completed levels; a v1 run is always all 14'},
+        {name:'Initials', width:'3', format:'A-Z', notes:'offset 7 (v1) / 10 (v2)'},
+        {name:'Level 1–14 blocks', width:'14 × 8 = 112', format:'see below', notes:'every block is always present, even for levels not played'},
+        {name:'  Time', width:'3', format:'base-36', notes:'seconds on that level (1–46655); 0 allowed on unplayed levels and the unfinished level of a forfeit'},
+        {name:'  Deaths', width:'2', format:'base-36', notes:'0–255'},
+        {name:'  Small potions', width:'1', format:'base-36', notes:'0–35'},
+        {name:'  Large potions', width:'1', format:'base-36', notes:'0–35'},
+        {name:'  Sword hits', width:'1', format:'base-36', notes:'0–35'},
+        {name:'Total score', width:'3', format:'base-36', notes:'0–10000; the page recomputes it from the 14 blocks and rejects a mismatch'},
+        {name:'Checksum', width:'2', format:'base-36', notes:'c=571; c=(c*31+ascii)%1296 over EVERY char of the whole QR text before these two, NGPC-DEV.COM/PERSIA/ prefix included. Verified client-side, not stored. Detects corruption only -- no secret, so it does not stop forged scores'},
+      ],
+      totalLength: 'v1: 20 (prefix) + 127 = 147 chars; v2: 20 + 130 = 150 chars (profile-5 QR maximum is 154)',
+      sortField: 'total score (desc), then lower total time (asc), then earliest submission',
+      scorecard: 'Level targets (seconds, levels 1–14): 90,150,165,180,210,165,210,195,225,210,195,195,285,150. For each COMPLETED level: points = max(0, min(65535, floor(700*target/(time+target)) + 50*small + 200*large − 25*hits − 100*deaths)); total = min(10000, sum). In a forfeit the unfinished level (completed+1) may show time/events but scores ZERO. Tie-break time is the sum of all 14 block times. One doc per player at scores/PERSIA_<uid>, replaced only by a code that ranks strictly better (persiaRanksBetter in firestore.rules). The page and auth.js both rebuild score/time from the stored stage string.',
+      example: 'NGPC-DEV.COM/PERSIA/PERSIA1AAA02I001110460000004L000000500000005U0000004L0000005U0000005G000000690000005U0000005F0000005F0000007Y00000046000003YBW8',
+      exampleIsReal: false,
+      firestore: [
+        {field:'game', type:'"PERSIA" (fixed)'},
+        {field:'formatVersion', type:'string, "1" or "2"'},
+        {field:'initials', type:'string, ^[A-Z]{3}$'},
+        {field:'completed', type:'int, 14 for v1; 0–13 for v2'},
+        {field:'score', type:'int, 1–10,000'},
+        {field:'totalTime', type:'int, 0–653,170 (seconds)'},
+        {field:'levels', type:'string, ^[0-9A-Z]{112}$ (the 14 stage blocks)'},
+      ],
+    },
     rd: {
       urlPrefix: '(none)',
       urlNote: 'The cartridge shows the bare 32-char code with no URL prefix; pages still strip up to the last "/" like every other game. 0-9, A-Z and "-" only (base-36 everywhere).',
@@ -1245,7 +1278,7 @@
     // per-page tracker every page already writes to via auth.js's trackPageView()) -- a play
     // page's folder name doesn't always match this game's own slug (e.g. bw's is /play/bowling/,
     // not /play/bw/), hence the lookup table rather than assuming 'play_'+slug.
-    const PLAY_FOLDER = { bw:'bowling', tt:'tetris', yz:'yahtzee', fk:'farkle', '2k':'2048', overrev:'overrev', gd:'gardenia', sd:'sd', xn:'xn', sk:'sk' };
+    const PLAY_FOLDER = { bw:'bowling', tt:'tetris', yz:'yahtzee', fk:'farkle', '2k':'2048', overrev:'overrev', gd:'gardenia', sd:'sd', xn:'xn', sk:'sk', persia:'persia' };
     // A game scaffolded via NGPC-Admin-Scripts/scaffold-game.js always has its play page at
     // /play/<slug>/, matching the leaderboard slug directly -- only the original hand-built games
     // (the PLAY_FOLDER table above) have a differently-named play folder.

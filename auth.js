@@ -732,6 +732,47 @@ window.NGPC_AUTH = (function(){
     return '<div class="scorecard-grid">'+grid+'</div><table class="tk-sheet">'+rows+'</table>';
   }
 
+  // PRINCE OF PERSIA -- same stage-string decode and scoring as persia/index.html's own copy (the
+  // each-page-keeps-its-own-copy convention). A score doc stores the cartridge's 112-char stage
+  // string (14 x time/deaths/small/large/hits, base 36) + how many stages completed; the total and
+  // time are recomputed from it here, never trusted from the stored fields.
+  const PERSIA_TARGET = [90,150,165,180,210,165,210,195,225,210,195,195,285,150];
+  function persiaSummary(data){
+    const lv = data && data.levels, done = data && data.completed;
+    if(typeof lv !== 'string' || !/^[0-9A-Z]{112}$/.test(lv) || !(done >= 0 && done <= 14)) return null;
+    const levels = [];
+    let sum = 0, time = 0;
+    for(let i=0;i<14;i++){
+      const b = lv.slice(i*8, i*8+8);
+      const L = { level:i+1, time:parseInt(b.slice(0,3),36), deaths:parseInt(b.slice(3,5),36),
+                  small:parseInt(b.slice(5,6),36), large:parseInt(b.slice(6,7),36), hits:parseInt(b.slice(7,8),36), done:i<done };
+      L.pts = L.done ? Math.max(0, Math.min(65535, Math.floor(700*PERSIA_TARGET[i]/(L.time+PERSIA_TARGET[i])) + 50*L.small + 200*L.large - 25*L.hits - 100*L.deaths)) : 0;
+      sum += L.pts; time += L.time;
+      levels.push(L);
+    }
+    return { levels:levels, score:Math.min(10000, sum), time:time, completed:done };
+  }
+  function persiaClock(s){
+    const h = Math.floor(s/3600), m = Math.floor((s%3600)/60), sec = s%60;
+    return (h ? h+':'+String(m).padStart(2,'0') : String(m)) + ':' + String(sec).padStart(2,'0');
+  }
+  // Plain .tk-sheet rows only, so account/ and user/ need no new CSS.
+  function renderPersiaScorecardHTML(data){
+    const sum = persiaSummary(data);
+    if(!sum) return '';
+    const rows = sum.levels.map(function(L){
+      if(!L.done) return '<tr><td>Level '+L.level+'</td><td class="tk-val">&ndash;</td></tr>';
+      return '<tr><td>Level '+L.level+' &middot; '+Math.floor(L.time/60)+':'+String(L.time%60).padStart(2,'0')+
+        ' &middot; '+L.deaths+' death'+(L.deaths===1?'':'s')+' &middot; '+L.small+'S '+L.large+'L potions &middot; '+L.hits+' hit'+(L.hits===1?'':'s')+
+        '</td><td class="tk-val tnum">'+L.pts+'</td></tr>';
+    }).join('');
+    const status = sum.completed >= 14 ? 'Finished all 14 levels' : ('Forfeited after '+sum.completed+' of 14 levels');
+    return '<table class="tk-sheet">'+rows+
+      '<tr><td>Status</td><td class="tk-val">'+status+'</td></tr>'+
+      '<tr><td>Total score</td><td class="tk-val tnum">'+sum.score+' / 10000</td></tr>'+
+      '<tr><td>Total time</td><td class="tk-val tnum">'+persiaClock(sum.time)+'</td></tr></table>';
+  }
+
   // RED DRAGON -- a live per-hero snapshot (rd/index.html renderHeroDetailHTML), plain .tk-sheet
   // rows only so account/ and user/ need no new CSS.
   const RD_CLASSES = { K:'DEATH KNIGHT', M:'MYSTIC', T:'THIEF' };
@@ -759,6 +800,7 @@ window.NGPC_AUTH = (function(){
       case 'XN': return data.money !== undefined && data.checkpoint !== undefined;
       case 'FU': return data.totalScore !== undefined && data.startWorld !== undefined;
       case 'SK': return skSummary(data) !== null;
+      case 'PERSIA': return persiaSummary(data) !== null;
       case 'RD': return rdIsHero(data);
       case 'OV':
         // Same "skip rather than crash" stance overrev/index.html's own board rendering takes on
@@ -779,6 +821,7 @@ window.NGPC_AUTH = (function(){
       case 'XN': return renderXenon2ScorecardHTML(data);
       case 'FU': return renderFurryScorecardHTML(data);
       case 'SK': return renderSokobanScorecardHTML(data);
+      case 'PERSIA': return renderPersiaScorecardHTML(data);
       case 'RD': return rdIsHero(data) ? renderRedDragonHeroHTML(data) : '';
       case 'OV':
         try{ return renderOverRevScorecardHTML(Object.assign({}, data, OverRevProtocol.decode(data.raw))); }
@@ -811,6 +854,12 @@ window.NGPC_AUTH = (function(){
       const sum = skSummary(data);
       if(!sum) return '';
       return sum.stars+'/90 stars'+(Number.isFinite(data.totalMoves) ? (' · '+data.totalMoves+' moves') : '');
+    }
+    if(data.game==='PERSIA'){
+      // Numbers only -- callers put this into innerHTML unescaped.
+      const sum = persiaSummary(data);
+      if(!sum) return '';
+      return (sum.completed >= 14 ? 'finished' : ('forfeited · '+sum.completed+'/14 levels'))+' · '+persiaClock(sum.time);
     }
     return '';
   }
