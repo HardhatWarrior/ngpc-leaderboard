@@ -3,6 +3,7 @@ import createNgpcCore from "./ngpc_core.js";
 import { Machine, loadCore, BUTTONS, SCREEN_W, SCREEN_H, AUDIO_HZ } from "./machine.js";
 import { Pod } from "./pod.js";
 
+const BUILD = document.body.dataset.build || "dev";    // stamped by publish.py
 const DEFAULT_SERVER = "wss://ngpnet.fly.dev/";
 const LS_SERVER = "ngpnet.server";
 const MAX_CATCHUP = 4;          // frames per animation tick at most
@@ -133,7 +134,7 @@ function setPodStatus(stateName, pod, detail) {
   el.podStatus.className = "status " + stateName;
   el.podStatus.textContent = "pod: " + stateName + (detail ? " (" + detail + ")" : "") +
     " · frames in " + s.rx + " / out " + s.tx + extra +
-    (state.fps ? " · " + state.fps + " fps" : "");
+    (state.fps ? " · " + state.fps + " fps" : "") + " | " + BUILD;
 }
 
 // ------------------------------------------------------------------ loading
@@ -156,7 +157,8 @@ async function loadRomFromQuery() {
   const url = new URL(location.href).searchParams.get("rom") || document.body.dataset.rom;
   if (!url) return false;
   try {
-    const r = await fetch(url);
+    // no-cache = revalidate with the server (ETag), so a new ROM build is picked up at once
+    const r = await fetch(url, { cache: "no-cache" });
     if (!r.ok) throw new Error("HTTP " + r.status);
     setRom(new Uint8Array(await r.arrayBuffer()), url.split("/").pop() || url, false);
     return true;
@@ -186,7 +188,7 @@ function start() {
   return starting;
 }
 async function startNow() {
-  if (!state.M) state.M = await loadCore(createNgpcCore);
+  if (!state.M) state.M = await loadCore(createNgpcCore, { locateFile: (p) => p + "?v=" + BUILD });
   stopLoop();
   if (state.machine) state.machine.destroy();
   if (state.pod) state.pod.close();
@@ -432,6 +434,8 @@ window.ngp = {
 
 // ------------------------------------------------------------------ boot
 (async function main() {
+  const brand = document.getElementById("brand");
+  if (brand) brand.title = "build " + BUILD;
   const q = new URL(location.href).searchParams;
   const coarse = matchMedia("(pointer: coarse)").matches;
   if (q.get("touch") === "1" || (coarse && q.get("touch") !== "0")) document.body.classList.add("touch");
