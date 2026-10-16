@@ -120,9 +120,11 @@ function log(text) {
 
 function setPodStatus(stateName, pod, detail) {
   if (stateName === "closed" || stateName === "error") {
-    el.hint.textContent = "Connection lost (the server drops a link that is silent for 30 s, e.g. a phone that " +
-      "locked or switched apps). Press Reset, then enter ONLINE again.";
+    el.hint.textContent = "Connection lost. Press Reset, then enter ONLINE again.";
     el.lobby.hidden = true;
+  } else if (stateName === "reconnecting") {
+    el.hint.textContent = "Connection lost, reconnecting... (the server keeps your seat in room " +
+      (pod ? pod.room : "") + " for 90 s).";
   } else if (stateName === "connected") {
     el.hint.textContent = "";
   }

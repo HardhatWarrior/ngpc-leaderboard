@@ -71,7 +71,7 @@ body {
   max-width: 100%;
 }
 .status { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--muted); }
-.status.connecting { color: var(--warn); }
+.status.connecting, .status.reconnecting { color: var(--warn); }
 .status.connected { color: var(--ok); }
 .status.closed, .status.error { color: var(--bad); }
 #lobby { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--fg); text-align: center; }
