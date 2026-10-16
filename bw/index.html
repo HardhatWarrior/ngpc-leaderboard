@@ -293,32 +293,44 @@
   /* main is a 1fr grid: without min-width:0 the table's width would stretch the whole panel past
      a phone screen instead of scrolling inside .t-boardwrap */
   #tournament-panel{ min-width:0; }
-  /* ---------- "How it works" flyout: the tournament rules and requirements, out of the board's way ---------- */
+  /* ---------- flyouts (How it works; a player's career stats): a modal <dialog> sliding in from
+     the right, full width on phones ---------- */
   .t-howto-btn{ width:auto; margin-top:10px; padding:6px 12px; border-radius:999px; background:transparent;
     border:1px solid var(--border); color:var(--accent2); font-size:12px; font-weight:600; }
   .t-howto-btn:hover{ border-color:var(--accent2); }
   .t-howto-btn:focus-visible{ outline:2px solid var(--accent2); outline-offset:2px; }
-  dialog.t-howto{ position:fixed; inset:0 0 0 auto; margin:0; padding:0; width:min(460px, 100vw); max-width:100vw;
+  dialog.flyout{ position:fixed; inset:0 0 0 auto; margin:0; padding:0; width:min(460px, 100vw); max-width:100vw;
     height:100%; max-height:none; border:0; border-left:1px solid var(--border); background:var(--panel); color:var(--cream);
     box-shadow:-12px 0 32px rgba(0,0,0,.45); }
-  dialog.t-howto::backdrop{ background:rgba(6,9,20,.6); }
-  dialog.t-howto[open]{ animation:t-howto-in .2s ease-out; }
-  @keyframes t-howto-in{ from{ transform:translateX(28px); opacity:0; } }
-  body:has(dialog.t-howto[open]){ overflow:hidden; }
-  .t-howto-in{ display:flex; flex-direction:column; height:100%; }
-  .t-howto-head{ display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border);
+  dialog.flyout::backdrop{ background:rgba(6,9,20,.6); }
+  dialog.flyout[open]{ animation:flyout-in .2s ease-out; }
+  @keyframes flyout-in{ from{ transform:translateX(28px); opacity:0; } }
+  body:has(dialog.flyout[open]){ overflow:hidden; }
+  .flyout-in{ display:flex; flex-direction:column; height:100%; }
+  .flyout-head{ display:flex; align-items:center; gap:12px; border-bottom:1px solid var(--border);
     padding:calc(14px + env(safe-area-inset-top, 0px)) 20px 14px; }
-  .panel .t-howto-head h2{ margin:0; }
-  .t-howto-x{ width:auto; margin-left:auto; padding:5px 11px; background:transparent; border:1px solid var(--border);
+  .flyout-head h2{ margin:0; min-width:0; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  .flyout-x{ width:auto; margin-left:auto; padding:5px 11px; background:transparent; border:1px solid var(--border);
     color:var(--cream); font-size:17px; line-height:1; }
-  .t-howto-x:focus-visible{ outline:2px solid var(--accent2); outline-offset:2px; }
-  .t-howto-body{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; font-size:13.5px; line-height:1.55;
+  .flyout-x:focus-visible{ outline:2px solid var(--accent2); outline-offset:2px; }
+  .flyout-body{ flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; font-size:13.5px; line-height:1.55;
     padding:4px 20px calc(24px + env(safe-area-inset-bottom, 0px)); }
-  .t-howto-body h3{ margin:20px 0 8px; font-size:11.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--gold); }
-  .t-howto-body ul, .t-howto-body ol{ margin:0; padding-left:20px; display:flex; flex-direction:column; gap:6px; }
-  .t-howto-body p{ margin:10px 0 0; color:var(--dim); }
-  .t-howto-body b{ font-weight:600; }
-  @media (prefers-reduced-motion:reduce){ dialog.t-howto[open]{ animation:none; } }
+  .flyout-body h3{ margin:20px 0 8px; font-size:11.5px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--gold); }
+  .flyout-body ul, .flyout-body ol{ margin:0; padding-left:20px; display:flex; flex-direction:column; gap:6px; }
+  .flyout-body p{ margin:10px 0 0; color:var(--dim); }
+  .flyout-body b{ font-weight:600; }
+  /* the career flyout: My stats' tiles and tables, for another player */
+  .flyout-who{ display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 12px; margin:16px 0 4px; }
+  .flyout-ini{ font-family:"Press Start 2P",monospace; font-size:16px; letter-spacing:.06em; color:var(--cream); }
+  .flyout-who a, .flyout-link{ color:var(--accent2); font-size:12.5px; font-weight:600; }
+  .flyout-link{ display:inline-block; margin-top:18px; }
+  .flyout-body .career-cols h3{ margin:0 0 6px; font-size:11px; letter-spacing:.1em; color:var(--cream); }
+  /* a player's initials on the boards open their career flyout (while Career stats is visible) */
+  .who-stats{ width:auto; margin:0; padding:0; border:0; border-radius:2px; background:none; font:inherit; letter-spacing:inherit;
+    color:inherit; cursor:pointer; text-decoration:underline dotted var(--border); text-underline-offset:4px; }
+  .who-stats:hover{ color:var(--accent2); }
+  .who-stats:focus-visible{ outline:2px solid var(--accent2); outline-offset:2px; }
+  @media (prefers-reduced-motion:reduce){ dialog.flyout[open]{ animation:none; } }
   .t-evhead{ display:flex; flex-wrap:wrap; gap:12px 24px; align-items:flex-end; justify-content:space-between; margin:12px 0 14px; }
   .t-evinfo{ min-width:0; flex:1 1 300px; }
   .t-name{ margin:0; font-family:"Press Start 2P",monospace; font-size:14px; font-weight:400; line-height:1.5;
@@ -509,13 +521,13 @@
       <!-- the "How it works" flyout (opened by #t-howto-btn): rules and requirements, checked
            against tEntries()/tCompare()/handicapFor() and the cart (1P-only SUBMIT SCORE, OPTION
            shows the QR, avg_add_game). Keep it in step with those if the rules change. -->
-      <dialog class="t-howto" id="t-howto" aria-labelledby="t-howto-title">
-        <div class="t-howto-in">
-          <div class="t-howto-head">
+      <dialog class="flyout" id="t-howto" aria-labelledby="t-howto-title">
+        <div class="flyout-in">
+          <div class="flyout-head">
             <h2 id="t-howto-title">How tournaments work</h2>
-            <button type="button" class="t-howto-x" id="t-howto-close" aria-label="Close">&times;</button>
+            <button type="button" class="flyout-x" id="t-howto-close" aria-label="Close">&times;</button>
           </div>
-          <div class="t-howto-body">
+          <div class="flyout-body">
             <h3>What you need</h3>
             <ul>
               <li>An up-to-date copy of Neo Bowling. Score codes from older versions are turned away when you scan.</li>
@@ -584,7 +596,7 @@
           </div>
           <div class="career-src" id="career-src"></div>
           <div class="code-out" id="career-code-out" hidden>
-            <div class="stat-label">Your current stats code</div>
+            <div class="stat-label">Your saved stats code</div>
             <div class="code-val tnum" id="career-code-val"></div>
             <button type="button" class="btn-secondary" id="career-code-copy">Copy code</button>
             <div class="career-src" id="career-code-src" style="margin-top:8px"></div>
@@ -605,6 +617,18 @@
       <div id="board-status"></div>
       <div id="board"></div>
     </section>
+
+    <!-- a player's career stats (openPlayerStats()), opened from their initials on the leaderboard
+         or the tournament board while Career stats is visible to the viewer. Never shows a code. -->
+    <dialog class="flyout" id="p-stats" aria-labelledby="p-stats-title">
+      <div class="flyout-in">
+        <div class="flyout-head">
+          <h2 id="p-stats-title">Career stats</h2>
+          <button type="button" class="flyout-x" id="p-stats-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="flyout-body" id="p-stats-body"></div>
+      </div>
+    </dialog>
   </main>
 
   <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com &middot; <a href="mailto:support@ngpc-dev.com" style="color:inherit">support@ngpc-dev.com</a></footer>
@@ -902,7 +926,7 @@
     out.defIni = ''; for(let i=0;i<3;i++) out.defIni += String.fromCharCode(65+get(5));
     // Curve preview, prize level and code version aren't bw_career fields (its rules allow a fixed
     // key list). They're NON-enumerable, so Object.assign() into the doc never writes them; they
-    // are re-read from the stored code, and encodeStatsCode() carries them through.
+    // are re-read from the stored code.
     // A v1 code has no prize level: it's whatever the best game, less its handicap, unlocks.
     const hide = (k, v) => Object.defineProperty(out, k, {value: v, enumerable: false});
     hide('codeVersion', codeVersion);
@@ -917,41 +941,6 @@
     return out;
   }
 
-  // Inverse of decodeStatsCode -- same bit layout as bw_statscode.py's encode() / the cart's
-  // xf_encode(). s uses the same field names decodeStatsCode returns, plus optional curve (0/1)
-  // and prize (0-5). version 2 (the default) carries the prize level; version 1 leaves it out,
-  // for builds before prize balls.
-  function encodeStatsCode(s, version){
-    version = version === 1 ? 1 : 2;
-    const bits = [];
-    const put = (v,n) => { for(let i=n-1;i>=0;i--) bits.push((v>>i)&1); };
-    const putVar = v => {
-      if(v === 0) put(0,2);
-      else if(v < 64){ put(1,2); put(v,6); }
-      else if(v < 1024){ put(2,2); put(v,10); }
-      else { put(3,2); put(v,16); }
-    };
-    put(version,3);
-    put(s.hasBest ? 1 : 0, 1);
-    if(s.hasBest){
-      if(s.bestColor >= XF_COLOUR_COUNT[version]) throw new Error("A version " + version + " code can't hold that ball colour.");
-      put(s.bestScore,9);
-      for(const ch of s.bestIni) put(ch.charCodeAt(0)-65,5);
-      put(s.bestColor,4);
-      put(Math.floor(s.bestHcp/10),2);
-    }
-    ['games','frames','strikes','spares','turkeys','vsGames','vsFrames','vsStrikes','vsSpares','vsTurkeys','vsWins','vsLosses','avg10','avgGames']
-      .forEach(k=>putVar(s[k]));
-    for(const ch of s.defIni) put(ch.charCodeAt(0)-65,5);
-    put(s.curve ? 1 : 0, 1);
-    if(version >= 2) put(Math.min(5, s.prize || 0), 3);
-    while(bits.length % 5) bits.push(0);
-    const syms = [];
-    for(let i=0;i<bits.length;i+=5) syms.push((bits[i]<<4)|(bits[i+1]<<3)|(bits[i+2]<<2)|(bits[i+3]<<1)|bits[i+4]);
-    const c = xfCrc(syms);
-    syms.push((c>>10)&31, (c>>5)&31, c&31);
-    return syms.map(v=>XF_ALPHABET[v]).join('');
-  }
 
   function parseRollChars(rollChars){
     const rolls = [];
@@ -1070,7 +1059,9 @@
     return settings.scoreFormat === 'time' ? fmtTime(score) : String(score);
   }
 
+  let lastBoardDocs = [];      // renderStatsPanel() redraws with them when the viewer changes
   async function renderBoard(docs){
+    lastBoardDocs = docs;
     if(!docs.length){
       boardEl.innerHTML = '<div class="empty-state">No scores yet &mdash; be the first on the board.</div>';
       return;
@@ -1079,6 +1070,7 @@
     // their avatar after submitting) -- fetched fresh per render instead, one batched query for
     // every uid on the visible board rather than one read per row.
     const settings = getDisplaySettings();
+    const statsOn = careerVisible(statsUser);   // initials open the player's career flyout
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
@@ -1093,7 +1085,10 @@
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
       const rowHtml = '<div class="row'+(rank===1?' top1':'')+(hasDetail?' has-detail':'')+'"'+(hasDetail?' data-detail="d'+i+'"':'')+'>'+
         '<div class="rank">'+(rank===1?pinIconSVG():('#'+rank))+'</div>'+
-        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
+        '<div><div class="initials">'+avatarHtml+((statsOn && data.uid)
+          ? '<button type="button" class="who-stats" title="Career stats" data-stats-uid="'+escapeHtml(data.uid)+'" data-stats-ini="'
+            +escapeHtml(data.initials||'???')+'" data-stats-user="'+escapeHtml(data.username||'')+'">'+escapeHtml(data.initials||'???')+'</button>'
+          : escapeHtml(data.initials||'???'))+'</div>'+
           (usernameLine ? '<div class="row-meta">'+usernameLine+'</div>' : '')+'</div>'+
         '<div class="score-col"><div class="score-val tnum">'+(data.score!=null?fmtScoreValue(data.score, settings):'-')+'</div>'+
           (scoreMeta ? '<div class="row-meta">'+scoreMeta+'</div>' : '')+'</div>'+
@@ -1549,7 +1544,9 @@
   }
 
   function renderStatsPanel(user){
+    if(!user || user.uid !== statsCodeUid) clearCareerCode();   // another account (or none): drop the last one's code
     statsUser = user;
+    if(lastBoardDocs.length) renderBoard(lastBoardDocs);
     const visible = careerVisible(user);
     statsPanelEl.hidden = !visible;
     if(!visible){
@@ -1591,41 +1588,103 @@
     }
   }
 
-  let statsCodeCurrent = '';
+  let statsCodeCurrent = '', statsCodeUid = null;   // the saved code on show, and whose it is
+  function clearCareerCode(){
+    statsCodeCurrent = '';
+    statsCodeUid = null;
+    el('career-code-val').textContent = '';
+    el('career-code-out').hidden = true;
+  }
   function careerRows(rows){
     return rows.map(([label, v])=>'<tr><td>'+escapeHtml(label)+'</td><td>'+escapeHtml(String(v))+'</td></tr>').join('');
+  }
+  // ---- career helpers (My stats, and a player's career flyout) ----
+  // The raw stats code's owner-only home. Typed into a cart, a code copies that career (the
+  // average, so the tournament handicap, and the prize balls), so it isn't on the public
+  // bw_career/{uid} doc; only its owner reads it back (My stats' saved code box).
+  function careerCodeRef(uid){ return db.collection('bw_career').doc(uid).collection('private').doc('code'); }
+  // the newer of a player's latest v3 score code average and their saved stats code's
+  function careerAverage(scores, career){
+    let avg = null;
+    scores.filter(d=>d.version===3 && Number.isInteger(d.avg10)).forEach(d=>{
+      if(!avg || d.submittedAt > avg.at) avg = {avg10:d.avg10, games:d.avgGames||0, at:d.submittedAt, fromCode:false};
+    });
+    if(career && career.avgGames > 0 && (!avg || career.submittedAt > avg.at)){
+      avg = {avg10:career.avg10, games:career.avgGames, at:career.submittedAt, fromCode:true};
+    }
+    return avg;
+  }
+  // prize level: from the raw code when its owner has it, else the public doc's copy, else what the
+  // best game (less its handicap) unlocks, as a v1 code does
+  function careerPrize(career, code){
+    if(code){ try{ return decodeStatsCode(code).prize; }catch(e){ /* fall through */ } }
+    if(Number.isInteger(career.prize)) return career.prize;
+    return career.hasBest ? prizeLevelFor(career.bestScore - career.bestHcp) : 0;
+  }
+  function career1pRows(c, prize){
+    return [
+      ['Games played', c.games], ['Frames', c.frames], ['Strikes', c.strikes], ['Spares', c.spares], ['Turkeys', c.turkeys],
+      ['Best on the cart', c.hasBest ? (c.bestIni + ' ' + c.bestScore + (c.bestHcp ? ' (hcp +' + c.bestHcp + ')' : '')) : '\u2013'],
+      ['Prize balls', prizeBallNames(prize).join(', ') || '\u2013'],
+    ].filter(r=>prize != null || r[0] !== 'Prize balls');
+  }
+  function careerVsRows(c){
+    return [
+      ['Games played', c.vsGames], ['Frames', c.vsFrames], ['Strikes', c.vsStrikes],
+      ['Spares', c.vsSpares], ['Turkeys', c.vsTurkeys], ['Record', c.vsWins + '-' + c.vsLosses],
+    ];
+  }
+  // Saves a decoded stats code: the totals (plus the prize level, which only the code carries) on
+  // the public bw_career/{uid}, the raw code on its owner-only private/code, in one batch. Until
+  // the firestore.rules with that layout are published the batch is refused, and the code rides
+  // on the public doc as before (Manage Game > Bowling features > Stats codes moves it later).
+  async function writeCareer(user, s){
+    const ref = db.collection('bw_career').doc(user.uid), now = Date.now();
+    const pub = Object.assign({uid:user.uid, username:user.username, submittedAt:now}, s);
+    delete pub.code;
+    pub.prize = s.prize;
+    try{
+      const b = db.batch();
+      b.set(ref, pub);
+      b.set(careerCodeRef(user.uid), {code:s.code, submittedAt:now});
+      await b.commit();
+    }catch(e){
+      if(!e || e.code !== 'permission-denied') throw e;
+      await ref.set(Object.assign({uid:user.uid, username:user.username, submittedAt:now}, s));
+    }
   }
 
   async function refreshStats(){
     const user = statsUser;
     if(!db || !user || statsPanelEl.hidden) return;
-    let scores = [], career = null;
+    let scores = [], career = null, savedCode = '';
     try{
-      const [snap, cdoc] = await Promise.all([
+      const [snap, cdoc, pdoc] = await Promise.all([
         db.collection('scores').where('game','==',QR_GAME_CODE).where('uid','==',user.uid).where('approved','==',true).get(),
         db.collection('bw_career').doc(user.uid).get(),
+        // the owner-only raw code (refused until the rules with that layout are published; a code
+        // saved before then is still on the public doc)
+        careerCodeRef(user.uid).get().catch(()=>null),
       ]);
       scores = snap.docs.map(d=>d.data());
       career = cdoc.exists ? cdoc.data() : null;
+      savedCode = (pdoc && pdoc.exists && pdoc.data().code) || (career && career.code) || '';
     }catch(e){
       el('career-msg').innerHTML = '<div class="msg err">'+friendlyDbError(e)+'</div>';
       return;
     }
+    if(statsUser !== user) return;   // signed out or switched account while loading
+    clearCareerCode();
 
     // Average: whichever is newer -- the latest v3 score code or the saved stats code.
-    let avg = null;
-    scores.filter(d=>d.version===3 && Number.isInteger(d.avg10)).forEach(d=>{
-      if(!avg || d.submittedAt > avg.at) avg = {avg10:d.avg10, games:d.avgGames||0, at:d.submittedAt, from:'your latest score code'};
-    });
-    if(career && career.avgGames > 0 && (!avg || career.submittedAt > avg.at)){
-      avg = {avg10:career.avg10, games:career.avgGames, at:career.submittedAt, from:'your stats code'};
-    }
+    const avg = careerAverage(scores, career);
     el('stats-summary').textContent = (avg && avg.games > 0)
       ? 'avg ' + fmtAvg(avg.avg10) + (avg.games >= HCP_MIN_GAMES ? ' \u00b7 hcp ' + handicapFor(avg.avg10) : '')
       : '';
     if(avg && avg.games > 0){
       el('st-avg').textContent = fmtAvg(avg.avg10);
-      el('st-avg-sub').textContent = avg.games + ' game' + (avg.games===1?'':'s') + ' \u00b7 from ' + avg.from + ', ' + fmtWhen(avg.at);
+      el('st-avg-sub').textContent = avg.games + ' game' + (avg.games===1?'':'s') + ' \u00b7 from '
+        + (avg.fromCode ? 'your stats code' : 'your latest score code') + ', ' + fmtWhen(avg.at);
       if(avg.games >= HCP_MIN_GAMES){
         el('st-hcp').textContent = String(handicapFor(avg.avg10));
         el('st-hcp-sub').textContent = 'floor((200 \u2212 average) \u00d7 0.9), max 90';
@@ -1650,39 +1709,21 @@
     el('career-empty').hidden = !!career;
     el('career-save').textContent = career ? 'Update stats code' : 'Save stats code';
     if(career){
-      // Curve preview, prize level and the code's own format version are only in the stored code.
-      let fromCode = {curve:0, codeVersion: career.bestColor >= 6 ? 2 : 1,
-                      prize: career.hasBest ? prizeLevelFor(career.bestScore - career.bestHcp) : 0};
-      try{ const d = decodeStatsCode(career.code); fromCode = {curve:d.curve, codeVersion:d.codeVersion, prize:d.prize}; }
-      catch(e){ /* keep the fallback */ }
-      el('career-1p').innerHTML = careerRows([
-        ['Games played', career.games], ['Frames', career.frames], ['Strikes', career.strikes],
-        ['Spares', career.spares], ['Turkeys', career.turkeys],
-        ['Best on the cart', career.hasBest ? (career.bestIni + ' ' + career.bestScore + (career.bestHcp ? ' (hcp +' + career.bestHcp + ')' : '')) : '\u2013'],
-        ['Prize balls', prizeBallNames(fromCode.prize).join(', ') || '\u2013'],
-      ]);
-      el('career-vs').innerHTML = careerRows([
-        ['Games played', career.vsGames], ['Frames', career.vsFrames], ['Strikes', career.vsStrikes],
-        ['Spares', career.vsSpares], ['Turkeys', career.vsTurkeys], ['Record', career.vsWins + '-' + career.vsLosses],
-      ]);
+      el('career-1p').innerHTML = careerRows(career1pRows(career, careerPrize(career, savedCode)));
+      el('career-vs').innerHTML = careerRows(careerVsRows(career));
       el('career-src').textContent = 'From your stats code, saved ' + fmtWhen(career.submittedAt) + '. Update it any time from HISCORES > STATS CODE on the cart.';
-      // Regenerate a current code: the saved career totals, with the average/game count swapped for
-      // the most recent known (the newer of your latest v3 score code and the saved code), so a
-      // build that takes a typed code starts from where you actually are. It keeps the saved code's
-      // format version, so a code saved from a build before prize balls still types into that build.
-      try{
-        const merged = Object.assign({}, career);
-        if(avg && avg.games > 0){ merged.avg10 = avg.avg10; merged.avgGames = avg.games; }
-        merged.curve = fromCode.curve;
-        merged.prize = fromCode.prize;
-        const code = encodeStatsCode(merged, fromCode.codeVersion);
-        statsCodeCurrent = code;
-        el('career-code-val').textContent = (code.match(/.{1,4}/g) || []).join(' ');
-        el('career-code-src').textContent = (avg && avg.games > 0 && avg.at > career.submittedAt)
-          ? 'Includes your newer average from ' + fmtWhen(avg.at) + '. Type it into HISCORES > STATS CODE > ENTER A CODE on a new build.'
-          : 'Type it into HISCORES > STATS CODE > ENTER A CODE on a new build.';
-        el('career-code-out').hidden = false;
-      }catch(e){ el('career-code-out').hidden = true; }
+      // The code as the cart made it, only ever shown to its owner: the page reads codes, it never
+      // makes one. A score scanned since then can carry a newer average than the code does.
+      statsCodeCurrent = savedCode;
+      statsCodeUid = user.uid;
+      el('career-code-out').hidden = !savedCode;
+      if(savedCode){
+        el('career-code-val').textContent = (savedCode.match(/.{1,4}/g) || []).join(' ');
+        el('career-code-src').textContent = 'Type it into HISCORES > STATS CODE > ENTER A CODE on a new build.'
+          + ((avg && !avg.fromCode && avg.at > career.submittedAt)
+            ? ' Your latest score has a newer average (' + fmtAvg(avg.avg10) + '): save a fresh STATS CODE from the cart to carry it over.'
+            : '');
+      }
     }
   }
 
@@ -1697,7 +1738,7 @@
     const btn = el('career-save');
     btn.disabled = true;
     try{
-      await db.collection('bw_career').doc(user.uid).set(Object.assign({uid:user.uid, username:user.username, submittedAt:Date.now()}, s));
+      await writeCareer(user, s);
       el('career-code').value = '';
       msg.innerHTML = '<div class="msg ok">Stats saved.</div>';
       await refreshStats();
@@ -1730,7 +1771,7 @@
       if(d && ((d.games || 0) > s.games || (d.vsGames || 0) > s.vsGames)){
         return ' Your saved career stats have more games, so they were kept.';
       }
-      await db.collection('bw_career').doc(user.uid).set(Object.assign({uid:user.uid, username:user.username, submittedAt:Date.now()}, s));
+      await writeCareer(user, s);
       return ' Career stats saved.';
     }catch(e){
       return ' Career stats weren\u2019t saved: ' + friendlyDbError(e);
@@ -1854,15 +1895,18 @@
     }
     if(tools) tools.hidden = false;
     const me = tViewer && tViewer.uid;
+    const statsOn = careerVisible(tViewer);   // initials open the player's career flyout
     // the mockup's table: # | Player | Score | Hcp | Total | Streak / X | Best game; a row opens its
     // scorecard. Scratch ranks by score and shows it as the Total too, as the mockup does.
     let h = '<table class="t-table"><thead><tr><th>#</th><th class="l">Player</th><th>Score</th><th>Hcp</th><th>Total</th>'
       + '<th class="t-tb" title="Longest strike streak / total strikes">Streak / X</th><th class="l t-when">Best game</th></tr></thead><tbody>';
     rows.forEach((e,i)=>{
       const d = e.d, rank = i + 1, ini = escapeHtml(d.initials || '???'), open = tOpen.has(e.k);
+      const statsAttrs = (statsOn && d.uid) ? ' class="who-stats" data-stats-uid="' + escapeHtml(d.uid) + '" data-stats-ini="' + ini
+        + '" data-stats-user="' + escapeHtml(d.username || '') + '"' : '';
       const who = d.username
-        ? '<a href="/user/?u=' + encodeURIComponent(d.username) + '" title="@' + escapeHtml(d.username.toUpperCase()) + '">' + ini + '</a>'
-        : ini;
+        ? '<a href="/user/?u=' + encodeURIComponent(d.username) + '" title="@' + escapeHtml(d.username.toUpperCase()) + '"' + statsAttrs + '>' + ini + '</a>'
+        : (statsAttrs ? '<button type="button"' + statsAttrs + '>' + ini + '</button>' : ini);
       h += '<tr class="t-row' + (rank === 1 ? ' top' : '') + (me && d.uid === me ? ' me' : '') + '" data-detail="t' + i + '" data-k="' + escapeHtml(e.k)
         + '" tabindex="0" aria-expanded="' + open + '">'
         + '<td class="rank">' + rank + '</td>'
@@ -1931,16 +1975,87 @@
   }
 
   el('t-pick').addEventListener('change', e=>{ tPickId = e.target.value; renderTournament(); });
-  // ---- "How it works" flyout (a modal <dialog>: Esc and the close button shut it, focus goes
-  // back to the button) ----
-  const howto = el('t-howto');
-  el('t-howto-btn').addEventListener('click', ()=>{
-    if(typeof howto.showModal === 'function') howto.showModal(); else howto.setAttribute('open', '');
-  });
-  const howtoClose = ()=>{ if(typeof howto.close === 'function') howto.close(); else howto.removeAttribute('open'); };
-  el('t-howto-close').addEventListener('click', howtoClose);
-  // a click on the dimmed backdrop lands on the <dialog> itself (its contents fill it)
-  howto.addEventListener('click', e=>{ if(e.target === howto) howtoClose(); });
+  // ---- flyouts (modal <dialog>s: Esc and the close button shut them and focus goes back to what
+  // opened them; a click on the dimmed backdrop lands on the <dialog> itself, as its contents fill it) ----
+  function flyout(id, closeId){
+    const d = el(id);
+    let opener = null;
+    const close = ()=>{ if(typeof d.close === 'function') d.close(); else d.removeAttribute('open'); };
+    el(closeId).addEventListener('click', close);
+    d.addEventListener('click', e=>{ if(e.target === d) close(); });
+    // a live board redraw can replace the initials that opened it: focus the same player's again
+    d.addEventListener('close', ()=>{
+      const uid = opener && !opener.isConnected && opener.dataset ? opener.dataset.statsUid : '';
+      opener = null;
+      if(!uid) return;
+      const again = document.querySelector('[data-stats-uid="' + (window.CSS && CSS.escape ? CSS.escape(uid) : uid) + '"]');
+      if(again) again.focus();
+    });
+    return ()=>{
+      if(d.open) return;
+      opener = document.activeElement;
+      if(typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+    };
+  }
+  el('t-howto-btn').addEventListener('click', flyout('t-howto', 't-howto-close'));
+
+  // ---- a player's career stats: what My stats shows them, opened from their initials on the
+  // leaderboard or the tournament board while Career stats is visible to the viewer. Never a code. ----
+  const openPStats = flyout('p-stats', 'p-stats-close');
+  let pStatsReq = 0;
+  async function openPlayerStats(uid, initials, username){
+    const req = ++pStatsReq, body = el('p-stats-body');
+    const viewer = window.NGPC_AUTH ? NGPC_AUTH.currentUser : null;
+    const head = '<div class="flyout-who"><span class="flyout-ini">' + escapeHtml(initials || '???') + '</span>'
+      + (username ? '<a href="/user/?u=' + encodeURIComponent(username) + '">@' + escapeHtml(username.toUpperCase()) + '</a>' : '') + '</div>'
+      + (featureLevel('careerStats') === 'on' ? '' : '<div class="preview-note">' + escapeHtml(featureNote('careerStats', 'Career stats', viewer)) + '</div>');
+    body.innerHTML = head + '<p>Loading&hellip;</p>';
+    openPStats();
+    let scores = [], career = null;
+    try{
+      const [snap, cdoc] = await Promise.all([
+        db.collection('scores').where('game','==',QR_GAME_CODE).where('uid','==',uid).where('approved','==',true).get(),
+        db.collection('bw_career').doc(uid).get(),
+      ]);
+      scores = snap.docs.map(d=>d.data());
+      career = cdoc.exists ? cdoc.data() : null;
+    }catch(e){
+      if(req === pStatsReq) body.innerHTML = head + '<div class="msg err">' + escapeHtml(friendlyDbError(e)) + '</div>';
+      return;
+    }
+    if(req !== pStatsReq) return;     // another player's flyout was opened meanwhile
+    const avg = careerAverage(scores, career), has = !!(avg && avg.games > 0);
+    const best = scores.reduce((b,d)=> (!b || d.score > b.score) ? d : b, null);
+    const tile = (label, val, sub, cls) => '<div class="stat-tile"><div class="stat-label">' + label + '</div><div class="stat-val tnum'
+      + (cls ? ' ' + cls : '') + '">' + escapeHtml(String(val)) + '</div><div class="stat-sub">' + escapeHtml(sub) + '</div></div>';
+    let h = '<div class="stat-tiles">'
+      + tile('Average', has ? fmtAvg(avg.avg10) : '\u2013', has ? avg.games + ' game' + (avg.games === 1 ? '' : 's') + ' \u00b7 ' + fmtWhen(avg.at) : 'no average yet')
+      + tile('Tournament handicap', has && avg.games >= HCP_MIN_GAMES ? handicapFor(avg.avg10) : '\u2013',
+             has ? (avg.games >= HCP_MIN_GAMES ? 'from this average' : 'after ' + HCP_MIN_GAMES + ' games') : '')
+      + tile('Best game', best ? best.score : '\u2013', best ? best.initials + ' \u00b7 ' + fmtWhen(best.submittedAt) : 'no submitted scores', 'good')
+      + tile('Scores submitted', scores.length, '')
+      + '</div>';
+    if(career){
+      h += '<div class="career-cols"><div><h3>1 player games</h3><table class="career-table tnum">' + careerRows(career1pRows(career, Number.isInteger(career.prize) ? career.prize : null))
+        + '</table></div><div><h3>VS link matches</h3><table class="career-table tnum">' + careerRows(careerVsRows(career)) + '</table></div></div>'
+        + '<p>From the cart\u2019s stats code, saved ' + escapeHtml(fmtWhen(career.submittedAt)) + '.</p>';
+    } else {
+      h += '<p>No career totals saved yet. They appear once this player saves a stats code, or scans a score from a current version of the game.</p>';
+    }
+    if(username) h += '<a class="flyout-link" href="/user/?u=' + encodeURIComponent(username) + '">View profile &rarr;</a>';
+    body.innerHTML = head + h;
+  }
+  // initials that open it (renderBoard() / drawTBoard() mark them while Career stats is visible),
+  // in the capture phase, ahead of the rows' own open-the-scorecard click. A modified click on a
+  // profile link still opens the profile.
+  document.addEventListener('click', e=>{
+    const t = e.target.closest && e.target.closest('[data-stats-uid]');
+    if(!t || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    if(!careerVisible(window.NGPC_AUTH ? NGPC_AUTH.currentUser : null)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    openPlayerStats(t.dataset.statsUid, t.dataset.statsIni, t.dataset.statsUser);
+  }, true);
   tPanel.querySelectorAll('.t-toggle button').forEach(btn=>btn.addEventListener('click', ()=>{
     tMode = btn.dataset.mode;
     tPanel.querySelectorAll('.t-toggle button').forEach(b=>b.setAttribute('aria-pressed', String(b === btn)));

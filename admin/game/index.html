@@ -441,6 +441,14 @@
       <button type="button" class="action btn-primary" id="bw-features-save" style="margin-top:14px">Save</button>
       <div id="bw-features-msg"></div>
 
+      <!-- The one-time move of saved stats codes off the public bw_career docs into each player's
+           owner-only bw_career/{uid}/private/code (initBwCodeLock()). Needs the firestore.rules
+           with that layout. -->
+      <div class="field-label" style="margin-top:22px">Stats codes</div>
+      <div class="current-value" id="bw-lock-status">Checking&hellip;</div>
+      <button type="button" class="action btn-secondary" id="bw-lock-btn" style="margin-top:10px" hidden>Lock them</button>
+      <div id="bw-lock-msg"></div>
+
       <!-- games/bw.bwTournaments: [{id, name, startsAt, endsAt, prize}] (ms timestamps). Saved
            straight to the game doc on Add / Save / Delete, separately from the switches above.
            bw/index.html builds each event's board from the verified v3 scores submitted inside
@@ -550,6 +558,56 @@
   });
 
   /* ---- Bowling tournament events: games/bw.bwTournaments, edited from bw-features-panel ---- */
+  // Bowling features > Stats codes. A saved stats code typed into a cart copies that player's career
+  // (the average, so the tournament handicap, and the prize balls), so it lives in the owner-only
+  // bw_career/{uid}/private/code. Records saved before that keep it on the public doc until this
+  // moves them; it needs the firestore.rules with that layout (else the writes are refused).
+  function initBwCodeLock(db){
+    const statusEl = el('bw-lock-status'), btn = el('bw-lock-btn'), msg = el('bw-lock-msg');
+    let open = [];
+    async function check(){
+      try{
+        const snap = await db.collection('bw_career').get();
+        open = snap.docs.filter(d=>typeof d.data().code === 'string');
+        statusEl.textContent = open.length
+          ? open.length + ' saved career record' + (open.length === 1 ? ' still shows its' : 's still show their') + ' stats code publicly.'
+          : 'Every saved stats code is private: only its player can see it.';
+        btn.hidden = !open.length;
+      }catch(e){
+        statusEl.textContent = 'Couldn\u2019t check: ' + (e.message || 'unknown error');
+        btn.hidden = true;
+      }
+    }
+    btn.addEventListener('click', async ()=>{
+      btn.disabled = true;
+      msg.innerHTML = '';
+      let done = 0, failed = 0, blocked = false;
+      for(const d of open){
+        const data = d.data(), priv = d.ref.collection('private').doc('code');
+        try{
+          const p = await priv.get();
+          const b = db.batch();
+          // keep a newer private copy (saved under the new layout) if there is one
+          if(!p.exists || !(p.data().submittedAt >= data.submittedAt)){
+            b.set(priv, {code: data.code, submittedAt: Number.isInteger(data.submittedAt) ? data.submittedAt : Date.now()});
+          }
+          b.update(d.ref, {code: firebase.firestore.FieldValue.delete()});
+          await b.commit();
+          done++;
+        }catch(e){
+          failed++;
+          if(e && e.code === 'permission-denied' && !done){ blocked = true; break; }
+        }
+      }
+      msg.innerHTML = blocked
+        ? '<div class="msg err">The database rules don\u2019t allow this yet. Publish the updated firestore.rules first, then try again.</div>'
+        : '<div class="msg ' + (failed ? 'err' : 'ok') + '">Locked ' + done + (failed ? ', ' + failed + ' failed. Try again.' : '.') + '</div>';
+      btn.disabled = false;
+      await check();
+    });
+    check();
+  }
+
   function initBwTournaments(docRef, data){
     let events = Array.isArray(data.bwTournaments) ? data.bwTournaments.slice() : [];
     let editingId = null, armedDelete = null;
@@ -1358,6 +1416,7 @@
           btn.disabled = false;
         }
       });
+      initBwCodeLock(db);
       initBwTournaments(docRef, data);
     }
 

@@ -1009,21 +1009,24 @@ service cloud.firestore {
     }
 
     // bw_career/{uid} -- a player's Neo Bowling career totals, from the cart's OPTIONS > STATS
-    // CODE (decoded and checked in bw/index.html's decodeStatsCode(); the raw code is kept too).
-    // Public read like scores; only the owner writes their own doc, under their real username.
+    // CODE (decoded and checked in bw/index.html's decodeStatsCode()). Public read like scores:
+    // other players see them in /bw/'s career flyout. The raw code is NOT on this doc: typed into a
+    // cart it copies that career (the average, so the tournament handicap, and the prize balls), so
+    // it lives in the owner-only private/code below. Only the owner writes their own doc, under
+    // their real username. `code` is the old layout's field: nothing may write it any more, and the
+    // owner or the admin may only remove it (Manage Game > Bowling features > Stats codes).
     match /bw_career/{uid} {
       function isU16(v) { return v is int && v >= 0 && v <= 65535; }
       function isBowlingCareer(d) {
-        return d.keys().hasOnly(['uid', 'username', 'submittedAt', 'version', 'code', 'hasBest', 'bestIni', 'bestScore', 'bestColor', 'bestHcp',
+        return d.keys().hasOnly(['uid', 'username', 'submittedAt', 'version', 'hasBest', 'bestIni', 'bestScore', 'bestColor', 'bestHcp',
                                  'games', 'frames', 'strikes', 'spares', 'turkeys', 'vsGames', 'vsFrames', 'vsStrikes', 'vsSpares', 'vsTurkeys',
-                                 'vsWins', 'vsLosses', 'avg10', 'avgGames', 'defIni'])
+                                 'vsWins', 'vsLosses', 'avg10', 'avgGames', 'defIni', 'prize'])
           && d.uid == uid
           && d.username is string && d.username == get(/databases/$(database)/documents/users/$(uid)).data.username
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
           && d.submittedAt >= request.time.toMillis() - 300000
           && d.version == 1
-          && d.code is string && d.code.matches('^[A-HJ-NP-Z2-9]{6,64}$')
           && d.hasBest is bool
           && d.bestIni is string && d.bestIni.matches('^[A-Z]{3}$')
           && d.bestScore is int && d.bestScore >= 0 && d.bestScore <= 330
@@ -1034,11 +1037,28 @@ service cloud.firestore {
           && isU16(d.vsWins) && isU16(d.vsLosses)
           && d.avg10 is int && d.avg10 >= 0 && d.avg10 <= 3000
           && isU16(d.avgGames)
-          && d.defIni is string && d.defIni.matches('^[A-Z]{3}$');
+          && d.defIni is string && d.defIni.matches('^[A-Z]{3}$')
+          && (!('prize' in d) || (d.prize is int && d.prize >= 0 && d.prize <= 5));
       }
       allow read: if true;
       allow create, update: if request.auth != null && request.auth.uid == uid && isBowlingCareer(request.resource.data);
+      // the old layout's public `code`: removing it, and only it
+      allow update: if request.auth != null && (request.auth.uid == uid || isAdmin())
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['code'])
+        && !('code' in request.resource.data);
       allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
+
+      // bw_career/{uid}/private/code -- the raw stats code, for its owner only (My stats shows it
+      // back so it can be typed into a new build). The admin may write it for the one-time move
+      // off the public doc.
+      match /private/{docId} {
+        allow read, delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
+        allow create, update: if request.auth != null && (request.auth.uid == uid || isAdmin())
+          && docId == 'code'
+          && request.resource.data.keys().hasOnly(['code', 'submittedAt'])
+          && request.resource.data.code is string && request.resource.data.code.matches('^[A-HJ-NP-Z2-9]{6,64}$')
+          && request.resource.data.submittedAt is int;
+      }
     }
 
     // Default-deny for every other collection -- Firestore denies unmatched
