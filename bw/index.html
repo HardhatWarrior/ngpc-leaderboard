@@ -30,6 +30,7 @@
     --danger:#e5615a;
     --pin-cream:#f4eedd;
     --gold:#f2c14e;
+    --gold-ink:#2b1f00;
   }
   *{ box-sizing:border-box; }
   html,body{ height:auto; }
@@ -330,6 +331,20 @@
     color:inherit; cursor:pointer; text-decoration:underline dotted var(--border); text-underline-offset:4px; }
   .who-stats:hover{ color:var(--accent2); }
   .who-stats:focus-visible{ outline:2px solid var(--accent2); outline-offset:2px; }
+  /* ---------- achievements (bw/bw-shared.js): the 300 Club and tournament titles ---------- */
+  .ach-block{ margin:-4px 0 18px; }
+  .ach-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .ach{ display:inline-flex; align-items:center; gap:6px; font-family:"Press Start 2P",monospace; font-size:9px; letter-spacing:.06em;
+    line-height:1; padding:7px 10px; border-radius:999px; background:var(--gold); color:var(--gold-ink); }
+  .ach b{ font-weight:400; }
+  .ach.champ{ background:transparent; color:var(--gold); border:1px solid var(--gold); }
+  .ach svg{ width:12px; height:12px; flex:none; }
+  .ach-note{ font-size:11.5px; color:var(--dim); margin-top:8px; line-height:1.5; }
+  /* on the game's own row: a perfect game, an event-winning game */
+  .row-badge{ display:inline-flex; align-items:center; gap:3px; vertical-align:middle; margin-left:8px; font-family:"Press Start 2P",monospace;
+    font-size:7px; letter-spacing:.04em; line-height:1; padding:3px 5px; border-radius:4px; background:var(--gold); color:var(--gold-ink); white-space:nowrap; }
+  .row-badge.champ{ background:transparent; color:var(--gold); border:1px solid var(--gold); }
+  .row-badge svg{ width:9px; height:9px; flex:none; }
   @media (prefers-reduced-motion:reduce){ dialog.flyout[open]{ animation:none; } }
   .t-evhead{ display:flex; flex-wrap:wrap; gap:12px 24px; align-items:flex-end; justify-content:space-between; margin:12px 0 14px; }
   .t-evinfo{ min-width:0; flex:1 1 300px; }
@@ -585,10 +600,11 @@
       <div id="stats-body" hidden>
         <div class="stat-tiles">
           <div class="stat-tile"><div class="stat-label">Average</div><div class="stat-val tnum" id="st-avg">&ndash;</div><div class="stat-sub" id="st-avg-sub"></div></div>
-          <div class="stat-tile"><div class="stat-label">Tournament handicap</div><div class="stat-val tnum" id="st-hcp">&ndash;</div><div class="stat-sub" id="st-hcp-sub"></div></div>
+          <div class="stat-tile"><div class="stat-label">Handicap now</div><div class="stat-val tnum" id="st-hcp">&ndash;</div><div class="stat-sub" id="st-hcp-sub"></div><div class="stat-sub" id="st-hcp-ev" hidden></div></div>
           <div class="stat-tile"><div class="stat-label">Best game</div><div class="stat-val good tnum" id="st-best">&ndash;</div><div class="stat-sub" id="st-best-sub"></div></div>
           <div class="stat-tile"><div class="stat-label">Scores submitted</div><div class="stat-val tnum" id="st-subs">0</div><div class="stat-sub" id="st-subs-sub"></div></div>
         </div>
+        <div class="ach-block" id="st-ach" hidden><div class="stat-label">Achievements</div><div id="st-ach-body"></div></div>
         <div id="career-view" hidden>
           <div class="career-cols">
             <div><h3>1 player games</h3><table class="career-table tnum" id="career-1p"></table></div>
@@ -636,6 +652,7 @@
 </div>
 
 <script src="/auth.js"></script>
+<script src="/bw/bw-shared.js?v=1"></script>
 <script>
 (function(){
   "use strict";
@@ -803,18 +820,9 @@
   // games/bw.previewTesters, auth.js canPreviewGame() -- plus the admin and developer);
   // anything else is Off. Testers is a separate flag on purpose: an older cached copy of this
   // page (or of Manage Game) only knows <k>, sees false and keeps the feature hidden.
-  function featureLevel(k){
-    const f = bwFeatures();
-    if(f[k] === true) return 'on';
-    return (f[k + 'Testers'] === true || f[k] === 'testers') ? 'testers' : 'off';
-  }
-  function featureVisible(k, user){
-    const lvl = featureLevel(k);
-    if(lvl === 'on') return true;
-    if(!user || !window.NGPC_AUTH) return false;
-    if(NGPC_AUTH.isGameManager(user, gameData)) return true;
-    return lvl === 'testers' && NGPC_AUTH.canPreviewGame(user, gameData);
-  }
+  // (bw-shared.js, which user/index.html uses too)
+  function featureLevel(k){ return BW_SHARED.featureLevel(bwFeatures(), k); }
+  function featureVisible(k, user){ return BW_SHARED.featureVisible(gameData, k, user, window.NGPC_AUTH || null); }
   // the note on a panel only some accounts can see yet (a tester gets no admin instructions)
   function featureNote(k, label, user){
     const mgr = !!(user && window.NGPC_AUTH && NGPC_AUTH.isGameManager(user, gameData));
@@ -1071,6 +1079,7 @@
     // every uid on the visible board rather than one read per row.
     const settings = getDisplaySettings();
     const statsOn = careerVisible(statsUser);   // initials open the player's career flyout
+    const champs = championGames(statsUser);
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
@@ -1088,7 +1097,7 @@
         '<div><div class="initials">'+avatarHtml+((statsOn && data.uid)
           ? '<button type="button" class="who-stats" title="Career stats" data-stats-uid="'+escapeHtml(data.uid)+'" data-stats-ini="'
             +escapeHtml(data.initials||'???')+'" data-stats-user="'+escapeHtml(data.username||'')+'">'+escapeHtml(data.initials||'???')+'</button>'
-          : escapeHtml(data.initials||'???'))+'</div>'+
+          : escapeHtml(data.initials||'???'))+rowBadges(data, champs)+'</div>'+
           (usernameLine ? '<div class="row-meta">'+usernameLine+'</div>' : '')+'</div>'+
         '<div class="score-col"><div class="score-val tnum">'+(data.score!=null?fmtScoreValue(data.score, settings):'-')+'</div>'+
           (scoreMeta ? '<div class="row-meta">'+scoreMeta+'</div>' : '')+'</div>'+
@@ -1531,13 +1540,13 @@
     el('stats-toggle').setAttribute('aria-expanded', String(!!open));
   }
   el('stats-toggle').addEventListener('click', ()=>statsExpand(el('stats-content').hidden));
-  const HCP_MIN_GAMES = 5;   // same as the cart's HCP_MIN_GAMES
+  const HCP_MIN_GAMES = BW_SHARED.HCP_MIN_GAMES;   // same as the cart's HCP_MIN_GAMES
   let statsUser = null;
   let pendingStatsCode = null;   // from a STATS CODE QR link, until the panel can take it
 
   function fmtAvg(avg10){ return Math.floor(avg10/10) + '.' + (avg10 % 10); }
   // floor((200 - avg) * 0.9), capped 90 -- spec section 4, the cart's avg_handicap()
-  function handicapFor(avg10){ return Math.min(90, Math.floor(Math.max(0, 2000 - avg10) * 9 / 100)); }
+  function handicapFor(avg10){ return BW_SHARED.handicapFor(avg10); }
 
   function careerVisible(user){
     return featureVisible('careerStats', user);
@@ -1545,6 +1554,7 @@
 
   function renderStatsPanel(user){
     if(!user || user.uid !== statsCodeUid) clearCareerCode();   // another account (or none): drop the last one's code
+    if(!user || !statsUser || user.uid !== statsUser.uid){ myAchScores = null; el('st-ach').hidden = true; }
     statsUser = user;
     if(lastBoardDocs.length) renderBoard(lastBoardDocs);
     const visible = careerVisible(user);
@@ -1589,6 +1599,13 @@
   }
 
   let statsCodeCurrent = '', statsCodeUid = null;   // the saved code on show, and whose it is
+  let myAchScores = null;                            // My stats' own approved scores, for its badges
+  function renderMyAch(){
+    const user = statsUser, box = el('st-ach');
+    const h = (user && myAchScores) ? achHTML(achievementsFor(user.uid, myAchScores, user)) : '';
+    box.hidden = !h;
+    el('st-ach-body').innerHTML = h;
+  }
   function clearCareerCode(){
     statsCodeCurrent = '';
     statsCodeUid = null;
@@ -1603,6 +1620,17 @@
   // average, so the tournament handicap, and the prize balls), so it isn't on the public
   // bw_career/{uid} doc; only its owner reads it back (My stats' saved code box).
   function careerCodeRef(uid){ return db.collection('bw_career').doc(uid).collection('private').doc('code'); }
+  // The handicap each running event locked in for a player -- from their last score before its
+  // start, so it can differ from today's -- e.g. "Fall Classic: +0, locked from Oct 15". scores:
+  // that player's approved scores; '' unless an event is live and Tournaments is visible.
+  function eventHcpText(scores, viewer){
+    return liveEvents(viewer).map(ev=>{
+      const s = BW_SHARED.snapshotFor(ev, scores);
+      if(!s) return ev.name + ': scratch (no score before the start)';
+      if(!(s.avgGames >= HCP_MIN_GAMES)) return ev.name + ': scratch (under ' + HCP_MIN_GAMES + ' games at the start)';
+      return ev.name + ': +' + handicapFor(s.avg10) + ', locked from ' + fmtWhen(s.submittedAt);
+    }).join(' \u00b7 ');
+  }
   // the newer of a player's latest v3 score code average and their saved stats code's
   function careerAverage(scores, career){
     let avg = null;
@@ -1700,10 +1728,15 @@
     }
 
     const best = scores.reduce((b,d)=> (!b || d.score > b.score) ? d : b, null);
+    const evHcp = eventHcpText(scores, user);
+    el('st-hcp-ev').textContent = evHcp;
+    el('st-hcp-ev').hidden = !evHcp;
     el('st-best').textContent = best ? String(best.score) : '\u2013';
     el('st-best-sub').textContent = best ? (best.initials + ' \u00b7 ' + fmtWhen(best.submittedAt)) : 'no submitted scores yet';
     el('st-subs').textContent = String(scores.length);
     el('st-subs-sub').textContent = scores.length ? 'approved scores on this board' : '';
+    myAchScores = scores;
+    renderMyAch();
 
     el('career-view').hidden = !career;
     el('career-empty').hidden = !!career;
@@ -1791,11 +1824,8 @@
   let tUnsub = null, tTimer = null, tMode = 'hcp', tPickId = null, tViewer = null, tShownStatus = null, tScrolled = false;
   const tOpen = new Set();     // players (tKey) whose scorecard is open -- kept across live redraws
 
-  function tEvents(){
-    const list = (gameData && gameData.bwTournaments) || [];
-    return list.filter(e=>e && e.id && e.name && e.startsAt < e.endsAt);
-  }
-  function tStatus(ev){ const now = Date.now(); return now < ev.startsAt ? 'upcoming' : now < ev.endsAt ? 'live' : 'final'; }
+  function tEvents(){ return BW_SHARED.events(gameData); }
+  function tStatus(ev){ return BW_SHARED.status(ev, Date.now()); }
   // live first, then the next upcoming, then finished ones newest first
   function tOrdered(){
     const order = {live:0, upcoming:1, final:2};
@@ -1825,50 +1855,60 @@
     return (d ? d + 'd ' : '') + h + 'h ' + String(m).padStart(2,'0') + 'm ' + String(sec).padStart(2,'0') + 's';
   }
 
-  // Spec section 2: a strike is a 10 at a full rack -- the first ball of frames 1-9; in the
-  // 10th, ball 1, ball 2 after a strike, ball 3 after strike-strike or a spare.
-  function strikeStats(rolls){
-    let i = 0, run = 0, streak = 0, strikes = 0;
-    const ball = isStrike => { if(isStrike){ strikes++; run++; if(run > streak) streak = run; } else run = 0; };
-    for(let f=0; f<9 && i<rolls.length; f++){
-      if(rolls[i] === 10){ ball(true); i += 1; } else { ball(false); i += 2; }
-    }
-    const [a, b, c] = rolls.slice(i);
-    if(a === undefined) return {streak, strikes};
-    ball(a === 10);
-    if(b !== undefined && a === 10) ball(b === 10);
-    if(c !== undefined && ((a === 10 && b === 10) || (a < 10 && a + b === 10))) ball(c === 10);
-    return {streak, strikes};
-  }
+  // strikes, a player's key, the ranking order and each event's standings (best verified game in
+  // the window, handicap snapshotted from the last v3 score before the start): bw-shared.js
+  function strikeStats(rolls){ return BW_SHARED.strikeStats(rolls); }
+  function tKey(d){ return BW_SHARED.playerKey(d); }
+  function tCompare(a, b, mode){ return BW_SHARED.compare(a, b, mode); }
+  function tEntries(ev){ return BW_SHARED.standings(ev, tScores); }
 
-  function tKey(d){ return d.uid || ('@' + (d.username || d.initials)); }
-  function tCompare(a, b, mode){
-    const ka = mode === 'hcp' ? a.total : a.score, kb = mode === 'hcp' ? b.total : b.score;
-    return (kb - ka) || (b.streak - a.streak) || (b.strikes - a.strikes) || (a.at - b.at);
+  // ---- achievements: the 300 Club (perfect games) and tournament titles (1st on the handicap
+  // board of a finished event, only while Tournaments is visible to the viewer; they need every
+  // approved score, which the tournament panel loads) ----
+  const TROPHY_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 1.5h8V5a4 4 0 0 1-3 3.87V11h2.5v1.5h-7V11H7V8.87A4 4 0 0 1 4 5zM2 2.5h1.5V5c0 .3.03.6.09.9A2.5 2.5 0 0 1 2 3.5zM12.5 2.5H14v1a2.5 2.5 0 0 1-1.59 2.4c.06-.3.09-.6.09-.9z"/><rect x="4" y="13" width="8" height="1.5" fill="currentColor"/></svg>';
+  function achievementsFor(uid, ownScores, viewer){
+    const perfect = BW_SHARED.perfectGames(ownScores.filter(d=>d.uid === uid));
+    const titles = (tScores && tournamentVisible(viewer))
+      ? BW_SHARED.champions(gameData, tScores, Date.now()).filter(c=>c.entry.k === uid) : [];
+    return {perfect, titles};
   }
-  // Each player's best verified game inside the window, with the handicap snapshotted from
-  // their last v3 score submitted BEFORE the start (spec section 4) -- games bowled during the
-  // event never move it. The handicap is fixed per player, so the best game is the same on
-  // the Handicap and Scratch boards.
-  function tEntries(ev){
-    const snap = new Map();
-    tScores.forEach(d=>{
-      if(d.version !== 3 || !Number.isInteger(d.avg10) || !(d.submittedAt < ev.startsAt)) return;
-      const k = tKey(d), prev = snap.get(k);
-      if(!prev || d.submittedAt > prev.submittedAt) snap.set(k, d);
+  // the badges, and a line naming them (the dates of the perfect games, the events won)
+  function achHTML(a){
+    if(!a.perfect.length && !a.titles.length) return '';
+    const n = k => k > 1 ? ' <b>\u00d7' + k + '</b>' : '';
+    let chips = '', note = [];
+    if(a.perfect.length){
+      chips += '<span class="ach">300 CLUB' + n(a.perfect.length) + '</span>';
+      note.push('Perfect game' + (a.perfect.length > 1 ? 's' : '') + ': ' + a.perfect.map(d=>fmtWhen(d.submittedAt)).join(', '));
+    }
+    if(a.titles.length){
+      chips += '<span class="ach champ">' + TROPHY_SVG + 'CHAMPION' + n(a.titles.length) + '</span>';
+      note.push('Won ' + a.titles.map(c=>c.ev.name).join(', '));
+    }
+    return '<div class="ach-row">' + chips + '</div><div class="ach-note">' + escapeHtml(note.join(' \u00b7 ')) + '</div>';
+  }
+  // after the standings or the clock change: redraw the leaderboard if its trophies moved, and My stats
+  function refreshChampions(){
+    const sig = [...championGames(statsUser).keys()].join(',');
+    if(sig !== champSig){ champSig = sig; if(lastBoardDocs.length) renderBoard(lastBoardDocs); }
+    renderMyAch();
+  }
+  // event-winning games for the rows' trophy: "uid|submittedAt" -> [event names]
+  let champSig = '';
+  function championGames(viewer){
+    const m = new Map();
+    if(!tScores || !tournamentVisible(viewer)) return m;
+    BW_SHARED.champions(gameData, tScores, Date.now()).forEach(c=>{
+      const k = c.entry.d.uid + '|' + c.entry.d.submittedAt;
+      m.set(k, (m.get(k) || []).concat(c.ev.name));
     });
-    const best = new Map();
-    tScores.forEach(d=>{
-      if(d.version !== 3 || !d.verified || !Array.isArray(d.rolls) || !Number.isInteger(d.score)) return;
-      if(!(d.submittedAt >= ev.startsAt && d.submittedAt < ev.endsAt)) return;
-      const k = tKey(d), s = snap.get(k);
-      const hcp = (s && s.avgGames >= HCP_MIN_GAMES) ? handicapFor(s.avg10) : null;
-      const st = strikeStats(d.rolls);
-      const e = {d, k, score:d.score, hcp, total:d.score + (hcp || 0), streak:st.streak, strikes:st.strikes, at:d.submittedAt};
-      const prev = best.get(k);
-      if(!prev || tCompare(e, prev, 'hcp') < 0) best.set(k, e);
-    });
-    return [...best.values()];
+    return m;
+  }
+  function rowBadges(d, champs){
+    let h = BW_SHARED.isPerfect(d) ? '<span class="row-badge" title="Perfect game: 12 strikes">300</span>' : '';
+    const won = d.uid ? champs.get(d.uid + '|' + d.submittedAt) : null;
+    if(won) h += '<span class="row-badge champ" title="' + escapeHtml('Won ' + won.join(', ')) + '">' + TROPHY_SVG + 'WON</span>';
+    return h;
   }
 
   function tCurrent(){ return tEvents().find(e=>e.id===tPickId) || null; }
@@ -1896,6 +1936,7 @@
     if(tools) tools.hidden = false;
     const me = tViewer && tViewer.uid;
     const statsOn = careerVisible(tViewer);   // initials open the player's career flyout
+    const champs = championGames(tViewer);
     // the mockup's table: # | Player | Score | Hcp | Total | Streak / X | Best game; a row opens its
     // scorecard. Scratch ranks by score and shows it as the Total too, as the mockup does.
     let h = '<table class="t-table"><thead><tr><th>#</th><th class="l">Player</th><th>Score</th><th>Hcp</th><th>Total</th>'
@@ -1910,7 +1951,7 @@
       h += '<tr class="t-row' + (rank === 1 ? ' top' : '') + (me && d.uid === me ? ' me' : '') + '" data-detail="t' + i + '" data-k="' + escapeHtml(e.k)
         + '" tabindex="0" aria-expanded="' + open + '">'
         + '<td class="rank">' + rank + '</td>'
-        + '<td class="who l">' + who + '</td>'
+        + '<td class="who l">' + who + rowBadges(d, champs) + '</td>'
         + '<td>' + e.score + '</td>'
         + '<td class="hcp">' + (e.hcp != null ? '+' + e.hcp
           : '<span title="No handicap: under 5 games, or no score before the start" aria-label="scratch, no handicap">&ndash;</span>') + '</td>'
@@ -1923,7 +1964,15 @@
     boardT.innerHTML = h + '</tbody></table>';
   }
 
+  let tFinalCount = -1;
   function tTick(){
+    // an event (picked or not) just finished: its winner shows on the leaderboard and My stats too
+    const finals = tEvents().filter(e=>tStatus(e) === 'final').length;
+    if(finals !== tFinalCount){
+      const first = tFinalCount < 0;
+      tFinalCount = finals;
+      if(!first){ renderTournament(); refreshChampions(); return; }
+    }
     const ev = tCurrent();
     if(!ev) return;
     const st = tStatus(ev), now = Date.now();
@@ -1961,7 +2010,11 @@
     if(ev.prize) prizeEl.innerHTML = '<b>Prize:</b> ' + escapeHtml(ev.prize);
     if(!tUnsub){
       tUnsub = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).onSnapshot(
-        snap=>{ tScores = snap.docs.map(x=>x.data()); drawTBoard(); },
+        snap=>{
+          tScores = snap.docs.map(x=>x.data());
+          drawTBoard();
+          refreshChampions();
+        },
         err=>{ el('t-board').innerHTML = '<div class="msg err">' + escapeHtml(friendlyDbError(err)) + '</div>'; }
       );
     }
@@ -2026,15 +2079,18 @@
     if(req !== pStatsReq) return;     // another player's flyout was opened meanwhile
     const avg = careerAverage(scores, career), has = !!(avg && avg.games > 0);
     const best = scores.reduce((b,d)=> (!b || d.score > b.score) ? d : b, null);
-    const tile = (label, val, sub, cls) => '<div class="stat-tile"><div class="stat-label">' + label + '</div><div class="stat-val tnum'
-      + (cls ? ' ' + cls : '') + '">' + escapeHtml(String(val)) + '</div><div class="stat-sub">' + escapeHtml(sub) + '</div></div>';
+    const tile = (label, val, sub, cls, sub2) => '<div class="stat-tile"><div class="stat-label">' + label + '</div><div class="stat-val tnum'
+      + (cls ? ' ' + cls : '') + '">' + escapeHtml(String(val)) + '</div><div class="stat-sub">' + escapeHtml(sub) + '</div>'
+      + (sub2 ? '<div class="stat-sub">' + escapeHtml(sub2) + '</div>' : '') + '</div>';
     let h = '<div class="stat-tiles">'
       + tile('Average', has ? fmtAvg(avg.avg10) : '\u2013', has ? avg.games + ' game' + (avg.games === 1 ? '' : 's') + ' \u00b7 ' + fmtWhen(avg.at) : 'no average yet')
-      + tile('Tournament handicap', has && avg.games >= HCP_MIN_GAMES ? handicapFor(avg.avg10) : '\u2013',
-             has ? (avg.games >= HCP_MIN_GAMES ? 'from this average' : 'after ' + HCP_MIN_GAMES + ' games') : '')
+      + tile('Handicap now', has && avg.games >= HCP_MIN_GAMES ? handicapFor(avg.avg10) : '\u2013',
+             has ? (avg.games >= HCP_MIN_GAMES ? 'from this average' : 'after ' + HCP_MIN_GAMES + ' games') : '', '', eventHcpText(scores, viewer))
       + tile('Best game', best ? best.score : '\u2013', best ? best.initials + ' \u00b7 ' + fmtWhen(best.submittedAt) : 'no submitted scores', 'good')
       + tile('Scores submitted', scores.length, '')
       + '</div>';
+    const ach = achHTML(achievementsFor(uid, scores, viewer));
+    if(ach) h += '<div class="ach-block"><div class="stat-label">Achievements</div>' + ach + '</div>';
     if(career){
       h += '<div class="career-cols"><div><h3>1 player games</h3><table class="career-table tnum">' + careerRows(career1pRows(career, Number.isInteger(career.prize) ? career.prize : null))
         + '</table></div><div><h3>VS link matches</h3><table class="career-table tnum">' + careerRows(careerVsRows(career)) + '</table></div></div>'

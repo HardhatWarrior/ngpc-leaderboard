@@ -22,6 +22,7 @@
     --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
     --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
     --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
+    --gold:#f2c14e; --gold-ink:#2b1f00;
   }
   *{ box-sizing:border-box; } html,body{ height:auto; }
   body{
@@ -135,6 +136,15 @@
   .sub-pager button:hover:not(:disabled){ border-color:var(--accent2); }
   .sub-pager .sub-page-label{ font-size:11.5px; color:var(--dim); }
 
+  /* ---------- achievements (bw/bw-shared.js): the 300 Club and tournament titles ---------- */
+  .ach-block{ margin:-4px 0 18px; }
+  .ach-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+  .ach{ display:inline-flex; align-items:center; gap:6px; font-family:"Press Start 2P",monospace; font-size:9px; letter-spacing:.06em;
+    line-height:1; padding:7px 10px; border-radius:999px; background:var(--gold); color:var(--gold-ink); }
+  .ach b{ font-weight:400; }
+  .ach.champ{ background:transparent; color:var(--gold); border:1px solid var(--gold); }
+  .ach svg{ width:12px; height:12px; flex:none; }
+  .ach-note{ font-size:11.5px; color:var(--dim); margin-top:8px; line-height:1.5; }
   .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; }
   .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
 
@@ -158,6 +168,13 @@
 
   <div id="not-found-msg" hidden></div>
 
+  <!-- Neo Bowling achievements (bw/bw-shared.js, as on /bw/): the 300 Club while Career stats is
+       visible to the viewer, tournament titles while Tournaments is (Manage Game > Bowling features) -->
+  <section class="panel" id="bw-ach-panel" hidden>
+    <h2>Neo Bowling achievements</h2>
+    <div id="bw-ach-body"></div>
+  </section>
+
   <section class="panel" id="subs-panel" hidden>
     <h2>Submissions</h2>
     <p class="hint">Every score this player has submitted while signed in, across every game. Click one with a scorecard to expand it.</p>
@@ -179,6 +196,7 @@
 </div>
 
 <script src="/auth.js"></script>
+<script src="/bw/bw-shared.js?v=1"></script>
 <script>
 (function(){
   "use strict";
@@ -349,9 +367,11 @@
       // No .orderBy() here on purpose -- pairing it with the .where('uid',...) filter needs a
       // composite index Firestore won't build automatically, so this sorts client-side instead.
       const [snap] = await Promise.all([
-        A.db.collection('scores').where('uid','==',uid).get(),
+        // approved only: the rules let anyone but the admin read nothing else, and refuse a query
+        // that could return more
+        A.db.collection('scores').where('uid','==',uid).where('approved','==',true).get(),
         A.db.collection('games').get().then(gamesSnap=>{
-          gamesSnap.forEach(doc=>{ const d = doc.data(); if(d.code) GAME_NAMES[d.code] = d.name || doc.id; });
+          gamesSnap.forEach(doc=>{ const d = doc.data(); if(d.code) GAME_NAMES[d.code] = d.name || doc.id; if(doc.id === 'bw') bwGame = d; });
         }).catch(()=>{ /* non-critical -- names just fall back to raw codes */ }),
       ]);
       allSubs = snap.docs.slice();
@@ -359,10 +379,54 @@
       subStatus.textContent = '';
       subPage = 0;
       renderSubPage();
+      bwAchUid = uid;
+      renderBwAch();
     }catch(e){
       subStatus.innerHTML = '<div class="msg err">Couldn’t load submissions right now — try again in a bit.</div>';
     }
   }
+  // ---- Neo Bowling achievements: the 300 Club from this player's own verified scores; titles
+  // from every approved Bowling score (fetched once, only when a finished event can be shown) ----
+  const TROPHY_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 1.5h8V5a4 4 0 0 1-3 3.87V11h2.5v1.5h-7V11H7V8.87A4 4 0 0 1 4 5zM2 2.5h1.5V5c0 .3.03.6.09.9A2.5 2.5 0 0 1 2 3.5zM12.5 2.5H14v1a2.5 2.5 0 0 1-1.59 2.4c.06-.3.09-.6.09-.9z"/><rect x="4" y="13" width="8" height="1.5" fill="currentColor"/></svg>';
+  let bwGame = null, bwAchUid = null, bwAllScores = null, bwAchReq = 0;   // bwAllScores: a promise
+  function fmtAchDate(ts){ return new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); }
+  async function renderBwAch(){
+    const A = window.NGPC_AUTH, S = window.BW_SHARED, panel = el('bw-ach-panel'), req = ++bwAchReq;
+    if(!A || !S || !bwGame || !bwAchUid){ panel.hidden = true; return; }
+    await A.authReady;
+    const viewer = A.currentUser, now = Date.now();
+    const mine = allSubs.map(d=>d.data()).filter(d=>d.game === 'BW' && d.approved === true && d.uid === bwAchUid);
+    const perfect = S.featureVisible(bwGame, 'careerStats', viewer, A) ? S.perfectGames(mine) : [];
+    let titles = [];
+    const finals = S.events(bwGame).filter(ev=>S.status(ev, now) === 'final');
+    const played = finals.some(ev=>mine.some(d=>d.version === 3 && d.verified === true && d.submittedAt >= ev.startsAt && d.submittedAt < ev.endsAt));
+    if(played && S.featureVisible(bwGame, 'tournaments', viewer, A)){
+      try{
+        if(!bwAllScores){
+          bwAllScores = A.db.collection('scores').where('game','==','BW').where('approved','==',true).get()
+            .then(snap=>snap.docs.map(d=>d.data()));
+          bwAllScores.catch(()=>{ bwAllScores = null; });   // a failed read is retried next time
+        }
+        titles = S.champions(bwGame, await bwAllScores, now).filter(c=>c.entry.k === bwAchUid);
+      }catch(e){ /* titles are decoration -- leave them out */ }
+    }
+    if(req !== bwAchReq) return;
+    if(!perfect.length && !titles.length){ panel.hidden = true; return; }
+    const n = k => k > 1 ? ' <b>\u00d7' + k + '</b>' : '';
+    let chips = '', note = [];
+    if(perfect.length){
+      chips += '<span class="ach">300 CLUB' + n(perfect.length) + '</span>';
+      note.push('Perfect game' + (perfect.length > 1 ? 's' : '') + ': ' + perfect.map(d=>fmtAchDate(d.submittedAt)).join(', '));
+    }
+    if(titles.length){
+      chips += '<span class="ach champ">' + TROPHY_SVG + 'CHAMPION' + n(titles.length) + '</span>';
+      note.push('Won ' + titles.map(c=>c.ev.name).join(', '));
+    }
+    el('bw-ach-body').innerHTML = '<div class="ach-row">' + chips + '</div><div class="ach-note">' + escapeHtml(note.join(' \u00b7 ')) + '</div>';
+    panel.hidden = false;
+  }
+  if(window.NGPC_AUTH) NGPC_AUTH.onAuthChange(()=>renderBwAch());
+
   boot();
 })();
 </script>
