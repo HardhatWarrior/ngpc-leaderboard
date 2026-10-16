@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#101418">
+<title>Farkle Online - NGPC web player</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body data-rom="farkleonline.ngc">
+<header id="bar">
+  <span class="brand">NGPC + NgpNet</span>
+  <label class="file">ROM <input id="romFile" type="file" accept=".ngc,.ngp,.bin,application/octet-stream"></label>
+  <label class="file">BIOS <input id="biosFile" type="file" accept=".bin,application/octet-stream"></label>
+  <span id="romName" class="muted">no ROM</span>
+  <span id="biosState" class="muted">BIOS?</span>
+  <label class="server">Server <input id="serverUrl" type="text" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="wss://host/ (blank = offline)"></label>
+  <button id="reconnect" type="button">Reconnect</button>
+  <button id="reset" type="button" title="Power-cycle the console and reconnect">Reset</button>
+  <button id="mute" type="button" title="Sound on/off">Sound</button>
+  <button id="logToggle" type="button" title="Show the pod's frame log">Log</button>
+</header>
+
+<main id="stage">
+  <canvas id="screen" width="160" height="152"></canvas>
+  <div id="podStatus" class="status idle">pod: idle</div>
+  <div id="hint" class="muted">Pick a ROM (and bios.bin if asked). Keys: arrows, Z = A, X = B, Enter = OPTION.</div>
+  <pre id="log" hidden></pre>
+</main>
+
+<div id="touch" aria-hidden="true">
+  <div id="dpad">
+    <span class="arrow up">&#9650;</span><span class="arrow down">&#9660;</span>
+    <span class="arrow left">&#9664;</span><span class="arrow right">&#9654;</span>
+  </div>
+  <div id="buttons">
+    <button class="btn option" data-bits="64" type="button">OPTION</button>
+    <button class="btn b" data-bits="32" type="button">B</button>
+    <button class="btn a" data-bits="16" type="button">A</button>
+  </div>
+</div>
+
+<script type="module" src="player.js"></script>
+</body>
+</html>

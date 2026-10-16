@@ -1,0 +1,141 @@
+:root {
+  --bg: #101418;
+  --panel: #1a2026;
+  --fg: #e6e9ec;
+  --muted: #8a949e;
+  --accent: #4cc2ff;
+  --ok: #58d68d;
+  --warn: #f5b041;
+  --bad: #ff6b6b;
+  --btn: #2a333c;
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  height: 100%;
+  overscroll-behavior: none;
+}
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  min-height: 100dvh;
+  touch-action: manipulation;
+}
+
+#bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  align-items: center;
+  padding: 6px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid #000;
+}
+#bar .brand { font-weight: 600; color: var(--accent); margin-right: 4px; }
+#bar label { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+#bar input[type="file"] { max-width: 11em; font-size: 12px; }
+#bar input[type="text"] {
+  background: #0c1014; color: var(--fg); border: 1px solid #333; border-radius: 4px;
+  padding: 3px 6px; min-width: 14em; font-family: ui-monospace, Consolas, monospace; font-size: 12px;
+}
+#bar button, .btn {
+  background: var(--btn); color: var(--fg); border: 1px solid #3a444e; border-radius: 6px;
+  padding: 4px 10px; cursor: pointer; font: inherit;
+}
+#bar button:active, .btn:active, .btn.down { background: var(--accent); color: #000; }
+#bar button.on { border-color: var(--accent); }
+.muted { color: var(--muted); font-size: 12px; }
+
+#stage {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px;
+  gap: 6px;
+  min-height: 0;
+}
+#screen {
+  background: #000;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  display: block;
+  width: 480px;
+  height: 456px;
+  max-width: 100%;
+}
+.status { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--muted); }
+.status.connecting { color: var(--warn); }
+.status.connected { color: var(--ok); }
+.status.closed, .status.error { color: var(--bad); }
+#log {
+  width: 100%;
+  max-width: 720px;
+  max-height: 30vh;
+  overflow: auto;
+  margin: 0;
+  padding: 6px 8px;
+  background: #0c1014;
+  border: 1px solid #222;
+  border-radius: 6px;
+  font: 11px/1.35 ui-monospace, Consolas, monospace;
+  color: #b8c2cc;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---- on-screen pad: shown on touch devices (or with ?touch=1) ---- */
+#touch {
+  display: none;
+  flex: 0 0 auto;
+  padding: 10px 14px calc(10px + env(safe-area-inset-bottom));
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+body.touch #touch { display: flex; }
+#dpad {
+  position: relative;
+  width: 150px; height: 150px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #2a333c 0 30%, #1f272e 31% 100%);
+  border: 1px solid #3a444e;
+  touch-action: none;
+}
+#dpad .arrow {
+  position: absolute; color: #9aa6b2; font-size: 20px; line-height: 1; pointer-events: none;
+}
+#dpad .up { top: 10px; left: 50%; transform: translateX(-50%); }
+#dpad .down { bottom: 10px; left: 50%; transform: translateX(-50%); }
+#dpad .left { left: 10px; top: 50%; transform: translateY(-50%); }
+#dpad .right { right: 10px; top: 50%; transform: translateY(-50%); }
+#dpad.d-up .up, #dpad.d-down .down, #dpad.d-left .left, #dpad.d-right .right { color: var(--accent); }
+#buttons {
+  display: grid;
+  grid-template-areas: "option option" "b a";
+  gap: 14px;
+  align-items: end;
+  touch-action: none;
+}
+.btn { font-weight: 600; touch-action: none; }
+.btn.a, .btn.b { width: 68px; height: 68px; border-radius: 50%; font-size: 22px; }
+.btn.a { grid-area: a; }
+.btn.b { grid-area: b; margin-top: 24px; }
+.btn.option { grid-area: option; justify-self: center; padding: 6px 14px; font-size: 12px; border-radius: 14px; }
+
+/* phones: screen full width, controls below */
+@media (max-width: 700px), (pointer: coarse) {
+  #bar { gap: 4px 8px; padding: 4px 6px; font-size: 12px; }
+  #bar input[type="text"] { min-width: 10em; }
+  #stage { padding: 4px; }
+  #screen { width: 100%; height: auto; }
+}
