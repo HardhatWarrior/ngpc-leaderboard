@@ -74,6 +74,9 @@ body {
 .status.connecting { color: var(--warn); }
 .status.connected { color: var(--ok); }
 .status.closed, .status.error { color: var(--bad); }
+#lobby { font-family: ui-monospace, Consolas, monospace; font-size: 12px; color: var(--fg); text-align: center; }
+#lobby .room { display: inline-block; margin: 0 4px; padding: 1px 6px; border: 1px solid #3a444e; border-radius: 4px; color: var(--accent); }
+#lobby .room.mine { border-color: var(--ok); color: var(--ok); }
 #log {
   width: 100%;
   max-width: 720px;

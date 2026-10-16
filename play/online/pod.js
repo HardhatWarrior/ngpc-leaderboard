@@ -67,13 +67,18 @@ export class Pod {
    * @param {string}   opts.url       wss://... (empty = offline, no socket)
    * @param {function} [opts.onStatus] (state: "idle"|"connecting"|"connected"|"closed"|"error", pod, detail)
    * @param {function} [opts.onLog]    (text)
+   * @param {function} [opts.onRooms]  (rooms: [{code, players, max}]) replies to listRooms()
    * @param {boolean}  [opts.quiet]    do not log every frame
    */
   constructor(opts = {}) {
     this.url = opts.url || "";
     this.onStatus = opts.onStatus || (() => {});
     this.onLog = opts.onLog || (() => {});
+    this.onRooms = opts.onRooms || (() => {});
     this.quiet = !!opts.quiet;
+    this.helloSeen = false;                     // the console has introduced itself on this socket
+    this.pendingList = 0;                       // LIST frames the PAGE sent (their ROOMS replies stay here)
+    this.room = "";                             // code of the room the console is in, "" outside
     this.ws = null;
     this.state = "idle";
     this.deframer = new Deframer();
@@ -95,6 +100,7 @@ export class Pod {
     this.toConsole.length = 0;
     this.inbox.length = 0;
     this.seen = { WELCOME: false, zone_parts: 0, PONG: 0, tx: 0, rx: 0, lastOp: "" };
+    this.helloSeen = false; this.pendingList = 0; this.room = "";
     if (!this.url) { this._set("idle"); return; }
     let ws;
     try {
@@ -134,6 +140,15 @@ export class Pod {
 
   get connected() { return !!this.ws && this.ws.readyState === 1; }
 
+  /** Ask the server for the open rooms (needs the console's HELLO first). The ROOMS reply goes to
+   *  onRooms, not to the console. Returns false if it could not be sent. */
+  listRooms() {
+    if (!this.connected || !this.helloSeen) return false;
+    this.ws.send(Uint8Array.from([0x02]));
+    this.pendingList++;
+    return true;
+  }
+
   /** Wire the console up: serial on, peer present. Call once after machine.boot(). */
   attach(machine) {
     machine.serialSetEnabled(true);
@@ -155,6 +170,8 @@ export class Pod {
     if (all.length) {
       for (const f of this.deframer.feed(all)) {
         this.seen.tx++;
+        if (f[0] === 0x01) this.helloSeen = true;
+        else if (f[0] === 0x05) this.room = "";
         if (!this.quiet) this.onLog("[" + frame + "] >> " + (OPNAME[f[0]] || "0x" + f[0].toString(16)) + " " + hex(f.subarray(1), 24));
         if (this.connected) this.ws.send(f);
       }
@@ -163,8 +180,18 @@ export class Pod {
     if (this.inbox.length) {
       for (const msg of this.inbox) {
         if (!msg.length || msg.length > 255) continue;
+        if (msg[0] === 0x82 && this.pendingList > 0) {   // ROOMS for the page's own LIST
+          this.pendingList--;
+          const rooms = [];
+          for (let i = 0, p = 2; i < msg[1] && p + 6 <= msg.length; i++, p += 6) {
+            rooms.push({ code: String.fromCharCode(msg[p], msg[p + 1], msg[p + 2], msg[p + 3]), players: msg[p + 4], max: msg[p + 5] });
+          }
+          this.onRooms(rooms);
+          continue;
+        }
         this.seen.rx++;
         const name = OPNAME[msg[0]] || "0x" + msg[0].toString(16);
+        if (name === "ROOM" && msg.length >= 5) this.room = String.fromCharCode(msg[1], msg[2], msg[3], msg[4]);
         this.seen.lastOp = name;
         if (name === "WELCOME") this.seen.WELCOME = true;
         else if (name === "W_ZONE") this.seen.zone_parts++;

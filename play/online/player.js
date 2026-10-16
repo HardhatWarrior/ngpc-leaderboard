@@ -14,6 +14,7 @@ const el = {
   biosState: $("biosState"), serverUrl: $("serverUrl"), reconnect: $("reconnect"), reset: $("reset"),
   mute: $("mute"), logToggle: $("logToggle"), podStatus: $("podStatus"), hint: $("hint"), log: $("log"),
   touch: $("touch"), dpad: $("dpad"), bar: $("bar"), stage: $("stage"),
+  lobby: $("lobby"), lobbyList: $("lobbyList"),
 };
 
 // ------------------------------------------------------------------ IndexedDB (BIOS, last ROM)
@@ -59,6 +60,7 @@ class Audio {
   }
   get available() { return (this.wr - this.rd) & (this.cap - 1); }
   start() {
+    keepAwake();                                  // a user gesture: the moment iOS grants a wake lock
     if (this.ctx) { if (this.ctx.state !== "running") this.ctx.resume(); return; }
     const AC = window.AudioContext || window.webkitAudioContext;
     if (!AC) return;
@@ -117,6 +119,13 @@ function log(text) {
 }
 
 function setPodStatus(stateName, pod, detail) {
+  if (stateName === "closed" || stateName === "error") {
+    el.hint.textContent = "Connection lost (the server drops a link that is silent for 30 s, e.g. a phone that " +
+      "locked or switched apps). Press Reset, then enter ONLINE again.";
+    el.lobby.hidden = true;
+  } else if (stateName === "connected") {
+    el.hint.textContent = "";
+  }
   const s = pod ? pod.seen : { rx: 0, tx: 0 };
   const extra = pod && pod.deframer.bad ? ", bad crc " + pod.deframer.bad : "";
   el.podStatus.className = "status " + stateName;
@@ -181,7 +190,7 @@ async function startNow() {
   if (state.pod) state.pod.close();
   const m = new Machine(state.M, state.rom, state.bios);
   m.boot();
-  const pod = new Pod({ url: el.serverUrl.value.trim(), onStatus: setPodStatus, onLog: log });
+  const pod = new Pod({ url: el.serverUrl.value.trim(), onStatus: setPodStatus, onLog: log, onRooms: showRooms });
   pod.attach(m);
   state.machine = m; state.pod = pod;
   el.log.textContent = "";
@@ -189,6 +198,34 @@ async function startNow() {
   el.hint.textContent = pod.url ? "" : "Offline (no server URL). Enter one and press Reconnect to go online.";
   startLoop();
 }
+
+// ------------------------------------------------------------------ lobby (LIST every few seconds once the console said HELLO)
+const LOBBY_EVERY_MS = 3000;
+function showRooms(rooms) {
+  const pod = state.pod;
+  el.lobby.hidden = false;
+  el.lobbyList.textContent = "";
+  if (!rooms.length) { el.lobbyList.textContent = "none - CREATE ROOM to open one"; return; }
+  for (const r of rooms) {
+    const span = document.createElement("span");
+    span.className = "room" + (pod && pod.room === r.code ? " mine" : "");
+    span.textContent = r.code + " " + r.players + "/" + r.max;
+    span.title = pod && pod.room === r.code ? "your room" : "JOIN ROOM and type this code";
+    el.lobbyList.appendChild(span);
+  }
+}
+setInterval(() => { if (state.pod && state.running) state.pod.listRooms(); }, LOBBY_EVERY_MS);
+
+// ------------------------------------------------------------------ screen wake lock (phones lock the screen while you wait for the opponent)
+const wake = { lock: null };
+async function keepAwake() {
+  if (!("wakeLock" in navigator) || wake.lock || document.hidden || !state.running) return;
+  try {
+    wake.lock = await navigator.wakeLock.request("screen");
+    wake.lock.addEventListener("release", () => { wake.lock = null; });
+  } catch (_) { /* denied or unsupported: nothing to do */ }
+}
+document.addEventListener("visibilitychange", () => { if (!document.hidden) keepAwake(); });
 
 // ------------------------------------------------------------------ the loop
 function stepOne() {
@@ -258,6 +295,7 @@ function startLoop() {
   state.lastPump = state.t0;
   requestAnimationFrame(raf);
   if (!state.fallbackTimer) state.fallbackTimer = setInterval(fallbackTick, 50);
+  keepAwake();
 }
 function stopLoop() {
   state.running = false;
