@@ -194,7 +194,9 @@ async function startNow() {
   if (state.pod) state.pod.close();
   const m = new Machine(state.M, state.rom, state.bios);
   m.boot();
-  const pod = new Pod({ url: el.serverUrl.value.trim(), onStatus: setPodStatus, onLog: log, onRooms: showRooms });
+  const pod = new Pod({ url: el.serverUrl.value.trim(), onStatus: setPodStatus, onLog: log, onRooms: showRooms,
+    // the game names its own server (OPTIONS > ONLINE SERVER in Farkle Online); the field follows it
+    onServer: (url) => { el.serverUrl.value = url; localStorage.setItem(LS_SERVER, url); } });
   pod.attach(m);
   state.machine = m; state.pod = pod;
   el.log.textContent = "";

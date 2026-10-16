@@ -74,9 +74,13 @@ export class Pod {
    * @param {function} [opts.onLog]    (text)
    * @param {function} [opts.onRooms]  (rooms: [{code, players, max}]) replies to listRooms()
    * @param {boolean}  [opts.quiet]    do not log every frame
+   * @param {function} [opts.onServer] (url) the game asked for this server (POD_SERVER frame); the pod switches to it
+   * @param {boolean}  [opts.followGameServer=true] honour POD_SERVER; false keeps the page's own server
    */
   constructor(opts = {}) {
     this.url = opts.url || "";
+    this.onServer = opts.onServer || (() => {});
+    this.followGameServer = opts.followGameServer !== false;
     this.onStatus = opts.onStatus || (() => {});
     this.onLog = opts.onLog || (() => {});
     this.onRooms = opts.onRooms || (() => {});
@@ -233,6 +237,12 @@ export class Pod {
     }
     if (all.length) {
       for (const f of this.deframer.feed(all)) {
+        if (f[0] === 0xF0) {                       // POD_SERVER: console -> pod only, never relayed
+          const url = String.fromCharCode(...f.subarray(1)).trim().toLowerCase();
+          this.onLog("[" + frame + "] >> POD_SERVER " + url + (this.followGameServer ? "" : " (ignored: page keeps its server)"));
+          if (this.followGameServer && url && url !== this.url) { this.onServer(url); this.connect(url); return; }
+          continue;
+        }
         this.seen.tx++;
         if (f[0] === 0x01) { this.helloSeen = true; this.lastHello = f; }
         else if (f[0] === 0x05) this.room = "";
