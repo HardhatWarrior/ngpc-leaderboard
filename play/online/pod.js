@@ -39,7 +39,7 @@ export function wrap(frame) {
 }
 
 export class Deframer {
-  constructor() { this.buf = []; this.bad = 0; }
+  constructor(onBad) { this.buf = []; this.bad = 0; this.onBad = onBad || null; }
   feed(data) {
     for (let i = 0; i < data.length; i++) this.buf.push(data[i]);
     const out = [];
@@ -53,6 +53,7 @@ export class Deframer {
         this.buf.splice(0, n + 2);
       } else {
         this.bad++;
+        if (this.onBad) this.onBad(Uint8Array.from(this.buf.slice(0, Math.min(this.buf.length, n + 2))));
         this.buf.shift();                       // resync one byte at a time
       }
     }
@@ -94,7 +95,7 @@ export class Pod {
     this.retry = { timer: 0, attempt: 0, since: 0 };   // reconnect backoff while in a room
     this.ws = null;
     this.state = "idle";
-    this.deframer = new Deframer();
+    this.deframer = new Deframer((b) => this.onLog("[" + this.frame + "] bad crc from console: " + hex(b, 40)));
     this.toConsole = [];                        // bytes waiting for the wire
     this.inbox = [];                            // messages arrived, not yet logged/queued
     this.seen = { WELCOME: false, zone_parts: 0, PONG: 0, tx: 0, rx: 0, lastOp: "" };
@@ -110,7 +111,7 @@ export class Pod {
   connect(url = this.url) {
     this.close();
     this.url = url || "";
-    this.deframer = new Deframer();
+    this.deframer = new Deframer((b) => this.onLog("[" + this.frame + "] bad crc from console: " + hex(b, 40)));
     this.toConsole.length = 0;
     this.inbox.length = 0;
     this.seen = { WELCOME: false, zone_parts: 0, PONG: 0, tx: 0, rx: 0, lastOp: "" };

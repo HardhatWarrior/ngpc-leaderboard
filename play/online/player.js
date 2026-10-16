@@ -138,6 +138,9 @@ function setPodStatus(stateName, pod, detail) {
 }
 
 // ------------------------------------------------------------------ loading
+/** NgpCraft's HLE image announces itself: its boot glue starts with these bytes. */
+function isCleanRoomBios(b) { return b[0] === 0x45 && b[1] === 0x32 && b[2] === 0x00 && b[3] === 0xff; }
+
 async function loadBios() {
   const saved = await idb.get("bios");
   if (saved && saved.byteLength === 65536) { state.bios = new Uint8Array(saved); el.biosState.textContent = "BIOS: saved copy"; return; }
@@ -145,7 +148,13 @@ async function loadBios() {
     const r = await fetch("bios.bin", { cache: "no-store" });
     if (r.ok) {
       const buf = await r.arrayBuffer();
-      if (buf.byteLength === 65536) { state.bios = new Uint8Array(buf); el.biosState.textContent = "BIOS: bios.bin"; return; }
+      if (buf.byteLength === 65536) {
+        state.bios = new Uint8Array(buf);
+        const hle = isCleanRoomBios(state.bios);
+        el.biosState.textContent = hle ? "BIOS: built-in clean-room" : "BIOS: bios.bin";
+        el.biosState.title = hle ? "NgpCraft's clean-room BIOS (no SNK code). Pick your own bios.bin for the real boot and font." : "";
+        return;
+      }
     }
   } catch (_) { /* no bios.bin next to the page */ }
   el.biosState.textContent = "BIOS: pick bios.bin (64 KiB)";
