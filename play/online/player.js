@@ -6,6 +6,7 @@ import { Pod } from "./pod.js";
 const BUILD = document.body.dataset.build || "dev";    // stamped by publish.py
 const DEFAULT_SERVER = "wss://ngpnet.fly.dev/";
 const LS_SERVER = "ngpnet.server";
+const LS_SOUND = "ngpnet.sound";
 const MAX_CATCHUP = 4;          // frames per animation tick at most
 const RESYNC_AFTER = 30;        // frames behind -> drop the backlog instead
 
@@ -54,7 +55,8 @@ const idb = {
 // ------------------------------------------------------------------ audio (WebAudio, pull model)
 class Audio {
   constructor() {
-    this.ctx = null; this.node = null; this.muted = false;
+    this.ctx = null; this.node = null;
+    this.muted = localStorage.getItem(LS_SOUND) !== "on";   // off by default; Sound button turns it on
     this.cap = 1 << 15;                               // ring of stereo frames (power of two)
     this.L = new Float32Array(this.cap); this.R = new Float32Array(this.cap);
     this.wr = 0; this.rd = 0; this.pos = 0;           // pos: fractional read cursor (resampling)
@@ -419,9 +421,10 @@ el.reset.addEventListener("click", () => { if (state.rom && state.bios) start();
 el.mute.addEventListener("click", () => {
   state.audio.start();
   state.audio.muted = !state.audio.muted;
+  localStorage.setItem(LS_SOUND, state.audio.muted ? "off" : "on");
   el.mute.classList.toggle("on", !state.audio.muted);
 });
-el.mute.classList.add("on");
+el.mute.classList.toggle("on", !state.audio.muted);
 el.logToggle.addEventListener("click", () => { el.log.hidden = !el.log.hidden; el.logToggle.classList.toggle("on", !el.log.hidden); });
 el.canvas.addEventListener("pointerdown", () => state.audio.start());
 window.addEventListener("resize", fitCanvas);
