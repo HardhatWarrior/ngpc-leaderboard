@@ -352,6 +352,32 @@
       <div id="email-msg"></div>
       </div>
     </section>
+
+    <!-- POCKET REALM (NgpNet) character link. Hidden in markup AND only ever un-hidden when the
+         NgpNet server's GET /claim says this signed-in account is eligible: while the link is in
+         TESTING on the server that means the site admin and the tester list only, so nobody else
+         sees so much as a panel header. The link itself lives on NgpNet (site_uid on the player
+         row), not in Firestore -- no rules change needed. -->
+    <section class="panel" id="pr-panel" hidden>
+      <div class="panel-header collapsed" data-toggle="pr-body" role="button" tabindex="0" aria-expanded="false">
+        <h2>Pocket Realm</h2>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="panel-body" id="pr-body" hidden>
+      <p class="hint" id="pr-testing-note" hidden>Testing: this panel is visible only to the site admin and selected testers until the link goes live.</p>
+      <div id="pr-linked" hidden>
+        <div class="current-value">Linked character <b class="px" id="pr-char-name" style="font-size:12px">&mdash;</b> <span id="pr-char-meta"></span></div>
+        <p class="hint">Your ngpc-dev.com username is shown next to this character on the <a href="/pr/">Pocket Realm ladder</a>. Unlink it to free this account for a different character.</p>
+        <button class="btn-secondary" id="pr-unlink">Unlink character</button>
+      </div>
+      <div id="pr-unlinked" hidden>
+        <p class="hint">Tie your Pocket Realm character to this account: on the cartridge pick <b>CHARACTER CODE</b> on the title screen and type the 8 letters here. One character per account. Your username then appears next to it on the <a href="/pr/">ladder</a>.</p>
+        <label>Character code<input type="text" id="pr-code" maxlength="9" autocomplete="off" spellcheck="false" placeholder="XRLK Y6ZB" style="text-transform:uppercase;font-family:'Press Start 2P','IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em"></label>
+        <button class="btn-primary" id="pr-link">Link character</button>
+      </div>
+      <div id="pr-msg"></div>
+      </div>
+    </section>
   </div>
 
   <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com &middot; <a href="mailto:support@ngpc-dev.com" style="color:inherit">support@ngpc-dev.com</a></footer>
@@ -1019,6 +1045,63 @@
     }
   }
 
+  // ---- Pocket Realm character link (NgpNet server, see /pr/ and NgpNet/README.md "Site account link") ----
+  // The server verifies this account's Firebase ID token itself, so the only thing sent is that
+  // token plus the CHARACTER CODE. `localStorage.ngpnet_url` overrides the server for local testing.
+  const NGPNET_URL = (function(){ try{ return localStorage.getItem('ngpnet_url') || 'https://ngpnet.fly.dev'; }catch(e){ return 'https://ngpnet.fly.dev'; } })();
+  const prPanel = el('pr-panel'), prMsg = el('pr-msg'), prCode = el('pr-code');
+  function prSetMsg(text, kind){ prMsg.innerHTML = text ? '<div class="msg '+kind+'">'+A.escapeHtml(text)+'</div>' : ''; }
+  async function prApi(method, body){
+    const user = A.auth.currentUser;
+    if(!user) throw new Error('Sign in first.');
+    const idToken = await user.getIdToken();
+    let r;
+    try{
+      r = await fetch(NGPNET_URL+'/claim', { method, headers: Object.assign({ authorization:'Bearer '+idToken }, body ? { 'content-type':'application/json' } : {}), body: body ? JSON.stringify(body) : undefined });
+    }catch(e){ throw new Error('The Pocket Realm server could not be reached. Try again in a minute.'); }
+    const d = await r.json().catch(()=>null);
+    if(!d) throw new Error('The Pocket Realm server gave an unexpected answer (HTTP '+r.status+').');
+    if(!d.ok) throw new Error(d.error || ('HTTP '+r.status));
+    return d;
+  }
+  function fmtPlaytime(s){ s = Number(s)||0; return s < 3600 ? Math.round(s/60)+' min' : (s/3600).toFixed(1)+' h'; }
+  function renderPocketRealm(d){
+    prPanel.hidden = !d.eligible;
+    if(!d.eligible) return;
+    el('pr-testing-note').hidden = !!d.public;
+    const c = d.character;
+    el('pr-linked').hidden = !c;
+    el('pr-unlinked').hidden = !!c;
+    if(c){
+      el('pr-char-name').textContent = c.name || '(unnamed)';
+      el('pr-char-meta').textContent = 'LV '+c.lv+' · '+c.xp+' XP · '+(c.rank ? 'rank #'+c.rank : 'unranked')+' · '+fmtPlaytime(c.playtime)+' played'+(c.online ? ' · online now' : '');
+    }
+  }
+  async function loadPocketRealm(){
+    try{ renderPocketRealm(await prApi('GET')); }
+    catch(e){ prPanel.hidden = true; /* server down or not eligible: the panel simply stays hidden */ }
+  }
+  el('pr-link').addEventListener('click', async ()=>{
+    const code = prCode.value.replace(/[\s-]/g,'').toUpperCase();
+    if(code.length !== 8){ prSetMsg('A CHARACTER CODE is 8 letters.', 'err'); return; }
+    el('pr-link').disabled = true; prSetMsg('', '');
+    try{
+      const d = await prApi('POST', { code, name: (A.currentUser && A.currentUser.username) || undefined });
+      prCode.value = '';
+      renderPocketRealm(Object.assign({ eligible:true, public: el('pr-testing-note').hidden }, d));
+      prSetMsg('Linked to '+(d.character.name || 'your character')+'.', 'ok');
+    }catch(e){ prSetMsg(e.message, 'err'); }
+    el('pr-link').disabled = false;
+  });
+  el('pr-unlink').addEventListener('click', async ()=>{
+    if(!confirm('Unlink this character from your account? You can link it (or another one) again later.')) return;
+    el('pr-unlink').disabled = true; prSetMsg('', '');
+    try{ await prApi('DELETE'); await loadPocketRealm(); prSetMsg('Character unlinked.', 'ok'); }
+    catch(e){ prSetMsg(e.message, 'err'); }
+    el('pr-unlink').disabled = false;
+  });
+  prCode.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); el('pr-link').click(); } });
+
   A.onAuthChange((user)=>{
     if(user){
       signedOutMsg.hidden = true;
@@ -1026,7 +1109,9 @@
       refreshFromProfile();
       loadSubmissions();
       loadAdminLinks(user);
+      loadPocketRealm();
     } else {
+      prPanel.hidden = true;
       el('admin-links').hidden = true;
       signedOutMsg.hidden = false;
       content.hidden = true;
