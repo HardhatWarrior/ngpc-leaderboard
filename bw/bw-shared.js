@@ -56,25 +56,23 @@
     const ka = mode === 'hcp' ? a.total : a.score, kb = mode === 'hcp' ? b.total : b.score;
     return (kb - ka) || (b.streak - a.streak) || (b.strikes - a.strikes) || (a.at - b.at);
   }
-  // Each player's best verified game inside the window, with the handicap snapshotted from
-  // their last v3 score submitted BEFORE the start (spec section 4) -- games bowled during the
-  // event never move it. The handicap is fixed per player, so the best game is the same on
-  // the Handicap and Scratch boards. scores: every approved Bowling score. Unsorted.
+  // Each player's best verified game inside the window, with the handicap eventHandicap() gives
+  // them (spec section 4): fixed per player for the whole event, so the best game is the same on
+  // the Handicap and Scratch boards. scores: every approved Bowling score. Unsorted. Each entry
+  // also says where its handicap came from (hcpFrom 'start' / 'event', hcpAt).
   function standings(ev, scores){
-    const snap = new Map();
-    scores.forEach(d=>{
-      if(d.version !== 3 || !Number.isInteger(d.avg10) || !(d.submittedAt < ev.startsAt)) return;
-      const k = playerKey(d), prev = snap.get(k);
-      if(!prev || d.submittedAt > prev.submittedAt) snap.set(k, d);
-    });
+    const mine = new Map(), hcps = new Map();
+    scores.forEach(d=>{ const k = playerKey(d); if(!mine.has(k)) mine.set(k, []); mine.get(k).push(d); });
     const best = new Map();
     scores.forEach(d=>{
       if(d.version !== 3 || !d.verified || !Array.isArray(d.rolls) || !Number.isInteger(d.score)) return;
       if(!(d.submittedAt >= ev.startsAt && d.submittedAt < ev.endsAt)) return;
-      const k = playerKey(d), s = snap.get(k);
-      const hcp = (s && s.avgGames >= HCP_MIN_GAMES) ? handicapFor(s.avg10) : null;
+      const k = playerKey(d);
+      if(!hcps.has(k)) hcps.set(k, eventHandicap(ev, mine.get(k)));
+      const h = hcps.get(k), hcp = h.hcp;
       const st = strikeStats(d.rolls);
-      const e = {d, k, score:d.score, hcp, total:d.score + (hcp || 0), streak:st.streak, strikes:st.strikes, at:d.submittedAt};
+      const e = {d, k, score:d.score, hcp, hcpFrom:h.from, hcpAt:h.at, total:d.score + (hcp || 0),
+                 streak:st.streak, strikes:st.strikes, at:d.submittedAt};
       const prev = best.get(k);
       if(!prev || compare(e, prev, 'hcp') < 0) best.set(k, e);
     });
@@ -90,6 +88,27 @@
       if(!s || d.submittedAt > s.submittedAt) s = d;
     });
     return s;
+  }
+
+  // The handicap a player bowls an event with (scores: that player's own). Every code carries the
+  // cart's average and its game count (every finished 1-player game, submitted or not).
+  //  - Qualified at the start: their last v3 score before the start came from a cart with 5+
+  //    games. That average sets it, locked: games during the event never move it.
+  //  - Otherwise (no score before the start, or under 5 games then): their FIRST score in the event
+  //    whose code carries 5+ games sets it, for all their event games -- as a league establishes
+  //    a new bowler's average. Until then they bowl scratch.
+  // -> {hcp, from:'start'|'event'|null, at, avg10}; hcp null and from null while scratch.
+  function eventHandicap(ev, scores){
+    const s = snapshotFor(ev, scores);
+    if(s && s.avgGames >= HCP_MIN_GAMES) return {hcp:handicapFor(s.avg10), from:'start', at:s.submittedAt, avg10:s.avg10};
+    let est = null;
+    scores.forEach(d=>{
+      if(d.version !== 3 || !Number.isInteger(d.avg10) || !(d.avgGames >= HCP_MIN_GAMES)) return;
+      if(!(d.submittedAt >= ev.startsAt && d.submittedAt < ev.endsAt)) return;
+      if(!est || d.submittedAt < est.submittedAt) est = d;
+    });
+    if(est) return {hcp:handicapFor(est.avg10), from:'event', at:est.submittedAt, avg10:est.avg10};
+    return {hcp:null, from:null, at:null, avg10:null};
   }
 
   // ---- achievements ----
@@ -121,5 +140,5 @@
   }
 
   window.BW_SHARED = {HCP_MIN_GAMES, handicapFor, strikeStats, featureLevel, featureVisible, events, status,
-                      playerKey, compare, standings, snapshotFor, champions, isPerfect, perfectGames};
+                      playerKey, compare, standings, snapshotFor, eventHandicap, champions, isPerfect, perfectGames};
 })();

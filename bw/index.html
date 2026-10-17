@@ -385,6 +385,8 @@
   .t-table td.hcp{ color:var(--dim); }
   .t-table td.tb{ font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--dim); }
   .t-table td.when{ font-size:12px; color:var(--dim); }
+  .hcp-est{ text-decoration:underline dotted var(--border); text-underline-offset:3px; }
+  .t-table .hcp-note{ color:var(--dim); margin-top:2px; }
   .t-table tr.me td{ background:rgba(92,143,214,.12); }
   .t-table tr.t-row{ cursor:pointer; }
   .t-table tr.t-row:focus-visible{ outline:2px solid var(--accent2); outline-offset:-2px; }
@@ -529,7 +531,7 @@
       <ul class="t-rules">
         <li><b>Total</b> = best game + handicap</li>
         <li><b>Handicap</b> = 90% of (200 &minus; average), max 90</li>
-        <li>Average from your last score before the start; under <b>5 games</b> bowls scratch</li>
+        <li>Average from your last score before the start; under <b>5 games</b> then, from your first 5-game score in the event</li>
         <li>Ties: <b>longest strike streak</b>, then <b>strikes</b>, then earliest</li>
         <li>Same as <b>TOURNEY HCP</b> on the cart</li>
       </ul>
@@ -570,7 +572,7 @@
               <li><b>Handicap = 90% of (200 &minus; your average)</b>, rounded down, max 90. A 150 average gets +45. A 200 average or better gets no handicap.</li>
               <li>Your cart keeps your average from every finished 1-player game, submitted or not. Anyone bowling on your cart changes it.</li>
               <li>Your handicap is locked in from the last score you submitted before the event starts. <b>Tip:</b> submit a game before the start.</li>
-              <li>You bowl scratch (no handicap) if you submitted no score before the start, or if your cart had fewer than 5 games when you submitted it.</li>
+              <li>No score before the start, or your cart had fewer than 5 games then? Your first score in the event from a cart with 5+ games sets your handicap, for all your event games. Games bowled at home count toward the 5. Until then you bowl scratch.</li>
               <li><b>TOURNEY HCP</b> on the cart&rsquo;s CAREER STATS screen (from HISCORES on the title) uses the same formula, but it shows today&rsquo;s value.</li>
               <li>Ties between players go to the longest strike streak in their best game, then most strikes, then whoever submitted first.</li>
             </ul>
@@ -1620,15 +1622,16 @@
   // average, so the tournament handicap, and the prize balls), so it isn't on the public
   // bw_career/{uid} doc; only its owner reads it back (My stats' saved code box).
   function careerCodeRef(uid){ return db.collection('bw_career').doc(uid).collection('private').doc('code'); }
-  // The handicap each running event locked in for a player -- from their last score before its
-  // start, so it can differ from today's -- e.g. "Fall Classic: +0, locked from Oct 15". scores:
-  // that player's approved scores; '' unless an event is live and Tournaments is visible.
+  // The handicap each running event gives a player (BW_SHARED.eventHandicap(): locked from their
+  // last score before the start, or set by their first 5-game score in it), so it can differ from
+  // today's -- e.g. "Fall Classic: +0, locked from Oct 15". scores: that player's approved scores;
+  // '' unless an event is live and Tournaments is visible.
   function eventHcpText(scores, viewer){
     return liveEvents(viewer).map(ev=>{
-      const s = BW_SHARED.snapshotFor(ev, scores);
-      if(!s) return ev.name + ': scratch (no score before the start)';
-      if(!(s.avgGames >= HCP_MIN_GAMES)) return ev.name + ': scratch (under ' + HCP_MIN_GAMES + ' games at the start)';
-      return ev.name + ': +' + handicapFor(s.avg10) + ', locked from ' + fmtWhen(s.submittedAt);
+      const h = BW_SHARED.eventHandicap(ev, scores);
+      if(h.hcp == null) return ev.name + ': scratch until a score from a cart with ' + HCP_MIN_GAMES + '+ games';
+      return ev.name + ': +' + h.hcp + (h.from === 'event' ? ', set by the first ' + HCP_MIN_GAMES + '-game score in it (' : ', locked from ')
+        + fmtWhen(h.at) + (h.from === 'event' ? ')' : '');
     }).join(' \u00b7 ');
   }
   // the newer of a player's latest v3 score code average and their saved stats code's
@@ -1911,6 +1914,13 @@
     return h;
   }
 
+  // where an entry's handicap came from, for its open row
+  function hcpNote(e){
+    if(e.hcp == null) return 'Scratch: no score from a cart with 5+ games yet';
+    return 'Handicap +' + e.hcp + (e.hcpFrom === 'event'
+      ? ', set by the first 5-game score in this event (' + fmtWhen(e.hcpAt) + ')'
+      : ', locked from the last score before the start (' + fmtWhen(e.hcpAt) + ')');
+  }
   function tCurrent(){ return tEvents().find(e=>e.id===tPickId) || null; }
 
   function drawTBoard(){
@@ -1953,13 +1963,16 @@
         + '<td class="rank">' + rank + '</td>'
         + '<td class="who l">' + who + rowBadges(d, champs) + '</td>'
         + '<td>' + e.score + '</td>'
-        + '<td class="hcp">' + (e.hcp != null ? '+' + e.hcp
-          : '<span title="No handicap: under 5 games, or no score before the start" aria-label="scratch, no handicap">&ndash;</span>') + '</td>'
+        + '<td class="hcp">' + (e.hcp == null
+          ? '<span title="Scratch until a score from a cart with 5+ games" aria-label="scratch, no handicap">&ndash;</span>'
+          : e.hcpFrom === 'event' ? '<span class="hcp-est" title="Set by their first 5-game score in this event">+' + e.hcp + '</span>'
+          : '+' + e.hcp) + '</td>'
         + '<td class="total">' + (tMode === 'hcp' ? e.total : e.score) + '</td>'
         + '<td class="tb t-tb">' + e.streak + ' / ' + e.strikes + '</td>'
         + '<td class="when l t-when">' + escapeHtml(fmtWhen(e.at)) + '</td></tr>'
         + '<tr class="t-detail" id="t' + i + '"' + (open ? '' : ' hidden') + '><td colspan="7">' + renderScorecardHTML(d.rolls)
-        + scoreCheckHTML(d.rolls) + '<div class="sc-check t-when-m">best game ' + escapeHtml(fmtWhen(e.at)) + '</div></td></tr>';
+        + scoreCheckHTML(d.rolls) + '<div class="sc-check t-when-m">best game ' + escapeHtml(fmtWhen(e.at)) + '</div>'
+        + '<div class="sc-check hcp-note">' + escapeHtml(hcpNote(e)) + '</div></td></tr>';
     });
     boardT.innerHTML = h + '</tbody></table>';
   }
