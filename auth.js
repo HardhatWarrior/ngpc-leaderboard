@@ -533,24 +533,53 @@ window.NGPC_AUTH = (function(){
         marks[frame] = [m1, m2];
         if(!needThird) break;
         if(ri+2 >= rolls.length) break;
-        marks[frame].push(bowlingMarkChar(rolls[ri+2]));
+        // a strike then two bonus balls that make 10 is "X 3 /", as bw/index.html's frameMarks
+        const r3 = rolls[ri+2];
+        marks[frame].push((r1===10 && r2!==10 && r2+r3===10) ? '/' : bowlingMarkChar(r3));
         break;
       }
     }
     return marks;
   }
-  function renderBowlingScorecardHTML(rolls){
+  // The same paper-style strip as bw/index.html's own renderScorecardHTML (frame numbers on top,
+  // a strike in frames 1-9 in the right-hand box, X red, / gold), plus its "code checked" line for
+  // a verified score. The bw-sheet class carries the look (each page's .bw-sheet rules, copied from
+  // bw/index.html), so Sokoban's level grid keeps the plain .scorecard-grid boxes.
+  function bowlingStrikeStats(rolls){
+    // copy of bw/bw-shared.js strikeStats (that file isn't loaded on these pages)
+    let i = 0, run = 0, streak = 0, strikes = 0;
+    const ball = isStrike => { if(isStrike){ strikes++; run++; if(run > streak) streak = run; } else run = 0; };
+    for(let f=0; f<9 && i<rolls.length; f++){
+      if(rolls[i] === 10){ ball(true); i += 1; } else { ball(false); i += 2; }
+    }
+    const [a, b, c] = rolls.slice(i);
+    if(a === undefined) return {streak, strikes};
+    ball(a === 10);
+    if(b !== undefined && a === 10) ball(b === 10);
+    if(c !== undefined && ((a === 10 && b === 10) || (a < 10 && a + b === 10))) ball(c === 10);
+    return {streak, strikes};
+  }
+  function renderBowlingScorecardHTML(rolls, verified){
     const scores = bowlingComputeScores(rolls);
     const marks = bowlingFrameMarks(rolls);
-    let html = '<div class="scorecard-grid">';
+    let html = '<div class="scorecard-grid bw-sheet">';
     for(let f=0; f<SCORE_MAX_FRAMES; f++){
-      const m = marks[f] || [];
-      html += '<div class="sc-frame">'+
-        '<div class="sc-marks">'+m.map(c=>'<span>'+escapeHtml(c)+'</span>').join('')+'</div>'+
-        '<div class="sc-total tnum">'+(scores[f]!=null ? scores[f] : '')+'</div>'+
+      let m = marks[f] || [];
+      if(f < 9 && m.length === 1 && m[0] === 'X') m = ['', 'X'];
+      html += '<div class="sc-frame"><div class="sc-n">'+(f+1)+'</div>'+
+        '<div class="sc-marks">'+m.map(c=>'<span class="'+(c==='X'?'x':c==='/'?'sp':'')+'">'+escapeHtml(c)+'</span>').join('')+'</div>'+
+        // escaped: firestore.rules only checks rolls is a list of 12-21, not that each is a number,
+        // so a doc written through the SDK with a string roll would put markup in the total
+        '<div class="sc-total tnum">'+escapeHtml(scores[f]!=null ? scores[f] : '')+'</div>'+
       '</div>';
     }
-    return html + '</div>';
+    html += '</div>';
+    if(verified){
+      const st = bowlingStrikeStats(rolls);
+      html += '<div class="sc-check">✓ code checked · ' + rolls.length + ' rolls replayed · streak '
+        + st.streak + ', ' + st.strikes + ' strike' + (st.strikes === 1 ? '' : 's') + '</div>';
+    }
+    return html;
   }
 
   const YZ_CATS = ['Ones','Twos','Threes','Fours','Fives','Sixes','3-Kind','4-Kind','House','Small','Large','Yahtzee','Chance'];
@@ -813,7 +842,7 @@ window.NGPC_AUTH = (function(){
   }
   function scoreDetailHTML(data){
     switch(data.game){
-      case 'BW': return renderBowlingScorecardHTML(data.rolls);
+      case 'BW': return renderBowlingScorecardHTML(data.rolls, data.verified);
       case 'YZ': return renderYahtzeeScorecardHTML(data.categoryScores);
       case 'FK': return renderFarkleScorecardHTML(data);
       case '2K': return render2048ScorecardHTML(data);

@@ -787,7 +787,9 @@
       if(f < 9 && m.length === 1 && m[0] === 'X') m = ['', 'X'];
       html += '<div class="sc-frame"><div class="sc-n">'+(f+1)+'</div>'+
         '<div class="sc-marks">'+m.map(c=>'<span class="'+(c==='X'?'x':c==='/'?'sp':'')+'">'+escapeHtml(c)+'</span>').join('')+'</div>'+
-        '<div class="sc-total tnum">'+(scores[f]!=null ? scores[f] : '')+'</div>'+
+        // escaped: firestore.rules only checks rolls is a list of 12-21, not that each is a number,
+        // so a doc written through the SDK with a string roll would put markup in the total
+        '<div class="sc-total tnum">'+escapeHtml(scores[f]!=null ? scores[f] : '')+'</div>'+
       '</div>';
     }
     return html + '</div>';
