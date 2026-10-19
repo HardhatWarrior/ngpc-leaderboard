@@ -601,6 +601,14 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
       img.data[i + 2] = parseInt(c.slice(5, 7), 16); img.data[i + 3] = 255;
     }
     cx.putImageData(img, 0, 0);
+    /* islands from added content (CONTENT PACKS): drawn where they stand once a cart has them */
+    var ISLES = [{"cid":4,"name":"BUOY ISLE","x0":10,"y0":106,"w":11,"h":10,"cells":".,,,,,,,,,.,,sssssss,,,ssffgggss,,ssgfgfgs,,,,ssgggss,..,,ssgss,,...,,sss,,.....,,s,,.......,s,........,,,...."},{"cid":5,"name":"GULL ROCK","x0":14,"y0":32,"w":9,"h":9,"cells":".,,,,,...,,sss,,..,ssggs,,.,sgggfs,.,,sggss,..,,sgs,,...,,s,,.....,s,......,,,..."},{"cid":7,"name":"BELLSTONE","x0":111,"y0":28,"w":11,"h":11,"cells":"..,,,,,,,...,,sssss,,.,,sgggggs,,,sgggggggs,,sgggggggs,,,sgggggs,,.,,sgggs,,...,,sgs,,.....,,s,,.......,s,........,,,...."},{"cid":8,"name":"CHOIR ISLE","x0":79,"y0":35,"w":11,"h":11,"cells":"..,,,,,,,,..,,ssssss,,,,sgggggss,,sggggggfs,,sgggggggs,,sfggggggs,,,sgggggs,,.,,ssgss,,...,,,s,,,......,s,........,,,...."},{"cid":6,"name":"EMBER ISLE","x0":112,"y0":97,"w":10,"h":10,"cells":"..,,,,,,...,,ssss,,.,,sgffgs,,,sgggggss,,sggggfgs,,,sgggggs,.,,ssgss,,..,,,s,,,.....,s,.......,,,..."},{"cid":9,"name":"HOLLOW KEY","x0":27,"y0":94,"w":10,"h":11,"cells":"..,,,,,....,,sss,,..,,sssss,,.,sggggss,,,sggggggs,,,sgfgggs,.,sggffs,,.,,sggs,,...,,s,,,.....,s,.......,,,...."}], PCOL = { ",": "#5aa9d6", "s": "#e8d49a", "g": "#5fa34a", "f": "#2f6b35" };
+    ISLES.forEach(function (p) {
+      for (var j = 0; j < p.h; j++) for (var k = 0; k < p.w; k++) {
+        var col = PCOL[p.cells.charAt(j * p.w + k)];
+        if (col) { cx.fillStyle = col; cx.fillRect(p.x0 + k, p.y0 + j, 1, 1); }
+      }
+    });
     function mark(px, py, fill) {
       cx.fillStyle = "#ffffff"; cx.fillRect(px - 3, py - 3, 7, 7);
       cx.fillStyle = fill; cx.fillRect(px - 2, py - 2, 5, 5);
