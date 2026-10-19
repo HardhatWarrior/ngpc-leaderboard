@@ -124,6 +124,7 @@
         <button type="button" class="btn-secondary" id="clearbtn">Clear</button>
       </div>
       <div id="readmsg"></div>
+      <p class="hint" id="savenote" style="margin:10px 0 0" aria-live="polite"></p>
     </section>
 
     <div id="tale" hidden>
@@ -713,7 +714,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
     return s;
   }
 
-  function read(text, quiet) {
+  function read(text, quiet, save) {
     var s = normalise(text);
     if (!s) { $("tale").hidden = true; msg("", ""); return false; }
     try {
@@ -724,6 +725,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
       $("codein").value = TC.codeRows(syms).join("\n");
       msg(ver < D.version ? "That code was made by an older build of the game. It is shown the way the current build would load it." : "", "note");
       try { localStorage.setItem(STORE, s); } catch (e) {}
+      if (save !== false) saveCloud(s);
       return true;
     } catch (e) {
       $("tale").hidden = true;
@@ -737,22 +739,56 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
   $("clearbtn").addEventListener("click", function () {
     $("codein").value = ""; $("tale").hidden = true; msg("", ""); lastSyms = null;
     try { localStorage.removeItem(STORE); } catch (e) {}
+    forgetCloud();
     if (location.hash) history.replaceState(null, "", location.pathname);
   });
   $("codein").addEventListener("keydown", function (e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) read($("codein").value); });
 
+  /* ---- a signed-in player's tale is kept on the site (taleCodes/{uid}, readable and writable by that
+   * player only) until they scan or type a new one, so it follows them to any device; signed out, it
+   * stays in this browser only ---- */
+  var curUser = null;
+  function cloudRef() {
+    return curUser && curUser.uid && NGPC_AUTH.db ? NGPC_AUTH.db.collection("taleCodes").doc(curUser.uid) : null;
+  }
+  function setSaveNote(t) { $("savenote").textContent = t; }
+  function saveCloud(code) {
+    var r = cloudRef();
+    if (!r) { setSaveNote(window.NGPC_AUTH ? "Sign in to keep this tale on the site and see it on any device. For now it is only remembered in this browser." : ""); return; }
+    r.set({ code: code, updatedAt: Date.now() }).then(function () {
+      setSaveNote("Saved to your account. It stays until you read a new code.");
+    }).catch(function () { setSaveNote("Could not save to your account right now; it is still remembered in this browser."); });
+  }
+  function forgetCloud() {
+    var r = cloudRef();
+    if (r) r.delete().then(function () { setSaveNote(""); }).catch(function () {});
+    else setSaveNote("");
+  }
+  /* what to show when nothing came in the address: the account copy, else this browser's */
+  function loadStored() {
+    var local = null;
+    try { local = localStorage.getItem(STORE); } catch (e) {}
+    var r = cloudRef();
+    if (!r) { if (local) read(local, true, false); return Promise.resolve(); }
+    return r.get().then(function (doc) {
+      var c = doc.exists && doc.data() && doc.data().code;
+      if (c && read(c, true, false)) { setSaveNote("Saved to your account. It stays until you read a new code."); return; }
+      if (local && read(local, true, false)) saveCloud(local);   /* a tale read before signing in moves to the account */
+    }).catch(function () { if (local) read(local, true, false); });
+  }
+
   /* the page opens straight onto the tale when the cartridge's QR was scanned (404.html sends
-   * /GN<code> to /gn/#<code>), else onto the last tale read in this browser */
+   * /GN<code> to /gn/#<code>), else onto the saved one */
+  var fromHash = false;
   function boot() {
     var h = decodeURIComponent((location.hash || "").slice(1));
     if (h) {
       $("codein").value = h;
       history.replaceState(null, "", location.pathname);
+      fromHash = true;
       if (read(h)) return;
     }
-    var saved = null;
-    try { saved = localStorage.getItem(STORE); } catch (e) {}
-    if (saved) read(saved, true);
+    loadStored();
   }
 
   /* ---- the same coming-soon gate every game page has ---- */
@@ -762,6 +798,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
     $("access-gate").hidden = ok;
     $("page-content").hidden = !ok;
     if (ok && !booted) { booted = true; boot(); }
+    else if (ok && booted && curUser) { if (lastSyms) saveCloud(lastSyms); else loadStored(); }   /* signed in after the page opened */
   }
   if (window.NGPC_AUTH) {
     var art = $("header-art");
@@ -770,6 +807,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
       if (art && gameData.titleImage) { art.src = gameData.titleImage; art.hidden = false; }
     }).catch(function () { gameData = {}; }) : Promise.resolve();
     NGPC_AUTH.onAuthChange(function (user) {
+      curUser = user && user.uid ? user : null;
       gp.then(function () {
         applyGate(user);
         var al = $("admin-link"); if (al) al.hidden = !NGPC_AUTH.isGameManager(user, gameData);

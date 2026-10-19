@@ -973,6 +973,19 @@ service cloud.firestore {
     // scoresArchive/{id} -- where admin/game/'s "Reset leaderboard" moves a game's old scores (a copy of
     // each score doc plus originalId/resetId/archivedAt) instead of destroying them. Admin-only on
     // every operation; append-only (no update/delete) so an archive can't be quietly rewritten.
+    // Guardians of the Nocturne: the one TALE CODE a signed-in player last read on /gn/, kept so it
+    // follows them to any device until they read a new one. Private: only that player can read,
+    // write or delete it (not even other signed-in users). The page decodes and checks the code
+    // itself; this only bounds its shape (the game's alphabet, 6-100 symbols).
+    match /taleCodes/{uid} {
+      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['code', 'updatedAt'])
+        && request.resource.data.code is string
+        && request.resource.data.code.matches('^[A-HJ-NP-Z2-9]{6,100}$')
+        && request.resource.data.updatedAt is int;
+    }
+
     match /scoresArchive/{id} {
       allow read: if isAdmin();
       allow create: if isAdmin()
