@@ -137,6 +137,13 @@
       <p class="hint" id="savenote" style="margin:10px 0 0" aria-live="polite"></p>
     </section>
 
+    <section class="panel" id="adminpanel" hidden>
+      <h2>Admin: every saved tale</h2>
+      <p class="hint">Site admins only. Each signed-in player's latest TALE CODE (taleCodes). View shows it below without
+        touching your own saved tale or theirs.</p>
+      <div id="adminlist" class="hint">Loading...</div>
+    </section>
+
     <div id="tale" hidden>
       <div class="cols">
         <div class="stack">
@@ -850,6 +857,46 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
     loadStored();
   }
 
+  /* ---- site admins: every player's saved tale (taleCodes is readable by isAdmin() in firestore.rules) ---- */
+  function adminTales(user) {
+    var panel = $("adminpanel"), box = $("adminlist");
+    if (!user || !NGPC_AUTH.isSiteAdmin || !NGPC_AUTH.isSiteAdmin(user) || !NGPC_AUTH.db) { panel.hidden = true; return; }
+    panel.hidden = false;
+    NGPC_AUTH.db.collection("taleCodes").get().then(function (qs) {
+      var rows = [];
+      qs.forEach(function (d) { rows.push({ uid: d.id, code: (d.data() || {}).code || "", at: (d.data() || {}).updatedAt || 0 }); });
+      rows.sort(function (a, b) { return b.at - a.at; });
+      if (!rows.length) { box.textContent = "No saved tales yet."; return; }
+      return Promise.all(rows.map(function (r) {
+        return NGPC_AUTH.db.collection("users").doc(r.uid).get().then(function (u) { r.name = (u.exists && u.data().username) || r.uid; }, function () { r.name = r.uid; });
+      })).then(function () {
+        box.textContent = "";
+        rows.forEach(function (r) {
+          var line = document.createElement("div");
+          line.className = "guard";
+          line.style.gridTemplateColumns = "1fr auto";
+          var sum = "";
+          try { var f = TC.decode(TC.parseCode(r.code)); sum = "LV " + f.lv + (f.ngp ? "+" + f.ngp : "") + ", " + f.gold + " GOLD, pieces " + pop(f.pieces) + "/4"; }
+          catch (e) { sum = "unreadable code"; }
+          var left = document.createElement("div");
+          left.textContent = r.name;
+          var sm = document.createElement("small");
+          sm.textContent = sum + (r.at ? " - " + new Date(r.at).toLocaleString() : "");
+          left.appendChild(sm);
+          var b = document.createElement("button");
+          b.type = "button"; b.className = "btn-secondary"; b.textContent = "View";
+          b.addEventListener("click", function () {
+            read(r.code, true, false);
+            setSaveNote("Admin view: " + r.name + "'s tale (not saved to any account).");
+            $("tale").scrollIntoView();
+          });
+          line.appendChild(left); line.appendChild(b);
+          box.appendChild(line);
+        });
+      });
+    }).catch(function () { box.textContent = "Could not read the saved tales (are the admin rules for taleCodes published?)."; });
+  }
+
   /* ---- the same coming-soon gate every game page has ---- */
   var gameData = null, booted = false;
   function applyGate(user) {
@@ -880,6 +927,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
       gp.then(function () {
         applyGate(user);
         var al = $("admin-link"); if (al) al.hidden = !NGPC_AUTH.isGameManager(user, gameData);
+        adminTales(user);
       });
     });
   } else { gameData = { devStatus: "final" }; applyGate(null); }

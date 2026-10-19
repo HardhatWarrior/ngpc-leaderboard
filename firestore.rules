@@ -978,7 +978,8 @@ service cloud.firestore {
     // write or delete it (not even other signed-in users). The page decodes and checks the code
     // itself; this only bounds its shape (the game's alphabet, 6-100 symbols).
     match /taleCodes/{uid} {
-      allow read, delete: if request.auth != null && request.auth.uid == uid;
+      allow read: if (request.auth != null && request.auth.uid == uid) || isAdmin();   // admins: /gn/'s admin panel lists them
+      allow delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['code', 'updatedAt'])
         && request.resource.data.code is string
