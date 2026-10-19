@@ -683,7 +683,19 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
       return '<div class="guard" style="grid-template-columns:1fr auto"><div>' + esc(q.name) + (hint ? "<small>" + esc(hint) + "</small>" : "") +
         '</div><span class="chip ' + cls + '">' + txt + "</span></div>";
     }).join("");
-    $("p-quests").innerHTML = "<h2>Side quests <span class=\"dim\" style=\"text-transform:none;letter-spacing:0\">(" + qd + "/" + f.quest.length + ")</span></h2>" + ql;
+    /* island quests from added content (CONTENT PACKS): the code carries up to 4 started ones (cid, stage) */
+    var PQ = {"4":{"pack":"BUOY ISLE","name":"THE BELL BUOY","done":3,"hints":["CLAPPER AT LARGO","CLAPPER TO KEEPER"]},"5":{"pack":"GULL ROCK","name":"A GULL'S LETTER","done":3,"hints":["SISTER IN FERMATA","REPLY TO GULL ROCK"]},"7":{"pack":"BELLSTONE","name":"THE SINGING STONES","done":4,"hints":["WAKE NOON STONE","WAKE DUSK STONE","BACK TO THE SHRINE"]},"8":{"pack":"CHOIR ISLE","name":"THE LOST CANTOR","done":3,"hints":["ASK IN SERENADE","HERB FOR THE GRAVE"]},"6":{"pack":"EMBER ISLE","name":"THE BELL FORGE","done":2,"hints":["BRING BRONZE SWORD"]},"9":{"pack":"HOLLOW KEY","name":"THE MARIGOLD'S LOG","done":3,"hints":["SEARCH THE TOWER","DIG AT THE CAIRN"]}};
+    var pl = (f.pq || []).map(function (e) {
+      var q = PQ[String(e[0])], st = e[1], txt, cls = "";
+      if (!q) return '<div class="guard" style="grid-template-columns:1fr auto"><div>ISLAND QUEST #' + e[0] + '<small>from newer content</small></div><span class="chip">stage ' + st + "</span></div>";
+      if (st >= q.done) { txt = "done"; cls = "on"; }
+      else txt = "in progress";
+      var hint = (st > 0 && st < q.done && q.hints[st - 1]) ? q.hints[st - 1] : "";
+      return '<div class="guard" style="grid-template-columns:1fr auto"><div>' + esc(q.name) + "<small>" + esc(q.pack) + (hint ? " · " + esc(hint) : "") +
+        '</small></div><span class="chip ' + cls + '">' + txt + "</span></div>";
+    }).join("");
+    $("p-quests").innerHTML = "<h2>Side quests <span class=\"dim\" style=\"text-transform:none;letter-spacing:0\">(" + qd + "/" + f.quest.length + ")</span></h2>" + ql +
+      (pl ? "<h2 style=\"margin-top:14px\">Island quests <span class=\"dim\" style=\"text-transform:none;letter-spacing:0\">(started, up to 4 travel in a code)</span></h2>" + pl : "");
 
     /* more */
     var chestsOpened = 0, chestsTotal = 0;
