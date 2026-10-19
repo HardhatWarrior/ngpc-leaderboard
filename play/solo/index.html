@@ -148,7 +148,8 @@
     el('manual-sep').hidden = !data.romPath;
     el('rom-row').hidden = false;
   }
-  el('back-link').href = '/games/about/?g=' + encodeURIComponent(slug);
+  // a game with its own page (e.g. /gn/) goes back there; the rest to the generic about page
+  el('back-link').href = /^\/[a-z0-9-]+\/$/.test(data.leaderboardPath || '') ? data.leaderboardPath : '/games/about/?g=' + encodeURIComponent(slug);
   el('back-link').textContent = '\u2190 ' + name;
 
   // This one page serves every solo game, so auth.js's own path-keyed page-view tracker (which

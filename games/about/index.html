@@ -137,6 +137,11 @@
     const data = doc.exists ? doc.data() : null;
     if(!data || data.section !== 'solo'){ fail('That game isn’t available.'); return; }
 
+    // A solo game with its own page (leaderboardPath set to something other than this generic
+    // landing page or the player, e.g. /gn/) keeps its links there: send old about links on.
+    const own = data.leaderboardPath || '';
+    if(/^\/[a-z0-9-]+\/$/.test(own) && own !== '/games/' && own !== '/play/'){ location.replace(own); return; }
+
     document.title = data.name || slug;
     el('game-title').textContent = data.name || slug;
     el('header-art').alt = (data.name || slug) + ' title screen';
