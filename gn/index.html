@@ -739,16 +739,24 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
     }).join("");
     var ISQ = {};
     (D.isles || []).forEach(function (e) { if (e.quest) ISQ[e.cid] = { pack: e.name, q: e.quest }; });
-    var pl = (f.pq || []).map(function (e) {
-      var o = ISQ[e[0]], st = e[1], txt, cls = "";
-      if (!o) return '<div class="guard" style="grid-template-columns:1fr auto"><div>ISLAND QUEST #' + e[0] + "<small>from newer content</small></div><span class=\"chip\">stage " + st + "</span></div>";
-      if (st >= o.q.done) { txt = "done"; cls = "on"; } else txt = "in progress";
-      var hint = (st > 0 && st < o.q.done && o.q.hints[st - 1]) ? o.q.hints[st - 1] : "";
-      return '<div class="guard" style="grid-template-columns:1fr auto"><div>' + esc(o.q.name) + "<small>" + esc(o.pack) + (hint ? " - " + esc(hint) : "") +
-        '</small></div><span class="chip ' + cls + '">' + txt + "</span></div>";
+    /* every known island quest: started ones (carried in the code) by name, the rest as ISLAND QUEST n, not started */
+    var have = {};
+    (f.pq || []).forEach(function (e) { have[e[0]] = e[1]; });
+    var row = function (title, sub, txt, cls) {
+      return '<div class="guard" style="grid-template-columns:1fr auto"><div>' + esc(title) + (sub ? "<small>" + esc(sub) + "</small>" : "") +
+        '</div><span class="chip ' + cls + '">' + txt + "</span></div>";
+    };
+    var n = 0, pl = (D.isles || []).filter(function (e) { return e.quest; }).map(function (e) {
+      n++;
+      var st = have[e.cid];
+      if (!st) return row("ISLAND QUEST " + n, "", "not started", "");
+      delete have[e.cid];
+      var q = e.quest, done = st >= q.done, hint = (!done && q.hints[st - 1]) ? q.hints[st - 1] : "";
+      return row(q.name, e.name + (hint ? " - " + hint : ""), done ? "done" : "in progress", done ? "on" : "");
     }).join("");
+    Object.keys(have).forEach(function (cid) { pl += row("ISLAND QUEST #" + cid, "from newer content", "stage " + have[cid], ""); });
     $("p-quests").innerHTML = "<h2>Side quests <span class=\"dim\" style=\"text-transform:none;letter-spacing:0\">(" + qd + "/" + f.quest.length + ")</span></h2>" + ql +
-      (pl ? "<h2 style=\"margin-top:14px\">Island quests <span class=\"dim\" style=\"text-transform:none;letter-spacing:0\">(started, up to 4 travel in a code)</span></h2>" + pl : "");
+      (pl ? "<h2 style=\"margin-top:14px\">Island quests <span class=\"dim\" style=\"text-transform:none;letter-spacing:0\">(the newest 4 started travel in a code)</span></h2>" + pl : "");
 
     /* more */
     var chestsOpened = 0, chestsTotal = 0;
