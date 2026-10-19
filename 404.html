@@ -38,6 +38,11 @@
     var first = slashIdx === -1 ? path.slice(1) : path.slice(1, slashIdx);
     var rest = slashIdx === -1 ? '' : path.slice(slashIdx + 1); // no leading slash
     if(!first){ location.replace('/'); return; }
+    // Guardians of the Nocturne's TALE CODE QR is NGPC-DEV.COM/GN + the code with NO slash between
+    // them, so the whole thing is one long first segment. A real game folder is never that long and
+    // all-uppercase: hand the code to /gn/ in the hash, same as every other game's payload.
+    var gn = /^GN([A-Z2-9]{8,100})$/i.exec(first);
+    if(gn){ location.replace('/gn/#' + gn[1].toUpperCase()); return; }
     var lower = first.toLowerCase();
     // Already lowercase and still not found -- a genuinely unknown path, not a casing mismatch.
     // Send home instead of redirecting to the exact same URL (which would just 404 again).

@@ -3,18 +3,781 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Guardians of the Nocturne</title>
+<title>GUARDIANS OF THE NOCTURNE - Your Tale</title>
 <link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
-<link rel="canonical" href="https://www.ngpc-dev.com/games/about/?g=gn">
-<meta http-equiv="refresh" content="0; url=/games/about/?g=gn">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <style>
-  body{ margin:0; min-height:100vh; display:flex; align-items:center; justify-content:center;
-        background:#10162a; color:#f4eedd; font-family:system-ui,sans-serif; font-size:14px; }
-  a{ color:#5c8fd6; }
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#5c8fd6; --accent-ink:#0a1830;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a; --gold:#e8c547;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif; padding-inline:20px; padding-block:28px; display:flex; justify-content:center; }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; } .tnum{ font-variant-numeric:tabular-nums; }
+  #shell{ width:100%; max-width:960px; display:flex; flex-direction:column; gap:22px; }
+  header{ background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--border); border-radius:14px; padding:22px 22px 18px; display:flex; flex-direction:column; gap:14px; }
+  .eyebrow{ font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase; }
+  .header-row{ display:flex; flex-direction:row; justify-content:space-between; gap:16px; align-items:flex-start; }
+  .title-block{ display:flex; flex-direction:column; align-items:flex-end; text-align:right; gap:5px; min-width:0; }
+  .title-block h1{ margin:0; font-size:clamp(15px,4.4vw,24px); line-height:1.35; color:var(--cream); overflow-wrap:break-word; }
+  .created-by{ font-size:11px; color:var(--dim); }
+  .created-by a, .hdr-link{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
+  .created-by a:hover, .hdr-link:hover{ color:var(--accent2); }
+  .hdr-link{ font-size:11.5px; font-weight:600; color:var(--accent2); margin-top:4px; }
+  .header-art{ width:130px; height:auto; flex:none; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; }
+  .header-art[hidden], .hdr-link[hidden]{ display:none; }
+  main{ display:flex; flex-direction:column; gap:20px; }
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  #access-gate{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px 20px; }
+  #page-content{ display:flex; flex-direction:column; gap:22px; }
+  #page-content[hidden]{ display:none; }
+  .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  .panel .hint{ margin:0 0 14px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+  .hint a{ color:var(--accent2); }
+  button{ font:inherit; border:none; border-radius:8px; padding:11px 16px; cursor:pointer; font-weight:600; font-size:13.5px; }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); } .btn-primary:hover:not(:disabled){ background:#7aa6e3; }
+  .btn-secondary{ background:transparent; border:1px solid var(--border); color:var(--cream); } .btn-secondary:hover:not(:disabled){ border-color:var(--accent2); }
+  .btns{ display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; }
+  textarea{ width:100%; min-height:92px; background:var(--navy); color:var(--cream); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-family:"IBM Plex Mono",monospace; font-size:14px; letter-spacing:.06em; resize:vertical; }
+  textarea:focus{ outline:2px solid var(--accent2); outline-offset:1px; }
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; margin-top:12px; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+  .msg.note{ background:rgba(92,143,214,.12); color:var(--dim); border:1px solid rgba(92,143,214,.3); }
+  #tale[hidden]{ display:none; }
+  #tale{ display:flex; flex-direction:column; gap:20px; }
+  .cols{ display:grid; grid-template-columns:1fr 1fr; gap:20px; align-items:start; }
+  @media (max-width:760px){ .cols{ grid-template-columns:1fr; } }
+  .stack{ display:flex; flex-direction:column; gap:20px; min-width:0; }
+  .hero-top{ display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 14px; margin-bottom:12px; }
+  .hero-name{ font-family:"Press Start 2P",monospace; font-size:16px; color:var(--cream); }
+  .hero-lv{ font-family:"Press Start 2P",monospace; font-size:13px; color:var(--good); }
+  .badge{ display:inline-block; padding:2px 7px; border-radius:4px; font-family:"IBM Plex Mono",monospace; font-size:10px; font-weight:700; letter-spacing:.5px; color:var(--gold); border:1px solid var(--gold); }
+  .badge.done{ color:#1a1407; background:var(--gold); }
+  .bar{ height:10px; border-radius:5px; background:var(--navy); border:1px solid var(--border); overflow:hidden; margin:4px 0 2px; }
+  .bar > i{ display:block; height:100%; background:var(--accent); }
+  .barlbl{ font-size:11px; color:var(--dim); display:flex; justify-content:space-between; gap:8px; }
+  .stats{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:14px 0 4px; }
+  .stat{ background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:8px 6px; text-align:center; min-width:0; }
+  .stat b{ display:block; font-family:"Press Start 2P",monospace; font-weight:400; font-size:clamp(10px,3.4vw,13px); overflow-wrap:anywhere; color:var(--cream); }
+  .stat span{ font-size:10px; color:var(--dim); text-transform:uppercase; letter-spacing:.08em; }
+  .tk-sheet{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  .tk-sheet td{ padding:5px 4px; border-bottom:1px solid var(--border); vertical-align:top; }
+  .tk-sheet tr:last-child td{ border-bottom:none; }
+  .tk-sheet td.v{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
+  .tk-sheet td small{ display:block; color:var(--dim); font-size:11px; margin-top:1px; }
+  .dim{ color:var(--dim); } .ok{ color:var(--good); }
+  .guard{ display:grid; grid-template-columns:28px 1fr auto; gap:6px 10px; align-items:center; padding:7px 0; border-bottom:1px solid var(--border); font-size:12.5px; }
+  .guard:last-child{ border-bottom:none; }
+  .roman{ font-family:"Press Start 2P",monospace; font-size:10px; color:var(--accent2); }
+  .guard small{ display:block; color:var(--dim); font-size:11px; }
+  .chip{ font-size:10.5px; padding:2px 8px; border-radius:10px; border:1px solid var(--border); color:var(--dim); white-space:nowrap; }
+  .chip.on{ border-color:var(--good); color:var(--good); }
+  .chips{ display:flex; flex-wrap:wrap; gap:6px; }
+  canvas#map{ width:100%; max-width:384px; aspect-ratio:1; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); background:#000; display:block; }
+  .legend{ font-size:11px; color:var(--dim); margin-top:8px; display:flex; flex-wrap:wrap; gap:4px 14px; }
+  .legend i{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:-1px; }
+  footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
 </style>
+<!-- Cloudflare Web Analytics -->
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
+<!-- End Cloudflare Web Analytics -->
 </head>
 <body>
-<div>Redirecting to <a href="/games/about/?g=gn">Guardians of the Nocturne</a>&hellip;</div>
-<script>location.replace('/games/about/?g=gn' + location.hash);</script>
+
+<div id="shell">
+  <div id="access-gate" hidden>
+    <p class="hint" style="text-align:center;margin:0">This game isn't public yet. Check back once it's live on the main page.</p>
+  </div>
+  <div id="page-content" hidden>
+  <header>
+    <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
+    <div class="header-row">
+      <img src="" alt="Guardians of the Nocturne title screen" class="header-art" id="header-art" width="160" height="152" hidden>
+      <div class="title-block">
+        <h1>GUARDIANS OF THE NOCTURNE</h1>
+        <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
+        <a href="/games/about/?g=gn" class="hdr-link">&#9876; About this game</a>
+        <a href="/admin/game/?slug=gn" class="hdr-link" id="admin-link" hidden>&#9881; Manage Game</a>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel">
+      <h2>Read your tale</h2>
+      <p class="hint">This game has no scoreboard. Your whole adventure travels as a <b>TALE CODE</b>: on the cartridge open
+        YOUR TALE &rsaquo; TALE CODE and either scan its QR with your phone's camera or type the code in here.
+        Nothing is saved on this site: the stats below are read from the code right in your browser, and only you see them.</p>
+      <label for="codein" class="hint" style="display:block;margin-bottom:6px">TALE CODE</label>
+      <textarea id="codein" spellcheck="false" autocomplete="off" autocapitalize="characters" placeholder="LMTH CDLG C6EQ 6EVP ..."></textarea>
+      <div class="btns">
+        <button type="button" class="btn-primary" id="readbtn">Read my tale</button>
+        <button type="button" class="btn-secondary" id="clearbtn">Clear</button>
+      </div>
+      <div id="readmsg"></div>
+    </section>
+
+    <div id="tale" hidden>
+      <div class="cols">
+        <div class="stack">
+          <section class="panel" id="p-hero"></section>
+          <section class="panel" id="p-gear"></section>
+          <section class="panel" id="p-bag"></section>
+        </div>
+        <div class="stack">
+          <section class="panel" id="p-story"></section>
+          <section class="panel" id="p-world"></section>
+          <section class="panel" id="p-quests"></section>
+        </div>
+      </div>
+      <section class="panel" id="p-more"></section>
+    </div>
+  </main>
+
+  <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com &middot; <a href="mailto:support@ngpc-dev.com" style="color:inherit">support@ngpc-dev.com</a></footer>
+  </div>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+var DATA = {"alphabet":"ABCDEFGHJKLMNPQRSTUVWXYZ23456789","salt":"GN-TALE-CODE","version":5,"maxSyms":80,"maxGold":9999,"items":[{"name":"","kind":"IK_NONE","power":0,"price":0,"desc":["",""]},{"name":"HERB","kind":"IK_HEAL","power":30,"price":8,"desc":["RESTORES 30 HP.","SMELLS OF RAIN."]},{"name":"POTION","kind":"IK_HEAL","power":90,"price":30,"desc":["RESTORES 90 HP.","BITTER, BUT WARM."]},{"name":"ETHER","kind":"IK_MP","power":20,"price":40,"desc":["RESTORES 20 MP.","TASTES OF STARS."]},{"name":"WING","kind":"IK_WING","power":0,"price":25,"desc":["OUTSIDE, FLIES YOU","TO THE LAST TOWN."]},{"name":"ELIXIR","kind":"IK_FULL","power":0,"price":250,"desc":["FULL HP AND MP.","THE WITCH'S BEST."]},{"name":"OAK STAFF","kind":"IK_WEAPON","power":2,"price":10,"desc":["BEATS TIME, AND","THE ODD SLIME."]},{"name":"BRONZE SWORD","kind":"IK_WEAPON","power":7,"price":60,"desc":["CAST FROM AN OLD","CRACKED BELL."]},{"name":"IRON SWORD","kind":"IK_WEAPON","power":13,"price":220,"desc":["FORGED IN LARGO.","IT RINGS TRUE."]},{"name":"STEEL SWORD","kind":"IK_WEAPON","power":20,"price":600,"desc":["TEMPERED IN THE","SNOWS OF FERMATA."]},{"name":"SILVER BLADE","kind":"IK_WEAPON","power":28,"price":1500,"desc":["THE SMITH'S PRIDE.","SPIRITS FEAR IT."]},{"name":"MOON SABER","kind":"IK_WEAPON","power":38,"price":3800,"desc":["SERENADE'S FINEST.","GLOWS AT DUSK."]},{"name":"NIGHTSONG","kind":"IK_WEAPON","power":50,"price":0,"desc":["CASSIUS'S BLADE.","SINGS AS IT CUTS."]},{"name":"CLOTHES","kind":"IK_ARMOR","power":2,"price":10,"desc":["A STUDENT'S COAT,","PATCHED AT ELBOWS."]},{"name":"LEATHER MAIL","kind":"IK_ARMOR","power":5,"price":50,"desc":["HUNTER'S LEATHER.","STIFF BUT LIGHT."]},{"name":"CHAIN MAIL","kind":"IK_ARMOR","power":10,"price":200,"desc":["A THOUSAND RINGS.","IT JINGLES."]},{"name":"IRON PLATE","kind":"IK_ARMOR","power":16,"price":550,"desc":["A KNIGHT'S PLATE.","HEAVY, BUT SOUND."]},{"name":"SILVER MAIL","kind":"IK_ARMOR","power":23,"price":1400,"desc":["SILVER FROM THE","OLD MINES."]},{"name":"MOON ROBE","kind":"IK_ARMOR","power":31,"price":3600,"desc":["WOVEN BY MOONLIGHT","IN SERENADE."]},{"name":"STARCLOAK","kind":"IK_ARMOR","power":40,"price":0,"desc":["MIRA'S OWN CLOAK,","SEWN WITH STARS."]},{"name":"SEA COAT","kind":"IK_ARMOR","power":20,"price":1000,"desc":["A KEEPER'S OILSKIN","SHRUGS OFF STORMS."]},{"name":"SEXTANT","kind":"IK_KEY","power":0,"price":0,"desc":["SPEEDS THE SHIP.","AT NIGHT, ANY DOCK"]},{"name":"ECHO BRAND","kind":"IK_WEAPON","power":58,"price":4800,"desc":["IT STRIKES ONCE,","THEN ITS ECHO."]},{"name":"REQUIEM","kind":"IK_WEAPON","power":66,"price":7200,"desc":["A BLACK BLADE FOR","SONGS THAT ENDED."]},{"name":"VESPER'S BOW","kind":"IK_WEAPON","power":75,"price":9800,"desc":["THE OLD MAESTRO'S","BOW. IT HUMS LOW."]},{"name":"DIRGE MAIL","kind":"IK_ARMOR","power":46,"price":4500,"desc":["DARK PLATE THAT","HUMS A SLOW DIRGE."]},{"name":"AURORA ROBE","kind":"IK_ARMOR","power":52,"price":6800,"desc":["WOVEN OF NORTHERN","LIGHTS. IT GLOWS."]},{"name":"VESPER COAT","kind":"IK_ARMOR","power":60,"price":9500,"desc":["VESPER'S OLD COAT,","WARM AS A LULLABY."]}],"flags":{"INTRO_SEEN":1,"HALL_OPEN":2,"KING_SEALED":4,"SHIP":8,"ON_SHIP":16},"maxLv":20,"bagSlots":8,"towns":["CODA","LARGO","FERMATA","SERENADE"],"townExit":[[66,82],[102,70],[58,28],[24,62]],"levels":[[0,15,5,6,4,4],[7,22,8,8,5,5],[23,28,10,10,7,6],[47,34,13,12,8,8],[110,40,16,14,10,9],[220,46,18,17,12,10],[360,52,21,19,13,12],[550,58,24,22,15,13],[800,64,27,24,17,15],[1100,70,30,27,18,16],[1500,76,33,29,20,18],[2000,82,36,32,22,19],[2600,88,39,34,23,21],[3300,94,42,37,25,22],[4100,100,45,39,27,24],[5000,106,48,42,28,25],[6000,112,51,44,30,27],[7200,118,54,47,32,28],[8600,124,57,49,33,30],[10000,130,60,52,35,31]],"guardians":["SERA","ODEN","MIRA","CASSIUS"],"kindsB64":"VVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVRERFVVVURERVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVRERERERFVEYEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVISEhESEhEhEREVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUREREREiESERERERFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVURERERESEhEREREREiEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVERIREhERERERIRIQABERESVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVIRERAAEREhISIREhEAAREAESESVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUQEiESABEgABESIRERAAEhEREQABERFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVEhERIQABERERERABEQABEREREREREAESFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVEREREQAhERERESESIAAREREREREREREQAhEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVURESEQASEiEREREhEhIREREhERERERERERABEVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVRESIREREREhESESESEREREhERIRIREiEREREREVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVURERERIRERERESERIhEYERIRERIREREREhEhEREVVVVVVVVVVVVVVRERVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVERIRERERERIRERESERIRERESIhESIRERERERAQFVVVVVVVVVVVVREREVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVREREiEREhEhEREhIRERERISIREREREiESERIRERJVVVVVVVVVVVURGBFVVVVVVVVVVVVVVVVVVVVVVVVVURVVUREhIREREREREhIRIRERERERIhEREgAAERERERESVVVVVVVVVVVVERERVVVVVVVVVVVVVVVVVVVVVVVVURERVVEREhEhEhEREiEREAAAABEREREQAAASISISIREiElVVVVVVVVVVVVUREVVVVVVVVVVVVVVVVVVVVVVVVREYERVRERERIREREREAAAIiIRERAAAAAhEREREREiERERFVVVVVVVVVVVVVUVVVVVVVVVVVVVVVVVVVVVVVVVUREREVURESERASERAAIRESEhIhERERIRIREREREREhESESVVVVVVVVVVVVVVZVVVVVVVVVVVVVVVVVVVVVVVVRERERFVERERESEREREiIhEREiEhEREhERIhIRESEiEhEiFVVVVVVVVVVVVVVWVVVVVVVVVVVVVVVVVVVVVVVVVRERERVVEhESEREREREREhEQAAARESERERERERERERERERVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVRVVVVURERERIREREREhEAAAESEREhERIRIhERERERFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVlVVVVVVEhERIhIRERERAAABESERESIREhESIRIRIVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVZVVVVVVVVREREREREhEQCAAiEBIREhESISERIRIVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVEREhEREREVVVURERERIRERIlVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVWVVVVVVVVURERERFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVlVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVRERERFVVVVVVVVVVVVVVVVVVVVVVRERERVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVURERERVVVVVRERERERFVVVVVVVVVVVVVVVVVVVVVERERERVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUREiIhERERVVERERERERFVVVVVVVVVVVVVVVVVVVURERERERVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVEREiIiIiIRERURERERERERFVVVVVVVVVVVVVVVVVVVERERERERVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVRERESIhEiIiIRERERERERERERFVVVVVVVVVVVVVVVVVUREREREREVVVVVVVVVVVVVVVVVVVURERFVVVVVVVVRERERIiIhIiIiIRERERERERERIhFVVVVVVVVVVVVVVVVVEREREREREVVVVVVVVVVVVVVVVVVRERERFVVVVVVVEREREiEiEiIiEiEREREREREREiIiJVVVVVVVVVVVVVVVVREREREREQEFVVVVVVVVVVVVVVVVERIRERFVVVVVVREREiIiIiERESIhERERERERERIiIiVVVVVVVVVVVVVVVVEREREREREREVVVVVVVVVVVVVVVURERERIhFVVVVVURESIiIiIhgSEiKBERERERERESIiIRVVVVVVVVVVVVVVVRERERERERERFVVVVVVVVVVVVVVSIiIhEhESFVVVVVEREiIiIiITEhIiERERERERERESERERVVVVVVVVVVVVVVUREREREREREREVVVVVVVVVVVVVUSIiIhEhERVVVVVRESIiEiIiIjIiIhEREREREREREREREVVVVVVVVVVVVVVVEREREREREREREVVVVVVVVVVVVSESIhEREhEVVVVVVREiIiIhIiIjIiIREREREREREREREREVVVVVVVVVVVVVVRERERERERERERERVVVVVVVVVVURISEREREREVVVVVURIiIiIiISIjIhEREREREREREREREREVVVVVVVVVVVVVERERERERERERERERVVVVVVVVVRIRERERESERFVVVVVVRIiIiIiIiEjEiERERERERERERERERFVVVVVVVVVVVVREREREREREREREREVVVVVVVVVURERIRERERERVVVVVVVRESISEiEiIjIhEREREREREREQEBERFVVVVVVVVVVVURERERERgREREREREVVVVVVVVRAQERESEhEREVVVVVVVURESIiIiIiITMRERERERERERERERERVVVVVVVVVVVVERERERERERERERERFVVVVVVVUREREhERERAAAFVVVVVVERESIhIiISIRMREREREREREREBERERVVVVVVVVVVVRERERERVVVVURERERVVVVVVVVIiEhEREREQAABVVVVVVRERESIiIhEiERMxEREREREREREREREVVVVVVVVVVVURERERBVVVVVEREREVVVVVVVURERERIRERIAAAEFVVVVURERERERERERERExERERERERERERERFVVVVVVVVVVVEREREVVVVVVRERERFVVVVVVVEREREhERERAIABFVVVVVERERERERERERERExEREAAAERERERERVVVVVVVVVVVRERERVVURFVUREREVVVVVVVVSESEREREhEREzM2ZVVVVREREREREREREREREzEQEREQERERIhEVVVVVVVVVVVURERMzMzGBVVERERFVVVVVVVEREREREhERISESEVVVVVUREQEREREREREREAETEREREQABIiIhFVVVVVVVVVVVEREzFVVVEVVRERERVVVVVVVSERIhERERESEhERIVVVVVURERERERIREREQERETERERERECIiERVVVVVVVVVVVVERETFVVVVVURIiFVVVVVVVUREREhEREhEREhESEVVVVVEREREREiIiEQARERExEREREREiIiFVVVVVVVVVVVVRERExEVVVVVESIhVVVVVVVVASIAEhERERIAARERIVVVVRERERERIiIiARERERExERERERERERVVVVVVVVVVVVUAAAMRFVVVURIiIVVVVVVVVRERIQESERAAERESIREVVVURERERESIiIRERERERMRERERERERFVVVVVVVVVVVVVAAADERFVURESIiFVVVVVVVVREREREAABEREiEhERFVVVURERERERIRERERERERMRERERERExVVVVVVVVVVVVUAAAAxERERERESIhVVVVVVVVUREiIREREiESIhEhIRVVVVERERERERERERERERETERERERETFVVVVVVVVVVVVVEAgAMREREREREREVVVVVVVVVERERERERIREiIhEiEVVVVRERERERERERERERERETERERERMRVVVVVVVVVVVVVmETMzERERARERERVVVVVVVVVRERERERERISIiERIiFVVVVRERERERERERIRERERExERERExFVVVVVVVVVVVVVVREREREREQEREREVVVVVVVVVURERISERERIhERIRIRVVVVUREREREREREiIiERERMRERETERVVVVVVVVVVVVVVURERERERERERERFVVVVVVVVVEREREREhEhERERERFVVVVVURERERERERIiIiERETERERMREVVVVVVVVVVVVVVVEREREREBEQEREVVVVVVVVVURIRERERERgRESERIRVVVVVVERERERERESIiIRERExERExERVVVVVVVVVVVVVVVRERERERERERERVVVVVVVVVVEiIiERERIREhEhERElVVVVVVERERERERERIRERERMRETEREVVVVVVVVVVVVVVVURESERERERERFVVVVVVVVVVSIiIiIiERISEhERERVVVVVVVREREREREREREQERETERExERFVVVVVVVVVVVVVVVESIiEREREREVVVVVVVVVVVUSIiISEREREREREhEVVVVVVVVREREREREREBEREzMxETERERVVVVVVVVVVVVVVVRESIhERERERVVVVVVVVVVVREhIRERIRERERESEhFVVVVVVVVRERERERERAQERMAAAMREREVVVVVVVVVVVVVVVVREiIRERERFVVVVVVVVVVVURERISIiESISERERIVVVVVVVVVVVERERERERERETAAADERERFVVVVVVVVVVVVVVVURESEREREVVVVVVVVVVVVVERESEhERIREREBERFVVVVVVVVVVVUREREREREREwAAAxEREVVVVVVVVVVVVVVVVVERERERERVVVVVVVVVVVVVRIRIRIYEREREiESERVVVVVVVVVVVVVVVRERERERMAgAMRERFVVVVVVVVVVVVVVVVVERERERFVVVVVVVVVVVVVUREhERERERERIiEhFVVVVVVVVVVVVVVVVVURERETMzMzERERVVVVVVVVVVVVVVVVVVERERFVVVVVVVVVVVVVVVEREREiEiERERERIRVVVVVVVVVVVVVVVVVVURERERETERERFVVVVVVVVVVVVVVVVVVVURFVVVVVVVVVVVVVVVVVERERERIRERERIRFVVVVVVVVVVVVVVVVVVVERERERExEREVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVRESECAREhEhERIVVVVVVVVVVVVVVVVVVVVRERERERMRERVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVRIRIRIRERERERVVVVVVVVVVVVVVVVVVVVUREREBETERFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVREhASERESERFVVVVVVVVVVVVVVVVVVVVVERERFVExFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUREREiEVVVVVVVVVVVVVVVVVVVVVVVVRERERVVZVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVURERERVWVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVEREREVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVRERERFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVURERERVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVERERFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVREREVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUYERVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVURFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUUVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVFVVVVVVVVVVVVVVVVVVVVVVVREREBVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVRVVVVVVVVVVVVVVVVVVVVVVVERERgRVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUVVVVVVVVVVVVVVVVVVVVVVVRERERFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVFVVVVVVVVVVVVVVVVVVVVVVVRERERVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVRVVVVVVVVVVVVVVVVVVVVVVVVRERFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUVVVVVVVVVVVVVVVVVVVVVVVVVREVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVAABAAAVVVVVVVVVVVVVVVVVVVVVVVWVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQAAAAQAAAAFVVVVVVVVVVVVVVVVVVVVVlVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQAABVVUVVUAAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVAAVVVVUVVVVVAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUABVVVURERVVVVAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQAFVVVRERERVVVVAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVAAVVVVEBEREBFVVVAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQBVVREREREREREVVVAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVAAVVEREREREREREVVQAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQAFURERERERERERFVUABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUABVERERERgRERERVVAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVAAVREREREREREREVVQAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQAFVRERERERERERFVUABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQBVURERERERERERVVAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUABVURERERERERFVUABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUABVURERFREREVVQAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUABVVVVVVVVVVVAAVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUABVVVVVVVVVUABVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVUAAAVVVVVVAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVQAAAAAAAAAFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=","quests":[{"name":"A STUDENT'S SONG","key":"pipe","max":3,"bits":2,"hints":["SEE THE WOODCUTTER","TAKE PIPE TO CODA"]},{"name":"THE LIGHTHOUSE","key":"lamp","max":5,"bits":3,"hints":["SAIL TO LIGHTHOUSE","SHARDS TO SMITH","LENS TO THE KEEPER","THE KEEPER'S GIFT"]},{"name":"THE WINTER HYMN","key":"hymn","max":5,"bits":3,"hints":["ASK THE HUNTER","HERMIT, EAST ISLET","HYMN TO FERMATA","THE CHOIR'S GIFT"]},{"name":"CASSIUS'S PENANCE","key":"locket","max":4,"bits":3,"hints":["CASSIUS AT WITCH'S","LOCKET TO MOURNER","BACK TO CASSIUS"]},{"name":"A FORGOTTEN NAME","key":"name","max":3,"bits":2,"hints":["SERENADE'S PRIEST","TELL CODA MAESTRO"]}],"ngpMax":9,"mst":{"step":2000,"cap":63,"ptsMax":63,"mpCap":45,"mpPick":3},"ruins":["OLD SHRINE","STANDING STONES","OLD WATCHTOWER","FROZEN SHRINE","ORGAN PIPES","RUINED CHAPEL","FALLEN COLUMNS","OLD GRAVEYARD"],"npcFlags":{"CHAPEL_PILGRIM.MET":0,"LARGO_MINSTREL.GIFT1":1,"CODA_TRAVELLER.GIFT1":8,"CODA_LANTERNGIRL.GIFT1":9,"CODA_BUOYKEEPER.GIFT1":10},"city":[[64,78],[100,66],[56,24],[22,58]],"cityW":5,"cityH":4,"scene":[[40,11,11],[86,17,4],[88,17,4],[40,22,3],[64,27,11],[113,48,2],[115,48,2],[73,56,1],[75,56,1],[9,57,5],[11,57,5],[74,58,1],[107,59,11],[28,60,13],[41,63,0],[6,66,11],[99,68,12],[112,70,8],[112,71,8],[110,73,9],[114,73,10],[60,76,10],[57,77,8],[57,78,8],[59,78,9],[24,80,14],[11,85,7],[13,85,7],[63,86,11],[12,87,7],[57,110,6],[63,110,6]],"rescueR":3,"oldExit":[[1,100,70],[3,27,62]]};
+/* TALE CODE: a JavaScript port of tools/tale_code.py (same bits, same CRC,
+ * same checks) so codes made here load in the game. Writes version 3 (version 2
+ * plus the NEW GAME+ cycle in 4 bits and the record's flag bytes 60-63, each a
+ * zero bit or a one bit and 8 bits); version 2 is version 1 plus last_town in
+ * 2 bits, gold's size class 3 in 14 bits and the side-quest stages after the
+ * bag. Reads versions 1, 2 and 3. Writes version 4 since MASTERY: version 3 with
+ * gold 14 bits flat, flags 5 bits, each chest word a zero bit or a one bit and
+ * 16 bits, then the MASTERY steps (zero bit, or one bit and 8 bits) and up to 4
+ * CONTENT PACKS' quests (count 3 bits, then cid 6 + stage 3 each, newest first).
+ * Writes version 5 since MASTERY POINTS: version 4 with xp as 11 bits past the
+ * level's start, mp 7 bits, weapon / armor 4 bits each (0 none, else the n-th
+ * item of that kind), and after the MASTERY points earned (when not zero) a
+ * zero bit, or a one bit, the unspent points (6 bits) and the MAX MP +3 picks
+ * (4 bits, b_mp / 3). Reads versions 1-5; migrate() is what the game does to
+ * a version 1-4 code on load (XP past a point -> points; version 4 also
+ * refunds nocturne_23's automatic mastery steps). */
+function makeTaleCore(D) {
+  "use strict";
+  var A = D.alphabet, ITEMS = D.items, IT_COUNT = ITEMS.length, FL = D.flags, QUESTS = D.quests;
+  var FL_MASK = 0;
+  Object.keys(FL).forEach(function (k) { FL_MASK |= FL[k]; });
+  var SALT = [];
+  for (var i = 0; i < D.salt.length; i++) SALT.push(D.salt.charCodeAt(i));
+  var KINDS = (function () {
+    var bin = atobPortable(D.kindsB64), out = new Uint8Array(128 * 128);
+    for (var j = 0; j < bin.length; j++) {
+      var b = bin.charCodeAt(j);
+      out[2 * j] = b >> 4;
+      out[2 * j + 1] = b & 15;
+    }
+    return out;
+  })();
+
+  function atobPortable(s) {
+    if (typeof atob === "function") return atob(s);
+    return Buffer.from(s, "base64").toString("binary");
+  }
+
+  function Bad(msg) { this.message = msg; this.name = "Bad"; }
+
+  function crc16(bytes) {
+    var c = 0xFFFF;
+    for (var i = 0; i < bytes.length; i++) {
+      c ^= bytes[i] << 8;
+      for (var k = 0; k < 8; k++) {
+        c = (c & 0x8000) ? ((c << 1) ^ 0x1021) : (c << 1);
+        c &= 0xFFFF;
+      }
+    }
+    return c;
+  }
+
+  function Writer() { this.bits = []; }
+  Writer.prototype.put = function (v, n) {
+    if (!(v >= 0 && v < Math.pow(2, n) && Math.floor(v) === v)) throw new Bad("value " + v + " does not fit " + n + " bits");
+    for (var i = n - 1; i >= 0; i--) this.bits.push(Math.floor(v / Math.pow(2, i)) & 1);
+  };
+  Writer.prototype.vari = function (v, top) {   /* 2-bit size class: 0, 6, 10 or top (16; 14 for v2 gold) bits */
+    if (v === 0) this.put(0, 2);
+    else if (v < 64) { this.put(1, 2); this.put(v, 6); }
+    else if (v < 1024) { this.put(2, 2); this.put(v, 10); }
+    else { this.put(3, 2); this.put(v, top || 16); }
+  };
+  Writer.prototype.small = function (v) {     /* 1 bit zero flag, else 6 bits */
+    if (v === 0) this.put(0, 1);
+    else { this.put(1, 1); this.put(v, 6); }
+  };
+
+  function Reader(syms) {
+    this.bits = [];
+    for (var i = 0; i < syms.length; i++)
+      for (var b = 4; b >= 0; b--) this.bits.push((syms[i] >> b) & 1);
+    this.pos = 0;
+  }
+  Reader.prototype.get = function (n) {
+    if (this.pos + n > this.bits.length) throw new Bad("the code ends too early");
+    var v = 0;
+    for (var i = 0; i < n; i++) { v = v * 2 + this.bits[this.pos]; this.pos++; }
+    return v;
+  };
+  Reader.prototype.vari = function (top) {
+    var c = this.get(2);
+    return c === 0 ? 0 : this.get([6, 10, top || 16][c - 1]);
+  };
+  Reader.prototype.small = function () { return this.get(1) ? this.get(6) : 0; };
+
+  var WEAPONS = [], ARMORS = [];
+  ITEMS.forEach(function (it, i) { if (it.kind === "IK_WEAPON") WEAPONS.push(i); else if (it.kind === "IK_ARMOR") ARMORS.push(i); });
+  var MST = D.mst;   /* step, cap, ptsMax, mpCap (gn.h MST_*) */
+
+  function kindOf(id) { return id > 0 && id < IT_COUNT ? ITEMS[id].kind : ""; }
+  function isGear(id) { var k = kindOf(id); return k === "IK_WEAPON" || k === "IK_ARMOR" || k === "IK_KEY"; }   /* (never stacks) */
+
+  function checkFile(f, ver) {
+    function need(ok, what) { if (!ok) throw new Bad(what); }
+    if (ver === undefined) ver = D.version;
+    need(f.lv >= 1 && f.lv <= D.maxLv, "LV must be 1 to " + D.maxLv);
+    need(f.xp >= 0 && f.xp <= 0xFFFF, "XP must be 0 to 65535");
+    need(f.hp >= 1 && f.hp <= 255, "HP must be 1 to 255");
+    need(f.mp >= 0 && f.mp <= 255, "MP must be 0 to 255");
+    need(f.gold >= 0 && f.gold <= D.maxGold, "gold must be 0 to " + D.maxGold);
+    need(f.pieces >= 0 && f.pieces < 16 && f.saved >= 0 && f.saved < 16, "pieces and guardians are 4 bits");
+    need((f.flags & ~FL_MASK) === 0, "unknown story flag bits");
+    ["x", "y", "ship_x", "ship_y"].forEach(function (k) { need(f[k] >= 0 && f[k] < 128, k + " must be 0 to 127"); });
+    need(f.last_town >= 0 && f.last_town < D.towns.length, "unknown town");
+    need(f.weapon === 0 || kindOf(f.weapon) === "IK_WEAPON", "the weapon slot holds something that is not a weapon");
+    need(f.armor === 0 || kindOf(f.armor) === "IK_ARMOR", "the armor slot holds something that is not armor");
+    ["b_atk", "b_def", "b_hp"].forEach(function (k) { need(f[k] >= 0 && f[k] <= 63, k + " must be 0 to 63"); });
+    need(f.chests.length === 4 && f.chests.every(function (c) { return c >= 0 && c <= 0xFFFF; }), "chests");
+    need(f.houses >= 0 && f.houses < 256, "cottages");
+    need(f.bag.length <= D.bagSlots, "the bag has " + D.bagSlots + " slots");
+    f.bag.forEach(function (e) {
+      need(e[0] > 0 && e[0] < IT_COUNT, "unknown item in the bag");
+      need(e[1] >= 1 && e[1] <= 9, "bag counts are 1 to 9");
+      need(e[1] === 1 || !isGear(e[0]), ITEMS[e[0]].name + " does not stack");
+    });
+    var q = f.quest || [];
+    need(q.length === QUESTS.length, "the side quests need " + QUESTS.length + " stages");
+    q.forEach(function (v, k) { need(v >= 0 && v <= QUESTS[k].max, QUESTS[k].name + " stage must be 0 to " + QUESTS[k].max); });
+    var c = f.ngp || 0, xb = f.xb || [0, 0, 0, 0];
+    need(c >= 0 && c <= D.ngpMax && Math.floor(c) === c, "NEW GAME+ cycle must be 0 to " + D.ngpMax);
+    need(xb.length === 4 && xb.every(function (v) { return v >= 0 && v < 256 && Math.floor(v) === v; }), "flag bytes are 0 to 255");
+    var m = f.mst || 0, pq = f.pq || [];
+    need(m >= 0 && m <= 255 && Math.floor(m) === m, "MASTERY POINTS earned must be 0 to 255");
+    var u = f.mpts || 0, bm = f.b_mp || 0;
+    need(u >= 0 && u <= MST.ptsMax && Math.floor(u) === u, "unspent MASTERY POINTS must be 0 to " + MST.ptsMax);
+    need(bm >= 0 && bm <= MST.mpCap && bm % MST.mpPick === 0, "the MAX MP bonus must be a multiple of " + MST.mpPick + ", 0 to " + MST.mpCap);
+    need(m || !(u || bm), "unspent points and a MAX MP bonus need MASTERY POINTS earned");
+    if (ver >= 5) {
+      var base = D.levels[f.lv - 1][0];
+      need(f.xp >= base && f.xp <= base + 2047, "XP must be " + base + " to " + (base + 2047) + " at LV " + f.lv +
+           (f.lv === D.maxLv ? " (every " + MST.step + " XP past " + base + " is a MASTERY POINT)" : ""));
+      need(f.mp <= 127, "MP must be 0 to 127");
+    } else {
+      need(!(u || bm), "unspent points and a MAX MP bonus need a version 5 code");
+    }
+    need(pq.length <= 4, "at most 4 island quests travel in a code");
+    pq.forEach(function (e) {
+      need(e[0] >= 1 && e[0] <= 63 && e[1] >= 1 && e[1] <= 7, "island quest: content id 1 to 63, stage 1 to 7");
+    });
+    need(pq.every(function (e, i) { return pq.findIndex(function (o) { return o[0] === e[0]; }) === i; }), "one island quest once");
+  }
+
+  function encode(f) {
+    checkFile(f);
+    var w = new Writer();
+    w.put(D.version, 4);
+    w.put(f.lv, 5); w.put(f.xp - D.levels[f.lv - 1][0], 11); w.put(f.hp, 8); w.put(f.mp, 7); w.put(f.gold, 14);   /* v5: xp past the level's start, mp 7; v4: gold flat */
+    w.put(f.pieces, 4); w.put(f.saved, 4); w.put(f.flags, 5);                         /* v4: 5 bits */
+    w.put(f.x, 7); w.put(f.y, 7); w.put(f.ship_x, 7); w.put(f.ship_y, 7);
+    w.put(f.last_town, 2); w.put(f.weapon ? WEAPONS.indexOf(f.weapon) + 1 : 0, 4); w.put(f.armor ? ARMORS.indexOf(f.armor) + 1 : 0, 4);   /* v5 */
+    w.small(f.b_atk); w.small(f.b_def); w.small(f.b_hp);
+    f.chests.forEach(function (c) { if (c) { w.put(1, 1); w.put(c, 16); } else w.put(0, 1); });
+    w.put(f.houses, 8);
+    w.put(f.bag.length, 4);
+    f.bag.forEach(function (e) { w.put(e[0], 5); w.put(e[1], 4); });
+    f.quest.forEach(function (v, k) { w.put(v, QUESTS[k].bits); });
+    w.put(f.ngp || 0, 4);                       /* version 3: NEW GAME+ cycle, flag bytes 60-63 */
+    (f.xb || [0, 0, 0, 0]).forEach(function (v) { if (v) { w.put(1, 1); w.put(v, 8); } else w.put(0, 1); });
+    if (f.mst) {                                 /* version 4: MASTERY, pack quests */
+      w.put(1, 1); w.put(f.mst, 8);
+      if (f.mpts || f.b_mp) { w.put(1, 1); w.put(f.mpts || 0, 6); w.put((f.b_mp || 0) / MST.mpPick, 4); }   /* version 5 */
+      else w.put(0, 1);
+    } else w.put(0, 1);
+    w.put((f.pq || []).length, 3);
+    (f.pq || []).forEach(function (e) { w.put(e[0], 6); w.put(e[1], 3); });
+    var bits = w.bits.slice();
+    while (bits.length % 5) bits.push(0);
+    var syms = [];
+    for (var i = 0; i < bits.length; i += 5)
+      syms.push(bits[i] * 16 + bits[i + 1] * 8 + bits[i + 2] * 4 + bits[i + 3] * 2 + bits[i + 4]);
+    var c = crc16(SALT.concat(syms)) & 0x7FFF;
+    syms.push((c >> 10) & 31, (c >> 5) & 31, c & 31);
+    if (syms.length > D.maxSyms) throw new Bad("the code is longer than " + D.maxSyms + " symbols");
+    return syms;
+  }
+
+  function decode(syms) {
+    if (syms.length < 6) throw new Bad("too short");
+    var data = syms.slice(0, syms.length - 3);
+    var c = crc16(SALT.concat(data)) & 0x7FFF;
+    var t = syms.slice(syms.length - 3);
+    if (t[0] !== ((c >> 10) & 31) || t[1] !== ((c >> 5) & 31) || t[2] !== (c & 31))
+      throw new Bad("the check symbols do not match, probably a typo");
+    var r = new Reader(data);
+    var ver = r.get(4);
+    if (ver < 1 || ver > 5) throw new Bad("unknown code version");
+    var v2 = ver >= 2, v4 = ver >= 4, v5 = ver >= 5;
+    var f = {};
+    f.lv = r.get(5);
+    if (f.lv < 1 || f.lv > D.maxLv) throw new Bad("LV must be 1 to " + D.maxLv);
+    f.xp = v5 ? D.levels[f.lv - 1][0] + r.get(11) : r.vari(); f.hp = r.get(8); f.mp = r.get(v5 ? 7 : 8); f.gold = v4 ? r.get(14) : r.vari(v2 ? 14 : 16);
+    f.pieces = r.get(4); f.saved = r.get(4); f.flags = r.get(v4 ? 5 : 8);
+    f.x = r.get(7); f.y = r.get(7); f.ship_x = r.get(7); f.ship_y = r.get(7);
+    f.last_town = r.get(v2 ? 2 : 3);
+    if (v5) {
+      var wi = r.get(4), ai = r.get(4);
+      if (wi > WEAPONS.length || ai > ARMORS.length) throw new Bad("unknown weapon or armor");
+      f.weapon = wi ? WEAPONS[wi - 1] : 0; f.armor = ai ? ARMORS[ai - 1] : 0;
+    } else { f.weapon = r.get(5); f.armor = r.get(5); }
+    f.b_atk = r.small(); f.b_def = r.small(); f.b_hp = r.small();
+    f.chests = [0, 1, 2, 3].map(function () { return v4 ? (r.get(1) ? r.get(16) : 0) : r.vari(); });
+    f.houses = r.get(8);
+    var n = r.get(4);
+    if (n > D.bagSlots) throw new Bad("the bag has " + D.bagSlots + " slots");
+    f.bag = [];
+    for (var i = 0; i < n; i++) { var id = r.get(5); f.bag.push([id, r.get(4)]); }
+    f.quest = QUESTS.map(function (q) { return v2 ? r.get(q.bits) : 0; });
+    f.ngp = 0; f.xb = [0, 0, 0, 0];
+    if (ver >= 3) {
+      f.ngp = r.get(4);
+      if (f.ngp > D.ngpMax) throw new Bad("NEW GAME+ cycle must be 0 to " + D.ngpMax);
+      f.xb = [0, 1, 2, 3].map(function () { return r.get(1) ? r.get(8) : 0; });
+    }
+    f.mst = 0; f.pq = [];
+    var mpts = 0, bmp = 0;
+    if (v4) {
+      f.mst = r.get(1) ? r.get(8) : 0;
+      if (v5 && f.mst && r.get(1)) { mpts = r.get(6); bmp = MST.mpPick * r.get(4); }
+      var np = r.get(3);
+      if (np > 4) throw new Bad("at most 4 island quests travel in a code");
+      for (var j = 0; j < np; j++) { var cid = r.get(6); f.pq.push([cid, r.get(3)]); }
+    }
+    var left = r.bits.slice(r.pos);
+    if (Math.floor((r.pos + 4) / 5) !== data.length || left.some(function (b) { return b; }))
+      throw new Bad("there are left-over symbols");
+    f.mpts = mpts; f.b_mp = bmp;
+    checkFile(f, ver);
+    return f;
+  }
+
+  function stats(f) {
+    var row = D.levels[f.lv - 1];
+    return [Math.min(255, row[1] + f.b_hp), row[2] + (f.b_mp || 0)];
+  }
+
+  /* data.c mst_migrate: a version 1-4 code (or an old save) on load, once. refund (version 4):
+   * nocturne_23 spent every step itself (step k: ATK +1 when k is odd, else DEF +1, and HP +3 when
+   * k is a multiple of 3); the last min(mst, ptsMax) steps' gains come off the seed bonuses (never
+   * below 0) and come back as unspent points. Then XP past a point becomes points. Returns notes. */
+  function migrate(f, refund) {
+    var notes = [], k;
+    f.mpts = f.mpts || 0; f.b_mp = f.b_mp || 0;
+    if (refund && f.mst) {
+      var top = f.mst, n = Math.min(top, MST.ptsMax), a = 0, d = 0, h = 0;
+      for (k = top - n + 1; k <= top; k++) { if (k & 1) a++; else d++; if (k % 3 === 0) h += 3; }
+      f.b_atk = Math.max(0, f.b_atk - a); f.b_def = Math.max(0, f.b_def - d); f.b_hp = Math.max(0, f.b_hp - h);
+      f.mpts = n;
+      notes.push("The old automatic MASTERY (" + top + " steps) is refunded: ATK -" + a + ", DEF -" + d + ", HP -" + h +
+                 ", and " + n + " MASTERY POINTS to spend.");
+    }
+    var lim = D.levels[D.maxLv - 1][0] + MST.step, got = 0;
+    while (f.lv >= D.maxLv && f.xp >= lim) {
+      if (f.mpts >= MST.ptsMax) { f.xp = lim - 1; break; }
+      f.xp -= MST.step; f.mst = Math.min(255, f.mst + 1); f.mpts++; got++;
+    }
+    if (got) notes.push("XP past LV " + D.maxLv + " becomes " + got + " MASTERY POINTS (" + MST.step + " XP each).");
+    var m = stats(f);
+    f.hp = Math.min(f.hp, m[0]); f.mp = Math.min(f.mp, m[1]);
+    return notes;
+  }
+
+  /* what the game does after a good decode (tale.c): fit HP/MP/XP to this
+   * build's tables and repair story bits so the tale can be finished */
+  function fitNotes(f) {
+    var notes = [];
+    var p = f.pieces | f.saved;
+    if (f.saved & ~f.pieces & 15) notes.push("A freed guardian is missing their piece. Loading adds it.");
+    if ((p === 15 || (f.flags & FL.KING_SEALED)) && !(f.flags & FL.HALL_OPEN))
+      notes.push("All four pieces without the bridge of light. Loading opens the hall.");
+    if ((f.saved & 1) && !(f.flags & FL.SHIP)) notes.push("SERA is freed but there is no ship. Loading gives the ship.");
+    var m = stats(f);
+    if (f.hp > m[0]) notes.push("HP " + f.hp + " is over this level's maximum. Loading lowers it to " + m[0] + ".");
+    if (f.mp > m[1]) notes.push("MP " + f.mp + " is over this level's maximum. Loading lowers it to " + m[1] + ".");
+    if (f.xp < D.levels[f.lv - 1][0]) notes.push("XP is below LV " + f.lv + "'s start. Loading raises it to " + D.levels[f.lv - 1][0] + ".");
+    return notes;
+  }
+
+  function kindAt(x, y) { return x >= 0 && x < 128 && y >= 0 && y < 128 ? KINDS[y * 128 + x] : 0; }
+
+  function seaReachesDock(x, y) {
+    var seen = {}, todo = [[x, y]];
+    seen[x + "," + y] = 1;
+    while (todo.length) {
+      var c = todo.pop();
+      var nb = [[c[0] + 1, c[1]], [c[0] - 1, c[1]], [c[0], c[1] + 1], [c[0], c[1] - 1]];
+      for (var i = 0; i < 4; i++) {
+        var k = kindAt(nb[i][0], nb[i][1]), key = nb[i][0] + "," + nb[i][1];
+        if (k === 6) return true;
+        if (k === 5 && !seen[key]) { seen[key] = 1; todo.push(nb[i]); }
+      }
+    }
+    return false;
+  }
+
+  /* Where the game starts Arden (title.c file_load, world.c sanity_position),
+   * as tools/tale_code.py landing(): the walled cities (D.city boxes) and the
+   * world scenery (D.scene cells) cover cells older codes could stand on -
+   * those move to the nearest open cell; LARGO's / SERENADE's gates before
+   * the walled cities (D.oldExit) start at the town's gate now. */
+  var SCENE_AT = {};
+  D.scene.forEach(function (s) { SCENE_AT[s[0] + "," + s[1]] = s[2]; });
+
+  function cityOf(x, y, grow) {
+    grow = grow || 0;
+    for (var t = 0; t < D.city.length; t++) {
+      var c = D.city[t];
+      if (x >= c[0] - grow && x < c[0] + D.cityW + grow && y >= c[1] - grow && y < c[1] + D.cityH + grow) return t;
+    }
+    return -1;
+  }
+
+  function dressed(x, y) { return cityOf(x, y) >= 0 || SCENE_AT.hasOwnProperty(x + "," + y); }
+
+  function nearestOpen(x, y) {
+    for (var r = 1; r <= D.rescueR; r++)
+      for (var dy = -r; dy <= r; dy++)
+        for (var dx = -r; dx <= r; dx++) {
+          if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+          var nx = (x + dx) & 255, ny = (y + dy) & 255, k = kindAt(nx, ny);
+          if ((k >= 1 && k <= 3) || k === 6) return [nx, ny];
+        }
+    return null;
+  }
+
+  function fittedFlags(f) {
+    var fl = f.flags;
+    if (((f.pieces | f.saved) & 15) === 15 || (fl & FL.KING_SEALED)) fl |= FL.HALL_OPEN;
+    if (f.saved & 1) fl |= FL.SHIP;
+    return fl;
+  }
+
+  function landing(x, y, flags) {
+    for (var i = 0; i < D.oldExit.length; i++) {
+      var o = D.oldExit[i];
+      if (x === o[1] && y === o[2]) return { x: D.townExit[o[0]][0], y: D.townExit[o[0]][1], why: "old", town: o[0] };
+    }
+    var k = kindAt(x, y);
+    if ((k === 5 && (flags & FL.SHIP)) || (k >= 1 && k <= 3) || k === 6 || (k === 4 && (flags & FL.HALL_OPEN)))
+      return { x: x, y: y, why: null, town: -1 };
+    if (dressed(x, y)) {
+      var n = nearestOpen(x, y);
+      if (n) return { x: n[0], y: n[1], why: "rescue", town: cityOf(x, y) };
+    }
+    return { x: D.townExit[0][0], y: D.townExit[0][1], why: "coda", town: -1 };
+  }
+
+  function placeNotes(f) {
+    var notes = [], k = kindAt(f.x, f.y), fl = fittedFlags(f), L = landing(f.x, f.y, fl);
+    if (L.why === "old") {
+      notes.push("That is " + D.towns[L.town] + "'s gate from before the walled cities. The game shows " + D.towns[L.town] +
+                 " and starts Arden at its gate now, " + L.x + "," + L.y + ".");
+    } else if (L.why === "rescue") {
+      var near = cityOf(L.x, L.y, 1);
+      notes.push("Arden can't stand on that cell (" + (L.town >= 0 ? D.towns[L.town] + "'s city walls" : "a ruin, house or other scenery") +
+                 "), so the game moves him to the nearest open cell, " + L.x + "," + L.y + (near >= 0 ? " beside " + D.towns[near] : "") + ".");
+    } else if (L.why === "coda") {
+      notes.push("Arden can't stand on that cell, so the game moves him to CODA's gate.");
+    }
+    var wing = f.bag.some(function (e) { return ITEMS[e[0]].name === "WING"; });
+    if (k === 5 && (fl & FL.SHIP) && !seaReachesDock(f.x, f.y) && !wing)
+      notes.push("Arden is at sea where no dock can be reached, with no WING: he would be stuck.");
+    return notes;
+  }
+
+  function parseCode(text) {
+    var s = String(text).toUpperCase().replace(/[\s\-]/g, "");
+    var bad = s.split("").filter(function (ch) { return A.indexOf(ch) < 0; });
+    if (bad.length) {
+      var uniq = bad.filter(function (ch, i) { return bad.indexOf(ch) === i; }).join(" ");
+      throw new Bad("these characters are not in a TALE CODE: " + uniq + " (codes never use I, O, 0 or 1)");
+    }
+    return s.split("").map(function (ch) { return A.indexOf(ch); });
+  }
+
+  function codeRows(syms) {
+    var s = syms.map(function (v) { return A[v]; }).join(""), rows = [];
+    for (var r = 0; r < s.length; r += 16) {
+      var row = s.slice(r, r + 16), g = [];
+      for (var i = 0; i < row.length; i += 4) g.push(row.slice(i, i + 4));
+      rows.push(g.join(" "));
+    }
+    return rows;
+  }
+
+  function clone(f) { return JSON.parse(JSON.stringify(f)); }
+
+  function codeVersion(syms) { return syms.length ? syms[0] >> 1 : 0; }
+
+  return { encode: encode, decode: decode, migrate: migrate, checkFile: checkFile, fitNotes: fitNotes, placeNotes: placeNotes, landing: landing,
+           parseCode: parseCode, codeRows: codeRows, stats: stats, kindAt: kindAt, isGear: isGear, kindOf: kindOf,
+           clone: clone, codeVersion: codeVersion, Bad: Bad, FL_MASK: FL_MASK, KINDS: KINDS };
+}
+if (typeof module !== "undefined") module.exports = makeTaleCore;
+
+(function () {
+  "use strict";
+  var GAME_SLUG = "gn";
+  var D = DATA, TC = makeTaleCore(D), FL = D.flags;
+  var DUNGEONS = ["WILLOW CHAPEL", "SUNKEN BELLTOWER", "FROST CONSERVATORY", "DUSK MANOR"];
+  var FLOORS = [3, 3, 4, 4];
+  var ROMAN = ["I", "II", "III", "IV"];
+  var HOUSES = ["WOODCUTTER'S HUT", "OLD SAGE", "FISHER'S HUT", "LIGHTHOUSE", "HUNTER'S LODGE", "HERMIT'S CAVE HUT", "WITCH'S COTTAGE", "SMITH'S FORGE"];
+  var KIND_NAME = ["mountains", "grassland", "forest", "road", "bridge of light", "open sea", "a dock", "", "a landmark"];
+  var KIND_COLOR = ["#5d6277", "#74b05b", "#3d7a3f", "#c8a66a", "#efe2a0", "#2c5b9c", "#93602f", "#000000", "#d84a39"];
+  var STORE = "gn-tale-code";
+  var $ = function (id) { return document.getElementById(id); };
+  var lastSyms = null;
+
+  function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function pop(n) { var c = 0; while (n) { c += n & 1; n >>= 1; } return c; }
+  function itemName(id) { return id ? D.items[id].name : "(none)"; }
+  function effectOf(id) {
+    var it = D.items[id];
+    if (!id || !it) return "";
+    switch (it.kind) {
+      case "IK_HEAL": return "restores " + it.power + " HP";
+      case "IK_MP": return "restores " + it.power + " MP";
+      case "IK_WING": return "flies back to the last town";
+      case "IK_FULL": return "full HP and MP";
+      case "IK_WEAPON": return "ATK +" + it.power;
+      case "IK_ARMOR": return "DEF +" + it.power;
+      default: return "";
+    }
+  }
+  function rows(list) {
+    return '<table class="tk-sheet">' + list.map(function (r) {
+      return "<tr><td>" + r[0] + (r[2] ? "<small>" + r[2] + "</small>" : "") + '</td><td class="v">' + r[1] + "</td></tr>";
+    }).join("") + "</table>";
+  }
+
+  /* what the cartridge's STATUS screen shows (data.c stats_for): level row + 3 per freed guardian + seeds + gear */
+  function statsOf(f) {
+    var row = D.levels[f.lv - 1], bonus = 3 * pop(f.saved);
+    var wp = f.weapon ? D.items[f.weapon].power : 0, ap = f.armor ? D.items[f.armor].power : 0;
+    return {
+      maxhp: Math.min(255, row[1] + f.b_hp), maxmp: row[2] + (f.b_mp || 0),
+      atk: Math.min(255, row[3] + bonus + f.b_atk + wp), def: Math.min(255, row[4] + bonus + f.b_def + ap), agi: row[5]
+    };
+  }
+
+  function drawMap(f) {
+    var cv = $("map"); if (!cv) return;
+    var cx = cv.getContext("2d"), img = cx.createImageData(128, 128), x, y, i, c;
+    for (y = 0; y < 128; y++) for (x = 0; x < 128; x++) {
+      c = KIND_COLOR[TC.kindAt(x, y)] || "#000000"; i = (y * 128 + x) * 4;
+      img.data[i] = parseInt(c.slice(1, 3), 16); img.data[i + 1] = parseInt(c.slice(3, 5), 16);
+      img.data[i + 2] = parseInt(c.slice(5, 7), 16); img.data[i + 3] = 255;
+    }
+    cx.putImageData(img, 0, 0);
+    function mark(px, py, fill) {
+      cx.fillStyle = "#ffffff"; cx.fillRect(px - 3, py - 3, 7, 7);
+      cx.fillStyle = fill; cx.fillRect(px - 2, py - 2, 5, 5);
+    }
+    if (f.flags & FL.SHIP) mark(f.ship_x, f.ship_y, "#3b82f6");
+    mark(f.x, f.y, "#e5342a");
+  }
+
+  function render(f, ver) {
+    var s = statsOf(f), row = D.levels[f.lv - 1], maxLv = f.lv >= D.maxLv;
+    var done = (f.flags & FL.KING_SEALED) !== 0;
+    var freed = pop(f.saved), pieces = pop(f.pieces);
+
+    /* hero */
+    var xpPct, xpLbl;
+    if (!maxLv) {
+      var nxt = D.levels[f.lv][0];
+      xpPct = Math.max(0, Math.min(100, 100 * (f.xp - row[0]) / (nxt - row[0])));
+      xpLbl = f.xp + " / " + nxt + " XP to LV " + (f.lv + 1);
+    } else {
+      var past = f.xp - row[0];
+      xpPct = Math.max(0, Math.min(100, 100 * past / D.mst.step));
+      xpLbl = past + " / " + D.mst.step + " XP to the next MASTERY POINT";
+    }
+    $("p-hero").innerHTML =
+      '<h2>Status</h2><div class="hero-top"><span class="hero-name">ARDEN</span><span class="hero-lv">LV ' + f.lv + "</span>" +
+      (f.ngp ? '<span class="badge">NEW GAME+ ' + f.ngp + "</span>" : "") +
+      (done ? '<span class="badge done">TALE COMPLETE</span>' : "") + "</div>" +
+      '<div class="barlbl"><span>Experience</span><span class="tnum">' + esc(xpLbl) + '</span></div><div class="bar"><i style="width:' + xpPct.toFixed(1) + '%"></i></div>' +
+      '<div class="stats"><div class="stat"><b class="tnum">' + f.hp + "/" + s.maxhp + "</b><span>HP</span></div>" +
+      '<div class="stat"><b class="tnum">' + f.mp + "/" + s.maxmp + "</b><span>MP</span></div>" +
+      '<div class="stat"><b class="tnum">' + f.gold + "</b><span>Gold</span></div>" +
+      '<div class="stat"><b class="tnum">' + s.atk + "</b><span>Attack</span></div>" +
+      '<div class="stat"><b class="tnum">' + s.def + "</b><span>Defense</span></div>" +
+      '<div class="stat"><b class="tnum">' + s.agi + "</b><span>Agility</span></div></div>" +
+      '<p class="hint" style="margin:10px 0 0">Attack and defense include your gear, ' + (freed ? "+" + 3 * freed + " from the guardians you freed, " : "") +
+      "and your seed bonuses (ATK +" + f.b_atk + ", DEF +" + f.b_def + ", max HP +" + f.b_hp + ").</p>";
+
+    /* gear */
+    $("p-gear").innerHTML = "<h2>Equipment</h2>" + rows([
+      ["Weapon", f.weapon ? esc(itemName(f.weapon)) : '<span class="dim">(none)</span>', f.weapon ? esc(effectOf(f.weapon)) : ""],
+      ["Armor", f.armor ? esc(itemName(f.armor)) : '<span class="dim">(none)</span>', f.armor ? esc(effectOf(f.armor)) : ""]
+    ]);
+
+    /* bag */
+    var bag = f.bag.length ? rows(f.bag.map(function (e) {
+      return [esc(itemName(e[0])), e[1] > 1 ? "x" + e[1] : "", esc(effectOf(e[0]))];
+    })) : '<p class="hint" style="margin:0">The bag is empty.</p>';
+    $("p-bag").innerHTML = "<h2>Bag <span class=\"dim\" style=\"text-transform:none;letter-spacing:0\">(" + f.bag.length + "/" + D.bagSlots + ")</span></h2>" + bag;
+
+    /* story */
+    var g = "";
+    for (var i = 0; i < 4; i++) {
+      var fr = (f.saved >> i) & 1, pc = (f.pieces >> i) & 1;
+      g += '<div class="guard"><span class="roman">' + ROMAN[i] + "</span><div>" + esc(D.guardians[i] || "") +
+        "<small>" + esc(DUNGEONS[i]) + '</small></div><span class="chip' + (fr ? " on" : "") + '">' + (fr ? "freed" : pc ? "piece held" : "not yet") + "</span></div>";
+    }
+    var tail = done ? "The King is sealed. The tale is told." :
+      (f.flags & FL.HALL_OPEN) ? "The bridge of light is open. The HALL OF SILENCE awaits." :
+      pieces === 4 ? "All four pieces are held." : (pieces + " of 4 pieces held.");
+    $("p-story").innerHTML = "<h2>The four guardians</h2>" + g + '<p class="hint" style="margin:12px 0 0">' + esc(tail) + "</p>";
+
+    /* world */
+    var where = TC.kindAt(f.x, f.y);
+    $("p-world").innerHTML = "<h2>Where Arden is</h2>" +
+      '<canvas id="map" width="128" height="128" role="img" aria-label="World map with Arden\'s position"></canvas>' +
+      '<div class="legend"><span><i style="background:#e5342a"></i>Arden (' + f.x + "," + f.y + ")</span>" +
+      ((f.flags & FL.SHIP) ? '<span><i style="background:#3b82f6"></i>Your ship (' + f.ship_x + "," + f.ship_y + ")</span>" : "") + "</div>" +
+      rows([["Standing on", esc(KIND_NAME[where] || "the world")], ["WING returns to", esc(D.towns[f.last_town] || "?")],
+            ["Ship", (f.flags & FL.SHIP) ? "yours" : '<span class="dim">not yet</span>']]);
+    drawMap(f);
+
+    /* side quests */
+    var qd = 0, ql = f.quest.map(function (v, k) {
+      var q = D.quests[k], txt, cls = "";
+      if (v >= q.max) { txt = "done"; cls = "on"; qd++; }
+      else if (v === 0) txt = "not started";
+      else txt = "in progress";
+      var hint = (v > 0 && v < q.max && q.hints && q.hints[v - 1]) ? q.hints[v - 1] : "";
+      return '<div class="guard" style="grid-template-columns:1fr auto"><div>' + esc(q.name) + (hint ? "<small>" + esc(hint) + "</small>" : "") +
+        '</div><span class="chip ' + cls + '">' + txt + "</span></div>";
+    }).join("");
+    $("p-quests").innerHTML = "<h2>Side quests <span class=\"dim\" style=\"text-transform:none;letter-spacing:0\">(" + qd + "/" + f.quest.length + ")</span></h2>" + ql;
+
+    /* more */
+    var chestsOpened = 0, chestsTotal = 0;
+    for (var d = 0; d < 4; d++) { chestsTotal += FLOORS[d] * 4; chestsOpened += pop(f.chests[d] & ((1 << (FLOORS[d] * 4)) - 1)); }
+    var cot = HOUSES.map(function (n, k) { return '<span class="chip' + (((f.houses >> k) & 1) ? " on" : "") + '">' + esc(n) + "</span>"; }).join("");
+    var xb = f.xb || [0, 0, 0, 0];
+    var ruins = D.ruins.map(function (n, k) { return '<span class="chip' + (((xb[2] >> k) & 1) ? " on" : "") + '">' + esc(n) + "</span>"; }).join("");
+    var ruinsN = D.ruins.filter(function (n, k) { return (xb[2] >> k) & 1; }).length;
+    var mast = f.mst ? rows([["MASTERY points earned", f.mst], ["Unspent points", f.mpts || 0], ["MAX MP bonus", "+" + (f.b_mp || 0)]]) : "";
+    $("p-more").innerHTML = "<h2>Journey</h2>" + rows([
+      ["Dungeon chests opened", chestsOpened + " / " + chestsTotal],
+      ["Cottages visited", pop(f.houses) + " / " + HOUSES.length],
+      ["Ruins searched", ruinsN + " / " + D.ruins.length],
+      ["Island quests started", (f.pq || []).length]
+    ]) + '<p class="hint" style="margin:14px 0 6px">Cottages</p><div class="chips">' + cot + "</div>" +
+      '<p class="hint" style="margin:14px 0 6px">Ruins</p><div class="chips">' + ruins + "</div>" +
+      (mast ? '<p class="hint" style="margin:14px 0 6px">Mastery</p>' + mast : "");
+    $("tale").hidden = false;
+  }
+
+  function msg(html, cls) { $("readmsg").innerHTML = html ? '<div class="msg ' + cls + '">' + html + "</div>" : ""; }
+
+  /* a TALE CODE, or what its QR carries (NGPC-DEV.COM/GN + the symbols, with or without https://www.): a bare
+   * code never starts with GN (N is not a valid first symbol), so a leading GN is always the QR prefix */
+  function normalise(text) {
+    var s = String(text || "").toUpperCase().replace(/^\s*(HTTPS?:\/\/)?(WWW\.)?NGPC-DEV\.COM\//, "").replace(/[\s\-]/g, "");
+    if (s.indexOf("GN") === 0) s = s.slice(2);
+    return s;
+  }
+
+  function read(text, quiet) {
+    var s = normalise(text);
+    if (!s) { $("tale").hidden = true; msg("", ""); return false; }
+    try {
+      var syms = TC.parseCode(s), ver = TC.codeVersion(syms), f = TC.decode(syms);
+      TC.migrate(f, ver === 4);
+      render(f, ver);
+      lastSyms = s;
+      $("codein").value = TC.codeRows(syms).join("\n");
+      msg(ver < D.version ? "That code was made by an older build of the game. It is shown the way the current build would load it." : "", "note");
+      try { localStorage.setItem(STORE, s); } catch (e) {}
+      return true;
+    } catch (e) {
+      $("tale").hidden = true;
+      var why = e && e.message ? String(e.message) : "That is not a TALE CODE";
+      msg(esc(why.charAt(0).toUpperCase() + why.slice(1)) + "." + (quiet ? "" : " Check it against the cartridge's code screen."), "err");
+      return false;
+    }
+  }
+
+  $("readbtn").addEventListener("click", function () { read($("codein").value); });
+  $("clearbtn").addEventListener("click", function () {
+    $("codein").value = ""; $("tale").hidden = true; msg("", ""); lastSyms = null;
+    try { localStorage.removeItem(STORE); } catch (e) {}
+    if (location.hash) history.replaceState(null, "", location.pathname);
+  });
+  $("codein").addEventListener("keydown", function (e) { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) read($("codein").value); });
+
+  /* the page opens straight onto the tale when the cartridge's QR was scanned (404.html sends
+   * /GN<code> to /gn/#<code>), else onto the last tale read in this browser */
+  function boot() {
+    var h = decodeURIComponent((location.hash || "").slice(1));
+    if (h) {
+      $("codein").value = h;
+      history.replaceState(null, "", location.pathname);
+      if (read(h)) return;
+    }
+    var saved = null;
+    try { saved = localStorage.getItem(STORE); } catch (e) {}
+    if (saved) read(saved, true);
+  }
+
+  /* ---- the same coming-soon gate every game page has ---- */
+  var gameData = null, booted = false;
+  function applyGate(user) {
+    var ok = !gameData || gameData.devStatus !== "coming-soon" || NGPC_AUTH.canPreviewGame(user, gameData);
+    $("access-gate").hidden = ok;
+    $("page-content").hidden = !ok;
+    if (ok && !booted) { booted = true; boot(); }
+  }
+  if (window.NGPC_AUTH) {
+    var art = $("header-art");
+    var gp = NGPC_AUTH.db ? NGPC_AUTH.db.collection("games").doc(GAME_SLUG).get().then(function (doc) {
+      gameData = doc.exists ? doc.data() : {};
+      if (art && gameData.titleImage) { art.src = gameData.titleImage; art.hidden = false; }
+    }).catch(function () { gameData = {}; }) : Promise.resolve();
+    NGPC_AUTH.onAuthChange(function (user) {
+      gp.then(function () {
+        applyGate(user);
+        var al = $("admin-link"); if (al) al.hidden = !NGPC_AUTH.isGameManager(user, gameData);
+      });
+    });
+  } else { gameData = { devStatus: "final" }; applyGate(null); }
+})();
+</script>
+
 </body>
 </html>
