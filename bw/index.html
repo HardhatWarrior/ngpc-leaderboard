@@ -164,9 +164,10 @@
   /* ---------- leaderboard ---------- */
   #board-status{ font-size:12px; color:var(--dim); margin-bottom:10px; min-height:1.4em; }
   .row{
-    display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:12px;
+    display:grid; grid-template-columns:34px minmax(0,1fr) auto; align-items:center; gap:12px;
     padding:10px 8px; border-radius:8px;
   }
+  .row > div{ min-width:0; }
   /* general sibling (~), not adjacent (+): a row-detail panel can sit between two .row
      elements once a scorecard is present, which would otherwise break the adjacent match */
   .row ~ .row{ border-top:1px solid var(--border); }
@@ -177,7 +178,7 @@
   .row.top1{ background:rgba(178,58,82,.10); }
   .initials{
     font-family:"Press Start 2P",monospace; font-size:14px; letter-spacing:.06em; color:var(--cream);
-    display:flex; align-items:center; gap:8px;
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap; row-gap:4px;
   }
   .row-avatar{
     width:48px; height:48px; border-radius:4px; border:1px solid var(--border);
