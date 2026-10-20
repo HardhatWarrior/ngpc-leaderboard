@@ -134,9 +134,12 @@
   .pin-box svg{ width:62%; height:62%; }
 
   /* ---------- layout ---------- */
-  main{ display:grid; grid-template-columns:1fr; gap:20px; align-items:start; }
+  /* minmax(0,1fr), not 1fr: a plain 1fr track won't shrink below its widest child, so an expanded
+     scorecard pushed the panels wider than a narrow phone screen and the page scrolled sideways. */
+  main{ display:grid; grid-template-columns:minmax(0,1fr); gap:20px; align-items:start; }
 
   .panel{
+    min-width:0;
     background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px;
   }
   #access-gate{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px 20px; }
@@ -223,6 +226,19 @@
     .sc-marks{ font-size:11px; gap:1px; padding:3px 2px; }
     .sc-marks span{ width:10px; }
     .sc-total{ font-size:11.5px; }
+  }
+  @media (max-width:360px){
+    /* leaderboard rows: tighter rank / avatar / name so the score column never gets pushed off screen */
+    .row{ grid-template-columns:24px minmax(0,1fr) auto; gap:8px; padding:10px 4px; }
+    .row > div{ min-width:0; }
+    .initials{ font-size:12px; gap:6px; flex-wrap:wrap; }
+    .row-avatar{ width:36px; height:36px; }
+    .score-val{ font-size:13px; }
+    .row-meta{ font-size:10px; }
+    .sc-n{ font-size:8.5px; }
+    .sc-marks{ font-size:10px; gap:0; padding:3px 1px; }
+    .sc-marks span{ width:8px; }
+    .sc-total{ font-size:10px; }
   }
 
   /* ---------- QR scan ---------- */
