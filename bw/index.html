@@ -885,7 +885,7 @@
   const XF_SALT = "NGPCBW-CARRY-OVER";
   // Ball colours by the cart's index; prize level n (1-5) unlocks BW_BALL_COLOURS[5+n].
   const BW_BALL_COLOURS = ['BLUE','RED','GREEN','YELLOW','PINK','PURPLE','BLACK','BRONZE','SILVER','GOLD','CUSTOM'];
-  const XF_COLOUR_COUNT = {1:6, 2:11};
+  const XF_COLOUR_COUNT = {1:6, 2:11, 3:20};   // v3 (bowling_143): + the holiday balls and LUCKY 13
   const BW_PRIZE_RAW = [175, 200, 225, 250, 275];   // raw (handicap-free) game each prize level needs
   function prizeLevelFor(raw){ return BW_PRIZE_RAW.filter(t=>raw >= t).length; }
   function prizeBallNames(level){ return BW_BALL_COLOURS.slice(6, 6 + level); }
@@ -896,11 +896,11 @@
     syms.forEach(feed);
     return crc & 0x7FFF;
   }
-  // The first symbol holds the 3 version bits: a v1 code starts E-H (001xx), a v2 code J-M
-  // (010xx), never the B of a score code.
-  function looksLikeStatsCode(text){ return /^[E-HJ-M][A-HJ-NP-Z2-9]{5,63}$/.test(text); }
+  // The first symbol holds the 3 version bits: a v1 code starts E-H (001xx), v2 J-M (010xx),
+  // v3 N-R (011xx: N P Q R), never the B of a score code.
+  function looksLikeStatsCode(text){ return /^[E-HJ-NP-R][A-HJ-NP-Z2-9]{5,63}$/.test(text); }
   // looksLikeStatsCode() and a good check, so another game's QR that happens to start E-H or
-  // J-M still gets the "different game" message.
+  // J-M / N-R still gets the "different game" message.
   function statsCodeChecks(text){
     if(!looksLikeStatsCode(text)) return false;
     const syms = [...text].map(ch=>XF_ALPHABET.indexOf(ch)), c = xfCrc(syms.slice(0,-3)), chk = syms.slice(-3);
@@ -921,7 +921,7 @@
     const get = n => { if(p+n > bits.length) throw new Error("That code ends too early."); let v=0; for(let i=0;i<n;i++) v=(v<<1)|bits[p++]; return v; };
     const getVar = () => { const k = get(2); return k===0 ? 0 : get([6,10,16][k-1]); };
     const codeVersion = get(3);
-    if(codeVersion > 2) throw new Error("That code is from a newer build than this page understands.");
+    if(codeVersion > 3) throw new Error("That code is from a newer build than this page understands.");
     if(codeVersion < 1) throw new Error("That isn't a Neo Bowling stats code.");
     // version is the bw_career doc layout, which firestore.rules pins at 1. It is NOT the code's
     // own format version (codeVersion below); the stored code carries that.
@@ -930,7 +930,7 @@
       out.hasBest = true;
       out.bestScore = get(9);
       out.bestIni = ''; for(let i=0;i<3;i++) out.bestIni += String.fromCharCode(65+get(5));
-      out.bestColor = get(4);
+      out.bestColor = get(codeVersion >= 3 ? 5 : 4);   // v3: 5 bits, ball ids 0-19
       out.bestHcp = get(2)*10;
     }
     ['games','frames','strikes','spares','turkeys','vsGames','vsFrames','vsStrikes','vsSpares','vsTurkeys','vsWins','vsLosses','avg10','avgGames']
@@ -944,6 +944,8 @@
     hide('codeVersion', codeVersion);
     hide('curve', get(1));
     hide('prize', codeVersion >= 2 ? get(3) : (out.hasBest ? prizeLevelFor(out.bestScore - out.bestHcp) : 0));
+    // v3: the holiday balls and LUCKY 13 the cart has kept (bit 0 HEARTS .. 7 FIREWORKS, 8 LUCKY 13)
+    hide('found', codeVersion >= 3 ? get(9) : 0);
     // like the cart: nothing may be left but the last symbol's padding (whose bits it never reads)
     if(p + 5 <= bits.length) throw new Error("That code has extra characters on the end.");
     if(out.bestScore > 330 || out.avg10 > 3000 || !/^[A-Z]{3}$/.test(out.bestIni) || !/^[A-Z]{3}$/.test(out.defIni)
