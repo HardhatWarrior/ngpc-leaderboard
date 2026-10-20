@@ -976,14 +976,14 @@ service cloud.firestore {
     // Guardians of the Nocturne: the one TALE CODE a signed-in player last read on /gn/, kept so it
     // follows them to any device until they read a new one. Private: only that player can read,
     // write or delete it (not even other signed-in users). The page decodes and checks the code
-    // itself; this only bounds its shape (the game's alphabet, 6-100 symbols).
+    // itself; this only bounds its shape (the game's alphabet, 6-160 symbols: TALE CODE v8 is up to 127).
     match /taleCodes/{uid} {
       allow read: if (request.auth != null && request.auth.uid == uid) || isAdmin();   // admins: /gn/'s admin panel lists them
       allow delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['code', 'updatedAt'])
         && request.resource.data.code is string
-        && request.resource.data.code.matches('^[A-HJ-NP-Z2-9]{6,100}$')
+        && request.resource.data.code.matches('^[A-HJ-NP-Z2-9]{6,160}$')
         && request.resource.data.updatedAt is int;
     }
 
