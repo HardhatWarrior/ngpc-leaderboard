@@ -678,7 +678,7 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
-      // GUARDIANS OF THE NOCTURNE (gn/index.html's COMPLETION BOARD): the page decodes a version 9-10 TALE CODE
+      // GUARDIANS OF THE NOCTURNE (gn/index.html's COMPLETION BOARD): the page decodes a version 9-11 TALE CODE
       // with tale_core.js (CRC-checked), derives the ACHIEVEMENTS badges and writes initials, completion %
       // (0-100), badges lit (0-37: v10 adds the BESTIARY's 3), furthest journey (NEW GAME+ 0-5), COMPLETE and the code itself (so any
       // page can re-derive the badges). Each player keeps ONE entry at scores/GN_<uid>, replaceable only by
@@ -690,7 +690,7 @@ service cloud.firestore {
       function isNocturneScore(d) {
         return d.game == 'GN'
           && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'pct', 'badges', 'journey', 'complete', 'code', 'source', 'submittedAt', 'uid', 'username', 'approved'])
-          && d.formatVersion is string && d.formatVersion in ['9', '10']
+          && d.formatVersion is string && d.formatVersion in ['9', '10', '11']
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.pct is int && d.pct >= 0 && d.pct <= 100
           && d.badges is int && d.badges >= 0 && d.badges <= 37
@@ -1014,7 +1014,7 @@ service cloud.firestore {
     // Guardians of the Nocturne: the one TALE CODE a signed-in player last read on /gn/, kept so it
     // follows them to any device until they read a new one. Private: only that player can read,
     // write or delete it (not even other signed-in users). The page decodes and checks the code
-    // itself; this only bounds its shape (the game's alphabet, 6-200 symbols: TALE CODE v10 is up to 166).
+    // itself; this only bounds its shape (the game's alphabet, 6-200 symbols: TALE CODE v10 / v11 is up to 166).
     match /taleCodes/{uid} {
       allow read: if (request.auth != null && request.auth.uid == uid) || isAdmin();   // admins: /gn/'s admin panel lists them
       allow delete: if request.auth != null && request.auth.uid == uid;
