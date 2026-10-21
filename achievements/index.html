@@ -173,7 +173,12 @@
         if(!S || !game) return null;
         const mine = ctx.scores.filter(d=>d.game === 'BW');
         // the same Career stats visibility switch the profile uses (Off / Testers / On)
-        if(!S.featureVisible(game, 'careerStats', ctx.viewer, A)) return null;
+        // While Career stats is Off or Testers, the tab still shows but says why it is empty (Manage Game > Bowling
+        // features is where it is switched On).
+        if(!S.featureVisible(game, 'careerStats', ctx.viewer, A)){
+          return { note:'testing', earned:false, html:
+            '<h2 class="g-title">Neo Bowling</h2><div class="empty">Neo Bowling badges (the 300 CLUB and tournament CHAMPION) are being tested and are not public yet.</div>' };
+        }
         const perfect = S.perfectGames(mine), now = Date.now();
         let titles = [];
         const finals = S.events(game).filter(ev=>S.status(ev, now) === 'final');
