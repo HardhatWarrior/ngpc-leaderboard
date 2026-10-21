@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Badges</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#5c8fd6; --accent-ink:#0a1830;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a; --gold:#e8c547; --gold-ink:#2b1f00;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif; padding-inline:20px; padding-block:28px; display:flex; justify-content:center; }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; } .tnum{ font-variant-numeric:tabular-nums; }
+  #shell{ width:100%; max-width:760px; display:flex; flex-direction:column; gap:22px; }
+  header{ background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--border); border-radius:14px; padding:22px; display:flex; align-items:center; gap:16px; }
+  #who-avatar{ width:64px; height:64px; border-radius:8px; border:1px solid var(--border); image-rendering:pixelated; flex:none; background:var(--navy); }
+  .who-info{ display:flex; flex-direction:column; gap:4px; flex:1 1 0; min-width:0; }
+  .eyebrow{ font-size:10px; letter-spacing:.14em; color:var(--accent2); text-transform:uppercase; }
+  #who-name{ margin:0; font-size:clamp(12px,3.4vw,20px); color:var(--cream); overflow-wrap:anywhere; line-height:1.3; }
+  .who-links{ font-size:11.5px; }
+  .who-links a{ color:var(--accent2); text-decoration:underline; text-underline-offset:2px; font-weight:600; }
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  .panel .hint{ margin:0 0 12px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+  .panel .hint a{ color:var(--accent2); }
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+  .msg.note{ background:rgba(92,143,214,.12); color:var(--dim); border:1px solid rgba(92,143,214,.3); }
+  button{ font:inherit; border:none; border-radius:8px; padding:11px 16px; cursor:pointer; font-weight:600; font-size:13.5px; background:var(--accent); color:var(--accent-ink); }
+  button:hover{ background:#7aa6e3; }
+  /* game tabs */
+  .tabs{ display:flex; flex-wrap:wrap; gap:8px; }
+  .tab{ background:transparent; color:var(--cream); border:1px solid var(--border); padding:9px 12px; font-size:12.5px; display:flex; align-items:center; gap:8px; }
+  .tab:hover{ border-color:var(--accent2); background:transparent; }
+  .tab[aria-selected="true"]{ border-color:var(--gold); background:rgba(232,197,71,.08); }
+  .tab .n{ font-family:"IBM Plex Mono",monospace; font-size:11px; color:var(--gold); }
+  .tab .n.none{ color:var(--dim); }
+  /* a game's badges */
+  .g-head{ display:flex; align-items:center; gap:16px; margin:2px 0 14px; }
+  .g-pct{ font-size:clamp(22px,8vw,34px); color:var(--gold); flex:none; }
+  .g-sum{ flex:1; min-width:0; font-size:12.5px; }
+  .bar{ height:10px; border-radius:5px; background:var(--navy); border:1px solid var(--border); overflow:hidden; margin:6px 0 4px; }
+  .bar > i{ display:block; height:100%; background:var(--gold); }
+  .g-title{ margin:0 0 4px; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent2); }
+  .grp{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin:14px 0 6px; }
+  .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; }
+  .badge{ background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:8px 9px; min-width:0; opacity:.5; }
+  .badge b{ display:block; font-size:11.5px; color:var(--dim); overflow-wrap:anywhere; }
+  .badge small{ display:block; font-size:10.5px; color:var(--dim); margin-top:2px; overflow-wrap:anywhere; }
+  .badge.on{ opacity:1; border-color:var(--gold); background:rgba(232,197,71,.08); }
+  .badge.on b{ color:var(--gold); } .badge.on b::before{ content:"\2605  "; }
+  .badge.on.big{ background:rgba(232,197,71,.2); }
+  .fine{ font-size:11px; color:var(--dim); line-height:1.5; margin:14px 0 0; }
+  .empty{ color:var(--dim); font-size:13px; line-height:1.55; padding:6px 0; }
+  .empty a{ color:var(--accent2); font-weight:600; }
+  footer{ text-align:center; color:var(--dim); font-size:11px; }
+  footer a{ color:var(--accent2); }
+</style>
+<!-- Cloudflare Web Analytics -->
+<script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
+<!-- End Cloudflare Web Analytics -->
+</head>
+<body>
+
+<div id="shell">
+  <header>
+    <canvas id="who-avatar" width="64" height="64" hidden></canvas>
+    <div class="who-info">
+      <span class="eyebrow">Badges</span>
+      <h1 id="who-name" class="px">&mdash;</h1>
+      <div class="who-links" id="who-links" hidden></div>
+    </div>
+  </header>
+
+  <div id="status" class="msg note" hidden></div>
+
+  <section class="panel" id="tabs-panel" hidden>
+    <p class="hint" style="margin-bottom:10px">Badges a game awards for what a player has done in it. Pick a game.</p>
+    <div class="tabs" id="tabs" role="tablist"></div>
+  </section>
+
+  <section class="panel" id="game-panel" hidden></section>
+
+  <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com &middot; <a href="mailto:support@ngpc-dev.com">support@ngpc-dev.com</a></footer>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  const el = (id)=>document.getElementById(id);
+  const A = window.NGPC_AUTH;
+  const params = new URLSearchParams(location.search);
+  const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+  function setStatus(html, err){
+    const s = el('status');
+    s.className = 'msg ' + (err ? 'err' : 'note');
+    s.innerHTML = html; s.hidden = !html;
+  }
+  function loadScript(src){
+    return new Promise((ok, no)=>{
+      const s = document.createElement('script');
+      s.src = src; s.onload = ok; s.onerror = ()=>no(new Error('could not load '+src));
+      document.head.appendChild(s);
+    });
+  }
+  function fmtDate(ts){ return new Date(ts).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); }
+  function badgeGrid(list){
+    let out = '', grp = null;
+    list.forEach(b=>{
+      if(b.grp !== grp){ out += (grp !== null ? '</div>' : '') + (b.grp ? '<div class="grp">'+esc(b.grp)+'</div>' : '') + '<div class="grid">'; grp = b.grp; }
+      out += '<div class="badge'+(b.on?' on':'')+(b.big?' big':'')+'"><b>'+esc(b.name)+'</b>'+(b.sub?'<small>'+esc(b.sub)+'</small>':'')+'</div>';
+    });
+    return out + (grp !== null ? '</div>' : '');
+  }
+
+  // ---- Games that offer badges. Adding one = one more entry here: load(ctx) returns null when the game
+  // has nothing to show for this player at all (the tab is left out), else {note, earned, html}. ctx is
+  // {uid, username, self, viewer, scores: this player's approved score docs}. ----
+  const PROVIDERS = [
+    {
+      key:'gn', name:'Guardians of the Nocturne',
+      // From the player's TALE CODE: their private saved one when it is their own page, else the code on their
+      // public COMPLETION BOARD entry (scores/GN_<uid>, which the player puts there by submitting a tale).
+      async load(ctx){
+        await loadScript('/gn/achievements.js');
+        const G = window.NGPC_ACH_GN;
+        let res = null, from = '';
+        if(ctx.self){
+          try{
+            const d = await A.db.collection('taleCodes').doc(ctx.uid).get();
+            if(d.exists && d.data().code){ res = G.fromCode(d.data().code); from = 'your saved TALE CODE'; }
+          }catch(e){ /* fall back to the board entry */ }
+        }
+        const entries = ctx.scores.filter(d=>d.game === 'GN').sort((a,b)=>(b.submittedAt||0)-(a.submittedAt||0));
+        if(!res && entries.length){ res = G.fromCode(entries[0].code); from = 'the COMPLETION BOARD entry'; }
+        const link = '<a href="/gn/">Guardians of the Nocturne page</a>';
+        if(!res){
+          return { note:'not started', earned:false, html:
+            '<h2 class="g-title">'+esc(G.name)+'</h2><div class="empty">' + (ctx.self
+              ? 'No tale yet. Open the '+link+', read your TALE CODE from the cartridge (YOUR TALE &rsaquo; TALE CODE), and your badges appear here.'
+              : esc(ctx.username)+' has not shared a tale for this game yet. Badges show up once they read their TALE CODE and post it to the COMPLETION BOARD.') + '</div>' };
+        }
+        const journey = res.complete ? 'NEW GAME+ '+res.journey+', COMPLETE (FREE PLAY)' : (res.journey ? 'NEW GAME+ '+res.journey : 'the first tale');
+        return { note: res.pct+'%', earned: res.badges > 0, html:
+          '<h2 class="g-title">'+esc(G.name)+'</h2>'+
+          '<div class="g-head"><div class="g-pct px tnum">'+res.pct+'%</div><div class="g-sum"><div class="tnum">'+res.badges+' of '+res.total+' badges</div>'+
+          '<div class="bar"><i style="width:'+res.pct+'%"></i></div><div style="color:var(--dim)">Furthest journey: '+esc(journey)+'</div></div></div>'+
+          badgeGrid(res.list)+
+          '<p class="fine">Worked out from '+esc(from)+'. Completion % is the weighted share of the badges earned; 100% needs every badge. '+
+          (ctx.self ? 'Others see these badges once you submit your tale to the COMPLETION BOARD on the '+link+'.' : '')+'</p>' };
+      }
+    },
+    {
+      key:'bw', name:'Neo Bowling',
+      // The 300 Club (verified perfect games) and tournament titles: same rules as the player's profile page.
+      async load(ctx){
+        await loadScript('/bw/bw-shared.js');
+        const S = window.BW_SHARED;
+        let game = null;
+        try{ const d = await A.db.collection('games').doc('bw').get(); game = d.exists ? d.data() : null; }catch(e){}
+        if(!S || !game) return null;
+        const mine = ctx.scores.filter(d=>d.game === 'BW');
+        // the same Career stats visibility switch the profile uses (Off / Testers / On)
+        if(!S.featureVisible(game, 'careerStats', ctx.viewer, A)) return null;
+        const perfect = S.perfectGames(mine), now = Date.now();
+        let titles = [];
+        const finals = S.events(game).filter(ev=>S.status(ev, now) === 'final');
+        const played = finals.some(ev=>mine.some(d=>d.version === 3 && d.verified === true && d.submittedAt >= ev.startsAt && d.submittedAt < ev.endsAt));
+        if(played && S.featureVisible(game, 'tournaments', ctx.viewer, A)){
+          try{
+            const snap = await A.db.collection('scores').where('game','==','BW').where('approved','==',true).get();
+            titles = S.champions(game, snap.docs.map(d=>d.data()), now).filter(c=>c.entry.k === ctx.uid);
+          }catch(e){ /* titles are decoration: leave them out */ }
+        }
+        const list = [
+          { grp:'', name:'300 CLUB', sub: perfect.length ? (perfect.length > 1 ? perfect.length+' perfect games: ' : 'Perfect game: ') + perfect.map(d=>fmtDate(d.submittedAt)).join(', ') : 'a verified perfect game (12 strikes)', on: perfect.length > 0, big:true },
+          { grp:'', name:'CHAMPION', sub: titles.length ? 'Won ' + titles.map(c=>c.ev.name).join(', ') : 'win a Neo Bowling tournament', on: titles.length > 0, big:true },
+        ];
+        const got = list.filter(b=>b.on).length;
+        return { note: got+' of '+list.length, earned: got > 0, html:
+          '<h2 class="g-title">Neo Bowling</h2>'+badgeGrid(list)+
+          '<p class="fine">Perfect games are counted from verified scores; tournament titles from finished events.</p>' };
+      }
+    }
+  ];
+
+  async function boot(){
+    if(!A){ setStatus('Badges are not available right now (a required library failed to load).', true); return; }
+    await A.authReady;
+    const viewer = A.currentUser;
+    let name = (params.get('u') || '').trim(), uid = null, self = false;
+    if(!name){
+      if(!viewer || !viewer.username){
+        el('who-name').textContent = 'BADGES';
+        setStatus('Sign in to see your badges, or open a player’s profile and tap their Badges link.' +
+          ' <button type="button" id="signin" style="margin-left:8px;padding:6px 12px">Sign In</button>');
+        el('signin').addEventListener('click', ()=>A.openSignInModal('signin'));
+        A.onAuthChange(u=>{ if(u && u.username) location.reload(); });
+        return;
+      }
+      name = viewer.username; uid = viewer.uid; self = true;
+    }
+    if(!uid){
+      try{
+        const nd = await A.db.collection('usernames').doc(name.toLowerCase()).get();
+        if(!nd.exists){ el('who-name').textContent = 'BADGES'; setStatus('No player found with the username “'+esc(name)+'”.', true); return; }
+        uid = nd.data().uid;
+      }catch(e){ setStatus('Could not look that player up right now. Try again in a bit.', true); return; }
+      self = !!viewer && viewer.uid === uid;
+    }
+    let profile = null;
+    try{ const ud = await A.db.collection('users').doc(uid).get(); if(ud.exists) profile = ud.data(); }catch(e){}
+    const shown = (profile && profile.username) || name;
+    el('who-name').textContent = shown.toUpperCase();
+    document.title = shown.toUpperCase() + ' - Badges';
+    if(profile && Array.isArray(profile.avatar) && profile.avatar.length === A.AVATAR_CELLS){
+      el('who-avatar').hidden = false;
+      A.renderAvatarToCanvas(el('who-avatar'), profile.avatar, 64/A.AVATAR_SIZE);
+    }
+    el('who-links').innerHTML = '<a href="/user/?u='+encodeURIComponent(shown.toLowerCase())+'">View '+(self?'my':'their')+' player stats &rarr;</a>';
+    el('who-links').hidden = false;
+
+    let scores = [];
+    try{
+      // approved only: the rules let anyone but the admin read nothing else
+      const snap = await A.db.collection('scores').where('uid','==',uid).where('approved','==',true).get();
+      scores = snap.docs.map(d=>d.data());
+    }catch(e){ /* a game's own provider copes with having no scores */ }
+    const ctx = { uid:uid, username:shown, self:self, viewer:viewer, scores:scores };
+
+    setStatus('Loading badges…');
+    const results = [];
+    for(const p of PROVIDERS){
+      let r = null;
+      try{ r = await p.load(ctx); }catch(e){ console.warn('badges: '+p.key, e); }
+      if(r) results.push({ p:p, r:r });
+    }
+    setStatus('');
+    if(!results.length){ setStatus('No game with badges has anything to show here yet.'); return; }
+
+    const want = (params.get('g') || '').toLowerCase();
+    let cur = results.findIndex(x=>x.p.key === want);
+    if(cur < 0) cur = Math.max(0, results.findIndex(x=>x.r.earned));
+    function show(i){
+      cur = i;
+      el('tabs').innerHTML = results.map((x,k)=>
+        '<button type="button" class="tab" role="tab" aria-selected="'+(k===cur)+'" data-i="'+k+'">'+esc(x.p.name)+
+        ' <span class="n'+(x.r.earned?'':' none')+'">'+esc(x.r.note)+'</span></button>').join('');
+      el('game-panel').innerHTML = results[cur].r.html;
+      el('game-panel').hidden = false;
+      try{ const u = new URL(location.href); u.searchParams.set('g', results[cur].p.key); history.replaceState(null,'',u); }catch(e){}
+    }
+    el('tabs').addEventListener('click', e=>{ const b = e.target.closest('.tab'); if(b) show(+b.dataset.i); });
+    el('tabs-panel').hidden = results.length < 2;
+    show(cur);
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

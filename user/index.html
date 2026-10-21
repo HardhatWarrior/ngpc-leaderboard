@@ -201,6 +201,14 @@
 
   <!-- Neo Bowling achievements (bw/bw-shared.js, as on /bw/): the 300 Club while Career stats is
        visible to the viewer, tournament titles while Tournaments is (Manage Game > Bowling features) -->
+  <!-- Badges: every game that awards them, in one place (/achievements/?u=NAME); the Nocturne summary comes from
+       this player's COMPLETION BOARD entry among the scores loaded below. -->
+  <section class="panel" id="badges-panel" hidden>
+    <h2>Badges</h2>
+    <div id="badges-sum" class="ach-note" style="margin:6px 0 10px"></div>
+    <a id="badges-go" href="/achievements/" style="display:inline-block;color:var(--accent2);font-size:13px;font-weight:600">See all badges &rarr;</a>
+  </section>
+
   <section class="panel" id="bw-ach-panel" hidden>
     <h2>Neo Bowling achievements</h2>
     <div id="bw-ach-body"></div>
@@ -412,9 +420,19 @@
       renderSubPage();
       bwAchUid = uid;
       renderBwAch();
+      renderBadgesPanel(profile && profile.username ? profile.username : username);
     }catch(e){
       subStatus.innerHTML = '<div class="msg err">Couldn’t load submissions right now — try again in a bit.</div>';
     }
+  }
+  // ---- Badges link + a one-line summary of what the loaded scores show (Nocturne's completion board entry) ----
+  function renderBadgesPanel(name){
+    const gn = allSubs.map(d=>d.data()).filter(d=>d.game === 'GN').sort((a,b)=>(b.submittedAt||0)-(a.submittedAt||0))[0];
+    el('badges-go').href = '/achievements/?u=' + encodeURIComponent(name.toLowerCase());
+    el('badges-sum').textContent = gn
+      ? 'Guardians of the Nocturne: ' + gn.pct + '% complete · ' + gn.badges + ' badges' + (gn.complete ? ' · COMPLETE' : '')
+      : 'What this player has earned in each game.';
+    el('badges-panel').hidden = false;
   }
   // ---- Neo Bowling achievements: the 300 Club from this player's own verified scores; titles
   // from every approved Bowling score (fetched once, only when a finished event can be shown) ----

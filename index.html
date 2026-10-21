@@ -255,6 +255,7 @@
     color:var(--cream); text-decoration:none;
   }
   .event-bar[hidden]{ display:none; }
+  #badges-link[hidden]{ display:none; }
   .event-bar:hover, .event-bar:focus-visible{ background:var(--panel2); }
   .event-bar:focus-visible{ outline:2px solid var(--gold); outline-offset:2px; }
   .eb-tag{
@@ -320,6 +321,12 @@
     <span class="eb-main"><span class="eb-name" id="eb-name"></span><span class="eb-sub" id="eb-sub"></span></span>
     <span class="eb-note" id="eb-note" hidden></span>
     <span class="eb-go">View board &rarr;</span>
+  </a>
+
+  <!-- Signed-in players: straight to their own badges (/achievements/), the games' awards in one place. -->
+  <a id="badges-link" href="/achievements/" hidden style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel,#181f3a);border:1px solid #37426e;border-radius:12px;padding:12px 16px;text-decoration:none;color:var(--cream,#f4eedd)">
+    <span><b style="color:#e8c547;font-size:13px">&#9733; Your badges</b><span style="display:block;font-size:11.5px;color:var(--dim,#93a0c9);margin-top:2px">What you have earned in each game</span></span>
+    <span style="color:var(--accent2,#5c8fd6);font-size:12px;font-weight:600">View &rarr;</span>
   </a>
 
   <div id="ticker-wrap">
@@ -715,7 +722,10 @@
     });
     promoTimer = setTimeout(()=>{ renderPromo(); schedulePromo(); }, next - now + 250);
   }
-  if(window.NGPC_AUTH) NGPC_AUTH.onAuthChange(user=>{ promoUser = user; renderPromo(); });
+  if(window.NGPC_AUTH) NGPC_AUTH.onAuthChange(user=>{
+    promoUser = user; renderPromo();
+    const bl = el('badges-link'); if(bl) bl.hidden = !(user && user.username);
+  });
 
   function applySort(mode){
     const counts = countsCache[activePeriod];

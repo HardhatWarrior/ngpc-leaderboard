@@ -1149,6 +1149,7 @@ window.NGPC_AUTH = (function(){
     const homeLink = isHome ? '' : '<a class="acct-link" href="/">&larr; All games</a>';
     bar.innerHTML = '<div id="acct-left">'+homeLink+'</div>'
       + '<div id="acct-right"><span id="acct-owner" hidden><a class="acct-link" href="/games/">Single-Player</a><a class="acct-link" href="/play/test/">Test Player</a></span>'
+      + '<a id="acct-badges" class="acct-link" href="/achievements/" hidden>Badges</a>'
       + '<canvas id="acct-avatar" width="18" height="18" hidden></canvas>'
       + '<a id="acct-new" href="/admin/" hidden>NEW!</a>'
       + '<a id="acct-status" class="acct-link">Signed out</a>'
@@ -1159,6 +1160,8 @@ window.NGPC_AUTH = (function(){
     const avatarEl = bar.querySelector('#acct-avatar');
     const newEl = bar.querySelector('#acct-new');
     const ownerEl = bar.querySelector('#acct-owner');
+    // The signed-in player's own badges (/achievements/): shown from every page but that one.
+    const badgesEl = bar.querySelector('#acct-badges');
     // Owner-only shortcuts to pages not linked anywhere else yet (the hardcoded owner uid, not the
     // broader admin flag) -- each link is hidden on its own page, where it'd point at itself.
     ownerEl.querySelectorAll('a').forEach(a=>{ if(a.getAttribute('href') === location.pathname) a.hidden = true; });
@@ -1196,6 +1199,7 @@ window.NGPC_AUTH = (function(){
         btnEl.textContent = 'Sign Out';
         refreshAdminBadge(user);
         ownerEl.hidden = user.uid !== ADMIN_UID;
+        badgesEl.hidden = location.pathname.indexOf('/achievements') === 0;
         if(user.avatar){
           renderAvatarToCanvas(avatarEl, user.avatar, 18/AVATAR_SIZE);
           avatarEl.hidden = false;
@@ -1209,6 +1213,7 @@ window.NGPC_AUTH = (function(){
         avatarEl.hidden = true;
         newEl.hidden = true;
         ownerEl.hidden = true;
+        badgesEl.hidden = true;
       }
     });
   }
