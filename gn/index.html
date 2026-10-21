@@ -1276,7 +1276,8 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
       $("codein").value = TC.codeRows(syms).join("\n");
       msg(ver < D.version ? "That code was made by an older build of the game. It is shown the way the current build would load it." : "", "note");
       try { localStorage.setItem(STORE, s); } catch (e) {}
-      if (save !== false) saveCloud(s);
+      if (save !== false) { saveCloud(s); autoSubmit(); }
+      else submitMsg("", "");
       return true;
     } catch (e) {
       $("tale").hidden = true; lastAch = null;
@@ -1421,32 +1422,54 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
   }
   function submitMsg(html, cls) { $("submitmsg").innerHTML = html ? '<div class="msg ' + cls + '">' + html + "</div>" : ""; }
   $("ini").addEventListener("input", function () { this.value = this.value.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3); });
-  $("submitbtn").addEventListener("click", function () {
-    if (submitting) return;
-    var a = lastAch, code = lastSyms, ini = $("ini").value;
-    if (!a || !code) { submitMsg("Read a version 9 TALE CODE first (make it on the current build).", "err"); return; }
-    if (!/^[A-Z]{3}$/.test(ini)) { submitMsg("Type three initials, A to Z.", "err"); return; }
-    if (!window.NGPC_AUTH || !NGPC_AUTH.db) { submitMsg("The board is not available right now.", "err"); return; }
+  var INI_KEY = "gn-initials";
+  function savedIni() { try { var v = localStorage.getItem(INI_KEY) || ""; return /^[A-Z]{3}$/.test(v) ? v : ""; } catch (e) { return ""; } }
+  $("ini").value = savedIni();
+  function rememberIni(v) { try { localStorage.setItem(INI_KEY, v); } catch (e) {} }
+  function signInNudge(lead) {
+    submitMsg(esc(lead) + ' <button type="button" class="btn-secondary" id="gn-signin" style="padding:4px 10px">Sign In</button>', "note");
+    var b = $("gn-signin"); if (b) b.addEventListener("click", function () { NGPC_AUTH.openSignInModal("signin"); });
+  }
+  /* write the current code to scores/GN_<uid> (keep-best, the rules re-check it). auto: from a scan/read, quiet when
+   * nothing is known yet; ini null = use the existing entry's initials (or the remembered ones) */
+  function submitBoard(ini, auto) {
+    if (submitting) return Promise.resolve();
+    var a = lastAch, code = lastSyms;
+    if (!a || !code) { if (!auto) submitMsg("Read a version 9 TALE CODE first (make it on the current build).", "err"); return Promise.resolve(); }
+    if (!window.NGPC_AUTH || !NGPC_AUTH.db) { if (!auto) submitMsg("The board is not available right now.", "err"); return Promise.resolve(); }
+    if (!auto && !/^[A-Z]{3}$/.test(ini || "")) { submitMsg("Type three initials, A to Z.", "err"); return Promise.resolve(); }
     submitting = true; $("submitbtn").disabled = true;
-    submitMsg("Submitting...", "note");
+    if (!auto) submitMsg("Submitting...", "note");
     var A = NGPC_AUTH;
-    Promise.resolve(A.authReady).then(function () {
+    return Promise.resolve(A.authReady).then(function () {
       var u = A.currentUser;
       if (!u || !u.uid || !u.username) {
-        submitMsg('Sign in to submit. <button type="button" class="btn-secondary" id="gn-signin" style="padding:4px 10px">Sign In</button>', "err");
-        var b = $("gn-signin"); if (b) b.addEventListener("click", function () { A.openSignInModal("signin"); });
+        signInNudge(auto ? "Sign in and this scan updates your completion board entry automatically." : "Sign in to submit.");
         return;
       }
       var ref = A.db.collection("scores").doc("GN_" + u.uid);
       return ref.get().then(function (doc) { return doc.exists ? doc.data() : null; }, function () { return null; }).then(function (old) {
-        if (old && typeof old.pct === "number" && !gnBetter(a, old)) {
-          submitMsg("Your board entry (" + old.pct + "%, " + old.badges + " badges) already ranks the same or higher, so nothing was changed.", "err");
+        var hasOld = old && typeof old.pct === "number";
+        if (hasOld && /^[A-Z]{3}$/.test(old.initials || "")) { rememberIni(old.initials); if (!$("ini").value) $("ini").value = old.initials; }
+        if (auto) {
+          ini = hasOld && /^[A-Z]{3}$/.test(old.initials || "") ? old.initials : "";
+          if (!ini) {   /* no entry yet: ask once, prefilled */
+            if (!$("ini").value) $("ini").value = savedIni();
+            submitMsg("Put this tale on the completion board: check your initials and press Submit. Later scans then update it automatically.", "note");
+            try { $("ini").focus({ preventScroll: true }); } catch (e) {}
+            return;
+          }
+        }
+        if (hasOld && !gnBetter(a, old)) {
+          submitMsg(auto ? "Your best stays " + old.pct + "% (" + old.badges + " badges)." :
+                    "Your board entry (" + old.pct + "%, " + old.badges + " badges) already ranks the same or higher, so nothing was changed.", auto ? "note" : "err");
           return;
         }
         var rec = { game: GAME_CODE, formatVersion: TC.codeVersion(TC.parseCode(code)) >= 11 ? "11" : "10", initials: ini, pct: a.pct, badges: a.badges, journey: a.journey, complete: a.complete,
                     code: code, source: fromHash ? "qr" : "typed", submittedAt: Date.now(), uid: u.uid, username: u.username, approved: !!u.approved };
         return ref.set(rec).then(function () {
-          submitMsg((old ? "Board entry updated: " : "Added to the board: ") + esc(ini) + " - " + a.pct + "%, " + a.badges + " badges." +
+          rememberIni(ini);
+          submitMsg((hasOld ? "Leaderboard updated: " + a.pct + "% (was " + old.pct + "%)" : "Added to the board: " + esc(ini) + " - " + a.pct + "%") + ", " + a.badges + " badges." +
                     (u.approved ? "" : " Your account is awaiting approval, so it shows once approved."), "ok");
         }, function (e) {
           submitMsg(e && e.code === "permission-denied" ? "Not saved: the board refused it (your entry may already rank the same or higher)." :
@@ -1455,7 +1478,20 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
       });
     }).catch(function (e) { submitMsg("Submit error: " + esc((e && e.message) || "unknown"), "err"); })
       .then(function () { submitting = false; $("submitbtn").disabled = !lastAch; });
-  });
+  }
+  $("submitbtn").addEventListener("click", function () { submitBoard($("ini").value, false); });
+  /* after a code is read from a scan / paste: auto-update the board once the signed-in state is known */
+  var autoDone = null;
+  function autoSubmit() {
+    if (!lastAch || !lastSyms || autoDone === lastSyms) return;
+    if (!window.NGPC_AUTH) return;
+    Promise.resolve(NGPC_AUTH.authReady).then(function () {
+      if (autoDone === lastSyms) return;
+      var u = NGPC_AUTH.currentUser;
+      if (u && u.uid && u.username) autoDone = lastSyms;
+      submitBoard(null, true);
+    });
+  }
 
   /* ---- the same coming-soon gate every game page has ---- */
   var gameData = null, booted = false;
@@ -1465,7 +1501,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
     $("page-content").hidden = !ok;
     if (ok) subscribeBoard();
     if (ok && !booted) { booted = true; boot(); }
-    else if (ok && booted && curUser) { if (lastSyms) saveCloud(lastSyms); else loadStored(); }   /* signed in after the page opened */
+    else if (ok && booted && curUser) { if (lastSyms) { saveCloud(lastSyms); autoSubmit(); } else loadStored(); }   /* signed in after the page opened */
   }
   if (window.NGPC_AUTH) {
     var art = $("header-art");
