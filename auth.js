@@ -913,6 +913,8 @@ window.NGPC_AUTH = (function(){
     if(data.game === 'SK'){ const sum = skSummary(data); return sum ? (sum.stars+' STARS') : '-'; }
     // RED DRAGON ranks by experience (a live warrior list) -- no `score` field.
     if(data.game === 'RD') return Number.isFinite(data.experience) ? (data.experience+' XP') : '-';
+    // GUARDIANS OF THE NOCTURNE ranks by completion % (gn/'s ACHIEVEMENTS) -- no `score` field.
+    if(data.game === 'GN') return Number.isFinite(data.pct) ? (data.pct+'% COMPLETE') : '-';
     return data.score!=null ? data.score : '-';
   }
 
