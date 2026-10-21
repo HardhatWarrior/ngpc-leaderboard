@@ -948,15 +948,16 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
     /* more */
     var chestsOpened = 0, chestsTotal = 0;
     for (var d = 0; d < 4; d++) { chestsTotal += FLOORS[d] * 4; chestsOpened += pop(f.chests[d] & ((1 << (FLOORS[d] * 4)) - 1)); }
-    var cot = HOUSES.map(function (n, k) { return '<span class="chip' + (((f.houses >> k) & 1) ? " on" : "") + '">' + esc(n) + "</span>"; }).join("");
+    var GIFT = [1, 0, 1, 1, 0, 1, 0, 0];   /* cottages with a one-time gift (the others give none) */
+    var cot = HOUSES.map(function (n, k) { return GIFT[k] ? '<span class="chip' + (((f.houses >> k) & 1) ? " on" : "") + '">' + esc(n) + "</span>" : ""; }).join("");
     var xb = f.xb || [0, 0, 0, 0];
     var ruins = D.ruins.map(function (n, k) { return '<span class="chip' + (((xb[2] >> k) & 1) ? " on" : "") + '">' + esc(n) + "</span>"; }).join("");
     var ruinsN = D.ruins.filter(function (n, k) { return (xb[2] >> k) & 1; }).length;
     var mast = f.mst ? rows([["MASTERY points earned", f.mst], ["Unspent points", f.mpts || 0], ["MAX MP bonus", "+" + (f.b_mp || 0)]]) : "";
     $("p-more").innerHTML = "<h2>Journey</h2>" + rows([
       ["Dungeon chests opened", chestsOpened + " / " + chestsTotal],
-      ["Cottages visited", pop(f.houses) + " / " + HOUSES.length],
-      ["Ruins searched", ruinsN + " / " + D.ruins.length],
+      ["Cottage gifts taken", pop(f.houses & 0x2D) + " / 4"],
+      ["Ruin finds taken", ruinsN + " / " + D.ruins.length],
       ["Island quests done", ndone],
       ["Island quests in progress", (f.pq || []).length]
     ].concat(f.ngp ? [["Nocturne Tower checkpoint", ["none yet", "6F", "11F", "16F"][(f.tw || 0) & 3]],
@@ -966,8 +967,8 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
                       ["Piano sheet music", pop((f.twsh || 0) & 0x1FFFFF) + " / 21"]] : []).concat([
       ["Moored at the Tower Isle", (xb[3] & 0x40) ? "yes" : '<span class="dim">not yet</span>'],
       ["Music Room", pop((f.mroom || 0) & 0x1FFFFF) + " / 21 nocturnes heard"],
-      ["Time of day", TC.dayWord(f.minutes || 0).toLowerCase() + " (" + (f.minutes || 0) + " minutes played)"]])) + '<p class="hint" style="margin:14px 0 6px">Cottages</p><div class="chips">' + cot + "</div>" +
-      '<p class="hint" style="margin:14px 0 6px">Ruins</p><div class="chips">' + ruins + "</div>" +
+      ["Time of day", TC.dayWord(f.minutes || 0).toLowerCase() + " (" + (f.minutes || 0) + " minutes played)"]])) + '<p class="hint" style="margin:14px 0 6px">Cottage gifts taken (not visits; a full bag leaves a gift for later)</p><div class="chips">' + cot + "</div>" +
+      '<p class="hint" style="margin:14px 0 6px">Ruin finds taken</p><div class="chips">' + ruins + "</div>" +
       (mast ? '<p class="hint" style="margin:14px 0 6px">Mastery</p>' + mast : "");
     $("tale").hidden = false;
   }
