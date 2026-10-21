@@ -65,6 +65,7 @@
   .disc .disc-sub{ margin-left:auto; color:var(--dim); text-transform:none; letter-spacing:0; font-weight:400; }
   #tale-body[hidden], #admin-body[hidden], .admin-wrap[hidden]{ display:none; }
   #tale-body{ display:flex; flex-direction:column; gap:20px; }
+  #tale{ display:flex; flex-direction:column; gap:20px; } #tale[hidden]{ display:none; }
   .admin-wrap{ display:flex; flex-direction:column; gap:10px; }
   .cols{ column-count:2; column-gap:20px; }
   .cols > .panel{ break-inside:avoid; -webkit-column-break-inside:avoid; display:inline-block; width:100%; margin:0 0 20px; box-sizing:border-box; min-width:0; }
@@ -154,24 +155,6 @@
   </header>
 
   <main>
-    <section class="panel">
-      <h2>Read your tale</h2>
-      <p class="hint">Your whole adventure travels as a <b>TALE CODE</b>: on the cartridge open
-        YOUR TALE &rsaquo; TALE CODE and either scan its QR with your phone's camera or type the code in here.
-        The stats are worked out from the code right in your browser. If you are signed in, the code is kept on your account until
-        you read a new one, so it follows you to any device; signed out, it is only remembered in this browser.
-        Either way the code is private: only you can see it. Its ACHIEVEMENTS can go on the public COMPLETION BOARD below
-        if you choose to submit them.</p>
-      <label for="codein" class="hint" style="display:block;margin-bottom:6px">TALE CODE</label>
-      <textarea id="codein" spellcheck="false" autocomplete="off" autocapitalize="characters" placeholder="LMTH CDLG C6EQ 6EVP ..."></textarea>
-      <div class="btns">
-        <button type="button" class="btn-primary" id="readbtn">Read my tale</button>
-        <button type="button" class="btn-secondary" id="clearbtn">Clear</button>
-      </div>
-      <div id="readmsg"></div>
-      <p class="hint" id="savenote" style="margin:10px 0 0" aria-live="polite"></p>
-    </section>
-
     <div class="admin-wrap" id="adminpanel" hidden>
     <button type="button" class="disc" id="admin-toggle" aria-expanded="false" aria-controls="admin-body"><span class="chev" aria-hidden="true">&#9654;</span>Admin: every saved tale<span class="disc-sub">site admins only</span></button>
     <section class="panel" id="admin-body" hidden>
@@ -181,9 +164,10 @@
     </section>
     </div>
 
-    <div id="tale" hidden>
-      <button type="button" class="disc" id="tale-toggle" aria-expanded="true" aria-controls="tale-body"><span class="chev" aria-hidden="true">&#9654;</span>Your tale<span class="disc-sub">achievements, hero, gear, map, quests, journey</span></button>
+    <div id="talewrap">
+      <button type="button" class="disc" id="tale-toggle" aria-expanded="true" aria-controls="tale-body"><span class="chev" aria-hidden="true">&#9654;</span>Your tale<span class="disc-sub">achievements, hero, gear, map, quests, journey, your TALE CODE</span></button>
       <div id="tale-body">
+      <div id="tale" hidden>
       <section class="panel" id="p-ach">
         <h2>Achievements</h2>
         <div class="ach-head">
@@ -226,11 +210,29 @@
         <section class="panel" id="p-quests"></section>
       </div>
       </div>
+      <section class="panel">
+        <h2>Read your tale</h2>
+        <p class="hint">Your whole adventure travels as a <b>TALE CODE</b>: on the cartridge open
+          YOUR TALE &rsaquo; TALE CODE and either scan its QR with your phone's camera or type the code in here.
+          The stats are worked out from the code right in your browser. If you are signed in, the code is kept on your account until
+          you read a new one, so it follows you to any device; signed out, it is only remembered in this browser.
+          Either way the code is private: only you can see it. Its ACHIEVEMENTS can go on the public COMPLETION BOARD below
+          if you choose to submit them.</p>
+        <label for="codein" class="hint" style="display:block;margin-bottom:6px">TALE CODE</label>
+        <textarea id="codein" spellcheck="false" autocomplete="off" autocapitalize="characters" placeholder="LMTH CDLG C6EQ 6EVP ..."></textarea>
+        <div class="btns">
+          <button type="button" class="btn-primary" id="readbtn">Read my tale</button>
+          <button type="button" class="btn-secondary" id="clearbtn">Clear</button>
+        </div>
+        <div id="readmsg"></div>
+        <p class="hint" id="savenote" style="margin:10px 0 0" aria-live="polite"></p>
+      </section>
+      </div>
     </div>
 
     <section class="panel" id="p-board">
       <h2>Completion board</h2>
-      <p class="hint">Ranked by completion %, then badges, then whoever got there first. Read your TALE CODE above and submit it
+      <p class="hint">Ranked by completion %, then badges, then whoever got there first. Read your TALE CODE in Your tale above and submit it
         to join. Tap a row for its badges.</p>
       <div id="board-status" class="dim" style="font-size:12px;min-height:1.4em"></div>
       <div id="board"></div>
