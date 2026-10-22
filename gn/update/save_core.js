@@ -1,22 +1,11 @@
-/* GUARDIANS OF THE NOCTURNE save updater core: the JavaScript port of
- * tools/save_update/save_update.py (same scan, same file pick, same output
- * bytes; `py tools/save_update/save_update.py --selftest` cross-checks them).
- * Works on an 8 KB save block (ROM 0x1FA000) or on whole ROMs (updateRom).
- *   inspect(block)          -> {version, slot, era, files:[{file, used, lv, xp, gold, pieces, ngp, spot}], pick} or null
- *   saveBlock(block, slot)  -> {block: Uint8Array(8192), info, kept}  (throws Error)
- *   updateRom(old, nw, {slot, content, force}) -> {rom, info, kept}   (throws Error)
- * v1-v3 (FILE 1-3) saves are written back in their own format with only the
- * chosen file left; the new build converts them on load (save.c load_old).
- * v4 saves are copied as they are, or (a new ROM of a save-v5 build: the tag "GN-SAVE-V5") converted to v5.
- * v5 (THE EASTERN SEA: 1,024 bytes) only goes into a v5 build. Either goes to slot 0 of an erased block.
- *   saveBlock(block, slot, v5)  -> v5: the target build reads save v5 (isV5Rom) */
+
 (function (root) {
   "use strict";
   var ROM_SIZE = 0x200000, B32 = 0x1F8000, B33 = 0x1FA000, BLK = 0x2000;
   var REC_SIZE = 64, V1_REC = 40, SUSP_SIZE = 164, V3_SUSP_OFF = 348, V3_DISC_OFF = 204, V3_DISC = 48;
-  var ERAS = { 1: "nocturne_01-02", 2: "nocturne_03-11", 3: "nocturne_12-18", 4: "nocturne_19 - the Eastern Sea",
-               5: "the Eastern Sea or later" };
-  var V5_TAG = [0x47, 0x4E, 0x2D, 0x53, 0x41, 0x56, 0x45, 0x2D, 0x56, 0x35];   /* "GN-SAVE-V5" (save.c gn_save_tag) */
+  var ERAS = { 1: "nocturne_01-02", 2: "nocturne_03-11", 3: "nocturne_12-18", 4: "nocturne_19-45",
+               5: "nocturne_46 or later" };
+  var V5_TAG = [0x47, 0x4E, 0x2D, 0x53, 0x41, 0x56, 0x45, 0x2D, 0x56, 0x35];
   function isV5Rom(rom) {
     var n = Math.min(rom.length, B32) - V5_TAG.length, i, k;
     for (i = 0; i <= n; i++) {
@@ -27,7 +16,6 @@
     return false;
   }
   function saveLen(v) { return v === 5 ? 1024 : (v === 3 || v === 4) ? 512 : 256; }
-
   function slotVersion(b, s) {
     var o = s * 256;
     if (b[o] !== 0xCA || b[o + 1] !== 0xFE || b[o + 2] !== 0x20 || b[o + 3] !== 0x26) return 0;
@@ -36,7 +24,7 @@
   }
   function slotSave(b, s) {
     var v = slotVersion(b, s), p;
-    if ((s & 3) && slotVersion(b, s & ~3) === 5) return 0;   /* inside a v5 save (1,024 bytes) */
+    if ((s & 3) && slotVersion(b, s & ~3) === 5) return 0;
     if (v === 5) return (s & 3) ? 0 : v;
     if (v === 3 || v === 4) return (s & 1) ? 0 : v;
     if (v !== 1 && v !== 2) return 0;
@@ -105,7 +93,7 @@
     var n = newest(b);
     if (!n) return null;
     var v = n.v, buf = n.buf, d = { version: v, slot: n.slot, era: ERAS[v] || "?", files: [] }, used, sp;
-    if (v >= 5) { d.east = buf[648] & 1; d.ever = buf[649] & 0x1F; }   /* THE EASTERN SEA */
+    if (v >= 5) { d.x8 = buf[648] & 1; d.ever = buf[649] & 0x1F; }
     if (v >= 4) {
       used = buf[8] === 1;
       sp = buf.subarray(208, 208 + SUSP_SIZE);
@@ -123,7 +111,7 @@
     d.pick = k === null ? null : k + 1;
     return d;
   }
-  function toV5(buf) {                        /* a v4 save as v5 (bytes 512-1023 zero, version 5, checksum) */
+  function toV5(buf) {
     var nb = new Uint8Array(1024);
     nb.set(buf.subarray(0, 512), 0);
     nb[6] = 5;
@@ -138,7 +126,7 @@
     if (v >= 4) {
       if (slot !== null && slot !== 1) throw new Error("this save (v" + v + ", " + d.era + ") holds one tale: there is no FILE " + slot);
       if (buf[8] !== 1) throw new Error("the save holds no tale (erased)");
-      if (v === 5 && !v5) throw new Error("this save is v5 (the Eastern Sea): the new ROM is an older build that cannot read it");
+      if (v === 5 && !v5) throw new Error("this save needs a newer build");
       out.set((v === 4 && v5) ? toV5(buf) : buf, 0);
       return { block: out, info: d, kept: 1 };
     }
@@ -179,7 +167,6 @@
     return { rom: out, info: r.info, kept: r.kept };
   }
   function hasContent(rom) { return rom.length >= B32 + BLK && !blank(rom, B32); }
-
   var api = { inspect: inspect, saveBlock: saveBlock, updateRom: updateRom, romInfo: romInfo, hasContent: hasContent, isV5Rom: isV5Rom,
               ROM_SIZE: ROM_SIZE, B32: B32, B33: B33, BLK: BLK };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
