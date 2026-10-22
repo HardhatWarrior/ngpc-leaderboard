@@ -921,6 +921,12 @@
   function flattenProject(obj){
     if(isTrueColorProject(obj)) return flattenTrueColorProject(obj);
     if(!obj.version || obj.version<2) obj = migrateLegacyProject(obj);
+    // Multi-asset Tile Editor projects (version 4) keep each tile set under assets[]; import the
+    // one that was active when the project was saved.
+    if(obj.version===4 && Array.isArray(obj.assets) && obj.assets.length){
+      const a = obj.assets[obj.activeAsset||0] || obj.assets[0];
+      obj = { version:2, gridW:a.gridW, gridH:a.gridH, paletteBank:obj.paletteBank, layers:a.layers };
+    }
     const gridW = obj.gridW, gridH = obj.gridH;
     const w = gridW*8, h = gridH*8;
     const out = new Array(w*h).fill(A.TRANSPARENT);

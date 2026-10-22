@@ -118,6 +118,11 @@ details>summary{cursor:pointer;user-select:none;color:var(--dim);font-size:11px;
 .statusbar{display:flex;justify-content:space-between;color:var(--dim);font-size:11px;
   padding:4px 4px 0;gap:10px;}
 .paletteList{display:flex;flex-direction:column;gap:4px;max-height:140px;overflow:auto;}
+.assetRow{cursor:pointer;border:1px solid transparent;}
+.assetName{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.assetRow.active{border-color:var(--accent);background:var(--panel2);}
+.assetThumb{image-rendering:pixelated;flex:0 0 auto;max-width:40px;max-height:40px;background:var(--checker);border-radius:2px;}
+#assetList{max-height:320px;overflow:auto;}
 .paletteRow{display:flex;align-items:center;gap:6px;padding:4px 6px;border-radius:4px;
   border:1px solid transparent;cursor:pointer;}
 .paletteRow:hover{border-color:var(--border);}
@@ -171,10 +176,13 @@ label.chk{display:flex;align-items:center;gap:6px;cursor:pointer;}
       <input id="fileLoadProj" type="file" accept=".json,.ngptile" style="display:none">
       <a class="filelike" href="tilemap/" target="_blank" title="Arrange tiles from a saved project into a larger map (Save Project here, then Import Tileset there)" style="margin-left:6px">Tilemap Editor &rarr;</a>
       <a class="filelike" href="truecolor/" target="_blank" title="A separate per-pixel true-color canvas with no per-tile palette limit -- any of the 4096 RGB444 colors per pixel. Not for real tile hardware; useful for painting reference art or an avatar." style="margin-left:6px">True Color Tool &rarr;</a>
+      <a class="filelike" href="voxel/" target="_blank" title="Build a 3D voxel object and render it into an NGPC sprite sheet (N rotations x animation frames) that follows the same palette/tile rules -- exports .ngptile.json you can Load Project here" style="margin-left:6px">Voxel Sprite Tool &rarr;</a>
     </div>
     <div class="row">
       <button id="btnImportPng">Import PNG</button>
       <input id="fileImportPng" type="file" accept="image/png" style="display:none">
+      <button id="btnImportNtt" title="Import one or more NeoTile .ntt files (Soft'n Fuzzy NeoTile tile documents). Each NeoTile group can become its own asset, with its per-tile colours turned into shared palettes.">Import NeoTile</button>
+      <input id="fileImportNtt" type="file" accept=".ntt,.NTT" multiple style="display:none">
       <button id="btnPasteImage" title="Paste an image from the clipboard (copied from anywhere) straight into the same import flow as Import PNG. Ctrl+V on the canvas also works when there's an image on the clipboard.">Paste Image</button>
       <label class="chk" title="Only used by the 'Auto Palette Per Tile' import choice (and by Generate Palettes Per Tile below): caps how many new palettes it may create. If more distinct tile color-sets than this exist, the most similar ones are merged and affected tiles use the nearest surviving palette instead of their exact colors. Leave blank for no cap. Applies per-layer when Split into 2 Layers was also checked at import time.">
         Max palettes <input id="importMaxPalettes" type="number" min="1" max="256" step="1" style="width:52px" placeholder="&#8734;">
@@ -200,6 +208,21 @@ label.chk{display:flex;align-items:center;gap:6px;cursor:pointer;}
 
   <div id="left">
     <button id="btnCollapseLeft" class="sidebarToggle" title="Collapse this panel">◀</button>
+    <div class="panel" id="assetsPanel">
+      <h2>Assets</h2>
+      <div class="hint">Separate tile sets in this one project &mdash; e.g. player_walk (2x2), coin (1x1), font (16x6) &mdash; each with its own size, layers and groups, all sharing the palette bank. Saved together and exported as one C file. <span id="assetCount"></span></div>
+      <div class="paletteList" id="assetList" style="margin-top:6px"></div>
+      <div class="row" style="margin-top:6px">
+        <button id="btnAssetAdd" title="Add a new blank asset (same layer names as this one)">+ New</button>
+        <button id="btnAssetDup" title="Copy the active asset">Duplicate</button>
+        <button id="btnAssetFromSel" title="Copy the selected tiles (every layer) into a new asset">From Selection</button>
+      </div>
+      <div class="row" style="margin-top:6px">
+        <button id="btnAssetUp" title="Move the active asset up">&uarr;</button>
+        <button id="btnAssetDown" title="Move the active asset down">&darr;</button>
+        <button id="btnAssetDel" class="danger" title="Delete the active asset">Delete</button>
+      </div>
+    </div>
     <div class="panel">
       <h2>Grid Size (tiles)</h2>
       <div class="row">
@@ -2193,7 +2216,7 @@ function setupPanelReordering(){
       const panels=[...container.querySelectorAll('.panel')];
       const byKey=new Map(panels.map(p=>[p.dataset.panelKey,p]));
       savedOrder.forEach(k=>{ const p=byKey.get(k); if(p) container.appendChild(p); });
-      panels.forEach(p=>{ if(!savedOrder.includes(p.dataset.panelKey)) container.appendChild(p); });
+      panels.forEach(p=>{ if(!savedOrder.includes(p.dataset.panelKey)) container.insertBefore(p, container.querySelector('.panel')); });
     }
     function persistOrder(){
       const order=[...container.querySelectorAll('.panel')].map(p=>p.dataset.panelKey);
@@ -2294,6 +2317,7 @@ document.getElementById('btnNew').onclick=async ()=>{
   state.drawColor=1; state.drawColor2=2;
   state.layers=[ makeLayer('Layer 1') ];
   state.activeLayer=0;
+  assets=[{name:'asset1',gridW:2,gridH:2,activeLayer:0,layers:null,undoStack:[],redoStack:[]}]; activeAssetIdx=0; renderAssetList();
   selection=null; clipboard=null;
   syncGridInputs(); renderAllPaletteUI(); render(); scheduleAutosave();
 };
@@ -2307,12 +2331,13 @@ function packRowFor(layer,x0,y){
   }
   return word;
 }
-function generateCode(){
-  const name=document.getElementById('projName').value.trim() || 'my_tiles';
+function generateCode(nameOverride,mode){
+  const name=nameOverride || document.getElementById('projName').value.trim() || 'my_tiles';
   const far=document.getElementById('chkFar').checked ? 'NGP_FAR ' : '';
   const comments=document.getElementById('chkComments').checked;
   const tw=state.gridW, th=state.gridH;
   let lines=[];
+  if(mode!=='palonly'){
   lines.push(`/* Generated by NGPC Tile Editor. ${tw}x${th} tile grid, 8x8px tiles, 2bpp, ${state.layers.length} layer(s). */`);
   lines.push(`/* Tile order within each layer: row-major (left-to-right, top-to-bottom). */`);
   lines.push(`/* Each layer is one screen plane's worth of tiles (e.g. sprite back/front, SCR1/SCR2) -- wire each up separately. */`);
@@ -2370,6 +2395,8 @@ function generateCode(){
     }
   });
 
+  }
+  if(mode!=='nopal'){
   lines.push(`/* Shared palette table -- every layer above references indices into this. */`);
   lines.push(`static const u8 ${name}_palette_count = ${state.paletteBank.length}u;`);
   lines.push(`static const u16 ${far}${name}_palettes[] = {`);
@@ -2379,9 +2406,10 @@ function generateCode(){
     lines.push(tag + '    '+words.join(', ')+(pi<state.paletteBank.length-1?',':''));
   });
   lines.push('};');
+  }
   return lines.join('\n');
 }
-function refreshCode(){ document.getElementById('codeOut').value=generateCode(); }
+function refreshCode(){ document.getElementById('codeOut').value=generateCodeAll(); }
 document.getElementById('btnRegen').onclick=refreshCode;
 document.getElementById('chkFar').onchange=refreshCode;
 document.getElementById('chkComments').onchange=refreshCode;
@@ -2964,8 +2992,367 @@ function extractPalette(data,w,h){
   return colors;
 }
 
-/* ---------- project save/load ---------- */
+
+/* ---------- assets: several separate tile sets in one project (NeoTile-style groups) ----------
+   A project holds a list of named assets (each its own grid size, layers and tile groups) that
+   all share the project's palette bank. Only the active asset lives in `state`; the others are
+   kept serialized (plain arrays, same shape as a saved layer) together with their own undo
+   history. A project with one asset saves exactly like before (version 2); two or more save as
+   version 4 ({assets:[...]}), which the C export and the Tilemap Editor both understand. */
+let assets=[{name:'asset1',gridW:2,gridH:2,activeLayer:0,layers:null,undoStack:[],redoStack:[]}];
+let activeAssetIdx=0;
+function serializeLiveLayers(){
+  return state.layers.map(l=>({
+    name:l.name, visible:l.visible, defaultPalette:l.defaultPalette,
+    pixels:Array.from(l.pixels), tilePalette:Array.from(l.tilePalette),
+    groups:(l.groups||[]).map(g=>({...g})),
+    refRGBA: l.refRGBA ? Array.from(l.refRGBA) : null, refConverted: !!l.refConverted,
+  }));
+}
+function deserializeLayers(arr){
+  return arr.map(l=>({
+    name:l.name, visible:l.visible!==false, defaultPalette:clamp(l.defaultPalette||0,0,state.paletteBank.length-1),
+    pixels:Uint8Array.from(l.pixels), tilePalette:Int16Array.from(l.tilePalette),
+    groups:(l.groups||[]).map(g=>({...g})),
+    refRGBA: l.refRGBA ? Uint8ClampedArray.from(l.refRGBA) : null, refConverted: !!l.refConverted,
+  }));
+}
+function captureLiveAsset(){
+  const a=assets[activeAssetIdx];
+  a.gridW=state.gridW; a.gridH=state.gridH; a.activeLayer=state.activeLayer;
+  a.layers=serializeLiveLayers(); a.undoStack=undoStack; a.redoStack=redoStack;
+}
+function putAssetInState(a){
+  state.gridW=a.gridW; state.gridH=a.gridH;
+  state.layers=deserializeLayers(a.layers);
+  state.activeLayer=clamp(a.activeLayer||0,0,state.layers.length-1);
+}
+function resetTransientSelection(){
+  selection=null; pixelMask=null; pasteGhost=null; wandPasteHover=null;
+  drawing=false; shapeStart=null; shapeEnd=null; selMoving=false; wandMoving=false;
+}
+function loadAssetLive(i){
+  activeAssetIdx=i;
+  const a=assets[i];
+  putAssetInState(a);
+  undoStack=a.undoStack||[]; redoStack=a.redoStack||[];
+  resetTransientSelection();
+  syncGridInputs(); renderAllLayerUI(); render(); renderAssetList();
+}
+function switchAsset(i){
+  if(i===activeAssetIdx||i<0||i>=assets.length) return;
+  captureLiveAsset(); loadAssetLive(i); scheduleAutosave();
+}
+function uniqueAssetName(base,skipIdx){
+  base=String(base||'asset').trim()||'asset';
+  const taken=new Set(assets.filter((a,i)=>i!==skipIdx).map(a=>sanitizeIdent(a.name)));
+  if(!taken.has(sanitizeIdent(base))) return base;
+  for(let n=2;;n++){ const c=base+'_'+n; if(!taken.has(sanitizeIdent(c))) return c; }
+}
+function assetIsEmpty(a,live){
+  const layers=live?state.layers:(a.layers||[]);
+  return layers.every(l=>{ for(let i=0;i<l.pixels.length;i++) if(l.pixels[i]) return false; return true; });
+}
+
+/* thumbnails */
+function drawAssetThumb(cv,gw,gh,layers){
+  const w=gw*TILE,h=gh*TILE, ctx2=cv.getContext('2d');
+  const sc=Math.min(40/w,40/h);
+  cv.width=Math.max(1,Math.round(w*Math.min(sc,4))); cv.height=Math.max(1,Math.round(h*Math.min(sc,4)));
+  const img=ctx2.createImageData(w,h), d=img.data;
+  layers.forEach(l=>{
+    if(l.visible===false) return;
+    for(let y=0;y<h;y++) for(let x=0;x<w;x++){
+      const v=l.pixels[y*w+x]; if(!v) continue;
+      const ov=l.tilePalette[((y/TILE)|0)*gw+((x/TILE)|0)];
+      const pal=state.paletteBank[ov>=0?ov:l.defaultPalette]||state.paletteBank[0];
+      const c=pal.colors[v], o=(y*w+x)*4; d[o]=c.r*17; d[o+1]=c.g*17; d[o+2]=c.b*17; d[o+3]=255;
+    }
+  });
+  const off=document.createElement('canvas'); off.width=w; off.height=h; off.getContext('2d').putImageData(img,0,0);
+  ctx2.imageSmoothingEnabled=false; ctx2.clearRect(0,0,cv.width,cv.height); ctx2.drawImage(off,0,0,cv.width,cv.height);
+}
+function renderAssetList(){
+  const wrap=document.getElementById('assetList'); if(!wrap) return;
+  wrap.innerHTML='';
+  assets.forEach((a,i)=>{
+    const live=i===activeAssetIdx;
+    const gw=live?state.gridW:a.gridW, gh=live?state.gridH:a.gridH;
+    const row=document.createElement('div');
+    row.className='paletteRow assetRow'+(live?' active':'');
+    row.title=live?'Active asset':'Click to edit this asset';
+    const cv=document.createElement('canvas'); cv.className='assetThumb';
+    drawAssetThumb(cv,gw,gh,live?state.layers:a.layers);
+    const nm=document.createElement('span'); nm.className='assetName'; nm.textContent=a.name;
+    nm.title='Double-click to rename';
+    nm.ondblclick=e=>{
+      e.stopPropagation();
+      const inp=document.createElement('input'); inp.type='text'; inp.value=a.name; inp.style.width='100px';
+      let done=false;
+      const commit=ok=>{ if(done) return; done=true; const v=inp.value.trim(); if(ok&&v) a.name=uniqueAssetName(v,i); renderAssetList(); refreshCode(); scheduleAutosave(); };
+      inp.onclick=ev=>ev.stopPropagation();
+      inp.onkeydown=ev=>{ if(ev.key==='Enter'){ ev.preventDefault(); commit(true); } else if(ev.key==='Escape'){ commit(false); } ev.stopPropagation(); };
+      inp.onblur=()=>commit(true);
+      nm.replaceWith(inp); inp.focus(); inp.select();
+    };
+    const tag=document.createElement('span'); tag.className='tag'; tag.textContent=gw+'x'+gh;
+    row.appendChild(cv); row.appendChild(nm); row.appendChild(tag);
+    row.onclick=()=>switchAsset(i);
+    wrap.appendChild(row);
+  });
+  document.getElementById('assetCount').textContent=assets.length>1?`${assets.length} assets`:'1 asset';
+  document.getElementById('btnAssetDel').disabled=assets.length<=1;
+}
+function refreshLiveAssetThumb(){
+  const row=document.querySelectorAll('#assetList .assetRow')[activeAssetIdx]; if(!row) return;
+  const cv=row.querySelector('canvas'); if(cv) drawAssetThumb(cv,state.gridW,state.gridH,state.layers);
+  const tag=row.querySelector('.tag'); if(tag) tag.textContent=state.gridW+'x'+state.gridH;
+}
+function blankLayersLike(gw,gh){
+  return state.layers.map(l=>({name:l.name,visible:true,defaultPalette:l.defaultPalette,
+    pixels:new Array(gw*gh*TILE*TILE).fill(0),tilePalette:new Array(gw*gh).fill(-1),groups:[],refRGBA:null,refConverted:false}));
+}
+function addAsset(rec,atIdx){
+  captureLiveAsset();
+  const a={name:uniqueAssetName(rec.name),gridW:rec.gridW,gridH:rec.gridH,activeLayer:rec.activeLayer||0,layers:rec.layers,undoStack:[],redoStack:[]};
+  const at=atIdx==null?assets.length:atIdx;
+  assets.splice(at,0,a);
+  loadAssetLive(at); scheduleAutosave();
+}
+document.getElementById('btnAssetAdd').onclick=()=>{
+  addAsset({name:'asset'+(assets.length+1),gridW:2,gridH:2,layers:blankLayersLike(2,2)},activeAssetIdx+1);
+};
+document.getElementById('btnAssetDup').onclick=()=>{
+  captureLiveAsset();
+  const a=assets[activeAssetIdx];
+  addAsset({name:a.name+'_copy',gridW:a.gridW,gridH:a.gridH,activeLayer:a.activeLayer,layers:JSON.parse(JSON.stringify(a.layers))},activeAssetIdx+1);
+};
+document.getElementById('btnAssetFromSel').onclick=()=>{
+  if(!selection){ modalAlert('Select tile(s) first with the Select tool, then click this to copy them into a new asset.'); return; }
+  const x0=selection.x0,y0=selection.y0,w=selection.x1-selection.x0+1,h=selection.y1-selection.y0+1;
+  const layers=state.layers.map(l=>{
+    const px=new Array(w*h*TILE*TILE).fill(0), tp=new Array(w*h).fill(-1);
+    for(let y=0;y<h*TILE;y++) for(let x=0;x<w*TILE;x++) px[y*w*TILE+x]=getLayerPix(l,x0*TILE+x,y0*TILE+y);
+    for(let ty=0;ty<h;ty++) for(let tx=0;tx<w;tx++) tp[ty*w+tx]=tilePaletteAt(l,x0+tx,y0+ty);
+    return {name:l.name,visible:l.visible,defaultPalette:l.defaultPalette,pixels:px,tilePalette:tp,groups:[],refRGBA:null,refConverted:false};
+  });
+  addAsset({name:assets[activeAssetIdx].name+'_part',gridW:w,gridH:h,activeLayer:state.activeLayer,layers},activeAssetIdx+1);
+};
+document.getElementById('btnAssetDel').onclick=async ()=>{
+  if(assets.length<=1) return;
+  const a=assets[activeAssetIdx];
+  const ok=await modalConfirm(`Delete asset "${a.name}"? Its tiles are removed from the project (and from the C export). This can't be undone.`);
+  if(!ok) return;
+  assets.splice(activeAssetIdx,1);
+  loadAssetLive(clamp(activeAssetIdx,0,assets.length-1)); refreshCode(); scheduleAutosave();
+};
+function moveAsset(d){
+  const j=activeAssetIdx+d; if(j<0||j>=assets.length) return;
+  const t=assets[j]; assets[j]=assets[activeAssetIdx]; assets[activeAssetIdx]=t; activeAssetIdx=j;
+  renderAssetList(); refreshCode(); scheduleAutosave();
+}
+document.getElementById('btnAssetUp').onclick=()=>moveAsset(-1);
+document.getElementById('btnAssetDown').onclick=()=>moveAsset(1);
+
+/* ---------- project (de)serialization with assets ---------- */
 function serializeProject(){
+  const base=serializeProjectV2();
+  if(assets.length<=1){ base.assetName=assets[0].name; return base; }
+  captureLiveAsset();
+  return {
+    version:4, name:base.name, paletteBank:base.paletteBank, activePalette:base.activePalette,
+    activeAsset:activeAssetIdx,
+    assets:assets.map(a=>({name:a.name,gridW:a.gridW,gridH:a.gridH,activeLayer:a.activeLayer||0,layers:a.layers})),
+  };
+}
+function applyProjectData(obj){
+  if(obj && obj.version===4 && Array.isArray(obj.assets) && obj.assets.length){
+    document.getElementById('projName').value=obj.name||'my_tiles';
+    state.paletteBank=obj.paletteBank.map(p=>mkPalette(p.name,p.colors));
+    state.activePalette=clamp(obj.activePalette||0,0,state.paletteBank.length-1);
+    assets=obj.assets.map(a=>({name:a.name||'asset',gridW:a.gridW,gridH:a.gridH,activeLayer:a.activeLayer||0,
+      layers:a.layers,undoStack:[],redoStack:[]}));
+    activeAssetIdx=clamp(obj.activeAsset||0,0,assets.length-1);
+    putAssetInState(assets[activeAssetIdx]);
+  } else {
+    applyProjectDataV2(obj);
+    assets=[{name:(obj&&obj.assetName)||'asset1',gridW:state.gridW,gridH:state.gridH,activeLayer:state.activeLayer,layers:null,undoStack:[],redoStack:[]}];
+    activeAssetIdx=0;
+  }
+  renderAssetList();
+}
+
+/* ---------- C export across assets ---------- */
+function generateCodeAll(){
+  if(assets.length<=1) return generateCode();
+  captureLiveAsset();
+  const proj=sanitizeIdent(document.getElementById('projName').value.trim()||'my_tiles');
+  const saved={gridW:state.gridW,gridH:state.gridH,layers:state.layers,activeLayer:state.activeLayer};
+  const out=[];
+  out.push(`/* Generated by NGPC Tile Editor. Project "${proj}": ${assets.length} assets sharing one palette table (${proj}_palettes, at the end). */`);
+  out.push(`/* Each asset below is a separate tile set with its own grid size, tile arrays and per-tile palette indices. */`);
+  out.push(`#define ${proj.toUpperCase()}_ASSET_COUNT ${assets.length}u`);
+  out.push('');
+  const used=new Set();
+  try{
+    assets.forEach((a,i)=>{
+      let id=sanitizeIdent(proj+'_'+a.name), k=2; while(used.has(id)) id=sanitizeIdent(proj+'_'+a.name+'_'+(k++)); used.add(id);
+      putAssetInState(a);
+      out.push(`/* ======================== Asset ${i}: "${a.name}" (${a.gridW}x${a.gridH} tiles) ======================== */`);
+      out.push(generateCode(id,'nopal'));
+      out.push('');
+    });
+  } finally {
+    state.gridW=saved.gridW; state.gridH=saved.gridH; state.layers=saved.layers; state.activeLayer=saved.activeLayer;
+  }
+  out.push(generateCode(proj,'palonly'));
+  return out.join('\n');
+}
+
+/* ---------- NeoTile (.ntt) import ----------
+   NeoTile v0.03 (Soft'n Fuzzy, 2002) saves plain text:
+     ;// NeoTile: GroupWidth 2          <- document-wide group size in tiles
+     ;// NeoTile: GroupHeight 2
+     ;// NeoTile: TileColour0 255,255,255   <- every tile carries its own 4 colours (8-bit RGB)
+     ...TileColour3
+     Name:                             <- optional label naming the tile (usually a group's first tile)
+         DW 0000000000010101b          <- 8 rows, 2 bits per pixel, leftmost pixel first
+   Consecutive runs of GroupWidth*GroupHeight tiles form a group, laid out row-major. */
+function parseNtt(text){
+  let gw=1,gh=1,cols=[[0,0,0],[0,0,0],[0,0,0],[0,0,0]],name=null,cur=null;
+  const tiles=[];
+  text.split(/\r?\n/).forEach(line=>{
+    const s=line.trim(); if(!s) return;
+    let m=s.match(/^;\/\/\s*NeoTile:\s*(\w+)\s+(.*)$/);
+    if(m){
+      const k=m[1], v=m[2].trim();
+      if(k==='GroupWidth') gw=clamp(parseInt(v,10)||1,1,32);
+      else if(k==='GroupHeight') gh=clamp(parseInt(v,10)||1,1,32);
+      else if(/^TileColour[0-3]$/.test(k)){ const p=v.split(',').map(n=>parseInt(n,10)||0); cols=cols.slice(); cols[+k.slice(-1)]=[p[0]||0,p[1]||0,p[2]||0]; }
+      return;
+    }
+    if(s[0]===';') return;
+    m=s.match(/^dw\s+([01]{16})b?/i);
+    if(m){
+      if(!cur){ cur={name,rows:[],cols}; name=null; }
+      cur.rows.push(m[1]);
+      if(cur.rows.length===8){ tiles.push(cur); cur=null; }
+      return;
+    }
+    if(s.endsWith(':')) name=s.slice(0,-1).trim();
+  });
+  return {gw,gh,tiles};
+}
+function to444(c){ return {r:clamp(Math.round(c[0]/17),0,15),g:clamp(Math.round(c[1]/17),0,15),b:clamp(Math.round(c[2]/17),0,15)}; }
+// Build assets from parsed files. `bank` is extended in place; identical 4-colour sets share one palette.
+function nttToAssets(files,bank,mode){
+  const keyOf=cs=>cs.map(c=>c.r+','+c.g+','+c.b).join('|');
+  const palIndex=new Map(bank.map((p,i)=>[keyOf(p.colors),i]));
+  const palFor=(cols,base)=>{
+    const cs=cols.map(to444), k=keyOf(cs);
+    if(palIndex.has(k)) return palIndex.get(k);
+    bank.push(mkPalette(base+'_pal'+bank.length,cs)); palIndex.set(k,bank.length-1); return bank.length-1;
+  };
+  const out=[];
+  files.forEach(({fileName,parsed})=>{
+    const base=fileName.replace(/\.ntt$/i,'');
+    const {gw,gh,tiles}=parsed, per=gw*gh, nGroups=Math.ceil(tiles.length/per);
+    const tilePal=tiles.map(t=>palFor(t.cols,base));
+    const groupName=(g)=>{ const t=tiles[g*per]; return (t&&t.name)?t.name:(nGroups===1?base:base+'_'+g); };
+    const makeAsset=(name,AW,AH,place)=>{ // place(tileIndex)->[tx,ty] or null
+      const PW=AW*TILE, px=new Array(AW*AH*TILE*TILE).fill(0), tp=new Array(AW*AH).fill(-1), groups=[];
+      const counts=new Map();
+      return {name,AW,AH,PW,px,tp,groups,counts};
+    };
+    const paint=(A,t,ti,tx,ty)=>{
+      for(let y=0;y<8;y++){ const r=t.rows[y]; for(let x=0;x<8;x++) A.px[(ty*8+y)*A.PW+tx*8+x]=parseInt(r.substr(x*2,2),2); }
+      A.tp[ty*A.AW+tx]=tilePal[ti]; A.counts.set(tilePal[ti],(A.counts.get(tilePal[ti])||0)+1);
+    };
+    const finish=A=>{
+      let def=0,best=-1; A.counts.forEach((c,p)=>{ if(c>best){best=c;def=p;} });
+      const tp=A.tp.map(p=>p===def?-1:p);
+      out.push({name:A.name,gridW:A.AW,gridH:A.AH,activeLayer:0,layers:[{name:'Layer 1',visible:true,defaultPalette:def,
+        pixels:A.px,tilePalette:tp,groups:A.groups,refRGBA:null,refConverted:false}]});
+    };
+    if(mode==='groups' && nGroups>1){
+      for(let g=0;g<nGroups;g++){
+        const A=makeAsset(groupName(g),gw,gh);
+        for(let k=0;k<per;k++){
+          const ti=g*per+k; if(ti>=tiles.length) break;
+          const tx=k%gw, ty=(k/gw)|0; paint(A,tiles[ti],ti,tx,ty);
+          if(k>0&&tiles[ti].name) A.groups.push({name:tiles[ti].name,x0:tx,y0:ty,w:1,h:1});
+        }
+        finish(A);
+      }
+    } else {
+      const cols=Math.max(1,Math.min(nGroups,Math.floor(16/gw)||1)), rows=Math.ceil(nGroups/cols);
+      const A=makeAsset(base,cols*gw,rows*gh);
+      for(let g=0;g<nGroups;g++){
+        const gx=(g%cols)*gw, gy=((g/cols)|0)*gh;
+        const t0=tiles[g*per];
+        if(t0&&t0.name&&nGroups>1) A.groups.push({name:t0.name,x0:gx,y0:gy,w:gw,h:gh});
+        for(let k=0;k<per;k++){
+          const ti=g*per+k; if(ti>=tiles.length) break;
+          const tx=gx+k%gw, ty=gy+((k/gw)|0); paint(A,tiles[ti],ti,tx,ty);
+          // the group's own label is already used above (or, for a one-group file, as the asset name)
+          const t=tiles[ti], groupLabel=(k===0 && nGroups>1);
+          if(t.name && !groupLabel && !(nGroups===1 && per===1)) A.groups.push({name:t.name,x0:tx,y0:ty,w:1,h:1});
+        }
+      }
+      finish(A);
+    }
+  });
+  return out;
+}
+async function importNttFiles(fileList){
+  const files=[];
+  for(const f of fileList){
+    try{ const parsed=parseNtt(await f.text()); if(!parsed.tiles.length) throw new Error('no tiles found'); files.push({fileName:f.name,parsed}); }
+    catch(err){ await modalAlert(`Could not read "${f.name}" as a NeoTile file: ${err.message}`); }
+  }
+  if(!files.length) return;
+  const totalGroups=files.reduce((n,f)=>n+Math.ceil(f.parsed.tiles.length/(f.parsed.gw*f.parsed.gh)),0);
+  const summary=files.map(f=>`${f.fileName}: ${f.parsed.tiles.length} tiles in ${Math.ceil(f.parsed.tiles.length/(f.parsed.gw*f.parsed.gh))} group(s) of ${f.parsed.gw}x${f.parsed.gh}`).join('\n');
+  const mode=await showModal(`NeoTile import\n\n${summary}\n\nHow should the groups become assets?\n• One asset per group — each NeoTile group (e.g. a 2x2 sprite frame) is its own asset, named from its first tile's label. (${totalGroups} asset${totalGroups===1?'':'s'})\n• One sheet per file — all of a file's groups laid out side by side in a single asset, each named group marked as a tile group.`,
+    [{label:'Cancel',value:null},{label:'One sheet per file',value:'sheet'},{label:'One asset per group',value:'groups',primary:true}]);
+  if(!mode) return;
+  const curEmpty=assets.length===1 && assetIsEmpty(null,true);
+  let dest='new';
+  if(!curEmpty){
+    dest=await showModal('Where should the imported assets go?',
+      [{label:'Cancel',value:null},{label:'Add to this project',value:'add'},{label:'New project tab',value:'new',primary:true}]);
+    if(!dest) return;
+  }
+  if(dest==='add'){
+    pushUndo(); captureLiveAsset();
+    const bank=state.paletteBank;
+    const recs=nttToAssets(files,bank,mode);
+    const first=assets.length;
+    recs.forEach(r=>assets.push({name:uniqueAssetName(r.name),gridW:r.gridW,gridH:r.gridH,activeLayer:0,layers:r.layers,undoStack:[],redoStack:[]}));
+    renderAllPaletteUI(); loadAssetLive(first); refreshCode(); scheduleAutosave();
+    modalAlert(`Added ${recs.length} asset${recs.length===1?'':'s'} to this project. The palette bank now has ${bank.length} palette${bank.length===1?'':'s'}.`);
+    return;
+  }
+  const bank=[];
+  const recs=nttToAssets(files,bank,mode);
+  const seen=new Set();
+  recs.forEach(r=>{ let n=r.name,k=2; while(seen.has(sanitizeIdent(n))) n=r.name+'_'+(k++); seen.add(sanitizeIdent(n)); r.name=n; });
+  const projNameNew=files.length===1?files[0].fileName.replace(/\.ntt$/i,''):'neotile_import';
+  const snap={version:4,name:projNameNew,paletteBank:bank,activePalette:0,activeAsset:0,assets:recs};
+  if(curEmpty){ loadProject(snap); renderProjectTabs(); }
+  else {
+    projects[activeProjectIdx]=captureActiveProjectSnapshot();
+    const rec={name:projNameNew,snapshot:snap,zoom:Math.max(zoom,12),anchor:'tl',undoStack:[],redoStack:[]};
+    projects.push(rec); activeProjectIdx=projects.length-1; loadSnapshotIntoLive(rec);
+  }
+  refreshCode(); scheduleAutosave();
+}
+document.getElementById('btnImportNtt').onclick=()=>document.getElementById('fileImportNtt').click();
+document.getElementById('fileImportNtt').onchange=(e)=>{ const fs=[...e.target.files]; e.target.value=''; if(fs.length) importNttFiles(fs); };
+
+
+/* ---------- project save/load ---------- */
+function serializeProjectV2(){
   return {
     version:2,
     name:document.getElementById('projName').value.trim()||'my_tiles',
@@ -3001,7 +3388,7 @@ function migrateLegacy(obj){
 // safe to reuse both for "Load Project" (which layers its own pushUndo+clipboard-clear on top)
 // and for project-tab switching (which deliberately leaves clipboard/wandClipboard untouched so
 // copy/paste can cross tabs).
-function applyProjectData(obj){
+function applyProjectDataV2(obj){
   if(!obj.version || obj.version<2) obj=migrateLegacy(obj);
   document.getElementById('projName').value=obj.name||'my_tiles';
   state.gridW=obj.gridW; state.gridH=obj.gridH;
@@ -3137,6 +3524,7 @@ function scheduleAutosave(){
       localStorage.setItem('ngpc_tile_editor_autosave', JSON.stringify(payload));
       const el=document.getElementById('autosaveHint');
       el.textContent='autosaved '+new Date().toLocaleTimeString();
+      refreshLiveAssetThumb();
     }catch(e){}
   },400);
 }
@@ -3173,6 +3561,7 @@ function init(){
   renderAnchorGrid();
   renderAllPaletteUI();
   renderProjectTabs();
+  renderAssetList();
   setupHintToggle();
   setupLightModeToggle();
   setupCollapsiblePanels();

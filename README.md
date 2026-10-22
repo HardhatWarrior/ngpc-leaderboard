@@ -78,7 +78,14 @@ firmware updated still lands somewhere real.
   (never reaches the server) so the retry is a guaranteed single hop, no risk of 404ing again.
 - **`tile_editor/`** — a separate but linked tool (2bpp tile/sprite editor, tilemap builder, and a
   true-color variant) a developer can use to design their avatar or game art, with an
-  "Import from Tile Editor" path into the avatar editor.
+  "Import from Tile Editor" path into the avatar editor. Also includes `tile_editor/voxel/`, the Voxel
+  Sprite Tool (3D voxel object -> NGPC sprite sheet). Tile Editor projects can hold several assets
+  (version 4 files, e.g. imported from NeoTile `.ntt`); the avatar import uses the active asset.
+- **`graphics_kit/`** — the NGPC Graphics Kit: the Tile Editor, Tilemap Editor and Voxel Sprite Tool
+  combined into one single-file page with tabs, one combined project file (`.ngpgfx.json`) and
+  hand-offs between them (voxel sheet -> Tile Editor, tile project -> Map Editor). Built by
+  `build_graphics_kit.py` in the ngpc-tile-editor repo; the only site change is the True Color link
+  pointing at `/tile_editor/truecolor/`.
 - **`release_kit/`** — the NGPC Release Kit: a single-file, client-side tool (Cover, Manual, Label and
   fold-and-glue Box editors sharing one project JSON) for packaging homebrew releases. Nothing is
   uploaded; projects save to / open from the user's own files.
