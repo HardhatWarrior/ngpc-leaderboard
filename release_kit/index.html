@@ -4075,10 +4075,16 @@ function makePage(kind,bgc){
 }
 function seed(){
  size={wmm:43,hmm:23,rmm:2};applySizePx();
- pages=[makePage('art','#10122b'),makePage('art','#ffd23f')];
- pages[0].els[1].text='HOMEBREW VOL. 1';
- pages[1].els[1].text='HOMEBREW VOL. 2';pages[1].els[3].text='HHW0002';
- cur=0;els=pages[0].els;setSel([]);
+ var p=makePage('fullimg','#10122b');
+ var bw=Math.round(W*0.3335*10)/10,bh=Math.round(bw*0.2012*10)/10,dh=bw*360/632,py=50*(bh-dh)/bh;
+ var lw=Math.round((W-2*SAFE)*0.1237*10)/10,lh2=Math.round(lw/0.826*10)/10;
+ p.els.push(
+  mkImg({name:'Supported by NGP COLOR',imgId:'badge_ngp_banner',x:W-bw,y:0,w:bw,h:bh,fit:'cover',py:py}),
+  mkText({name:'Copyright and serial',x:W-SAFE-170,y:22,w:170,text:'\u00a9 HHW 2026\nHHW0001',font:'IBM Plex Sans',size:11,lh:1.38,align:'right',color:'#ffffff'}),
+  mkImg({name:'NEOGEO POCKET logo',imgId:'tpl_logo',x:W-SAFE-lw,y:H-SAFE-lh2,w:lw,h:lh2,fit:'contain'})
+ );
+ pages=[p];
+ cur=0;els=p.els;setSel([]);
 }
 
 /* ---------- slot layouts ---------- */
@@ -5679,7 +5685,12 @@ var INIT_PROMISE=(async function init(){
  var restored=false;
  try{
   var raw=localStorage.getItem(STORE_KEY);
-  if(raw){await loadProject(JSON.parse(raw));restored=true;}
+  if(raw){
+   var ro=JSON.parse(raw),js=JSON.stringify(ro.pages||[]);
+   /* an untouched copy of the old two-label starter is not real work: let the current default win */
+   var untouched=Array.isArray(ro.pages)&&ro.pages.length===2&&!(ro.imgs&&Object.keys(ro.imgs).length)&&js.indexOf('HOMEBREW VOL. 1')>0&&js.indexOf('HOMEBREW VOL. 2')>0;
+   if(!untouched){await loadProject(ro);restored=true;}
+  }
  }catch(err){restored=false;}
  if(!restored){await applyTemplateOrSeed();}
  hist=[];hp=-1;commit();
