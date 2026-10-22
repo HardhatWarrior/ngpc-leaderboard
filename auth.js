@@ -884,6 +884,13 @@ window.NGPC_AUTH = (function(){
       if(!sum) return '';
       return sum.stars+'/90 stars'+(Number.isFinite(data.totalMoves) ? (' · '+data.totalMoves+' moves') : '');
     }
+    if(data.game==='BATMAN'){
+      // Numbers + fixed names only -- callers put this into innerHTML unescaped.
+      const BMN = ['Axis Chemicals','Batmobile','Batcave','Batwing','Cathedral'];
+      const secs = Number.isFinite(data.ticks) ? Math.floor(data.ticks*20/1199) : null;
+      const clock = secs === null ? '' : (' · '+Math.floor(secs/60)+':'+String(secs%60).padStart(2,'0'));
+      return (data.kind === 'stage' ? BMN[(data.stage||1)-1] : 'overall run')+clock;
+    }
     if(data.game==='PERSIA'){
       // Numbers only -- callers put this into innerHTML unescaped.
       const sum = persiaSummary(data);
