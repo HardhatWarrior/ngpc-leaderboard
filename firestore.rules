@@ -717,17 +717,24 @@ service cloud.firestore {
       function batmanRanksBetter(n, o) {
         return n.score > o.score || (n.score == o.score && n.ticks < o.ticks);
       }
-      function isBatmanScore(d) {
+      // (Split into three functions: written as one long && chain this validator is rejected at runtime for
+      // exceeding the rules expression limit, although each part passes on its own.)
+      function batmanNumbers(d) {
         return d.game == 'BATMAN'
           && d.keys().hasOnly(['game', 'kind', 'formatVersion', 'initials', 'stage', 'score', 'sourcePoints', 'ticks', 'mask', 'stages', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.score is int && d.score >= 1 && d.score <= 999999
           && d.sourcePoints is int && d.sourcePoints >= 0 && d.sourcePoints <= 999999
-          && d.ticks is int && d.ticks >= 1 && d.ticks <= 9999999
-          && ((d.kind == 'overall' && d.formatVersion == '2' && d.stage == 0 && d.mask in [0, 1, 3, 7, 15, 31]
+          && d.ticks is int && d.ticks >= 1 && d.ticks <= 9999999;
+      }
+      function batmanKind(d) {
+        return ((d.kind == 'overall' && d.formatVersion == '2' && d.stage == 0 && d.mask in [0, 1, 3, 7, 15, 31]
                 && d.stages is string && d.stages.matches('^[0-9]{35}$'))
               || (d.kind == 'stage' && d.formatVersion == '3' && d.stage is int && d.stage >= 1 && d.stage <= 5 && d.mask == 0 && d.stages == ''))
-          && d.source is string && d.source in ['qr', 'capture']
+          && d.source is string && d.source in ['qr', 'capture'];
+      }
+      function isBatmanScore(d) {
+        return batmanNumbers(d) && batmanKind(d)
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
           && d.submittedAt >= request.time.toMillis() - 300000
@@ -739,12 +746,12 @@ service cloud.firestore {
       // score may take an SK_ id (otherwise anyone could squat SK_<victim> and permanently block
       // that player, since only the doc's owner may update or delete it). Auto-ids never contain
       // '_', so every other game's add() is unaffected.
-      allow create: if (isBowlingScore(request.resource.data) || isTetrisScore(request.resource.data) || isYahtzeeScore(request.resource.data) || isFarkleScore(request.resource.data) || is2048Score(request.resource.data) || isOverRevScore(request.resource.data) || isGardeniaScore(request.resource.data) || isSudokuScore(request.resource.data) || isXenon2Score(request.resource.data) || isBreakoutScore(request.resource.data) || isMinesweeperScore(request.resource.data) || isDonTDieMrRobotScore(request.resource.data) || isFruityPalsRevengeScore(request.resource.data) || isHoratioGoesSnowboardingScore(request.resource.data) || isFurryScore(request.resource.data) || isCarcassonneScore(request.resource.data)
-          || (isSokobanScore(request.resource.data) && scoreId == 'SK_' + request.auth.uid)
-          || (isRedDragonScore(request.resource.data) && scoreId == 'RD_' + request.auth.uid + '_' + request.resource.data.heroId)
-          || (isPersiaScore(request.resource.data) && scoreId == 'PERSIA_' + request.auth.uid)
-          || (isNocturneScore(request.resource.data) && scoreId == 'GN_' + request.auth.uid)
-          || (isBatmanScore(request.resource.data) && ((request.resource.data.kind == 'overall' && scoreId == 'BATMAN_' + request.auth.uid) || (request.resource.data.kind == 'stage' && scoreId == 'BATMAN_' + request.auth.uid + '_' + string(request.resource.data.stage)))))
+      allow create: if (((request.resource.data.game == 'BATMAN' && isBatmanScore(request.resource.data)) && ((request.resource.data.kind == 'overall' && scoreId == 'BATMAN_' + request.auth.uid) || (request.resource.data.kind == 'stage' && scoreId == 'BATMAN_' + request.auth.uid + '_' + string(request.resource.data.stage)))) || (request.resource.data.game == 'BW' && isBowlingScore(request.resource.data)) || (request.resource.data.game == 'TT' && isTetrisScore(request.resource.data)) || (request.resource.data.game == 'YZ' && isYahtzeeScore(request.resource.data)) || (request.resource.data.game == 'FK' && isFarkleScore(request.resource.data)) || (request.resource.data.game == '2K' && is2048Score(request.resource.data)) || (request.resource.data.game == 'OV' && isOverRevScore(request.resource.data)) || (request.resource.data.game == 'GD' && isGardeniaScore(request.resource.data)) || (request.resource.data.game == 'SD' && isSudokuScore(request.resource.data)) || (request.resource.data.game == 'XN' && isXenon2Score(request.resource.data)) || (request.resource.data.game == 'BK' && isBreakoutScore(request.resource.data)) || (request.resource.data.game == 'MS' && isMinesweeperScore(request.resource.data)) || (request.resource.data.game == 'DDMR' && isDonTDieMrRobotScore(request.resource.data)) || (request.resource.data.game == 'RVNG' && isFruityPalsRevengeScore(request.resource.data)) || (request.resource.data.game == 'HGS' && isHoratioGoesSnowboardingScore(request.resource.data)) || (request.resource.data.game == 'FU' && isFurryScore(request.resource.data)) || (request.resource.data.game == 'CA' && isCarcassonneScore(request.resource.data))
+          || ((request.resource.data.game == 'SK' && isSokobanScore(request.resource.data)) && scoreId == 'SK_' + request.auth.uid)
+          || ((request.resource.data.game == 'RD' && isRedDragonScore(request.resource.data)) && scoreId == 'RD_' + request.auth.uid + '_' + request.resource.data.heroId)
+          || ((request.resource.data.game == 'PERSIA' && isPersiaScore(request.resource.data)) && scoreId == 'PERSIA_' + request.auth.uid)
+          || ((request.resource.data.game == 'GN' && isNocturneScore(request.resource.data)) && scoreId == 'GN_' + request.auth.uid)
+)
         && !(scoreId.matches('^SK_.*') && request.resource.data.game != 'SK')
         && !(scoreId.matches('^RD_.*') && request.resource.data.game != 'RD')
         && !(scoreId.matches('^PERSIA_.*') && request.resource.data.game != 'PERSIA')
