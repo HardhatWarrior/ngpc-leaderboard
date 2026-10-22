@@ -411,11 +411,20 @@
   // ---- Badges link + a one-line summary of what the loaded scores show (Nocturne's completion board entry) ----
   function renderBadgesPanel(name){
     const gn = allSubs.map(d=>d.data()).filter(d=>d.game === 'GN').sort((a,b)=>(b.submittedAt||0)-(a.submittedAt||0))[0];
+    const show = (r)=>{
+      el('badges-sum').textContent = r
+        ? 'Guardians of the Nocturne: ' + r.pct + '% complete · ' + r.badges + ' badges' + (r.complete ? ' · COMPLETE' : '')
+        : 'What this player has earned in each game.';
+    };
     el('badges-go').href = '/achievements/?u=' + encodeURIComponent(name.toLowerCase());
-    el('badges-sum').textContent = gn
-      ? 'Guardians of the Nocturne: ' + gn.pct + '% complete · ' + gn.badges + ' badges' + (gn.complete ? ' · COMPLETE' : '')
-      : 'What this player has earned in each game.';
+    show(gn);                                  // the stored figures at once, then the entry's sticky union (fromEntry)
     el('badges-panel').hidden = false;
+    if(gn && gn.code){
+      const s = document.createElement('script');
+      s.src = '/gn/achievements.js';
+      s.onload = ()=>{ try{ const r = window.NGPC_ACH_GN && window.NGPC_ACH_GN.fromEntry(gn); if(r) show(r); }catch(e){ /* keep the stored figures */ } };
+      document.head.appendChild(s);
+    }
   }
 
   boot();

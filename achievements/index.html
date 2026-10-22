@@ -133,18 +133,25 @@
       key:'gn', name:'Guardians of the Nocturne',
       // From the player's TALE CODE: their private saved one when it is their own page, else the code on their
       // public COMPLETION BOARD entry (scores/GN_<uid>, which the player puts there by submitting a tale).
+      // Badges are sticky: the board entry's `earned` union (fromEntry) is applied whenever an entry exists, so a
+      // NEW GAME+ code never unlights a badge earned on an earlier journey.
       async load(ctx){
         await loadScript('/gn/achievements.js');
         const G = window.NGPC_ACH_GN;
         let res = null, from = '';
+        const entries = ctx.scores.filter(d=>d.game === 'GN').sort((a,b)=>(b.submittedAt||0)-(a.submittedAt||0));
+        const entry = entries.length ? entries[0] : null;
         if(ctx.self){
           try{
             const d = await A.db.collection('taleCodes').doc(ctx.uid).get();
-            if(d.exists && d.data().code){ res = G.fromCode(d.data().code); from = 'your saved TALE CODE'; }
+            if(d.exists && d.data().code){
+              const code = d.data().code;
+              res = entry ? G.fromEntry({ code: code, earned: entry.earned, pct: entry.pct, complete: entry.complete }) : G.fromCode(code);
+              from = 'your saved TALE CODE' + (entry && Array.isArray(entry.earned) ? ' and the badges your COMPLETION BOARD entry keeps' : '');
+            }
           }catch(e){ /* fall back to the board entry */ }
         }
-        const entries = ctx.scores.filter(d=>d.game === 'GN').sort((a,b)=>(b.submittedAt||0)-(a.submittedAt||0));
-        if(!res && entries.length){ res = G.fromCode(entries[0].code); from = 'the COMPLETION BOARD entry'; }
+        if(!res && entry){ res = G.fromEntry(entry); from = 'the COMPLETION BOARD entry'; }
         const link = '<a href="/gn/">Guardians of the Nocturne page</a>';
         if(!res){
           return { note:'not started', earned:false, html:
