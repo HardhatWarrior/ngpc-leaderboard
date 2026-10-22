@@ -884,6 +884,10 @@ window.NGPC_AUTH = (function(){
       if(!sum) return '';
       return sum.stars+'/90 stars'+(Number.isFinite(data.totalMoves) ? (' · '+data.totalMoves+' moves') : '');
     }
+    if(data.game==='ACES'){
+      // Fixed names only -- callers put this into innerHTML unescaped.
+      return ['Rookie','Squadron Leader','Wing Commander','Ace'][data.mode] || '';
+    }
     if(data.game==='BATMAN'){
       // Numbers + fixed names only -- callers put this into innerHTML unescaped.
       const BMN = ['Axis Chemicals','Batmobile','Batcave','Batwing','Cathedral'];
