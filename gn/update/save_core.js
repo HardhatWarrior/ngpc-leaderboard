@@ -7,12 +7,26 @@
  *   updateRom(old, nw, {slot, content, force}) -> {rom, info, kept}   (throws Error)
  * v1-v3 (FILE 1-3) saves are written back in their own format with only the
  * chosen file left; the new build converts them on load (save.c load_old).
- * v4 saves are copied as they are. Either goes to slot 0 of an erased block. */
+ * v4 saves are copied as they are, or (a new ROM of a save-v5 build: the tag "GN-SAVE-V5") converted to v5.
+ * v5 (THE EASTERN SEA: 1,024 bytes) only goes into a v5 build. Either goes to slot 0 of an erased block.
+ *   saveBlock(block, slot, v5)  -> v5: the target build reads save v5 (isV5Rom) */
 (function (root) {
   "use strict";
   var ROM_SIZE = 0x200000, B32 = 0x1F8000, B33 = 0x1FA000, BLK = 0x2000;
   var REC_SIZE = 64, V1_REC = 40, SUSP_SIZE = 164, V3_SUSP_OFF = 348, V3_DISC_OFF = 204, V3_DISC = 48;
-  var ERAS = { 1: "nocturne_01-02", 2: "nocturne_03-11", 3: "nocturne_12-18", 4: "nocturne_19 or later" };
+  var ERAS = { 1: "nocturne_01-02", 2: "nocturne_03-11", 3: "nocturne_12-18", 4: "nocturne_19 - the Eastern Sea",
+               5: "the Eastern Sea or later" };
+  var V5_TAG = [0x47, 0x4E, 0x2D, 0x53, 0x41, 0x56, 0x45, 0x2D, 0x56, 0x35];   /* "GN-SAVE-V5" (save.c gn_save_tag) */
+  function isV5Rom(rom) {
+    var n = Math.min(rom.length, B32) - V5_TAG.length, i, k;
+    for (i = 0; i <= n; i++) {
+      if (rom[i] !== 0x47) continue;
+      for (k = 1; k < V5_TAG.length && rom[i + k] === V5_TAG[k]; k++) ;
+      if (k === V5_TAG.length) return true;
+    }
+    return false;
+  }
+  function saveLen(v) { return v === 5 ? 1024 : (v === 3 || v === 4) ? 512 : 256; }
 
   function slotVersion(b, s) {
     var o = s * 256;
@@ -22,31 +36,33 @@
   }
   function slotSave(b, s) {
     var v = slotVersion(b, s), p;
+    if ((s & 3) && slotVersion(b, s & ~3) === 5) return 0;   /* inside a v5 save (1,024 bytes) */
+    if (v === 5) return (s & 3) ? 0 : v;
     if (v === 3 || v === 4) return (s & 1) ? 0 : v;
     if (v !== 1 && v !== 2) return 0;
     if (s & 1) { p = slotVersion(b, s - 1); if (p === 3 || p === 4) return 0; }
     return v;
   }
-  function sum16(buf, o) {
+  function sum16(buf, o, n) {
     var s = 0;
-    for (var i = 4; i < 512; i++) if (i !== o && i !== o + 1) s += buf[i];
+    for (var i = 4; i < (n || 512); i++) if (i !== o && i !== o + 1) s += buf[i];
     return s & 0xFFFF;
   }
   function sum8(buf, end) { var s = 0; for (var i = 4; i < end; i++) s += buf[i]; return s & 0xFF; }
   function checksumOk(buf, v) {
-    if (v === 3 || v === 4) { var o = v === 4 ? 72 : 200; return (buf[o] | (buf[o + 1] << 8)) === sum16(buf, o); }
+    if (v >= 3 && v <= 5) { var o = v === 3 ? 200 : 72; return (buf[o] | (buf[o + 1] << 8)) === sum16(buf, o, saveLen(v)); }
     var end = v === 2 ? 200 : 128;
     return buf[end] === sum8(buf, end);
   }
   function fixChecksum(buf, v) {
-    if (v === 3 || v === 4) { var o = v === 4 ? 72 : 200, s = sum16(buf, o); buf[o] = s & 0xFF; buf[o + 1] = s >> 8; }
+    if (v >= 3 && v <= 5) { var o = v === 3 ? 200 : 72, s = sum16(buf, o, saveLen(v)); buf[o] = s & 0xFF; buf[o + 1] = s >> 8; }
     else { var end = v === 2 ? 200 : 128; buf[end] = sum8(buf, end); }
   }
   function newest(b) {
     for (var s = 31; s >= 0; s--) {
       var v = slotSave(b, s);
       if (!v) continue;
-      var n = (v === 3 || v === 4) ? 512 : 256;
+      var n = saveLen(v);
       var buf = new Uint8Array(b.subarray(s * 256, s * 256 + n));
       if (buf.length === n && checksumOk(buf, v)) return { slot: s, v: v, buf: buf };
     }
@@ -89,6 +105,7 @@
     var n = newest(b);
     if (!n) return null;
     var v = n.v, buf = n.buf, d = { version: v, slot: n.slot, era: ERAS[v] || "?", files: [] }, used, sp;
+    if (v >= 5) { d.east = buf[648] & 1; d.ever = buf[649] & 0x1F; }   /* THE EASTERN SEA */
     if (v >= 4) {
       used = buf[8] === 1;
       sp = buf.subarray(208, 208 + SUSP_SIZE);
@@ -106,7 +123,14 @@
     d.pick = k === null ? null : k + 1;
     return d;
   }
-  function saveBlock(b, slot) {
+  function toV5(buf) {                        /* a v4 save as v5 (bytes 512-1023 zero, version 5, checksum) */
+    var nb = new Uint8Array(1024);
+    nb.set(buf.subarray(0, 512), 0);
+    nb[6] = 5;
+    fixChecksum(nb, 5);
+    return nb;
+  }
+  function saveBlock(b, slot, v5) {
     var n = newest(b);
     if (!n) throw new Error("no Nocturne save in this ROM");
     var v = n.v, buf = n.buf, d = inspect(b), out = new Uint8Array(BLK).fill(0xFF), i, o;
@@ -114,7 +138,8 @@
     if (v >= 4) {
       if (slot !== null && slot !== 1) throw new Error("this save (v" + v + ", " + d.era + ") holds one tale: there is no FILE " + slot);
       if (buf[8] !== 1) throw new Error("the save holds no tale (erased)");
-      out.set(buf, 0);
+      if (v === 5 && !v5) throw new Error("this save is v5 (the Eastern Sea): the new ROM is an older build that cannot read it");
+      out.set((v === 4 && v5) ? toV5(buf) : buf, 0);
       return { block: out, info: d, kept: 1 };
     }
     var k = slot === null ? d.pick : slot;
@@ -147,7 +172,7 @@
     if (old.length < B33 + BLK) throw new Error("the old ROM is shorter than 2 MB: no save block in it");
     if (!opt.force && !blank(nw, B33)) throw new Error("the new ROM already holds a save");
     if (opt.content && !opt.force && !blank(nw, B32)) throw new Error("the new ROM already holds added content");
-    var r = saveBlock(old.subarray(B33, B33 + BLK), opt.slot === undefined ? null : opt.slot);
+    var r = saveBlock(old.subarray(B33, B33 + BLK), opt.slot === undefined ? null : opt.slot, isV5Rom(nw));
     var out = new Uint8Array(nw);
     out.set(r.block, B33);
     if (opt.content) out.set(old.subarray(B32, B32 + BLK), B32);
@@ -155,7 +180,7 @@
   }
   function hasContent(rom) { return rom.length >= B32 + BLK && !blank(rom, B32); }
 
-  var api = { inspect: inspect, saveBlock: saveBlock, updateRom: updateRom, romInfo: romInfo, hasContent: hasContent,
+  var api = { inspect: inspect, saveBlock: saveBlock, updateRom: updateRom, romInfo: romInfo, hasContent: hasContent, isV5Rom: isV5Rom,
               ROM_SIZE: ROM_SIZE, B32: B32, B33: B33, BLK: BLK };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.NocturneSaveCore = api;

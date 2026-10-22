@@ -705,7 +705,7 @@ service cloud.firestore {
       function isNocturneScore(d) {
         return d.game == 'GN'
           && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'pct', 'badges', 'journey', 'complete', 'earned', 'code', 'source', 'submittedAt', 'uid', 'username', 'approved'])
-          && d.formatVersion is string && d.formatVersion in ['9', '10', '11']
+          && d.formatVersion is string && d.formatVersion in ['9', '10', '11', '12']
           && gnEarnedOk(d)
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.pct is int && d.pct >= 0 && d.pct <= 100
