@@ -33,7 +33,10 @@
   .created-by a:hover, .hdr-link:hover{ color:var(--accent2); }
   .hdr-link{ font-size:11.5px; font-weight:600; color:var(--accent2); margin-top:4px; }
   .header-art{ width:130px; height:auto; flex:none; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; }
-  .header-art[hidden], .hdr-link[hidden], .game-desc[hidden], .game-version[hidden]{ display:none; }
+  .art-strip{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; flex:none; max-width:406px; }
+  .extra-art{ width:130px; height:auto; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; flex:none; }
+  @media (max-width:600px){ .extra-art{ display:none !important; } }
+  .extra-art[hidden], .header-art[hidden], .hdr-link[hidden], .game-desc[hidden], .game-version[hidden]{ display:none; }
   .game-version{ font-size:11px; color:var(--dim); }
   .game-desc{ font-size:12px; line-height:1.5; color:var(--dim); overflow-wrap:anywhere; }
   .game-desc a{ color:var(--accent2); text-decoration:underline; text-underline-offset:2px; }
@@ -139,7 +142,11 @@
   <header>
     <span class="eyebrow">Neo Geo Pocket Color &middot; Homebrew</span>
     <div class="header-row">
-      <img src="" alt="Guardians of the Nocturne title screen" class="header-art" id="header-art" width="160" height="152" hidden>
+      <div class="art-strip">
+        <img src="" alt="Guardians of the Nocturne title screen" class="header-art" id="header-art" width="160" height="152" hidden>
+        <img src="" alt="Guardians of the Nocturne screenshot (extra 1)" class="extra-art" id="extra-art-1" hidden>
+        <img src="" alt="Guardians of the Nocturne screenshot (extra 2)" class="extra-art" id="extra-art-2" hidden>
+      </div>
       <div class="title-block">
         <h1>GUARDIANS OF THE NOCTURNE</h1>
         <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
@@ -1535,6 +1542,9 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
     var gp = NGPC_AUTH.db ? NGPC_AUTH.db.collection("games").doc(GAME_SLUG).get().then(function (doc) {
       gameData = doc.exists ? doc.data() : {};
       if (art && gameData.titleImage) { art.src = gameData.titleImage; art.hidden = false; }
+      [gameData.extraScreenshot1Path, gameData.extraScreenshot2Path].forEach(function (u, i) {   /* up to two extra screenshots, as the other games show */
+        var x = $("extra-art-" + (i + 1)); if (x && /^https?:\/\/.+/i.test(u || "")) { x.src = u; x.hidden = false; }
+      });
       var safe = function (u) { return /^https?:\/\/.+/i.test(u || "") ? u : null; };
       if (gameData.version) { $("game-version").textContent = gameData.version; $("game-version").hidden = false; }
       if (gameData.romPath) {   /* no ROM, nothing to play either */
