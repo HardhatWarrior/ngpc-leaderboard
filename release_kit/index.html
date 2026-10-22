@@ -2098,7 +2098,15 @@ var INIT_PROMISE=(async function init(){
  var restored=false;
  try{
   var raw=localStorage.getItem(STORE_KEY);
-  if(raw){await loadProject(JSON.parse(raw));restored=true;}
+  if(raw){
+   var ro=JSON.parse(raw);
+   /* a session that is still the untouched old factory layout is not real work: let the current default win */
+   var OLDN=['Spine banner','Spine logo','Spine serial','Spine title','Front footer bar','Front title','Back description','Credits rule','Serial','Publisher','Developer'];
+   var untouched=ro&&Array.isArray(ro.els)&&ro.els.length&&ro.els.every(function(e){return e.slot||OLDN.indexOf(e.name)>=0;})
+    &&ro.els.some(function(e){return e.text==='Write your game description here. Add features, controls and review quotes.';})
+    &&!(ro.imgs&&Object.keys(ro.imgs).length);
+   if(!untouched){await loadProject(ro);restored=true;}
+  }
  }catch(err){restored=false;}
  if(!restored){await applyTemplateOrSeed();}
  hist=[];hp=-1;commit();
