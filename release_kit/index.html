@@ -2135,6 +2135,8 @@ window.NGPC_APPS['cover']={
  title:'Cover',ready:INIT_PROMISE,
  renderPart:function(part,dpi){return exportCanvas(part,dpi);},
  bgColors:function(){return Object.assign({},bg);},
+ getScene:function(){return JSON.parse(JSON.stringify({els:els,bg:bg}));},
+ factoryScene:function(){return JSON.parse(JSON.stringify({els:FACTORY.els,bg:FACTORY.bg}));},
  importPicture:async function(src,name,part){var id='i'+Math.random().toString(36).slice(2,9);await loadRec(id,src,name);if(!imgs[id])return false;var P=PANELS[part]||PANELS.front;var el=mkImg({name:name,imgId:id,x:P.x,y:0,w:P.w,h:H,fit:'cover',lockAr:false});els.push(el);setSel([el.id]);commit();rebuildInspector();draw();return true;},
  serialize:function(){return JSON.parse(serialize(true));},
  load:async function(o){var why=projectProblem(o);if(why)throw new Error(why);await loadProject(o);hist=[];hp=-1;commit();afterOpen();},
@@ -5759,6 +5761,12 @@ function mkRect(o){return Object.assign({id:uid(),type:'rect',x:100,y:100,w:300,
 
 function seed(){
  cfg=freshCfg();sanitizeCfg();guides=[];els=[];resetOrg();setSel([]);
+ /* a blank box that borrows the look of the Cover's starting layout (text, rules and library badges); nothing stays linked */
+ var c=window.NGPC_APPS&&window.NGPC_APPS.cover,sc=c&&c.factoryScene&&c.factoryScene();
+ if(sc){
+  geom().pieces.forEach(function(p){var pp=cfg.pieces[p.k];pp.mode='color';pp.color=(sc.bg&&sc.bg[CVMAP[p.k]])||'#c6c6c7';});
+  els=layersFromScene(sc,{skip:function(e){return e.type==='image'&&(!e.imgId||!/^(badge_|tpl_)/.test(e.imgId));}});
+ }
 }
 
 /* ---------- slot layouts ---------- */
@@ -6296,11 +6304,11 @@ function buildLayout(){
 }
 function buildPage(){
  var d=section('Backgrounds & guides',false),b=d._b,g=geom();
- b.append(mk('p',{className:'small',textContent:'Every piece of the box can carry its own colour or picture. Cover art continues the Cover tab; Colour and Blank make the piece independent of it. Click an empty spot on a piece to put new items there.'}));
+ b.append(mk('p',{className:'small',textContent:'Every piece of the box can carry its own colour, text, shapes and pictures, all editable like on the Cover. Use Copy Cover art in the Cover link panel to bring the cover over. Click an empty spot on a piece to put new items there.'}));
  g.pieces.forEach(function(p){
   var pp=cfg.pieces[p.k];if(!pp)return;
   b.append(mk('div',{className:'small',textContent:p.n}));
-  var wrap=mk('div',{className:'acts'}),sc=selectC(pp,'mode',[['cover','Cover art'],['color','Colour'],['none','Blank white']]),cc=colorC(pp,'color',function(){if(pp.mode!=='color'){pp.mode='color';refreshInspector();}});
+  var wrap=mk('div',{className:'acts'}),sc=selectC(pp,'mode',(pp.mode==='cover'?[['cover','Linked to Cover (use Unlink)']]:[]).concat([['color','Colour'],['none','Blank white']])),cc=colorC(pp,'color',function(){if(pp.mode!=='color'){pp.mode='color';refreshInspector();}});
   sc.id='boxi'+(++idc);sc.setAttribute('aria-label',p.n+' source');cc.id='boxi'+(++idc);cc.setAttribute('aria-label',p.n+' colour');
   sc.style.flex='1 1 110px';cc.style.flex='0 0 44px';
   wrap.append(sc,cc,btn('+ Image',function(){lastPiece=p.k;addPieceImage(p);}),btn('Zoom',function(){zoomToPiece(p);}));
@@ -6985,7 +6993,7 @@ async function doExport(){
 $('modalClose').addEventListener('click',function(){$('modal').className='';});
 
 /* ---------- box engine ---------- */
-var DEF={W:119.06,H:119.06,D:19.05,S:22.23,Gb:9,F:12,Tb:10,Lt:59,Fd:47,Ls:53.6,Sa:16,Tt:17,Tw:34,insideArt:'front',win:true,winStyle:'cradle',winW:60.33,winH:53.98,winDx:0,winDy:0,artFit:'edge',lines:true,hatch:true,bleed:2,paper:'letter',orient:'auto',margin:8,scale:'actual',dx:0,dy:0,instr:true,tabPos:'fold',split:false,splitGap:14,Gs:9,pieces:{}};
+var DEF={W:119.06,H:119.06,D:19.05,S:22.23,Gb:9,F:12,Tb:10,Lt:59,Fd:47,Ls:53.6,Sa:16,Tt:17,Tw:34,insideArt:'color',win:true,winStyle:'cradle',winW:60.33,winH:53.98,winDx:0,winDy:0,artFit:'edge',lines:true,hatch:true,bleed:2,paper:'letter',orient:'auto',margin:8,scale:'actual',dx:0,dy:0,instr:true,tabPos:'fold',split:false,splitGap:14,Gs:9,pieces:{}};
 var LIM={W:[40,300],H:[40,300],D:[5,60],S:[5,70],Gb:[0,30],F:[0,40],Tb:[0,30],Lt:[0,130],Fd:[0,100],Ls:[0,130],Sa:[0,60],Tt:[0,40],Tw:[10,200],winW:[10,200],winH:[10,200],winDx:[-100,100],winDy:[-100,100],bleed:[0,6],margin:[0,30],dx:[-10,10],dy:[-10,10],splitGap:[6,60],Gs:[3,30]};
 var PAPERS={letter:[215.9,279.4,'US Letter · 8.5 × 11 in'],a4:[210,297,'A4 · 210 × 297 mm'],legal:[215.9,355.6,'US Legal · 8.5 × 14 in'],tabloid:[279.4,431.8,'Tabloid · 11 × 17 in'],a3:[297,420,'A3 · 297 × 420 mm']};
 var OVERLAP=10,PREVIEW_DPI=150,noLines=false;
@@ -7006,8 +7014,8 @@ function sanitizeCfg(){
  geom().pieces.forEach(function(p){
   var pc=cfg.pieces[p.k];
   if(!pc||typeof pc!=='object')pc=cfg.pieces[p.k]={};
-  if(['cover','color','none'].indexOf(pc.mode)<0)pc.mode='cover';
-  if(!/^#[0-9a-f]{6}$/i.test(pc.color||''))pc.color='#10122b';
+  if(['cover','color','none'].indexOf(pc.mode)<0)pc.mode='color';
+  if(!/^#[0-9a-f]{6}$/i.test(pc.color||''))pc.color='#c6c6c7';
  });
 }
 function geomBox(){var g=geom(),bl=cfg.bleed;return {ox:g.b.x0-bl,oy:g.b.y0-bl,w:(g.b.x1-g.b.x0+2*bl)*S,h:(g.b.y1-g.b.y0+2*bl)*S};}
@@ -7076,31 +7084,42 @@ function addPieceImage(p){
 
 /* ---------- Cover link ---------- */
 var CVMAP={top:'front',inside:'front',wallT:'front',wallB:'front',strip:'back',back:'back',spine:'spine',front:'front',lipT:'front',lipB:'front',side:'front'};
-async function importFromCover(){
- var c=window.NGPC_APPS&&window.NGPC_APPS.cover;
- if(!c||!c.renderPart){say('The Cover tab is not available.');return;}
- say('Copying the Cover artwork into editable layers…');await new Promise(function(r){setTimeout(r,20);});
- var g=geom(),dpi=200,k=dpi/25.4,art=getArt(dpi),cols=c.bgColors?c.bgColors():{},n=0;
- g.pieces.forEach(function(p){var pp=cfg.pieces[p.k];pp.mode='color';pp.color=cols[CVMAP[p.k]]||'#10122b';});
- var map=[['back','back','Back art (from Cover)'],['spine','spine','Spine art (from Cover)'],['front','front','Front art (from Cover)']];
- for(var i=0;i<map.length;i++){
-  var p=pieceByKey(map[i][0]),w=pieceWorld(p),r=[p.r[0],0,p.r[2],cfg.H],ww=(r[2]-r[0])*S,hh=(r[3]-r[1])*S;
-  var pcv=panelCanvas(art&&art[map[i][1]],r[2]-r[0],r[3]-r[1],k,cfg.artFit,art&&art.bg&&art.bg[map[i][1]]),id='cv'+Math.random().toString(36).slice(2,7);
-  await loadRec(id,pcv.toDataURL('image/png'),map[i][2]);if(!imgs[id])continue;
-  els.push(mkImg({name:map[i][2],imgId:id,x:(r[0]-ORG.x)*S,y:(r[1]-ORG.y)*S,w:ww,h:hh,fit:'cover',lockAr:false}));n++;
- }
- if(cfg.insideArt!=='color'){
-  var ip=pieceByKey('inside'),iw=pieceWorld(ip),icv=insideCanvas(art,k),iid='cv'+Math.random().toString(36).slice(2,7);
-  await loadRec(iid,icv.toDataURL('image/png'),'Inside art (from Cover)');
-  if(imgs[iid]){els.push(mkImg({name:'Inside art (from Cover)',imgId:iid,x:iw.x,y:iw.y,w:iw.w,h:iw.h,fit:'cover',lockAr:false}));n++;}
- }
- setSel([]);commit();rebuildInspector();draw();
- say('Copied '+n+' pictures from the Cover onto the matching pieces and matched each piece colour. They are independent layers now: changing the Cover does not touch the box, and Follow the Cover relinks them.');
+var CVP={back:{x:0,w:779},spine:{x:779,w:174},front:{x:953,w:778}},CVH=907;
+function cvPanelOf(e){var cx=e.x+e.w/2;return cx<779?'back':(cx<953?'spine':'front');}
+/* Turn Cover elements into ordinary box layers, centred on the matching piece. */
+function layersFromScene(sc,o){
+ var out=[];o=o||{};
+ (sc.els||[]).forEach(function(src){
+  if(!src||(o.skip&&o.skip(src)))return;
+  var pk=cvPanelOf(src),tk=o.map?o.map[pk]:pk;
+  if(!tk||(o.only&&o.only.indexOf(tk)<0)||(o.panel&&o.panel!==pk))return;
+  var pc=pieceByKey(tk);if(!pc)return;
+  var pw=pieceWorld(pc),P=CVP[pk],e=JSON.parse(JSON.stringify(src));
+  e.id=uid();e.slot=null;e.an={};e.fromCover=true;
+  if(e.type==='rect'&&e.w>=P.w*0.98){e.x=pw.x;e.w=pw.w;}else e.x=pw.x+(src.x-P.x)+(pw.w-P.w)/2;
+  e.y=pw.y+src.y+(pw.h-CVH)/2;
+  out.push(sanitize(e));
+ });
+ return out;
 }
-function followCover(){
- geom().pieces.forEach(function(p){cfg.pieces[p.k].mode='cover';});
- setEls(els.filter(function(e){return !(e.imgId&&/^cv/.test(e.imgId));}));
- setSel([]);commit();artCache=null;rebuildInspector();draw();say('Every piece follows the Cover art again. Layers copied from the Cover were removed; your own layers were kept.');
+async function importFromCover(onlyLinked){
+ var c=window.NGPC_APPS&&window.NGPC_APPS.cover;
+ if(!c||!c.getScene){say('The Cover tab is not available.');return;}
+ var sc=c.getScene(),g=geom(),cols=sc.bg||{},keys=[];
+ g.pieces.forEach(function(p){var pp=cfg.pieces[p.k];if(!onlyLinked||pp.mode==='cover')keys.push(p.k);});
+ if(!keys.length){say('Nothing is linked to the Cover, so there is nothing to unlink.');return;}
+ var panelKeys=['back','spine','front'].filter(function(k){return keys.indexOf(k)>=0;});
+ /* replace earlier copies on the pieces being filled, keep everything else */
+ var before=els.length;
+ setEls(els.filter(function(e){return !(e.fromCover&&panelKeys.concat(keys.indexOf('inside')>=0?['inside']:[]).some(function(k){var q=pieceAtPx({x:e.x+e.w/2,y:e.y+e.h/2});return q&&q.k===k;}));}));
+ var removed=before-els.length,add=layersFromScene(sc,{only:panelKeys});
+ if(keys.indexOf('inside')>=0&&(cfg.insideArt==='front'||cfg.insideArt==='back')){
+  var m={};m[cfg.insideArt]='inside';add=add.concat(layersFromScene(sc,{map:m,panel:cfg.insideArt}));
+ }
+ g.pieces.forEach(function(p){if(keys.indexOf(p.k)<0)return;var pp=cfg.pieces[p.k];pp.mode='color';pp.color=cols[CVMAP[p.k]]||pp.color||'#c6c6c7';});
+ setEls(els.concat(add));artCache=null;
+ setSel([]);layoutAll();commit();rebuildInspector();draw();
+ say((onlyLinked?'Unlinked from the Cover. ':'')+'Copied '+add.length+' items from the Cover onto the matching pieces and matched each piece colour'+(removed?' (replacing '+removed+' earlier copies)':'')+'. They are ordinary layers now, so move, restyle or delete them like in the Cover editor. Nothing stays linked to the Cover.');
 }
 function exportPieceCanvas(part,dpi){
  var p=pieceByKey(part)||pieceByKey('front'),r=p.r,k=dpi/25.4,cn=document.createElement('canvas');
@@ -7123,9 +7142,9 @@ function bsel(b,label,key,opts2){b.append(rowOf(label,selectC(cfg,key,opts2)));}
 function note(b,t){b.append(mk('p',{className:'small',textContent:t}));}
 function appendBoxPanels(){
  var d=section('Cover link',false),b=d._b;
- note(b,'Build the cover and the box together or on their own. Copying makes independent layers, so changing one afterwards never touches the other.');
- b.append(btn('Copy Cover art into the box',importFromCover,'primary'),btn('Follow the Cover again',followCover));
- b.append(btn('Refresh art from the Cover tab',function(){artCache=null;draw();say('Artwork refreshed from the Cover tab.');}));
+ note(b,'The box starts blank and works on its own. Bring the Cover art over whenever you like; it arrives as editable layers and is never linked, so changing one afterwards never touches the other.');
+ b.append(btn('Copy Cover art into the box',function(){importFromCover(false);},'primary'),btn('Unlink from the Cover',function(){importFromCover(true);}));
+ note(b,'Copy brings the Cover text, shapes and pictures over as normal layers, replacing any earlier copy. Unlink keeps what a piece shows from an old live link but makes it editable.');
  var a2=mk('div',{className:'acts'});a2.append(btn('Send front → Cover',function(){sendToCover('front');}),btn('Send back → Cover',function(){sendToCover('back');}),btn('Send spine → Cover',function(){sendToCover('spine');}));b.append(a2);
  panelEl.append(d);
  d=section('Box size (mm)',false);b=d._b;
@@ -7133,9 +7152,9 @@ function appendBoxPanels(){
  note(b,'Defaults come from a real US NGPC box: 4 11/16″ (119.06 mm) square, tray ¾″ (19.05 mm) deep, ⅞″ (22.23 mm) closed.');
  panelEl.append(d);
  d=section('Artwork fit',false);b=d._b;
- bsel(b,'Inside face','insideArt',[['front','Copy of the front art'],['back','Copy of the back art'],['color','Cover background colour']]);
+ bsel(b,'Inside face on copy','insideArt',[['color','Plain colour'],['front','Copy of the front art'],['back','Copy of the back art']]);
  bsel(b,'Fit to piece','artFit',[['edge','Full height, edges extended'],['fill','Fill the piece (crops)'],['stretch','Stretch to the piece']]);
- note(b,'Applies to pieces set to Cover art. Walls, flaps, tabs and lips continue the background colour of the panel they are attached to.');
+ note(b,'Walls, flaps, tabs and lips continue the colour of the panel they are attached to. Fit only applies to pieces still on an old live Cover link.');
  panelEl.append(d);
  d=section('Tray, walls and tabs',false);b=d._b;
  bn(b,'Side wall flap','F');bn(b,'Small tab length','Tb');bn(b,'End glue band','Gb');
@@ -7342,10 +7361,11 @@ function drawNet(ctx,art,pxmm,preview){
  var pn=panelSet(art,pxmm,W,H,S,mode),back=pn.back,spine=pn.spine,front=pn.front,inside=pn.inside;
  ctx.save();ctx.imageSmoothingQuality='high';
  ctx.fillStyle='#fff';ctx.fillRect(g.b.x0-bl-1,g.b.y0-bl-1,g.b.x1-g.b.x0+2*bl+2,g.b.y1-g.b.y0+2*bl+2);
- drawExt(ctx,back,{x:g.b0,y:0,w:W,h:H},{l:D,r:0,t:g.Tb+bl,b:g.Tb+bl});
- drawExt(ctx,spine,{x:g.s1,y:0,w:S,h:H},{l:g.sp?bl:0,r:0,t:g.Tb+bl,b:g.Tb+bl});
- drawExt(ctx,front,{x:g.f0,y:0,w:W,h:H},{l:0,r:Ls+(cfg.tabPos==='end'?Tt:0)+bl,t:Lt+bl,b:Lt+bl});
- drawExt(ctx,inside,{x:g.i0,y:0,w:W,h:H},{l:g.Gb+D+bl,r:0,t:D+F+bl,b:D+F+bl});
+ function linked(k){var q=cfg.pieces[k];return !q||q.mode==='cover';}
+ if(linked('back'))drawExt(ctx,back,{x:g.b0,y:0,w:W,h:H},{l:D,r:0,t:g.Tb+bl,b:g.Tb+bl});
+ if(linked('spine'))drawExt(ctx,spine,{x:g.s1,y:0,w:S,h:H},{l:g.sp?bl:0,r:0,t:g.Tb+bl,b:g.Tb+bl});
+ if(linked('front'))drawExt(ctx,front,{x:g.f0,y:0,w:W,h:H},{l:0,r:Ls+(cfg.tabPos==='end'?Tt:0)+bl,t:Lt+bl,b:Lt+bl});
+ if(linked('inside'))drawExt(ctx,inside,{x:g.i0,y:0,w:W,h:H},{l:g.Gb+D+bl,r:0,t:D+F+bl,b:D+F+bl});
  drawPieces(ctx,g,bl);
  drawLayers(ctx,!preview);
  g.tabs.forEach(function(t){hatchTab(ctx,t);});
