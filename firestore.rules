@@ -682,15 +682,31 @@ service cloud.firestore {
       // with tale_core.js (CRC-checked), derives the ACHIEVEMENTS badges and writes initials, completion %
       // (0-100), badges lit (0-37: v10 adds the BESTIARY's 3), furthest journey (NEW GAME+ 0-5), COMPLETE and the code itself (so any
       // page can re-derive the badges). Each player keeps ONE entry at scores/GN_<uid>, replaceable only by
-      // a code that RANKS STRICTLY HIGHER (gnRanksBetter: completion %, then badges) -- the Sokoban shape.
+      // an entry that keeps every badge and grows the set or raises the % (gnStickyUpdate, below).
       // 100% needs COMPLETE. source: 'qr' (opened from the cart's QR deep link) or 'typed'.
-      function gnRanksBetter(n, o) {
-        return n.pct > o.pct || (n.pct == o.pct && n.badges > o.badges);
+      // STICKY BADGES: `earned` is the list of badge indexes (0-35, the viewer's achievements() order, "100%" excluded)
+      // ever lit on any code this player submitted, so a NEW GAME+ code that unlights a journey-judged badge cannot
+      // shrink the entry. `code` is the LATEST submitted code; badges/pct/journey/complete describe the union. An update
+      // must keep every old badge (hasAll), never lower pct/journey/complete, and must grow the set or raise the %.
+      // An entry from before `earned` (no such field) migrates on its next write that does not rank lower.
+      function gnStickyUpdate(n, o) {
+        return n.pct >= o.pct && n.journey >= o.journey && (n.complete || !o.complete)
+          && (('earned' in o)
+                ? (n.earned.hasAll(o.earned) && (n.earned.size() > o.earned.size() || n.pct > o.pct))
+                : (n.badges >= o.badges));
+      }
+      function gnEarnedOk(d) {
+        return d.earned is list && d.earned.size() <= 36
+          && d.earned.hasOnly([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35])
+          && d.earned.toSet().size() == d.earned.size()
+          && (d.badges == d.earned.size() || (d.earned.size() == 36 && d.badges == 37))
+          && ((d.pct == 100) == (d.earned.size() == 36));
       }
       function isNocturneScore(d) {
         return d.game == 'GN'
-          && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'pct', 'badges', 'journey', 'complete', 'code', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'pct', 'badges', 'journey', 'complete', 'earned', 'code', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.formatVersion is string && d.formatVersion in ['9', '10', '11']
+          && gnEarnedOk(d)
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.pct is int && d.pct >= 0 && d.pct <= 100
           && d.badges is int && d.badges >= 0 && d.badges <= 37
@@ -793,13 +809,13 @@ service cloud.firestore {
           && isPersiaScore(request.resource.data)
           && persiaRanksBetter(request.resource.data, resource.data))
         // Fifth branch: GUARDIANS OF THE NOCTURNE keeps ONE entry per player (scores/GN_<uid>), replaceable
-        // only by a fully valid code that ranks strictly higher (gnRanksBetter).
+        // only by a fully valid entry whose sticky badge set grows or whose % rises (gnStickyUpdate).
         || (request.auth != null
           && scoreId == 'GN_' + request.auth.uid
           && resource.data.game == 'GN'
           && resource.data.uid == request.auth.uid
           && isNocturneScore(request.resource.data)
-          && gnRanksBetter(request.resource.data, resource.data))
+          && gnStickyUpdate(request.resource.data, resource.data))
         // Sixth branch: BATMAN keeps ONE entry per player per board (overall at BATMAN_<uid>, a stage at
         // BATMAN_<uid>_<stage>), replaceable only by a valid code for the SAME board that ranks strictly better.
         || (request.auth != null

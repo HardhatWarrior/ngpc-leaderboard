@@ -768,7 +768,28 @@ function pop(n) { var c = 0; while (n) { c += n & 1; n >>= 1; } return c; }
     A.push({ grp: "Titles", name: "100%", sub: "every other badge", w: 0, on: all, big: true });
     if (all) n++;
     return { list: A, pct: all ? 100 : Math.min(99, Math.floor(100 * got / tot)), badges: n, total: A.length,
-             journey: c, complete: !!fin, ver: 9 };
+             journey: c, complete: !!fin, ver: 9, bsf: bs / bsN };
+  }
+  /* STICKY badges (the board's `earned`: the list indexes 0-35 of every badge ever lit, excluding "100%"). Some badges
+   * are judged on the journey a code was made on, so NEW GAME+ can unlight them; the board keeps the union instead.
+   * Returns a copy of a with the union lit (b.earlier = kept from an earlier code) and its %, never below floorPct. */
+  function achEarned(a) { var e = []; a.list.forEach(function (b, i) { if (b.on && b.w) e.push(i); }); return e; }
+  function achUnion(a, earned, floorPct, oldComplete) {
+    var set = {}, tot = 3, got = 3 * (a.bsf || 0), n = 0, last = a.list.length - 1;
+    (earned || []).forEach(function (i) { set[i] = 1; });
+    var list = a.list.map(function (b, i) {
+      if (i === last) return b;
+      var on = b.on || !!set[i], x = { grp: b.grp, name: b.name, sub: b.sub, w: b.w, on: on, big: b.big, earlier: on && !b.on };
+      tot += b.w; if (on) { got += b.w; n++; }
+      return x;
+    });
+    var all = n === last, ci = 0;
+    list.forEach(function (b, i) { if (b.name === "COMPLETE" && b.grp === "Journeys") ci = i; });
+    list[last] = { grp: "Titles", name: "100%", sub: "every other badge", w: 0, on: all, big: true, earlier: all && !a.list[last].on };
+    if (all) n++;
+    var pct = all ? 100 : Math.max(floorPct || 0, Math.min(99, Math.floor(100 * got / tot)));
+    return { list: list, pct: pct, badges: n, total: a.total, journey: a.journey, complete: a.complete || !!oldComplete || list[ci].on,
+             ver: a.ver, bsf: a.bsf, earned: list.slice(0, last).map(function (b, i) { return b.on ? i : -1; }).filter(function (i) { return i >= 0; }) };
   }
 
 window.NGPC_ACH_GN = {
@@ -776,6 +797,11 @@ window.NGPC_ACH_GN = {
   fromCode: function (code) {
     try { var syms = TC.parseCode(String(code || "")); if (TC.codeVersion(syms) < 9) return null; return achievements(TC.decode(syms)); }
     catch (e) { return null; }
+  },
+  /* a board record (scores/GN_<uid>): its code's badges plus the sticky `earned` union (b.earlier marks kept ones) */
+  fromEntry: function (d) {
+    var a = d ? this.fromCode(d.code) : null;
+    return a && Array.isArray(d.earned) ? achUnion(a, d.earned, d.pct, d.complete) : a;
   }
 };
 })();

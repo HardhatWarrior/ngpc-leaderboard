@@ -112,6 +112,7 @@
   .ach small{ display:block; font-size:10.5px; color:var(--dim); margin-top:2px; overflow-wrap:anywhere; }
   .ach.on{ opacity:1; border-color:var(--gold); background:rgba(232,197,71,.08); }
   .ach.on b{ color:var(--gold); } .ach.on b::before{ content:"\2605  "; }
+  .ach.on.earlier{ border-style:dashed; background:rgba(232,197,71,.04); }
   .ach.on.big{ background:rgba(232,197,71,.2); }
   .submit-box{ border-top:1px solid var(--border); margin-top:16px; padding-top:14px; }
   #ini{ width:5.5em; background:var(--navy); color:var(--cream); border:1px solid var(--border); border-radius:8px; padding:10px; font-family:"Press Start 2P",monospace; font-size:13px; text-transform:uppercase; }
@@ -1133,14 +1134,36 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
     A.push({ grp: "Titles", name: "100%", sub: "every other badge", w: 0, on: all, big: true });
     if (all) n++;
     return { list: A, pct: all ? 100 : Math.min(99, Math.floor(100 * got / tot)), badges: n, total: A.length,
-             journey: c, complete: !!fin, ver: 9 };
+             journey: c, complete: !!fin, ver: 9, bsf: bs / bsN };
+  }
+  /* STICKY badges (the board's `earned`: the list indexes 0-35 of every badge ever lit, excluding "100%"). Some badges
+   * are judged on the journey a code was made on, so NEW GAME+ can unlight them; the board keeps the union instead.
+   * Returns a copy of a with the union lit (b.earlier = kept from an earlier code) and its %, never below floorPct. */
+  function achEarned(a) { var e = []; a.list.forEach(function (b, i) { if (b.on && b.w) e.push(i); }); return e; }
+  function achUnion(a, earned, floorPct, oldComplete) {
+    var set = {}, tot = 3, got = 3 * (a.bsf || 0), n = 0, last = a.list.length - 1;
+    (earned || []).forEach(function (i) { set[i] = 1; });
+    var list = a.list.map(function (b, i) {
+      if (i === last) return b;
+      var on = b.on || !!set[i], x = { grp: b.grp, name: b.name, sub: b.sub, w: b.w, on: on, big: b.big, earlier: on && !b.on };
+      tot += b.w; if (on) { got += b.w; n++; }
+      return x;
+    });
+    var all = n === last, ci = 0;
+    list.forEach(function (b, i) { if (b.name === "COMPLETE" && b.grp === "Journeys") ci = i; });
+    list[last] = { grp: "Titles", name: "100%", sub: "every other badge", w: 0, on: all, big: true, earlier: all && !a.list[last].on };
+    if (all) n++;
+    var pct = all ? 100 : Math.max(floorPct || 0, Math.min(99, Math.floor(100 * got / tot)));
+    return { list: list, pct: pct, badges: n, total: a.total, journey: a.journey, complete: a.complete || !!oldComplete || list[ci].on,
+             ver: a.ver, bsf: a.bsf, earned: list.slice(0, last).map(function (b, i) { return b.on ? i : -1; }).filter(function (i) { return i >= 0; }) };
   }
   function achGrid(list, onlyOn) {
     var out = "", grp = "";
     list.forEach(function (b) {
       if (onlyOn && !b.on) return;
       if (b.grp !== grp) { out += (grp ? "</div>" : "") + '<div class="ach-grp">' + esc(b.grp) + '</div><div class="ach-grid">'; grp = b.grp; }
-      out += '<div class="ach' + (b.on ? " on" : "") + (b.big ? " big" : "") + '"><b>' + esc(b.name) + "</b>" + (b.sub ? "<small>" + esc(b.sub) + "</small>" : "") + "</div>";
+      out += '<div class="ach' + (b.on ? " on" : "") + (b.big ? " big" : "") + (b.earlier ? " earlier" : "") + '"><b>' + esc(b.name) + "</b>" +
+        (b.earlier ? "<small>earned earlier</small>" : b.sub ? "<small>" + esc(b.sub) + "</small>" : "") + "</div>";
     });
     return out + (grp ? "</div>" : "");
   }
@@ -1158,6 +1181,23 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
       ver < 10 ? '<div class="msg note">This version 9 code carries no BESTIARY: make a fresh code on the current build to count it.</div>' : "");
     $("submitmsg").innerHTML = "";
     $("submitbtn").disabled = ver < 9;
+  }
+  /* signed in with a board entry: show the sticky union (badges kept from earlier codes marked), plus what this code alone proves */
+  function renderUnion(u, a) {
+    $("ach-pct").textContent = u.pct + "%";
+    $("ach-bar").style.width = u.pct + "%";
+    var kept = u.list.filter(function (b) { return b.earlier; }).length;
+    $("ach-count").textContent = u.badges + " of " + u.total + " badges on your board entry" + (kept ? " (" + kept + " earned earlier)" : "") +
+      " - this code alone: " + a.pct + "%, " + a.badges + " badges";
+    $("ach-journey").textContent = u.complete ? "Furthest journey: NEW GAME+ " + u.journey + ", COMPLETE (FREE PLAY)" :
+      "Furthest journey: " + (u.journey ? "NEW GAME+ " + u.journey : "the first tale");
+    $("ach-list").innerHTML = achGrid(u.list);
+  }
+  /* the stored union of a board record: its `earned` list, or (an entry from before sticky badges) its own code's badges */
+  function entryEarned(old) {
+    if (!old) return [];
+    if (Array.isArray(old.earned)) return old.earned.filter(function (i) { return typeof i === "number" && i >= 0 && i < 36; });
+    var oa = boardAch(old); return oa ? achEarned(oa) : [];
   }
 
   function render(f, ver) {
@@ -1444,7 +1484,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
     box.onclick = function (e) {
       var r = e.target.closest(".brow"); if (!r || e.target.closest("a")) return;
       var i = +r.getAttribute("data-i"), det = $("bd" + i);
-      if (!det.innerHTML) { var a = boardAch(rows[i]); det.innerHTML = a ? achGrid(a.list, true) : '<span class="dim">Badges unavailable.</span>'; }
+      if (!det.innerHTML) { var a = boardAch(rows[i]); if (a && Array.isArray(rows[i].earned)) a = achUnion(a, rows[i].earned, rows[i].pct, rows[i].complete); det.innerHTML = a ? achGrid(a.list, true) : '<span class="dim">Badges unavailable.</span>'; }
       det.hidden = !det.hidden;
     };
   }
@@ -1494,16 +1534,23 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
             return;
           }
         }
-        if (hasOld && !gnBetter(a, old)) {
-          submitMsg(auto ? "Your best stays " + old.pct + "% (" + old.badges + " badges)." :
-                    "Your board entry (" + old.pct + "%, " + old.badges + " badges) already ranks the same or higher, so nothing was changed.", auto ? "note" : "err");
+        /* sticky badges: union this code's badges with the entry's; the % never drops, nor the furthest journey */
+        var oldE = hasOld ? entryEarned(old) : [], migrate = hasOld && !Array.isArray(old.earned);
+        var m = achUnion(a, oldE, hasOld ? old.pct : 0, hasOld && old.complete);
+        if (hasOld) { m.journey = Math.max(a.journey, old.journey || 0); renderUnion(m, a); }
+        var grows = !hasOld || migrate || m.earned.length > oldE.length || m.pct > old.pct;
+        if (!grows) {
+          submitMsg(auto ? "Your board entry stays " + old.pct + "% (" + old.badges + " badges); this code adds no new badges." :
+                    "Your board entry (" + old.pct + "%, " + old.badges + " badges) already holds every badge this code proves, so nothing was changed.", auto ? "note" : "err");
           return;
         }
-        var rec = { game: GAME_CODE, formatVersion: TC.codeVersion(TC.parseCode(code)) >= 11 ? "11" : "10", initials: ini, pct: a.pct, badges: a.badges, journey: a.journey, complete: a.complete,
-                    code: code, source: fromHash ? "qr" : "typed", submittedAt: Date.now(), uid: u.uid, username: u.username, approved: !!u.approved };
+        /* the stored code is always the LATEST submitted one (it shows the current journey); `earned` carries the badges of earlier ones */
+        var rec = { game: GAME_CODE, formatVersion: TC.codeVersion(TC.parseCode(code)) >= 11 ? "11" : "10", initials: ini, pct: m.pct, badges: m.badges, journey: m.journey, complete: m.complete,
+                    earned: m.earned, code: code, source: fromHash ? "qr" : "typed", submittedAt: Date.now(), uid: u.uid, username: u.username, approved: !!u.approved };
         return ref.set(rec).then(function () {
           rememberIni(ini);
-          submitMsg((hasOld ? "Leaderboard updated: " + a.pct + "% (was " + old.pct + "%)" : "Added to the board: " + esc(ini) + " - " + a.pct + "%") + ", " + a.badges + " badges." +
+          if (!hasOld) renderUnion(m, a);
+          submitMsg((hasOld ? "Leaderboard updated: " + m.pct + "% (was " + old.pct + "%)" : "Added to the board: " + esc(ini) + " - " + m.pct + "%") + ", " + m.badges + " badges." +
                     (u.approved ? "" : " Your account is awaiting approval, so it shows once approved."), "ok");
         }, function (e) {
           submitMsg(e && e.code === "permission-denied" ? "Not saved: the board refused it (your entry may already rank the same or higher)." :
