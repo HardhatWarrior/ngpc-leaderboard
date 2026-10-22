@@ -93,7 +93,7 @@
     var n = newest(b);
     if (!n) return null;
     var v = n.v, buf = n.buf, d = { version: v, slot: n.slot, era: ERAS[v] || "?", files: [] }, used, sp;
-    if (v >= 5) { d.x8 = buf[648] & 1; d.ever = buf[649] & 0x1F; }
+    if (v >= 5) { d.x8 = buf[648] & 1; d.ever = buf[649] & 0x3F; d.xq = Math.min(buf[656], 10); }
     if (v >= 4) {
       used = buf[8] === 1;
       sp = buf.subarray(208, 208 + SUSP_SIZE);
