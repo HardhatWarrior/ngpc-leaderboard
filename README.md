@@ -79,6 +79,9 @@ firmware updated still lands somewhere real.
 - **`tile_editor/`** — a separate but linked tool (2bpp tile/sprite editor, tilemap builder, and a
   true-color variant) a developer can use to design their avatar or game art, with an
   "Import from Tile Editor" path into the avatar editor.
+- **`release_kit/`** — the NGPC Release Kit: a single-file, client-side tool (Cover, Manual, Label and
+  fold-and-glue Box editors sharing one project JSON) for packaging homebrew releases. Nothing is
+  uploaded; projects save to / open from the user's own files.
 - **`games/index.html`** — the **single-player (non-QR) games** page: the same tile grid as the
   main page, but listing only `games/{slug}` docs with `section: 'solo'`. The main page filters
   those docs out of its own grid and shows a "Single-player games →" link only once at least one
