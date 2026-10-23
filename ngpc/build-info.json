@@ -1,19 +1,19 @@
 {
-  "desktop_commit": "af7b0214dc1c810c301b9dcf527a0d546a98e72b",
+  "desktop_commit": "c46ce50561bbe3de87bb95ca4baeaaab851a7db0",
   "source_sha256": {
     "cpp/src/apu.cpp": "2c9123b0f3d67393ec075b3f7eab7829f2bdcdac0df4a67f26a9ff16edef09d4",
-    "cpp/src/core.cpp": "8c43e91cf7c5ec6fae14d4dca474588299fd732b7ac653af9f52db69be10bfaa",
+    "cpp/src/core.cpp": "72befbba1bbcdfa0c289a96241f5133860900b4cb103198120e8c6f6003a6144",
     "cpp/src/execute.cpp": "b403ca392b3b878cdf9d84955499df3cc0f24c611e8bbb937d097f667ec383a0",
-    "cpp/src/memory.cpp": "24485830f08a4221f60261a2c09aae58f3738d34cfaee876330fc787bf3c07fe",
+    "cpp/src/memory.cpp": "4f3519d1fc15328bae34209c8915b49681f42da5bce736a1d0f0e3a43c7ab96d",
     "cpp/src/mem_family.cpp": "d4682107a76695ad72c7c4f4144e989a374266ddd63f9bbe049178ff29970012",
     "cpp/src/reg_family.cpp": "29f9a333512b98a4d215f7331be3774e504772e1aa48428f96068044854a1f1e",
     "cpp/src/render.cpp": "4c01074453dd83338dd2d89c0e4427fa55b00b80f44404ed72f15a69e5786842",
     "cpp/src/z80.cpp": "9bb95c3765a2a564d2f740476cd64c0251006c2080873078b556de84e8f76e51",
     "cpp/src/apu.hpp": "3c19db368db05e4deb6b62c8fa3ae433f58c8ae45f8d959b93ef2361ae505e3d",
-    "cpp/src/machine.hpp": "da4be8611d73048aeaaf9c45864ff92debc50281035649dc65a4497df454114b",
+    "cpp/src/machine.hpp": "2a909cecc4ab69beea190e2639315d6de30a67cf6c44ed0261fbf9ddba690dc8",
     "cpp/src/z80.hpp": "589a5372a10664fa730eaf87923dd97f95a796db568cdc54018068d53383ed2e",
-    "cpp/include/ngpc_core.h": "99792c926fa971edf97cecc3a96d79f36b2cf41c14258eefccd5433d25e37c86",
-    "hle_bios/bios_hle.bin": "11c2899850d56eff2ddcba4c0ef9ed7c5a8ea77f38fdcffc050c30295c6ac169"
+    "cpp/include/ngpc_core.h": "9281cb27003e5e33303db92161b24416a953d554ea513e2bc000b6431d3caf6c",
+    "hle_bios/bios_hle.bin": "9112306f2d1ef29281604d7ee3b3e816b2b9cff04a93a4174f5d8181f06fd5da"
   },
   "files": {
     "compact.html": {
@@ -57,14 +57,14 @@
       "sha256": "030389b854ff6f4bcb3e453a5b821e7db48d5849c1b84a610b35e3571af938d7"
     },
     "ngpcraft.wasm": {
-      "bytes": 122405,
-      "gzip_bytes": 29038,
-      "sha256": "7c1bed34738fbf13c5baa8d1b9ed2551247cd4b343882d100fe80d9ffc527509"
+      "bytes": 122549,
+      "gzip_bytes": 29106,
+      "sha256": "62e6cf29381fbba618b4672ed4961afbe15b7f2ccfbb9acf6d09e51777b1752b"
     },
     "player.js": {
-      "bytes": 34506,
-      "gzip_bytes": 10466,
-      "sha256": "8ef37dea5c123d36f4c8c5e05b506bea1b485d11f70e51d0af4737b873bf75bb"
+      "bytes": 34377,
+      "gzip_bytes": 10586,
+      "sha256": "4a29383478b4fa72e92ecf6e7fc19eed08503ff2c449839bb1f4a553c02670ce"
     },
     "THIRD_PARTY_NOTICES.txt": {
       "bytes": 61934,

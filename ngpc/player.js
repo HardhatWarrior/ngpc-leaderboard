@@ -354,6 +354,9 @@ export class NgpCraftPlayer extends HTMLElement {
   }
   clearInput(){this.keys.clear();this.pointerAreas?.clear();this.pointers.clear();this.renderTouch();}
   async unlockAudio(){
+    // iOS mutes Web Audio while the hardware silent switch is on unless the page declares its audio
+    // as playback (Audio Session API, WebKit 16.4+; also Edge/Chrome on iOS). No-op elsewhere.
+    try{if(navigator.audioSession)navigator.audioSession.type='playback';}catch{}
     if(!this.audio){this.audio=new AudioContext({latencyHint:'interactive'});this.gain=this.audio.createGain();this.gain.gain.value=this.muted?0:this.settings.volume/100;this.gain.connect(this.audio.destination);}
     await this.audio.resume();
   }
