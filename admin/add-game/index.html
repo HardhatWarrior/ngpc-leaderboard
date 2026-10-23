@@ -114,11 +114,11 @@
     <div class="two">
       <label><b>Title screen image</b>
         <input type="file" id="g-image" accept="image/png,image/jpeg,image/gif,image/webp">
-        <span class="sub">A 160&times;152 screenshot, same as every other tile. Under 4 MB.</span>
+        <span class="sub">A 160&times;152 screenshot, same as every other tile. Up to 4 MB.</span>
       </label>
       <label><b>ROM</b>
         <input type="file" id="g-rom" accept=".ngp,.ngc">
-        <span class="sub">.ngp or .ngc, under 4 MB.</span>
+        <span class="sub">.ngp or .ngc, up to 4 MB.</span>
       </label>
     </div>
 
@@ -213,7 +213,7 @@
     if(devName && !developer){ msgEl.innerHTML = '<div class="msg err">No account named &ldquo;'+escapeHtml(devName)+'&rdquo; &mdash; pick one from the list, or leave Developer blank.</div>'; return; }
     if(!imageFile){ msgEl.innerHTML = '<div class="msg err">Choose a title screen image.</div>'; return; }
     if(!romFile || !/\.(ngp|ngc)$/i.test(romFile.name)){ msgEl.innerHTML = '<div class="msg err">Choose a .ngp or .ngc ROM.</div>'; return; }
-    if(imageFile.size >= MAX_BYTES || romFile.size >= MAX_BYTES){ msgEl.innerHTML = '<div class="msg err">Files must be under 4 MB each.</div>'; return; }
+    if(imageFile.size > MAX_BYTES || romFile.size > MAX_BYTES){ msgEl.innerHTML = '<div class="msg err">Files must be 4 MB or smaller each.</div>'; return; }
 
     const btn = el('g-add');
     btn.disabled = true;
