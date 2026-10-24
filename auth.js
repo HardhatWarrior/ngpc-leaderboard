@@ -665,6 +665,26 @@ window.NGPC_AUTH = (function(){
     const m = Math.floor(seconds/60), s = seconds%60;
     return m + ':' + String(s).padStart(2,'0');
   }
+  // SHUT THE BOX: rounds = tiles left open per round (0 = shut the box), total = their sum,
+  // lower is better. result '1' = 5-round solo series, W/L/D = a 3-round match.
+  function sbClock(seconds){
+    seconds = Number(seconds)||0;
+    return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');
+  }
+  function renderShutTheBoxScorecardHTML(data){
+    const rounds = Array.isArray(data.rounds) ? data.rounds : [];
+    const names = {'1':'Solo series', W:'Match won', L:'Match lost', D:'Match drawn'};
+    let rows = '';
+    rounds.forEach((v,i)=>{
+      const n = Number(v)||0;
+      rows += '<tr><td>Round '+(i+1)+'</td><td class="tk-val tnum">'+(n===0 ? 'SHUT THE BOX' : (n+' left')) +'</td></tr>';
+    });
+    rows += '<tr><td>'+escapeHtml(names[data.result]||'?')+'</td><td class="tk-val tnum">'+(Number(data.total)||0)+' left open</td></tr>'+
+      '<tr><td>Boxes shut</td><td class="tk-val tnum">'+(Number(data.shut)||0)+'</td></tr>'+
+      '<tr><td>Play time</td><td class="tk-val tnum">'+sbClock(data.seconds)+'</td></tr>';
+    return '<table class="tk-sheet">'+rows+'</table>';
+  }
+
   function renderSudokuScorecardHTML(data){
     const rows = '<tr><td>Difficulty</td><td class="sd-val">'+escapeHtml(SD_DIFF_NAMES[data.difficulty]||'?')+'</td></tr>'+
       '<tr><td>Time</td><td class="sd-val tnum">'+formatSdTime(data.time)+'</td></tr>'+
@@ -831,6 +851,7 @@ window.NGPC_AUTH = (function(){
       case 'SK': return skSummary(data) !== null;
       case 'PERSIA': return persiaSummary(data) !== null;
       case 'RD': return rdIsHero(data);
+      case 'SB': return Array.isArray(data.rounds) && data.rounds.length > 0 && data.total !== undefined;
       case 'OV':
         // Same "skip rather than crash" stance overrev/index.html's own board rendering takes on
         // a corrupted/legacy stored doc -- OverRevProtocol comes from overrev/protocol.js, which
@@ -852,6 +873,7 @@ window.NGPC_AUTH = (function(){
       case 'SK': return renderSokobanScorecardHTML(data);
       case 'PERSIA': return renderPersiaScorecardHTML(data);
       case 'RD': return rdIsHero(data) ? renderRedDragonHeroHTML(data) : '';
+      case 'SB': return renderShutTheBoxScorecardHTML(data);
       case 'OV':
         try{ return renderOverRevScorecardHTML(Object.assign({}, data, OverRevProtocol.decode(data.raw))); }
         catch(e){ return ''; }
@@ -883,6 +905,11 @@ window.NGPC_AUTH = (function(){
       const sum = skSummary(data);
       if(!sum) return '';
       return sum.stars+'/90 stars'+(Number.isFinite(data.totalMoves) ? (' · '+data.totalMoves+' moves') : '');
+    }
+    if(data.game==='SB'){
+      // Numbers + fixed words only -- callers put this into innerHTML unescaped.
+      const r = {'1':'solo', W:'won', L:'lost', D:'drew'}[data.result] || '';
+      return [r, (Number(data.shut)||0)+' shut', sbClock(data.seconds)].filter(Boolean).join(' · ');
     }
     if(data.game==='ACES'){
       // Fixed names only -- callers put this into innerHTML unescaped.
@@ -924,6 +951,8 @@ window.NGPC_AUTH = (function(){
     if(data.game === 'SK'){ const sum = skSummary(data); return sum ? (sum.stars+' STARS') : '-'; }
     // RED DRAGON ranks by experience (a live warrior list) -- no `score` field.
     if(data.game === 'RD') return Number.isFinite(data.experience) ? (data.experience+' XP') : '-';
+    // SHUT THE BOX ranks by `total` tiles left open, ascending -- no `score` field.
+    if(data.game === 'SB') return Number.isFinite(data.total) ? (data.total+' LEFT') : '-';
     // GUARDIANS OF THE NOCTURNE ranks by completion % (gn/'s ACHIEVEMENTS) -- no `score` field.
     if(data.game === 'GN') return Number.isFinite(data.pct) ? (data.pct+'% COMPLETE') : '-';
     return data.score!=null ? data.score : '-';

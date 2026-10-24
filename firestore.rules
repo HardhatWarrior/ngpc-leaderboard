@@ -619,6 +619,37 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
+      // SHUT THE BOX: the exact record sb/index.html's confirm handler writes. rounds = tiles
+      // left open per round (0-45, 0 = shut the box), 5 of them for a solo series (result '1')
+      // or 3 for a match (W/L/D); total must equal their sum; lower is better. shut (boxes shut)
+      // and seconds are detail only. The QR's checksum is verified client-side then dropped.
+      // Any number of docs per player (a plain best-score board). See ShutTheBox/GAME_SPEC.md.
+      function isShutTheBoxScore(d) {
+        return d.game == 'SB'
+          && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'result', 'total', 'rounds', 'shut', 'seconds', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.formatVersion is string && d.formatVersion == '1'
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.result is string && d.result in ['1', 'W', 'L', 'D']
+          && d.rounds is list
+          && ((d.result == '1' && d.rounds.size() == 5) || (d.result != '1' && d.rounds.size() == 3))
+          && d.rounds[0] is int && d.rounds[0] >= 0 && d.rounds[0] <= 45
+          && d.rounds[1] is int && d.rounds[1] >= 0 && d.rounds[1] <= 45
+          && d.rounds[2] is int && d.rounds[2] >= 0 && d.rounds[2] <= 45
+          && (d.rounds.size() == 3
+              || (d.rounds[3] is int && d.rounds[3] >= 0 && d.rounds[3] <= 45
+                  && d.rounds[4] is int && d.rounds[4] >= 0 && d.rounds[4] <= 45))
+          && d.total is int
+          && ((d.rounds.size() == 3 && d.total == d.rounds[0] + d.rounds[1] + d.rounds[2])
+              || (d.rounds.size() == 5 && d.total == d.rounds[0] + d.rounds[1] + d.rounds[2] + d.rounds[3] + d.rounds[4]))
+          && d.shut is int && d.shut >= 0 && d.shut <= d.rounds.size()
+          && d.seconds is int && d.seconds >= 0 && d.seconds <= 9999
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
       // RED DRAGON (Legend of the Red Dragon clone): game, formatVersion, heroId, initials (the
       // hero's name, 1-8 letters), cls, level, experience, dragonKills, daysPlayed, status, source,
       // submittedAt, required uid/username -- the exact record rd/index.html's confirm handler
@@ -783,6 +814,7 @@ service cloud.firestore {
       // that player, since only the doc's owner may update or delete it). Auto-ids never contain
       // '_', so every other game's add() is unaffected.
       allow create: if (((request.resource.data.game == 'BATMAN' && isBatmanScore(request.resource.data)) && ((request.resource.data.kind == 'overall' && scoreId == 'BATMAN_' + request.auth.uid) || (request.resource.data.kind == 'stage' && scoreId == 'BATMAN_' + request.auth.uid + '_' + string(request.resource.data.stage)))) || (request.resource.data.game == 'BW' && isBowlingScore(request.resource.data)) || (request.resource.data.game == 'TT' && isTetrisScore(request.resource.data)) || (request.resource.data.game == 'YZ' && isYahtzeeScore(request.resource.data)) || (request.resource.data.game == 'FK' && isFarkleScore(request.resource.data)) || (request.resource.data.game == '2K' && is2048Score(request.resource.data)) || (request.resource.data.game == 'OV' && isOverRevScore(request.resource.data)) || (request.resource.data.game == 'GD' && isGardeniaScore(request.resource.data)) || (request.resource.data.game == 'SD' && isSudokuScore(request.resource.data)) || (request.resource.data.game == 'XN' && isXenon2Score(request.resource.data)) || (request.resource.data.game == 'BK' && isBreakoutScore(request.resource.data)) || (request.resource.data.game == 'MS' && isMinesweeperScore(request.resource.data)) || (request.resource.data.game == 'DDMR' && isDonTDieMrRobotScore(request.resource.data)) || (request.resource.data.game == 'RVNG' && isFruityPalsRevengeScore(request.resource.data)) || (request.resource.data.game == 'HGS' && isHoratioGoesSnowboardingScore(request.resource.data)) || (request.resource.data.game == 'FU' && isFurryScore(request.resource.data)) || (request.resource.data.game == 'CA' && isCarcassonneScore(request.resource.data))
+          || (request.resource.data.game == 'SB' && isShutTheBoxScore(request.resource.data))
           || ((request.resource.data.game == 'SK' && isSokobanScore(request.resource.data)) && scoreId == 'SK_' + request.auth.uid)
           || ((request.resource.data.game == 'RD' && isRedDragonScore(request.resource.data)) && scoreId == 'RD_' + request.auth.uid + '_' + request.resource.data.heroId)
           || ((request.resource.data.game == 'PERSIA' && isPersiaScore(request.resource.data)) && scoreId == 'PERSIA_' + request.auth.uid)

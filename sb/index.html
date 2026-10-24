@@ -16,13 +16,11 @@
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 <style>
-  /* GENERATED DRAFT -- palette/layout copied verbatim from 2k/index.html's own template. Swap
-     --accent/--accent-ink for this game's own art if you want a distinct color, same as every
-     other game page here does. */
   :root{
     --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
-    --cream:#f4eedd; --dim:#93a0c9; --accent:#5c8fd6; --accent-ink:#0a1830;
-    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#d9a85c;
+    --accent-ink:#2a1a06; --accent2:#d9a85c;
+    --good:#4fbf8b; --danger:#e5615a; --felt:#2f7a45;
   }
   *{ box-sizing:border-box; } html,body{ height:auto; }
   body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif; padding-inline:20px; padding-block:28px; display:flex; justify-content:center; }
@@ -42,78 +40,81 @@
   .play-link:hover{ color:var(--cream); }
   .play-link[hidden]{ display:none; }
   .rom-link{ color:var(--dim); font-size:11px; }
-  .rom-link:hover{ color:var(--accent2); }
-  /* Only ever shown to the site admin or this game's own assigned developer -- see
-     NGPC_AUTH.isGameManager(). Quick jump to this game's admin panel from its own public page. */
   .admin-link{ color:var(--dim); font-size:11px; margin-top:2px; }
   .admin-link:hover{ color:var(--accent2); }
   .admin-link[hidden]{ display:none; }
-  /* No max-width on either image below -- a percentage cap here resolves against .art-strip's
-     OWN box (its nearest sized ancestor), not .header-row's wider one, so on a narrow viewport it
-     collapses the image to a small fraction of 130px instead of just capping it. The @media rule
-     further down handles narrow screens instead, by hiding the extras outright. */
+  .rom-link:hover{ color:var(--accent2); }
   .header-art{ position:relative; width:130px; height:auto; flex:none; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; }
-  /* Up to two extra screenshots/GIFs (games/{slug}.extraScreenshot1Path/2Path, set from
-     admin/game/index.html's own art panel) shown right next to the title screen, same size as it
-     -- hidden entirely (see the [hidden] rule already in the shared reset) until JS finds one
-     set. flex-wrap on the strip lets three same-size images wrap to a second line on a narrow
-     screen instead of overflowing; align-items:flex-start (not the flex default of stretch) is
-     required so a still-loading/broken image doesn't get its height stretched to match its
-     siblings, which reads as a horizontal squish. */
   .art-strip{ display:flex; flex-wrap:wrap; align-items:flex-start; gap:8px; flex:none; }
-  /* max-width caps this at three ~130px images across (130*3 + 8*2 gap) -- without it, a long
-     .game-desc line has no width to wrap against and stretches this column (and the flex row
-     it shares with .title-block) wide enough to wrap the ROM/Play/Manage links on the right. */
   .art-col{ display:flex; flex-direction:column; gap:8px; flex:0 1 auto; min-width:0; max-width:406px; }
   .game-desc{ font-size:11px; line-height:1.45; color:var(--dim); max-width:100%; min-width:0; overflow-wrap:anywhere; }
   .game-site{ font-size:11px; max-width:100%; min-width:0; }
   .game-site a{ color:var(--accent2); text-decoration:underline; text-underline-offset:2px; overflow-wrap:anywhere; word-break:break-word; }
   .game-site a:hover{ color:var(--cream); }
   .extra-art{ width:130px; height:auto; aspect-ratio:160/152; image-rendering:pixelated; border-radius:8px; border:1px solid var(--border); box-shadow:0 4px 14px rgba(0,0,0,.35); background:#000; object-fit:contain; flex:none; }
-  /* Three ~130px images side-by-side in .art-strip (header-art plus both extras) don't leave room
-     for .title-block in the same .header-row on a phone-width viewport -- .header-row stays
-     row-direction (no stacking breakpoint exists here), so it would otherwise overflow and push
-     the panel wider than the screen. Hiding the two optional extras below 600px keeps just the
-     title screenshot, which fits. */
   @media (max-width:600px){ .extra-art{ display:none; } }
+
   main{ display:grid; grid-template-columns:1fr; gap:20px; align-items:start; }
   .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
   #access-gate{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:32px 20px; }
+  /* #page-content is a flex column; [hidden] must still win (site-wide quirk, see sk/). */
   #page-content{ display:flex; flex-direction:column; gap:22px; }
   #page-content[hidden]{ display:none; }
   .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
   .panel .hint{ margin:0 0 16px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+
+  .mode-toggle{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .mode-btn{ width:auto; background:transparent; border:1px solid var(--border); color:var(--dim); border-radius:8px; padding:8px 14px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; }
+  .mode-btn:hover{ border-color:var(--accent2); }
+  .mode-btn.active{ border-color:var(--accent); color:var(--cream); background:rgba(217,168,92,.14); }
+
   #board-status{ font-size:12px; color:var(--dim); margin-bottom:10px; min-height:1.4em; }
   .row{ display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:12px; padding:10px 8px; border-radius:8px; }
   .row ~ .row{ border-top:1px solid var(--border); }
   .rank{ font-family:"Press Start 2P",monospace; font-size:11px; color:var(--dim); text-align:center; }
-  .row.top1 .rank{ color:var(--accent); } .row.top1{ background:rgba(92,143,214,.10); }
-  .initials{ font-family:"Press Start 2P",monospace; font-size:14px; letter-spacing:.06em; color:var(--cream); display:flex; align-items:center; gap:8px; }
+  .row.top1 .rank{ color:var(--accent); } .row.top1{ background:rgba(217,168,92,.10); }
+  .row > div:nth-child(2){ min-width:0; }
+  .initials{ font-family:"Press Start 2P",monospace; font-size:14px; letter-spacing:.06em; color:var(--cream); display:flex; align-items:center; gap:8px; min-width:0; overflow-wrap:anywhere; }
   .row-avatar{ width:48px; height:48px; border-radius:4px; border:1px solid var(--border); image-rendering:pixelated; flex:none; }
-  .score-val{ font-family:"Press Start 2P",monospace; font-size:15px; color:var(--good); }
+  .score-val{ font-family:"Press Start 2P",monospace; font-size:15px; color:var(--good); text-align:right; }
+  .score-val small{ display:block; font-family:"IBM Plex Sans",sans-serif; font-size:9.5px; color:var(--dim); margin-top:3px; letter-spacing:.08em; }
   .row-meta{ font-size:10.5px; color:var(--dim); grid-column:2; margin-top:2px; }
   .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .row-meta a:hover{ color:var(--accent2); }
+  .res-badge{ display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:9px; font-weight:700; letter-spacing:.5px; padding:1px 5px; border-radius:3px; border:1px solid var(--border); color:var(--dim); vertical-align:middle; }
+  .res-badge.W{ color:var(--good); border-color:var(--good); }
+  .res-badge.L{ color:var(--danger); border-color:var(--danger); }
+  .res-badge.D{ color:var(--accent2); border-color:var(--accent2); }
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
-  .row.has-detail{ cursor:pointer; } .row.has-detail:hover{ background:rgba(92,143,214,.08); }
+  .row.has-detail{ cursor:pointer; } .row.has-detail:hover{ background:rgba(217,168,92,.08); }
   .row-detail{ padding:2px 8px 14px; }
-  .tk-sheet{ width:100%; border-collapse:collapse; margin:14px 0; font-size:11.5px; }
-  .tk-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
-  .tk-sheet td.tk-val{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
+
+  /* ---------- round strip: one little tile per round, 00 = SHUT THE BOX ---------- */
+  .sb-rounds{ display:flex; gap:6px; flex-wrap:wrap; margin:12px 0 8px; }
+  .sb-round{ width:46px; border-radius:6px; border:1px solid var(--border); background:var(--felt); padding:6px 0 5px; text-align:center; }
+  .sb-round .lbl{ font-size:8.5px; letter-spacing:.1em; color:rgba(244,238,221,.75); text-transform:uppercase; }
+  .sb-round .val{ font-family:"Press Start 2P",monospace; font-size:13px; color:var(--cream); margin-top:4px; }
+  .sb-round.shut{ background:var(--accent); border-color:var(--accent); }
+  .sb-round.shut .lbl{ color:var(--accent-ink); } .sb-round.shut .val{ color:var(--accent-ink); }
+  .sb-round.unplayed{ opacity:.35; }
+  .sb-sheet{ width:100%; border-collapse:collapse; margin:4px 0 14px; font-size:11.5px; }
+  .sb-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
+  .sb-sheet td.sb-val{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
+
   .scan-video-wrap{ position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden; background:#000; margin-bottom:10px; }
   #scan-video{ width:100%; height:100%; object-fit:cover; display:block; }
   .scan-frame{ position:absolute; inset:14%; border:2px solid var(--accent2); border-radius:12px; box-shadow:0 0 0 999px rgba(0,0,0,.4); pointer-events:none; }
   .file-btn{ display:block; text-align:center; cursor:pointer; }
   button{ font:inherit; border:none; border-radius:8px; padding:12px 16px; cursor:pointer; font-weight:600; font-size:13.5px; width:100%; }
   button:disabled{ opacity:.5; cursor:not-allowed; }
-  .btn-primary{ background:var(--accent); color:var(--accent-ink); } .btn-primary:hover:not(:disabled){ filter:brightness(1.1); }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); } .btn-primary:hover:not(:disabled){ background:#ecc17a; }
   .btn-secondary{ background:transparent; border:1px solid var(--border); color:var(--cream); margin-top:8px; }
   .btn-secondary:hover:not(:disabled){ border-color:var(--accent2); }
   #confirm-view, #success-view{ display:none; }
   #confirm-view.show, #success-view.show{ display:block; }
   #idle-view.hide{ display:none; }
   .confirm-score{ text-align:center; padding:18px 0 20px; }
-  .confirm-score .who{ font-family:"Press Start 2P",monospace; font-size:22px; letter-spacing:.08em; color:var(--cream); }
+  .confirm-score .who{ font-family:"Press Start 2P",monospace; font-size:16px; letter-spacing:.04em; color:var(--cream); }
   .confirm-score .what{ font-family:"Press Start 2P",monospace; font-size:34px; color:var(--good); margin-top:10px; }
   .confirm-score .src{ margin-top:10px; font-size:11px; color:var(--dim); }
   .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; margin-top:12px; }
@@ -130,11 +131,6 @@
 <body>
 
 <div id="shell">
-  <!-- Shown instead of everything below while this game is devStatus 'coming-soon' and the
-       viewer isn't the site admin or this game's own assigned developer -- see ACCESS_GATE_UID
-       below. A determined visitor could still read the raw games/{slug} doc directly (this is a
-       static site, there's no server to actually enforce this), but the real page/board/ROM
-       aren't linked or shown to anyone else. -->
   <div id="access-gate" hidden>
     <p class="hint" style="text-align:center;margin:0">This game isn't public yet. Check back once it's live on the main page.</p>
   </div>
@@ -144,15 +140,15 @@
     <div class="header-row">
       <div class="art-col">
       <div class="art-strip">
-        <img src="" alt="Shut the Box title screen" class="header-art" id="header-art" width="160" height="152">
-        <img src="" alt="Shut the Box extra screenshot 1" class="extra-art" id="extra-art-1" hidden>
-        <img src="" alt="Shut the Box extra screenshot 2" class="extra-art" id="extra-art-2" hidden>
+        <img src="https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/submissions%2FL44BFbmiNkhi2vvLdrPUIxkvmfs2%2FLnQbc9mBFmLu7sIPY3XD%2Fscreenshot.png?alt=media&token=22c1131e-12c7-4b72-be05-cb8f0a04f8ee" alt="Shut the Box title screen" class="header-art" id="header-art" width="160" height="152">
+        <img src="" alt="Shut the Box (extra 1)" class="extra-art" id="extra-art-1" hidden>
+        <img src="" alt="Shut the Box (extra 2)" class="extra-art" id="extra-art-2" hidden>
       </div>
       <div class="game-desc" id="game-desc" hidden></div>
       <div class="game-site" id="game-site" hidden><a href="#" id="game-site-link" target="_blank" rel="noopener"></a></div>
       </div>
       <div class="title-block">
-        <h1>Shut the Box</h1>
+        <h1>SHUT THE BOX</h1>
         <div class="game-version" id="game-version" hidden></div>
         <div class="created-by">Created by: <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
         <a href="#" class="rom-link" id="rom-link" download>&#128190; Download ROM (.ngp)</a>
@@ -165,9 +161,12 @@
   <main>
     <section class="panel">
       <h2>Submit a score</h2>
+      <p class="hint">Finish a SOLO series (five rounds) or a VS CPU / VERSUS match, then scan the QR code the cartridge shows. Lower is better: the score is the total of the tiles left open across the rounds, and a round of 0 means you shut the box.</p>
+
       <div id="scan-signin-required">
         <button type="button" class="btn-primary" id="scan-signin-btn">Sign In</button>
       </div>
+
       <div id="idle-view" hidden>
         <button class="btn-primary" id="btn-scan">Scan QR Code</button>
         <div id="scan-live" hidden>
@@ -184,10 +183,11 @@
         </div>
         <div id="form-msg"></div>
       </div>
+
       <div id="confirm-view">
         <div class="confirm-score">
           <div class="who" id="confirm-initials">AAA</div>
-          <div class="what" id="confirm-score">-</div>
+          <div class="what" id="confirm-score">0</div>
           <div class="src" id="confirm-src">From a scanned QR code</div>
         </div>
         <div id="confirm-scorecard"></div>
@@ -195,6 +195,7 @@
         <button class="btn-secondary" id="btn-back">Cancel</button>
         <div id="confirm-msg"></div>
       </div>
+
       <div id="success-view">
         <div class="success-icon">&#127881;</div>
         <p id="success-text">Score submitted to the leaderboard.</p>
@@ -204,6 +205,10 @@
 
     <section class="panel">
       <h2>Leaderboard</h2>
+      <div class="mode-toggle">
+        <button type="button" class="mode-btn active" id="tab-solo" data-tab="solo">Solo &middot; 5 rounds</button>
+        <button type="button" class="mode-btn" id="tab-match" data-tab="match">Matches &middot; 3 rounds</button>
+      </div>
       <div id="board-status"></div>
       <div id="board"></div>
     </section>
@@ -220,6 +225,8 @@
   const QR_GAME_CODE = 'SB';
   const GAME_SLUG = 'sb';
   const SUBMIT_SOURCE = new URLSearchParams(location.search).get('src') === 'capture' ? 'capture' : 'qr';
+  const RESULT_NAMES = {'1':'Solo series', W:'Match won', L:'Match lost', D:'Match drawn'};
+  let activeTab = 'solo';
 
   const el = (id)=>document.getElementById(id);
   const accessGateEl = el('access-gate');
@@ -229,52 +236,72 @@
   const formMsg = el('form-msg'), confirmMsg = el('confirm-msg');
   const btnScan = el('btn-scan'), scanLive = el('scan-live'), scanFallback = el('scan-fallback');
   const scanVideo = el('scan-video'), scanFile = el('scan-file');
+  const tabButtons = [el('tab-solo'), el('tab-match')];
 
-  let db = null, pending = null, unsubscribeBoard = null;
+  let db = null, pending = null, unsubscribeBoard = null, gameData = null, latestDocs = [];
 
+  // Payload (ShutTheBox/GAME_SPEC.md, submission-template.json), fixed 26 chars after the
+  // "NGPC-DEV.COM/SB/" prefix, every char 0-9 / A-Z / "-" so the site's shared strip-to-last-"/"
+  // handling is safe:
+  //   0-1  "SB"             game code
+  //   2    "1"              format version
+  //   3-5  initials         A-Z
+  //   6    result           "1" solo 5-round series, "W"/"L"/"D" a 3-round match (VS CPU, 2 PLAYER as P1, VS LINK)
+  //   7-9  total            000-225, the sum of the round scores (LOWER IS BETTER)
+  //   10-19 rounds 1-5      2 digits each, 00-45 (00 = shut the box); "--" = not played (rounds 4-5 of a match)
+  //   20-23 seconds         0000-9999, the local player's play clock
+  //   24-25 checksum        sum of the ASCII codes of chars 0-23, mod 1296, as two base-36 digits
+  // Checksum and derived rules are verified here; the checksum itself is not stored.
+  function payloadChecksumOk(text){
+    let sum = 0;
+    for(let i=0;i<24;i++) sum += text.charCodeAt(i);
+    return sum % 1296 === parseInt(text.slice(24,26), 36);
+  }
   function parseShutTheBoxPayload(text){
-    if(text.length !== 26) return {error:"That code is the wrong length — rescan with the whole code in frame."};
-    const formatVersionStr = text.slice(2,3);
-    if(!/^\d{1}$/.test(formatVersionStr)) return {error:"That code has an unreadable format version."};
-    const formatVersion = parseInt(formatVersionStr,10);
+    if(text.slice(0,2) !== QR_GAME_CODE) return {error:'Unknown game code "'+text.slice(0,2)+'".'};
+    if(text.length !== 26) return {error:"That code is the wrong length for a Shut the Box score ("+text.length+" of 26 characters)."};
+    if(!/^[0-9A-Z-]{26}$/.test(text)) return {error:"That code has characters that can't be in a Shut the Box score."};
+    if(text[2] !== '1') return {error:'That code is a newer format ("'+text[2]+'") than this page understands.'};
+    if(!/^[0-9A-Z]{2}$/.test(text.slice(24)) || !payloadChecksumOk(text)) return {error:"That code didn't scan cleanly (checksum mismatch) — rescan it."};
     const initials = text.slice(3,6);
-    if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
-    const resultFlagStr = text.slice(6,7);
-    if(!/^\d{1}$/.test(resultFlagStr)) return {error:"That code has an unreadable result flag."};
-    const resultFlag = parseInt(resultFlagStr,10);
-    const totalStr = text.slice(7,10);
-    if(!/^\d{3}$/.test(totalStr)) return {error:"That code has an unreadable total."};
-    const total = parseInt(totalStr,10);
-    const round1Str = text.slice(10,12);
-    if(!/^\d{2}$/.test(round1Str)) return {error:"That code has an unreadable round 1."};
-    const round1 = parseInt(round1Str,10);
-    const round2Str = text.slice(12,14);
-    if(!/^\d{2}$/.test(round2Str)) return {error:"That code has an unreadable round 2."};
-    const round2 = parseInt(round2Str,10);
-    const round3Str = text.slice(14,16);
-    if(!/^\d{2}$/.test(round3Str)) return {error:"That code has an unreadable round 3."};
-    const round3 = parseInt(round3Str,10);
-    const round4Str = text.slice(16,18);
-    if(!/^\d{2}$/.test(round4Str)) return {error:"That code has an unreadable round 4."};
-    const round4 = parseInt(round4Str,10);
-    const round5Str = text.slice(18,20);
-    if(!/^\d{2}$/.test(round5Str)) return {error:"That code has an unreadable round 5."};
-    const round5 = parseInt(round5Str,10);
-    const elapsedSecondsStr = text.slice(20,24);
-    if(!/^\d{4}$/.test(elapsedSecondsStr)) return {error:"That code has an unreadable elapsed seconds."};
-    const elapsedSeconds = parseInt(elapsedSecondsStr,10);
-    const checksumStr = text.slice(24,26);
-    if(!/^\d{2}$/.test(checksumStr)) return {error:"That code has an unreadable checksum."};
-    const checksum = parseInt(checksumStr,10);
-    return { game:QR_GAME_CODE, formatVersion, initials, resultFlag, total, round1, round2, round3, round4, round5, elapsedSeconds, checksum };
+    if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code has unreadable initials."};
+    const result = text[6];
+    if(!(result in RESULT_NAMES)) return {error:"That code has an unrecognized result flag."};
+    if(!/^\d{3}$/.test(text.slice(7,10))) return {error:"That code has an unreadable total."};
+    const total = parseInt(text.slice(7,10), 10);
+    const rounds = [];
+    for(let i=0;i<5;i++){
+      const f = text.slice(10+i*2, 12+i*2);
+      if(f === '--'){ rounds.push(null); continue; }
+      if(!/^\d{2}$/.test(f)) return {error:"That code has an unreadable round "+(i+1)+" score."};
+      const v = parseInt(f, 10);
+      if(v > 45) return {error:"Round "+(i+1)+" claims "+v+" tiles left, but there are only 1-9 (45 max)."};
+      rounds.push(v);
+    }
+    const played = rounds.filter(v=>v!==null);
+    const expected = result === '1' ? 5 : 3;
+    if(played.length !== expected || rounds.slice(0,expected).some(v=>v===null)){
+      return {error:(result==='1' ? "A solo series has five rounds" : "A match has three rounds")+", but this code carries "+played.length+"."};
+    }
+    const sum = played.reduce((a,b)=>a+b, 0);
+    if(sum !== total) return {error:"That code's total ("+total+") doesn't match its rounds ("+sum+")."};
+    if(!/^\d{4}$/.test(text.slice(20,24))) return {error:"That code has an unreadable time."};
+    return {
+      game: QR_GAME_CODE,
+      formatVersion: '1',
+      initials: initials,
+      result: result,
+      total: total,
+      rounds: played,
+      shut: played.filter(v=>v===0).length,
+      seconds: parseInt(text.slice(20,24), 10),
+    };
   }
 
   function parsePayload(text){
-    text = (text||'').trim().toUpperCase();
-    if(text.length < 2) return {error:"That code is too short to be a valid score."};
-    const code = text.slice(0,2);
-    if(code === QR_GAME_CODE) return parseShutTheBoxPayload(text);
-    return {error:'Unknown game code "'+code+'".'};
+    text = (text||'').trim();
+    if(!text) return {error:"That code is too short to be a valid score."};
+    return parseShutTheBoxPayload(text.toUpperCase());
   }
 
   function lastPathSegment(text){
@@ -285,54 +312,70 @@
   function payloadFromEntry(){
     const raw = location.hash ? location.hash.slice(1) : lastPathSegment(location.pathname);
     const last = decodeURIComponent(lastPathSegment(raw));
-    if(last.length < 2) return null;
+    if(!last) return null;
     const result = parsePayload(last);
     return result.error ? null : result;
   }
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+  function fmtClock(seconds){
+    seconds = Number(seconds)||0;
+    const m = Math.floor(seconds/60), s = seconds%60;
+    return m + ':' + String(s).padStart(2,'0');
+  }
+  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 
-  function formatDisplayValue(o){ return String(o.total).padStart(3,'0'); }
-
-  // TODO -- the submission's own "scorecard reconstruction" field asked for something this
-  // generator can't safely auto-implement from free text. The developer's exact request:
-  //   "Total must equal the sum of the played round fields. Boxes shut = count of round fields equal to 00. Reject if the checksum does not match, if a round field is neither -- nor 00-45, or if total > 225. Solo (flag 1) entries form the main board; W/L/D entries are match results and should be listed separately or badged."
-  // Implement it by hand (likely inside renderScorecardHTML and/or formatDisplayValue below),
-  // then delete this comment.
-
-  function renderScorecardHTML(data){
-    const rows = '<tr><td>Format Version</td><td class="tk-val tnum">'+data.formatVersion+'</td></tr>'+
-      '<tr><td>Result Flag</td><td class="tk-val tnum">'+data.resultFlag+'</td></tr>'+
-      '<tr><td>Total</td><td class="tk-val tnum">'+data.total+'</td></tr>'+
-      '<tr><td>Round 1</td><td class="tk-val tnum">'+data.round1+'</td></tr>'+
-      '<tr><td>Round 2</td><td class="tk-val tnum">'+data.round2+'</td></tr>'+
-      '<tr><td>Round 3</td><td class="tk-val tnum">'+data.round3+'</td></tr>'+
-      '<tr><td>Round 4</td><td class="tk-val tnum">'+data.round4+'</td></tr>'+
-      '<tr><td>Round 5</td><td class="tk-val tnum">'+data.round5+'</td></tr>'+
-      '<tr><td>Elapsed Seconds</td><td class="tk-val tnum">'+data.elapsedSeconds+'</td></tr>'+
-      '<tr><td>Checksum</td><td class="tk-val tnum">'+data.checksum+'</td></tr>';
-    return '<table class="tk-sheet">'+rows+'</table>';
+  function renderRoundsHTML(data){
+    const rounds = Array.isArray(data.rounds) ? data.rounds : [];
+    const n = data.result === '1' ? 5 : 3;
+    let html = '<div class="sb-rounds">';
+    for(let i=0;i<n;i++){
+      const v = rounds[i];
+      if(v == null){ html += '<div class="sb-round unplayed"><div class="lbl">R'+(i+1)+'</div><div class="val">--</div></div>'; continue; }
+      html += '<div class="sb-round'+(v===0?' shut':'')+'" title="'+(v===0?'Shut the box!':(v+' left open'))+'"><div class="lbl">R'+(i+1)+'</div><div class="val">'+(v===0?'BOX':v)+'</div></div>';
+    }
+    html += '</div>';
+    html += '<table class="sb-sheet">'+
+      '<tr><td>'+escapeHtml(RESULT_NAMES[data.result]||'?')+'</td><td class="sb-val">'+n+' rounds</td></tr>'+
+      '<tr><td>Tiles left open (total)</td><td class="sb-val tnum">'+(Number(data.total)||0)+'</td></tr>'+
+      '<tr><td>Boxes shut</td><td class="sb-val tnum">'+(Number(data.shut)||0)+'</td></tr>'+
+      '<tr><td>Play time</td><td class="sb-val tnum">'+fmtClock(data.seconds)+'</td></tr>'+
+      '</table>';
+    return html;
   }
 
-  async function renderBoard(docs){
-    if(!docs.length){ boardEl.innerHTML = '<div class="empty-state">No scores yet — be the first on the board.</div>'; return; }
+  // Lower total wins; ties: more boxes shut, then less time, then the earlier submission.
+  function compareScores(a, b){
+    return (a.total - b.total) || ((b.shut||0) - (a.shut||0)) || ((a.seconds||0) - (b.seconds||0)) || ((a.submittedAt||0) - (b.submittedAt||0));
+  }
+
+  async function renderBoard(){
+    const docs = latestDocs
+      .filter(d=>{ const r = d.data().result; return activeTab === 'solo' ? r === '1' : (r === 'W' || r === 'L' || r === 'D'); })
+      .sort((x,y)=>compareScores(x.data(), y.data()))
+      .slice(0, 25);
+    if(!docs.length){
+      boardEl.innerHTML = '<div class="empty-state">No '+(activeTab==='solo'?'solo series':'match results')+' yet &mdash; be the first on the board.</div>';
+      return;
+    }
     const uids = docs.map(d=>d.data().uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
       const data = d.data();
       const rank = i+1;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
-      const meta = [fmtWhen(data.submittedAt), usernameLine].filter(Boolean).join(' · ');
+      const badge = activeTab === 'match' ? ('<span class="res-badge '+escapeHtml(data.result)+'">'+(data.result==='W'?'WIN':data.result==='L'?'LOSS':'DRAW')+'</span>') : '';
+      const shutLine = (Number(data.shut)||0) + ' shut';
+      const meta = [fmtWhen(data.submittedAt), badge, shutLine, fmtClock(data.seconds), usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
-      const rowHtml = '<div class="row'+(rank===1?' top1':'')+' has-detail" data-detail="d'+i+'">'+
+      const rowHtml = '<div class="row has-detail'+(rank===1?' top1':'')+'" data-detail="d'+i+'">'+
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.total!=null?String(data.total):'-')+'</div>'+
+        '<div class="score-val tnum">'+(Number(data.total)||0)+'<small>LEFT OPEN</small></div>'+
       '</div>';
-      const detailHtml = '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data)+'</div>';
-      return rowHtml + detailHtml;
+      return rowHtml + '<div class="row-detail" id="d'+i+'" hidden>'+renderRoundsHTML(data)+'</div>';
     }).join('');
     docs.forEach((d,i)=>{
       const data = d.data();
@@ -349,8 +392,6 @@
     if(detailId) el(detailId).hidden = !el(detailId).hidden;
   });
 
-  function escapeHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
-
   function friendlyDbError(e){
     const code = e && e.code;
     switch(code){
@@ -361,18 +402,29 @@
     }
   }
 
+  // Equality-only query (no composite index needed); ranking and the solo/match split happen
+  // client-side -- same approach as sk/index.html.
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('total','asc').limit(10);
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).limit(500);
     unsubscribeBoard = q.onSnapshot(
-      (snap)=>{ renderBoard(snap.docs); },
+      (snap)=>{ latestDocs = snap.docs; renderBoard(); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
     );
   }
 
+  function setTab(tab){
+    if(activeTab === tab) return;
+    activeTab = tab;
+    tabButtons.forEach(btn=>btn.classList.toggle('active', btn.dataset.tab===tab));
+    renderBoard();
+  }
+  tabButtons.forEach(btn=>btn.addEventListener('click', ()=>setTab(btn.dataset.tab)));
+
   function initDb(){
-    if(!firebase || !firebase.firestore){ boardStatusEl.innerHTML = '<div class="msg err">Firestore module not available</div>'; return; }
+    if(!firebase){ boardStatusEl.innerHTML = '<div class="msg err">Firebase SDK failed to load</div>'; return; }
+    if(!firebase.firestore){ boardStatusEl.innerHTML = '<div class="msg err">Firestore module not available</div>'; return; }
     try{
       db = firebase.firestore();
       boardStatusEl.textContent = '';
@@ -384,8 +436,12 @@
 
   async function writeScore(data){
     if(!db) return {ok:false, error:new Error('db not initialized')};
-    try{ await db.collection('scores').add(data); return {ok:true}; }
-    catch(e){ return {ok:false, error:e}; }
+    try{
+      await db.collection('scores').add(data);
+      return {ok:true};
+    }catch(e){
+      return {ok:false, error:e};
+    }
   }
 
   function showStage(stage){
@@ -396,10 +452,10 @@
 
   function openConfirm(parsed){
     pending = parsed;
-    el('confirm-initials').textContent = parsed.initials || '';
-    el('confirm-score').textContent = formatDisplayValue(parsed);
-    el('confirm-src').textContent = 'From a scanned QR code';
-    el('confirm-scorecard').innerHTML = renderScorecardHTML(parsed);
+    el('confirm-initials').textContent = parsed.initials;
+    el('confirm-score').textContent = String(parsed.total);
+    el('confirm-src').textContent = RESULT_NAMES[parsed.result] + ' · tiles left open · From a scanned QR code';
+    el('confirm-scorecard').innerHTML = renderRoundsHTML(parsed);
     confirmMsg.innerHTML = '';
     showStage('confirm');
   }
@@ -407,7 +463,10 @@
   function handleScanResult(text){
     formMsg.innerHTML = '';
     const result = parsePayload(lastPathSegment(text));
-    if(result.error){ formMsg.innerHTML = '<div class="msg err">'+escapeHtml(result.error)+'</div>'; return; }
+    if(result.error){
+      formMsg.innerHTML = '<div class="msg err">'+escapeHtml(result.error)+'</div>';
+      return;
+    }
     resetScanUI();
     openConfirm(result);
   }
@@ -431,7 +490,7 @@
   async function startLiveScan(){
     formMsg.innerHTML = '';
     if(!window.zbarWasm && !getBarcodeDetector() && !window.jsQR){
-      formMsg.innerHTML = '<div class="msg err">QR scanning library failed to load — try reloading the page.</div>';
+      formMsg.innerHTML = '<div class="msg err">QR scanning library failed (zbar: '+!!window.zbarWasm+', barcode: '+!!getBarcodeDetector()+', jsqr: '+!!window.jsQR+')</div>';
       return;
     }
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
@@ -439,7 +498,10 @@
       return;
     }
     try{ cameraStream = await navigator.mediaDevices.getUserMedia({ video:{ facingMode:{ ideal:'environment' } }, audio:false }); }
-    catch(e){ showFallback('Camera access denied: '+escapeHtml(e.message)); return; }
+    catch(e){
+      showFallback('Camera access denied: '+escapeHtml(e.message));
+      return;
+    }
     scanVideo.srcObject = cameraStream;
     try{ await scanVideo.play(); }catch(e){}
     btnScan.hidden = true; scanFallback.hidden = true; scanLive.hidden = false;
@@ -550,18 +612,27 @@
     const btn = el('btn-confirm');
     btn.disabled = true;
     confirmMsg.innerHTML = '<div class="msg ok">Submitting…</div>';
-    const record = Object.assign({}, pending, {
+    const record = {
+      game: QR_GAME_CODE,
+      formatVersion: '1',
+      initials: pending.initials,
+      result: pending.result,
+      total: pending.total,
+      rounds: pending.rounds,
+      shut: pending.shut,
+      seconds: pending.seconds,
       source: SUBMIT_SOURCE,
       submittedAt: Date.now(),
       uid: authedUser.uid,
       username: authedUser.username,
       approved: !!authedUser.approved,
-    });
+    };
     try{
       const res = await writeScore(record);
       btn.disabled = false;
       if(res.ok){
-        el('success-text').textContent = (pending.initials||'') + ' — ' + formatDisplayValue(pending) + ' submitted to the leaderboard.';
+        el('success-text').textContent = pending.initials + ' — ' + pending.total + ' left open (' + RESULT_NAMES[pending.result].toLowerCase() + ') submitted to the leaderboard.';
+        setTab(pending.result === '1' ? 'solo' : 'match');
         pending = null;
         showStage('success');
       } else {
@@ -575,13 +646,6 @@
 
   el('btn-again').addEventListener('click', ()=>{ pending = null; showStage('idle'); });
 
-  // Gates the WHOLE page (board, submit form, ROM download, art) behind devStatus !== 'coming-soon'
-  // OR the viewer being this game's own assigned developer or the site admin -- see access-gate's
-  // own markup comment. gameData is fetched once and reused both for this and for the ROM/art
-  // links below, instead of two separate reads of the same doc. This is enforcement in the loosest
-  // sense (a static site with no server can't truly hide a public Firestore doc from a determined
-  // visitor), but it does mean nobody else is ever shown or linked to this page's real content.
-  let gameData = null;
   let gateInitialized = false;
   function isAuthorizedViewer(user){
     if(!gameData || gameData.devStatus !== 'coming-soon') return true;
@@ -596,6 +660,7 @@
     initDb();
     const fromEntry = payloadFromEntry();
     if(fromEntry){
+      setTab(fromEntry.result === '1' ? 'solo' : 'match');
       openConfirm(fromEntry);
       history.replaceState(null, '', location.pathname);
     }
@@ -609,21 +674,22 @@
 
     const gameDocPromise = NGPC_AUTH.db
       ? NGPC_AUTH.db.collection('games').doc(GAME_SLUG).get().then(function(doc){
-          gameData = doc.exists ? doc.data() : {};
-          if(romLinkEl && gameData.romPath) romLinkEl.href = gameData.romPath;
+          if(!doc.exists){ if(romLinkEl) romLinkEl.hidden = true; gameData = {}; return; }
+          gameData = doc.data();
+          if(romLinkEl){ if(gameData.romPath) romLinkEl.href = gameData.romPath; else romLinkEl.hidden = true; }
           if(artEl && gameData.titleImage) artEl.src = gameData.titleImage;
           [gameData.extraScreenshot1Path, gameData.extraScreenshot2Path].forEach(function(url, i){
             if(!url) return;
             extraArtEls[i].src = url;
             extraArtEls[i].hidden = false;
           });
-        var descEl = el('game-desc');
-        if(descEl){ if(gameData.description){ descEl.textContent = gameData.description; descEl.hidden = false; } else descEl.hidden = true; }
-        var siteEl = el('game-site'), siteLinkEl = el('game-site-link');
-        if(siteEl && siteLinkEl){ if(gameData.siteUrl){ siteLinkEl.href = gameData.siteUrl; siteLinkEl.textContent = gameData.siteUrl; siteEl.hidden = false; } else siteEl.hidden = true; }
-        var versionEl = el('game-version');
-        if(versionEl){ if(gameData.version){ versionEl.textContent = gameData.version; versionEl.hidden = false; } else versionEl.hidden = true; }
-        }).catch(function(){ gameData = {}; /* fail open -- an unreadable doc isn't grounds to lock the page */ })
+          var descEl = el('game-desc');
+          if(descEl){ if(gameData.description){ descEl.textContent = gameData.description; descEl.hidden = false; } else descEl.hidden = true; }
+          var siteEl = el('game-site'), siteLinkEl = el('game-site-link');
+          if(siteEl && siteLinkEl){ if(gameData.siteUrl){ siteLinkEl.href = gameData.siteUrl; siteLinkEl.textContent = gameData.siteUrl; siteEl.hidden = false; } else siteEl.hidden = true; }
+          var versionEl = el('game-version');
+          if(versionEl){ if(gameData.version){ versionEl.textContent = gameData.version; versionEl.hidden = false; } else versionEl.hidden = true; }
+        }).catch(function(){ if(romLinkEl) romLinkEl.hidden = true; gameData = {}; })
       : Promise.resolve();
 
     NGPC_AUTH.onAuthChange((user)=>{
@@ -638,8 +704,6 @@
     });
     el('scan-signin-btn').addEventListener('click', ()=>NGPC_AUTH.openSignInModal('signin'));
   } else {
-    // auth.js itself failed to load -- none of this page's other gating works either in that
-    // case, so there's nothing to meaningfully lock; show the page rather than a dead end.
     gameData = { devStatus: 'final' };
     applyAccessGate(null);
   }
