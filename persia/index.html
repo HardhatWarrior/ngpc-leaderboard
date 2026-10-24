@@ -430,7 +430,7 @@
     return (b.k.score - a.k.score) || (a.k.time - b.k.time) || (a.k.when - b.k.when);
   }
   // One entry per player (their best), then the top BOARD_SIZE.
-  const BOARD_SIZE = 25;
+  const BOARD_SIZE = 10;
   function rankDocs(docs){
     const entries = [];
     docs.forEach(function(d){ const data = d.data(); const k = persiaRankKey(data); if(k) entries.push({d:d, data:data, k:k}); });

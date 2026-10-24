@@ -393,7 +393,7 @@
     // Endless has only one difficulty value ever sent (00, a placeholder -- the device doesn't
     // vary it), so filtering on it too is harmless and keeps the query shape consistent across
     // every group rather than special-casing Endless out of the difficulty filter.
-    q = q.where('difficulty','==',g.difficulty).where('approved','==',true).orderBy('score','desc').limit(25);
+    q = q.where('difficulty','==',g.difficulty).where('approved','==',true).orderBy('score','desc').limit(10);
     unsubscribeBoard = q.onSnapshot(
       (snap)=>{ renderBoard(snap.docs); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }

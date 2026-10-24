@@ -464,7 +464,7 @@
     return {score:sum.score, ticks:sum.ticks, when:Number(d.submittedAt)||0};
   }
   function bmCompare(a, b){ return (b.k.score - a.k.score) || (a.k.ticks - b.k.ticks) || (a.k.when - b.k.when); }
-  const BOARD_SIZE = 25;
+  const BOARD_SIZE = 10;
   function rankDocs(docs, view){
     const entries = [];
     docs.forEach(function(d){

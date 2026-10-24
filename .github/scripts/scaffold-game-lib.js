@@ -536,7 +536,7 @@ ${scorecardFormulaNote}${scorecardBlock}
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('${sortField}','${sortDir}').limit(25);
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('${sortField}','${sortDir}').limit(10);
     unsubscribeBoard = q.onSnapshot(
       (snap)=>{ renderBoard(snap.docs); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }

@@ -422,7 +422,7 @@
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
     const spec = getPayloadSpec();
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy(spec.sortField, spec.sortDir).limit(25);
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy(spec.sortField, spec.sortDir).limit(10);
     unsubscribeBoard = q.onSnapshot(
       (snap)=>{ renderBoard(snap.docs); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }

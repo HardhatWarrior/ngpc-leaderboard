@@ -471,7 +471,7 @@
   }
   // The cartridge's QR is cumulative (each level's lifetime best), so players resubmit as they
   // progress -- keep only each player's best-ranked entry, then the top BOARD_SIZE.
-  const BOARD_SIZE = 25;
+  const BOARD_SIZE = 10;
   function rankDocs(docs){
     const entries = [];
     docs.forEach(function(d){ const data = d.data(); const k = skRankKey(data); if(k) entries.push({d:d, data:data, k:k}); });
