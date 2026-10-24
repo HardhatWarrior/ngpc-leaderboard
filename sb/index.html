@@ -18,8 +18,8 @@
 <style>
   :root{
     --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
-    --cream:#f4eedd; --dim:#93a0c9; --accent:#d9a85c;
-    --accent-ink:#2a1a06; --accent2:#d9a85c;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#5c8fd6;
+    --accent-ink:#0a1830; --accent2:#5c8fd6;
     --good:#4fbf8b; --danger:#e5615a; --felt:#2f7a45;
   }
   *{ box-sizing:border-box; } html,body{ height:auto; }
@@ -66,13 +66,13 @@
   .mode-toggle{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
   .mode-btn{ width:auto; background:transparent; border:1px solid var(--border); color:var(--dim); border-radius:8px; padding:8px 14px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer; }
   .mode-btn:hover{ border-color:var(--accent2); }
-  .mode-btn.active{ border-color:var(--accent); color:var(--cream); background:rgba(217,168,92,.14); }
+  .mode-btn.active{ border-color:var(--accent); color:var(--cream); background:rgba(92,143,214,.14); }
 
   #board-status{ font-size:12px; color:var(--dim); margin-bottom:10px; min-height:1.4em; }
   .row{ display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:12px; padding:10px 8px; border-radius:8px; }
   .row ~ .row{ border-top:1px solid var(--border); }
   .rank{ font-family:"Press Start 2P",monospace; font-size:11px; color:var(--dim); text-align:center; }
-  .row.top1 .rank{ color:var(--accent); } .row.top1{ background:rgba(217,168,92,.10); }
+  .row.top1 .rank{ color:var(--accent); } .row.top1{ background:rgba(92,143,214,.10); }
   .row > div:nth-child(2){ min-width:0; }
   .initials{ font-family:"Press Start 2P",monospace; font-size:14px; letter-spacing:.06em; color:var(--cream); display:flex; align-items:center; gap:8px; min-width:0; overflow-wrap:anywhere; }
   .row-avatar{ width:48px; height:48px; border-radius:4px; border:1px solid var(--border); image-rendering:pixelated; flex:none; }
@@ -86,7 +86,7 @@
   .res-badge.L{ color:var(--danger); border-color:var(--danger); }
   .res-badge.D{ color:var(--accent2); border-color:var(--accent2); }
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
-  .row.has-detail{ cursor:pointer; } .row.has-detail:hover{ background:rgba(217,168,92,.08); }
+  .row.has-detail{ cursor:pointer; } .row.has-detail:hover{ background:rgba(92,143,214,.08); }
   .row-detail{ padding:2px 8px 14px; }
 
   /* ---------- round strip: one little tile per round, 00 = SHUT THE BOX ---------- */
@@ -107,7 +107,7 @@
   .file-btn{ display:block; text-align:center; cursor:pointer; }
   button{ font:inherit; border:none; border-radius:8px; padding:12px 16px; cursor:pointer; font-weight:600; font-size:13.5px; width:100%; }
   button:disabled{ opacity:.5; cursor:not-allowed; }
-  .btn-primary{ background:var(--accent); color:var(--accent-ink); } .btn-primary:hover:not(:disabled){ background:#ecc17a; }
+  .btn-primary{ background:var(--accent); color:var(--accent-ink); } .btn-primary:hover:not(:disabled){ background:#7aa2f7; }
   .btn-secondary{ background:transparent; border:1px solid var(--border); color:var(--cream); margin-top:8px; }
   .btn-secondary:hover:not(:disabled){ border-color:var(--accent2); }
   #confirm-view, #success-view{ display:none; }
