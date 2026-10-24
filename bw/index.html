@@ -677,7 +677,7 @@
 </div>
 
 <script src="/auth.js"></script>
-<script src="/bw/bw-shared.js?v=2"></script>
+<script src="/bw/bw-shared.js?v=3"></script>
 <script>
 (function(){
   "use strict";
@@ -1854,7 +1854,9 @@
   let tUnsub = null, tTimer = null, tMode = 'hcp', tPickId = null, tViewer = null, tShownStatus = null, tScrolled = false;
   const tOpen = new Set();     // players (tKey) whose scorecard is open -- kept across live redraws
 
-  function tEvents(){ return BW_SHARED.events(gameData); }
+  // the panel's events: closed ones (Manage Game > Close) are gone from it; their champions
+  // still count (refreshChampions() -> BW_SHARED.champions() reads every event)
+  function tEvents(){ return BW_SHARED.shown(gameData); }
   function tStatus(ev){ return BW_SHARED.status(ev, Date.now()); }
   // live first, then the next upcoming, then finished ones newest first
   function tOrdered(){

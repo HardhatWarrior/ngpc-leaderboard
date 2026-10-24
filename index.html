@@ -661,7 +661,7 @@
   // the event to announce: the one /bw/'s panel opens on (live, newest start first), else the
   // next one starting within PROMO_SOON_DAYS
   function promoEvent(g, now){
-    const list = g.bwTournaments.filter(e=>e && e.id && e.name && e.startsAt < e.endsAt);
+    const list = g.bwTournaments.filter(e=>e && e.id && e.name && e.startsAt < e.endsAt && e.closed !== true);   /* closed: Manage Game > Close */
     const live = list.filter(e=>now >= e.startsAt && now < e.endsAt).sort((a,b)=>b.startsAt - a.startsAt);
     if(live.length) return {ev: live[0], live: true};
     const soon = list.filter(e=>now < e.startsAt && e.startsAt - now <= PROMO_SOON_DAYS * 86400000)

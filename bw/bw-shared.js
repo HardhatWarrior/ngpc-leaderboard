@@ -50,6 +50,10 @@
     return list.filter(e=>e && e.id && e.name && e.startsAt < e.endsAt);
   }
   function status(ev, now){ return now < ev.startsAt ? 'upcoming' : now < ev.endsAt ? 'live' : 'final'; }
+  // The events the tournament panel and the main page's banner show: all but the ones an admin
+  // closed (Manage Game > Close) to clear them away. A closed event's winner still holds the
+  // title -- champions() reads every event.
+  function shown(game){ return events(game).filter(e=>e.closed !== true); }
 
   function playerKey(d){ return d.uid || ('@' + (d.username || d.initials)); }
   function compare(a, b, mode){
@@ -139,6 +143,6 @@
     });
   }
 
-  window.BW_SHARED = {HCP_MIN_GAMES, handicapFor, strikeStats, featureLevel, featureVisible, events, status,
+  window.BW_SHARED = {HCP_MIN_GAMES, handicapFor, strikeStats, featureLevel, featureVisible, events, shown, status,
                       playerKey, compare, standings, snapshotFor, eventHandicap, champions, isPerfect, perfectGames};
 })();

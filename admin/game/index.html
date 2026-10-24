@@ -85,6 +85,8 @@
   .t-pill{ font-size:10px; letter-spacing:.08em; text-transform:uppercase; border:1px solid var(--border); border-radius:999px; padding:2px 8px; color:var(--dim); margin-left:6px; }
   .t-pill.live{ color:var(--good); border-color:var(--good); }
   .t-pill.upcoming{ color:var(--accent2); border-color:var(--accent2); }
+  .t-pill.closed{ color:var(--dim); border-color:var(--dim); }
+  .tourney-item.closed .t-name, .tourney-item.closed .t-meta{ opacity:.6; }
   .tourney-form{ display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:10px 14px; margin-top:12px; background:var(--panel2); border:1px solid var(--border); border-radius:10px; padding:12px; }
   .tourney-form .t-wide{ grid-column:1 / -1; }
   .tourney-form .t-actions{ grid-column:1 / -1; display:flex; flex-wrap:wrap; gap:8px; }
@@ -618,14 +620,21 @@
     try { const tz = Intl.DateTimeFormat().resolvedOptions().timeZone; if(tz) el('bw-t-tz').textContent = ', ' + tz.replace(/_/g, ' '); } catch(e){}
     function status(ev){ const now = Date.now(); return now < ev.startsAt ? 'upcoming' : now < ev.endsAt ? 'live' : 'final'; }
     function render(){
-      events.sort((a,b)=>b.startsAt - a.startsAt);
+      // open events first (newest first), the closed ones after them
+      events.sort((a,b)=>((a.closed === true) - (b.closed === true)) || (b.startsAt - a.startsAt));
       listEl.innerHTML = events.length ? events.map(ev=>{
-        const st = status(ev);
-        return '<div class="tourney-item" data-id="'+escapeHtml(ev.id)+'"><div class="t-main">'
-          + '<div class="t-name">'+escapeHtml(ev.name)+'<span class="t-pill '+st+'">'+st+'</span></div>'
+        const st = status(ev), closed = ev.closed === true;
+        return '<div class="tourney-item'+(closed?' closed':'')+'" data-id="'+escapeHtml(ev.id)+'"><div class="t-main">'
+          + '<div class="t-name">'+escapeHtml(ev.name)+'<span class="t-pill '+st+'">'+st+'</span>'
+          + (closed ? '<span class="t-pill closed">closed</span>' : '')+'</div>'
           + '<div class="t-meta">'+escapeHtml(fmt(ev.startsAt))+' \u2013 '+escapeHtml(fmt(ev.endsAt))+'</div>'
           + (ev.prize ? '<div class="t-meta">Prize: '+escapeHtml(ev.prize)+'</div>' : '')
+          + (closed ? '<div class="t-meta">Hidden from the leaderboard page; the winner keeps the title.</div>' : '')
           + '</div><div class="t-btns">'
+          /* Close: only once it's over -- it leaves /bw/'s tournament panel (and the main page's
+             banner); Reopen puts it back. The champion badge stays either way. */
+          + (closed ? '<button type="button" class="action btn-secondary" data-act="reopen">Reopen</button>'
+             : st === 'final' ? '<button type="button" class="action btn-secondary" data-act="close" title="Hide it from the leaderboard page">Close</button>' : '')
           + '<button type="button" class="action btn-secondary" data-act="edit">Edit</button>'
           + '<button type="button" class="action btn-secondary" data-act="delete">'+(armedDelete===ev.id?'Confirm delete':'Delete')+'</button>'
           + '</div></div>';
@@ -655,6 +664,19 @@
       const id = btn.closest('.tourney-item').dataset.id;
       const ev = events.find(x=>x.id===id);
       if(!ev) return;
+      if(btn.dataset.act === 'close' || btn.dataset.act === 'reopen'){
+        armedDelete = null;
+        const closing = btn.dataset.act === 'close';
+        const next = events.map(x=>{
+          if(x.id !== id) return x;
+          const y = Object.assign({}, x);
+          if(closing) y.closed = true; else delete y.closed;
+          return y;
+        });
+        await persist(next, (closing ? 'Closed \u201c' : 'Reopened \u201c') + ev.name + '\u201d'
+          + (closing ? ': it\u2019s off the leaderboard page. The winner keeps the title.' : ': it\u2019s back on the leaderboard page.'));
+        return;
+      }
       if(btn.dataset.act === 'edit'){
         armedDelete = null;
         editingId = id;
@@ -691,6 +713,8 @@
       }
       const clash = events.find(x=>x.id!==editingId && startsAt < x.endsAt && x.startsAt < endsAt);
       const ev = { id: editingId || ('t'+Date.now().toString(36)), name, startsAt, endsAt, prize };
+      const was = editingId ? events.find(x=>x.id===editingId) : null;
+      if(was && was.closed === true) ev.closed = true;   // (Reopen is the way to show it again)
       const next = editingId ? events.map(x=>x.id===editingId ? ev : x) : events.concat([ev]);
       const btn = el('bw-t-save');
       btn.disabled = true;
