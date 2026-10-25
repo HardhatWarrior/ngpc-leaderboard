@@ -6994,7 +6994,7 @@ async function doExport(){
 $('modalClose').addEventListener('click',function(){$('modal').className='';});
 
 /* ---------- box engine ---------- */
-var DEF={W:119.06,H:119.06,D:19.05,S:22.23,Gb:9,F:12,Tb:20.5,Lt:59,Fd:47,Ls:53.6,Sa:16,Tt:17,Tw:34,insideArt:'color',win:true,winStyle:'cradle',winW:60.33,winH:53.98,winDx:0,winDy:0,attach:false,attachSide:'left',attachW:28.575,attachH:82.55,attachDx:0,attachDy:0,artFit:'edge',lines:true,hatch:true,bleed:2,paper:'letter',orient:'auto',margin:8,scale:'actual',dx:0,dy:0,instr:true,foldLines:false,tabPos:'fold',split:false,splitGap:14,Gs:9,split3:false,splitGap2:20,Gs2:16,pieces:{}};
+var DEF={W:119.06,H:119.06,D:19.05,S:22.23,Gb:9,F:12,Tb:20.5,Lt:59,Fd:47,Ls:53.6,Sa:16,Tt:17,Tw:34,insideArt:'color',win:true,winStyle:'cradle',winW:60.33,winH:53.98,winDx:0,winDy:0,attach:false,attachSide:'left',attachW:28.575,attachH:82.55,attachDx:0,attachDy:0,artFit:'edge',lines:true,hatch:true,bleed:2,paper:'letter',orient:'auto',margin:8,scale:'actual',dx:0,dy:0,instr:true,foldLines:false,tabPos:'fold',split:false,splitGap:14,Gs:9,split3:false,splitGap2:14,Gs2:9,glue3Side:'strip',glue2Side:'back',pieces:{}};
 var LIM={W:[40,300],H:[40,300],D:[5,60],S:[5,70],Gb:[0,30],F:[0,40],Tb:[0,30],splitGap2:[8,60],Gs2:[3,50],Lt:[0,130],Fd:[0,100],Ls:[0,130],Sa:[0,60],Tt:[0,40],Tw:[10,200],winW:[10,200],winH:[10,200],winDx:[-100,100],winDy:[-100,100],attachW:[5,110],attachH:[10,117],attachDx:[-60,60],attachDy:[-60,60],bleed:[0,6],margin:[0,30],dx:[-10,10],dy:[-10,10],splitGap:[6,60],Gs:[3,30]};
 var PAPERS={letter:[215.9,279.4,'US Letter · 8.5 × 11 in'],a4:[210,297,'A4 · 210 × 297 mm'],legal:[215.9,355.6,'US Legal · 8.5 × 14 in'],tabloid:[279.4,431.8,'Tabloid · 11 × 17 in'],a3:[297,420,'A3 · 297 × 420 mm']};
 var OVERLAP=10,PREVIEW_DPI=150,noLines=false;
@@ -7006,6 +7006,8 @@ function sanitizeCfg(){
  ['split','split3','win','attach','lines','foldLines','hatch','instr'].forEach(function(k){cfg[k]=!!cfg[k];});
  if(['fold','end'].indexOf(cfg.tabPos)<0)cfg.tabPos='fold';
  if(['left','right'].indexOf(cfg.attachSide)<0)cfg.attachSide='left';
+ if(['strip','back'].indexOf(cfg.glue3Side)<0)cfg.glue3Side='strip';
+ if(['back','cover'].indexOf(cfg.glue2Side)<0)cfg.glue2Side='back';
  if(['edge','fill','stretch'].indexOf(cfg.artFit)<0)cfg.artFit='edge';
  if(['front','back','color'].indexOf(cfg.insideArt)<0)cfg.insideArt='front';
  if(['cradle','rect'].indexOf(cfg.winStyle)<0)cfg.winStyle='cradle';
@@ -7166,9 +7168,11 @@ function appendBoxPanels(){
  b.append(checkC(cfg,'split','Cut the net in two between the spine and the back'));
  bn(b,'Gap between the pieces','splitGap');bn(b,'Glue tab on the back','Gs');
  note(b,'The tray (glue band, top wall, INSIDE, wall strip, BACK) and the cover (SPINE, FRONT, side lip) become two pieces. BACK gets a full-height glue tab on its spine edge; glue the SPINE to it.');
- b.append(checkC(cfg,'split3','Also cut the top wall and glue band off as a third piece'));
- bn(b,'Gap before INSIDE','splitGap2');bn(b,'Glue tab on INSIDE','Gs2');
- note(b,'Three pieces: the top wall with its glue band, the tray (INSIDE to BACK) and the cover. INSIDE gets a full-height glue tab on its left edge; glue the top wall piece to it so it continues from INSIDE as before. Works with or without the spine/back split.');
+ b.append(checkC(cfg,'split3','Also cut between the wall slot strip and BACK (three pieces)'));
+ bn(b,'Gap before BACK','splitGap2');bn(b,'Glue tab width','Gs2');
+ bsel(b,'Glue tab on','glue3Side',[['strip','The wall slot strip piece'],['back','The BACK piece']]);
+ bsel(b,'Spine split tab on','glue2Side',[['back','The BACK piece'],['cover','The cover piece']]);
+ note(b,'The glue tab is full height and can sit on either side of each cut: on the strip or on BACK for this cut, and on BACK or on the cover for the spine cut. Glue the other piece to it. Together with the spine split this makes three pieces: INSIDE and strip, BACK, and the cover. It also works without the spine split.');
  panelEl.append(d);
  d=section('Cartridge window',false);b=d._b;
  b.append(checkC(cfg,'win','Show the cartridge window'));
@@ -7209,7 +7213,7 @@ function arc(cx,cy,r,a0,a1){var p=[],n=6;for(var i=0;i<=n;i++){var a=(a0+(a1-a0)
    u = along the net, v = across it (0..H). */
 function geom(){
  var W=cfg.W,H=cfg.H,D=cfg.D,S=cfg.S,Gb=cfg.Gb,F=cfg.F,Tb=cfg.Tb,Lt=cfg.Lt,Ls=cfg.Ls,Tt=cfg.Tt,gc=3;
- var sp3=!!cfg.split3,t1=Gb+D,i0=t1+(sp3?cfg.splitGap2:0),Gs2=Math.min(cfg.Gs2,Math.max(3,cfg.splitGap2-3)),i1=i0+W,b0=i1+D,b1=b0+W,sp=!!cfg.split,s1=b1+(sp?cfg.splitGap:0),f0=s1+S,f1=f0+W,xs=f1+Ls,Gs=Math.min(cfg.Gs,Math.max(3,cfg.splitGap-3));
+ var sp3=!!cfg.split3,i0=Gb+D,i1=i0+W,s0=i1+D,b0=s0+(sp3?cfg.splitGap2:0),Gs2=Math.min(cfg.Gs2,Math.max(3,cfg.splitGap2-3)),b1=b0+W,sp=!!cfg.split,s1=b1+(sp?cfg.splitGap:0),f0=s1+S,f1=f0+W,xs=f1+Ls,Gs=Math.min(cfg.Gs,Math.max(3,cfg.splitGap-3));
  var Fd=Math.min(cfg.Fd,Lt),Sa=Math.min(cfg.Sa,H/2-12),Tw=Math.max(6,Math.min(cfg.Tw,H-2*Sa-8));
  var ty0=(H-Tw)/2,ty1=(H+Tw)/2,hasT=Tt>0&&Ls>0,hasG=Gb>0,tEnd=cfg.tabPos==='end';
  if(!tEnd)Tt=Math.min(Tt,Math.max(0,Ls-3));
@@ -7219,27 +7223,35 @@ function geom(){
  for(var i=1;i<=N;i++){var u=i/N;cv.push([f0+e+(xm-f0-e)*u,(Lt-Fd)+Fd*(0.5-0.5*Math.cos(Math.PI*u))]);}
  cv.push([f1,Lt]);
  var out=[];
- if(sp3){}else if(hasG)out.push([0,gc],[gc,0]);else out.push([0,0]);
+ if(hasG)out.push([0,gc],[gc,0]);else out.push([0,0]);
  out.push([i0,0]);
  out.push([i0,-D-F+c],[i0+c,-D-F],[i1-c,-D-F],[i1,-D-F+c],[i1,0]);
- out.push([i1+2,-Tb],[b0-2,-Tb],[b0,0],[b1,0]);if(sp)out.push(null,[s1,0]);out.push([s1+2,-Tb],[f0-2,-Tb],[f0,0]);
+ out.push([i1+2,-Tb],[s0-2,-Tb],[s0,0]);if(sp3)out.push('A');out.push([b0,0],[b1,0]);if(sp)out.push('B',[s1,0]);out.push([s1+2,-Tb],[f0-2,-Tb],[f0,0]);
  cv.forEach(function(p){out.push([p[0],-p[1]]);});
  out.push([f1,0]);
  if(Ls>0){out.push([xs,Sa]);if(hasT&&tEnd)out.push([xs,ty0],[xs+Tt,ty0+3],[xs+Tt,ty1-3],[xs,ty1]);out.push([xs,H-Sa]);}
  out.push([f1,H]);
  cv.slice().reverse().forEach(function(p){out.push([p[0],H+p[1]]);});
- out.push([f0,H],[f0-2,H+Tb],[s1+2,H+Tb],[s1,H]);if(sp)out.push(null);out.push([b1,H],[b0,H],[b0-2,H+Tb],[i1+2,H+Tb],[i1,H]);
+ out.push([f0,H],[f0-2,H+Tb],[s1+2,H+Tb],[s1,H]);if(sp)out.push('C');out.push([b1,H],[b0,H]);if(sp3)out.push('D');out.push([s0,H],[s0-2,H+Tb],[i1+2,H+Tb],[i1,H]);
  out.push([i1,H+D+F-c],[i1-c,H+D+F],[i0+c,H+D+F],[i0,H+D+F-c],[i0,H]);
- if(sp3)out.push([i0-Gs2,H-2.5],[i0-Gs2,2.5]);else if(hasG)out.push([gc,H],[0,H-gc]);else out.push([0,H]);
- var outs=[out],gtab=null,gtab3=null;
- if(sp){
-  var ia=out.indexOf(null),ib=out.lastIndexOf(null);
-  gtab=[[b1,0],[b1+Gs,2.5],[b1+Gs,H-2.5],[b1,H]];
-  outs=[out.slice(0,ia).concat([gtab[1],gtab[2]],out.slice(ib+1)),out.slice(ia+1,ib)];
- }
- if(sp3){
-  gtab3=[[i0,0],[i0-Gs2,2.5],[i0-Gs2,H-2.5],[i0,H]];
-  outs.push((hasG?[[0,gc],[gc,0]]:[[0,0]]).concat([[t1,0],[t1,H]],hasG?[[gc,H],[0,H-gc]]:[[0,H]]));
+ if(hasG)out.push([gc,H],[0,H-gc]);else out.push([0,H]);
+ var outs=[out],gtab=null,gtab3=null,t3=cfg.glue3Side==='back'?'back':'strip',t2=cfg.glue2Side==='cover'?'cover':'back';
+ if(sp||sp3){
+  var parts=[[]];
+  out.forEach(function(q){if(typeof q==='string')parts.push([]);else parts[parts.length-1].push(q);});
+  if(sp)gtab=t2==='cover'?[[s1,0],[s1-Gs,2.5],[s1-Gs,H-2.5],[s1,H]]:[[b1,0],[b1+Gs,2.5],[b1+Gs,H-2.5],[b1,H]];
+  if(sp3)gtab3=t3==='back'?[[b0,0],[b0-Gs2,2.5],[b0-Gs2,H-2.5],[b0,H]]:[[s0,0],[s0+Gs2,2.5],[s0+Gs2,H-2.5],[s0,H]];
+  /* a tab is two inner corner points; on a left edge they close the loop bottom to top, on a right edge they bridge top to bottom */
+  var tr=function(t){return [t[1],t[2]];},tl=function(t){return [t[2],t[1]];};
+  if(sp&&!sp3){
+   outs=[parts[0].concat(t2==='back'?tr(gtab):[],parts[2]),parts[1].concat(t2==='cover'?tl(gtab):[])];
+  }else if(sp3&&!sp){
+   outs=[parts[0].concat(t3==='strip'?tr(gtab3):[],parts[2]),parts[1].concat(t3==='back'?tl(gtab3):[])];
+  }else{
+   outs=[parts[0].concat(t3==='strip'?tr(gtab3):[],parts[4]),
+         parts[1].concat(t2==='back'?tr(gtab):[],parts[3],t3==='back'?tl(gtab3):[]),
+         parts[2].concat(t2==='cover'?tl(gtab):[])];
+  }
  }
  var tabs=[];
  if(gtab)tabs.push(gtab);
@@ -7247,11 +7259,13 @@ function geom(){
  if(hasG)tabs.push([[0,gc],[gc,0],[Gb,0],[Gb,H],[gc,H],[0,H-gc]]);
  
  var folds=[
-  [i0,0,i0,H],[i1,0,i1,H],[b0,0,b0,H],[b1,0,b1,H],[f0,0,f0,H],[f1,0,f1,H],
+  [i0,0,i0,H],[i1,0,i1,H],[f0,0,f0,H],[f1,0,f1,H],
   [i0,0,i1,0],[i0,-D,i1,-D],[i0,H,i1,H],[i0,H+D,i1,H+D],
-  [i1,0,b0,0],[i1,H,b0,H],[s1,0,f0,0],[s1,H,f0,H],
+  [i1,0,s0,0],[i1,H,s0,H],[s1,0,f0,0],[s1,H,f0,H],
   [f0,0,f1,0],[f0,H,f1,H]
  ];
+ if(!sp3||t3==='strip')folds.push([s0,0,s0,H]);else folds.push([b0,0,b0,H]);
+ if(!sp||t2==='back')folds.push([b1,0,b1,H]);else folds.push([s1,0,s1,H]);
  if(hasG)folds.push([Gb,0,Gb,H]);
  if(hasT&&tEnd)folds.push([xs,ty0,xs,ty1]);
  var slot=null;
@@ -7265,11 +7279,11 @@ function geom(){
  if(cfg.win){var wu=cfg.winH,wv=cfg.winW,cu=(cfg.attach?(cfg.attachSide==='right'?i0+agap+wu/2:i0+2*agap+cfg.attachW+wu/2):i0+W/2)+cfg.winDx,cvv=H/2+cfg.winDy;win={x:cu-wu/2,y:cvv-wv/2,w:wu,h:wv};}
  var m=Math.max(D+F,Lt);
  var pcs=[
-  {k:'top',n:'Top wall',r:[Gb,0,t1,H],o:sp3?'tbr':'tb'},
+  {k:'top',n:'Top wall',r:[Gb,0,i0,H],o:'tb'},
   {k:'inside',n:'Inside panel',r:[i0,0,i1,H],o:''},
   {k:'wallT',n:'Side wall (upper)',r:[i0,-D-F,i1,0],o:'tlr'},
   {k:'wallB',n:'Side wall (lower)',r:[i0,H,i1,H+D+F],o:'blr'},
-  {k:'strip',n:'Wall slot strip',r:[i1,-Tb,b0,H+Tb],o:'tb'},
+  {k:'strip',n:'Wall slot strip',r:[i1,-Tb,s0,H+Tb],o:'tb'},
   {k:'back',n:'Back',r:[b0,0,b1,H],o:'tb'},
   {k:'spine',n:'Spine',r:[s1,-Tb,f0,H+Tb],o:sp?'tbl':'tb'},
   {k:'front',n:'Front',r:[f0,0,f1,H],o:''},
@@ -7399,7 +7413,7 @@ function drawNet(ctx,art,pxmm,preview){
  if(linked('back'))drawExt(ctx,back,{x:g.b0,y:0,w:W,h:H},{l:D,r:0,t:g.Tb+bl,b:g.Tb+bl});
  if(linked('spine'))drawExt(ctx,spine,{x:g.s1,y:0,w:S,h:H},{l:g.sp?bl:0,r:0,t:g.Tb+bl,b:g.Tb+bl});
  if(linked('front'))drawExt(ctx,front,{x:g.f0,y:0,w:W,h:H},{l:0,r:Ls+(cfg.tabPos==='end'?Tt:0)+bl,t:Lt+bl,b:Lt+bl});
- if(linked('inside'))drawExt(ctx,inside,{x:g.i0,y:0,w:W,h:H},{l:(g.i0>g.Gb+D+0.01?0:g.Gb+D)+bl,r:0,t:D+F+bl,b:D+F+bl});
+ if(linked('inside'))drawExt(ctx,inside,{x:g.i0,y:0,w:W,h:H},{l:g.Gb+D+bl,r:0,t:D+F+bl,b:D+F+bl});
  drawPieces(ctx,g,bl);
  drawLayers(ctx,!preview);
  g.tabs.forEach(function(t){hatchTab(ctx,t);});
@@ -7477,7 +7491,7 @@ function instrPage(L,k){
   tiled?'The net is spread over several pages. Print them all, overlap the neighbours by the marked '+OVERLAP+' mm, line up the corner crosses and tape from the back.':'The whole net fits on one page.',
   'Cut around the solid outer line. Cut the solid lines of the cartridge cradle in the INSIDE panel'+(cfg.attach?', the attachment cut-out beside it,':'')+' and the slot on the fold at the end of INSIDE.',
   (cfg.foldLines?'Score every dashed line with a ruler and a dull tool (an empty pen works). Fold each crease so the printed side is on the outside.':'The fold lines are not printed, so no ink shows on the finished box. Line a ruler up with the cut-line corners and the window edges and score each crease with a dull tool (an empty pen works). Fold each crease so the printed side is on the outside.'),
-  (cfg.split3?'The top wall and its glue band are a separate piece. Fold the hatched glue tab on the left edge of INSIDE, glue it to the back of the top wall along its edge and line the fold up with the INSIDE edge. ':'')+(cfg.split?'The net is in two pieces: cut them apart. Fold the hatched glue tab on the right edge of BACK, put glue on it and attach the SPINE edge of the cover piece to it, lining the spine fold up with the back edge.':(cfg.split3?'':'The whole net is one piece.')),
+  (cfg.split3?'BACK is cut off from the wall slot strip: fold the hatched glue tab on the '+(cfg.glue3Side==='back'?'left edge of BACK, glue it to the back of the strip':'strip, glue it to the back of BACK')+' and line the two edges up. ':'')+(cfg.split?'The net is in two pieces: cut them apart. '+(cfg.glue2Side==='cover'?'Fold the hatched glue tab on the SPINE edge of the cover piece, put glue on it and attach it to the back of BACK, lining the spine fold up with the back edge.':'Fold the hatched glue tab on the right edge of BACK, put glue on it and attach the SPINE edge of the cover piece to it, lining the spine fold up with the back edge.')+'':(cfg.split3?'':'The whole net is one piece.')),
   'Build the tray: fold the wall strip up from BACK and fold INSIDE across so it sits parallel to BACK. Fold the side walls of INSIDE down and tuck their flaps in, then fold in the small tabs on the wall strip and spine. None of these are glued.',
   'Fold the top wall down and glue the hatched end band to the inside of BACK. This is the only glue in the tray.',
   'Make the pouch: fold the two FRONT lips inward. Put glue on the back (unprinted) side of the side lip, fold it over and press it onto the ends of both lips so the printed side shows. The opening stays at the spine end for the manual.',
