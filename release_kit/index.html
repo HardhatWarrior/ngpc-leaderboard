@@ -6068,6 +6068,7 @@ async function loadProject(o){
   old=o.cfg.els;inEls=old.map(function(e){var c=Object.assign({},e);['x','y','w','h','size','ls','stroke','radius','bw'].forEach(function(k){if(typeof c[k]==='number')c[k]*=S;});if(c.type==='image'&&c.fit==='stretch')c.fit='cover';return c;});
  }
  var c0=Object.assign({},o.cfg);delete c0.els;
+ if(c0&&!('foldLines' in c0)&&c0.Tb===10)c0.Tb=DEF.Tb; /* older files: lengthen the small tabs to just short of the spine width */
  cfg=freshCfg(c0);sanitizeCfg();resetOrg();
  var dx=ORG.x*S,dy=ORG.y*S;
  els=(inEls||[]).filter(function(e){return e&&(e.type==='text'||e.type==='image'||e.type==='rect');}).map(sanitize);
@@ -6993,7 +6994,7 @@ async function doExport(){
 $('modalClose').addEventListener('click',function(){$('modal').className='';});
 
 /* ---------- box engine ---------- */
-var DEF={W:119.06,H:119.06,D:19.05,S:22.23,Gb:9,F:12,Tb:10,Lt:59,Fd:47,Ls:53.6,Sa:16,Tt:17,Tw:34,insideArt:'color',win:true,winStyle:'cradle',winW:60.33,winH:53.98,winDx:0,winDy:0,artFit:'edge',lines:true,hatch:true,bleed:2,paper:'letter',orient:'auto',margin:8,scale:'actual',dx:0,dy:0,instr:true,tabPos:'fold',split:false,splitGap:14,Gs:9,pieces:{}};
+var DEF={W:119.06,H:119.06,D:19.05,S:22.23,Gb:9,F:12,Tb:20.5,Lt:59,Fd:47,Ls:53.6,Sa:16,Tt:17,Tw:34,insideArt:'color',win:true,winStyle:'cradle',winW:60.33,winH:53.98,winDx:0,winDy:0,artFit:'edge',lines:true,hatch:true,bleed:2,paper:'letter',orient:'auto',margin:8,scale:'actual',dx:0,dy:0,instr:true,foldLines:false,tabPos:'fold',split:false,splitGap:14,Gs:9,pieces:{}};
 var LIM={W:[40,300],H:[40,300],D:[5,60],S:[5,70],Gb:[0,30],F:[0,40],Tb:[0,30],Lt:[0,130],Fd:[0,100],Ls:[0,130],Sa:[0,60],Tt:[0,40],Tw:[10,200],winW:[10,200],winH:[10,200],winDx:[-100,100],winDy:[-100,100],bleed:[0,6],margin:[0,30],dx:[-10,10],dy:[-10,10],splitGap:[6,60],Gs:[3,30]};
 var PAPERS={letter:[215.9,279.4,'US Letter · 8.5 × 11 in'],a4:[210,297,'A4 · 210 × 297 mm'],legal:[215.9,355.6,'US Legal · 8.5 × 14 in'],tabloid:[279.4,431.8,'Tabloid · 11 × 17 in'],a3:[297,420,'A3 · 297 × 420 mm']};
 var OVERLAP=10,PREVIEW_DPI=150,noLines=false;
@@ -7002,7 +7003,7 @@ function freshCfg(o){var c=Object.assign({},DEF,o||{});c.pieces=c.pieces&&typeof
 function cloneCfg(){return JSON.parse(JSON.stringify(cfg));}
 function sanitizeCfg(){
  Object.keys(LIM).forEach(function(k){var v=parseFloat(cfg[k]);if(!isFinite(v))v=DEF[k];cfg[k]=Math.min(LIM[k][1],Math.max(LIM[k][0],v));});
- ['split','win','lines','hatch','instr'].forEach(function(k){cfg[k]=!!cfg[k];});
+ ['split','win','lines','foldLines','hatch','instr'].forEach(function(k){cfg[k]=!!cfg[k];});
  if(['fold','end'].indexOf(cfg.tabPos)<0)cfg.tabPos='fold';
  if(['edge','fill','stretch'].indexOf(cfg.artFit)<0)cfg.artFit='edge';
  if(['front','back','color'].indexOf(cfg.insideArt)<0)cfg.insideArt='front';
@@ -7157,7 +7158,7 @@ function appendBoxPanels(){
  note(b,'Walls, flaps, tabs and lips continue the colour of the panel they are attached to. Fit only applies to pieces still on an old live Cover link.');
  panelEl.append(d);
  d=section('Tray, walls and tabs',false);b=d._b;
- bn(b,'Side wall flap','F');bn(b,'Small tab length','Tb');bn(b,'End glue band','Gb');
+ bn(b,'Side wall flap','F');bn(b,'Small tab length','Tb');b.append(btn('Just short of the spine width',function(){cfg.Tb=Math.max(0,Math.round((cfg.S-1.5)*10)/10);changed(cfg);commit();rebuildInspector();}));bn(b,'End glue band','Gb');
  note(b,'The side walls hang off the INSIDE panel and just fold in place, as do the small tabs. The only glue in the tray is the band on the end of the top wall (to BACK). Set the band to 0 to remove it.');
  panelEl.append(d);
  d=section('Split into two pieces',false);b=d._b;
@@ -7181,7 +7182,7 @@ function appendBoxPanels(){
  note(b,'The lips on each side of the FRONT meet in the middle and curve apart toward the spine for the manual opening. The side lip is printed like the front and glued on its back side over the lip ends to make the pouch.');
  panelEl.append(d);
  d=section('Cut and fold lines',false);b=d._b;
- b.append(checkC(cfg,'lines','Print cut and fold lines'),checkC(cfg,'hatch','Hatch the glue areas'));
+ b.append(checkC(cfg,'lines','Print the solid cut lines'),checkC(cfg,'foldLines','Print the dashed fold lines (off = folds show on screen only)'),checkC(cfg,'hatch','Hatch the glue areas'));
  panelEl.append(d);
  d=section('Paper and print',false);b=d._b;
  bsel(b,'Paper','paper',Object.keys(PAPERS).map(function(k){return [k,PAPERS[k][2]];}));
@@ -7320,6 +7321,7 @@ function insideCanvas(art,pxmm){
  }
  return panelCanvas(art&&art[g0],cfg.W,cfg.H,pxmm,cfg.artFit,art&&art.bg&&art.bg[g0]);
 }
+var foldOn=true;
 function drawCradle(ctx,w){
  var a=w.x,b=w.y,wu=w.w,wv=w.h;
  if(cfg.winStyle==='rect'){rrPath(ctx,a,b,wu,wv,3);ctx.stroke();return;}
@@ -7339,6 +7341,7 @@ function drawCradle(ctx,w){
   ctx.moveTo(U(0.325),V(edge+sg*0.1));ctx.lineTo(U(0.42),V(edge+sg*0.01));ctx.lineTo(U(0.58),V(edge+sg*0.01));ctx.lineTo(U(0.675),V(edge+sg*0.1));
  });
  ctx.stroke();
+ if(!foldOn){ctx.restore();return;}
  /* fold lines: window edges and a second fold on each end flap */
  ctx.lineWidth=0.2;ctx.setLineDash([2.2,1.6]);
  ctx.strokeRect(a,b,wu,wv);
@@ -7369,14 +7372,15 @@ function drawNet(ctx,art,pxmm,preview){
  drawPieces(ctx,g,bl);
  drawLayers(ctx,!preview);
  g.tabs.forEach(function(t){hatchTab(ctx,t);});
+ foldOn=!!(preview||cfg.foldLines);
  if(cfg.lines&&!noLines){
   ctx.globalCompositeOperation='difference';ctx.strokeStyle='#fff';ctx.lineJoin='miter';
   ctx.lineWidth=0.22;g.outs.forEach(function(o){polyPath(ctx,o);ctx.stroke();});
   if(g.tabCut){polyPath(ctx,g.tabCut,false);ctx.stroke();}
   if(g.win)drawCradle(ctx,g.win);
   if(g.slot){ctx.beginPath();ctx.moveTo(g.slot[0],g.slot[1]);ctx.lineTo(g.slot[2],g.slot[3]);ctx.lineWidth=0.6;ctx.stroke();ctx.lineWidth=0.22;}
-  ctx.lineWidth=0.2;ctx.setLineDash([2.2,1.6]);
-  g.folds.forEach(function(f){ctx.beginPath();ctx.moveTo(f[0],f[1]);ctx.lineTo(f[2],f[3]);ctx.stroke();});
+  if(foldOn){ctx.lineWidth=0.2;ctx.setLineDash([2.2,1.6]);
+  g.folds.forEach(function(f){ctx.beginPath();ctx.moveTo(f[0],f[1]);ctx.lineTo(f[2],f[3]);ctx.stroke();});}
   ctx.setLineDash([]);ctx.globalCompositeOperation='source-over';
  }
  ctx.restore();
@@ -7440,7 +7444,7 @@ function instrPage(L,k){
   'Print at 100% (Actual size) on matte cardstock, about 160–250 gsm (65–110 lb). Turn off "Fit to page" in the print dialog.',
   tiled?'The net is spread over several pages. Print them all, overlap the neighbours by the marked '+OVERLAP+' mm, line up the corner crosses and tape from the back.':'The whole net fits on one page.',
   'Cut around the solid outer line. Cut the solid lines of the cartridge cradle in the INSIDE panel and the slot on the fold at the end of INSIDE.',
-  'Score every dashed line with a ruler and a dull tool (an empty pen works). Fold each crease so the printed side is on the outside.',
+  (cfg.foldLines?'Score every dashed line with a ruler and a dull tool (an empty pen works). Fold each crease so the printed side is on the outside.':'The fold lines are not printed, so no ink shows on the finished box. Line a ruler up with the cut-line corners and the window edges and score each crease with a dull tool (an empty pen works). Fold each crease so the printed side is on the outside.'),
   cfg.split?'The net is in two pieces: cut them apart. Fold the hatched glue tab on the right edge of BACK, put glue on it and attach the SPINE edge of the cover piece to it, lining the spine fold up with the back edge.':'The whole net is one piece.',
   'Build the tray: fold the wall strip up from BACK and fold INSIDE across so it sits parallel to BACK. Fold the side walls of INSIDE down and tuck their flaps in, then fold in the small tabs on the wall strip and spine. None of these are glued.',
   'Fold the top wall down and glue the hatched end band to the inside of BACK. This is the only glue in the tray.',
