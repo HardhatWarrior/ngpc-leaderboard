@@ -1441,13 +1441,19 @@
     // /play/<slug>/, matching the leaderboard slug directly -- only the original hand-built games
     // (the PLAY_FOLDER table above) have a differently-named play folder.
     el('lb-page-link').href = data.leaderboardPath || ('/'+slug+'/');
-    el('play-page-link').href = '/play/'+(PLAY_FOLDER[slug] || slug)+'/';
+    el('play-page-link').href = data.section === 'solo' ? '/play/solo/?g='+encodeURIComponent(slug) : '/play/'+(PLAY_FOLDER[slug] || slug)+'/';
     const downloads = data.romDownloads || 0;
-    const playFolder = PLAY_FOLDER[slug];
+    // Every game with an in-browser player has a count, whichever emulator it uses (the count is the play
+    // page's own loads): hand-built games via the PLAY_FOLDER table, single-player games on the shared
+    // /play/solo/ page (key play_solo_<slug>), everything else at /play/<slug>/. A renamed slug keeps its
+    // old key's plays (PLAY_ALIASES).
+    const PLAY_ALIASES = { gn:['play_solo_gotn'] };
+    const playKeys = [data.section === 'solo' ? 'play_solo_'+slug : 'play_'+(PLAY_FOLDER[slug] || slug)].concat(PLAY_ALIASES[slug] || []);
+    const playFolder = data.romPath ? playKeys[0] : null;   // no ROM, nothing to play
     const statsLineEl = el('stats-line');
     if(playFolder){
-      db.collection('pageViews').doc('play_'+playFolder).get().then(pvDoc=>{
-        const plays = (pvDoc.exists && pvDoc.data().total) || 0;
+      Promise.all(playKeys.map(k=>db.collection('pageViews').doc(k).get())).then(pvDocs=>{
+        const plays = pvDocs.reduce((n,d)=>n + ((d.exists && d.data().total) || 0), 0);
         statsLineEl.innerHTML = 'Downloaded <b>'+downloads+'</b> time'+(downloads===1?'':'s')
           +' &middot; Played <b>'+plays+'</b> time'+(plays===1?'':'s')+' (in-browser)';
       }).catch(()=>{
