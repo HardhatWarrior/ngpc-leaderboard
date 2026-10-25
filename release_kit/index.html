@@ -6068,6 +6068,7 @@ async function loadProject(o){
   old=o.cfg.els;inEls=old.map(function(e){var c=Object.assign({},e);['x','y','w','h','size','ls','stroke','radius','bw'].forEach(function(k){if(typeof c[k]==='number')c[k]*=S;});if(c.type==='image'&&c.fit==='stretch')c.fit='cover';return c;});
  }
  var c0=Object.assign({},o.cfg);delete c0.els;
+ if(c0&&!('glueV2' in c0)){var gw=[c0.Gb,c0.Gs,c0.Gs2].filter(function(v){return isFinite(v)&&v>0;});if(gw.length)c0.Gb=Math.min.apply(null,gw);} /* every hatched glue tab now shares the smallest of the old widths */
  if(c0&&!('foldLines' in c0)&&c0.Tb===10)c0.Tb=DEF.Tb; /* older files: lengthen the small tabs to just short of the spine width */
  cfg=freshCfg(c0);sanitizeCfg();resetOrg();
  var dx=ORG.x*S,dy=ORG.y*S;
@@ -6994,7 +6995,7 @@ async function doExport(){
 $('modalClose').addEventListener('click',function(){$('modal').className='';});
 
 /* ---------- box engine ---------- */
-var DEF={W:119.06,H:119.06,D:19.05,S:22.23,Gb:9,F:12,Tb:20.5,Lt:59,Fd:47,Ls:53.6,Sa:16,Tt:17,Tw:34,insideArt:'color',win:true,winStyle:'cradle',winW:60.33,winH:53.98,winDx:0,winDy:0,attach:false,attachSide:'left',attachW:28.575,attachH:82.55,attachDx:0,attachDy:0,artFit:'edge',lines:true,hatch:true,bleed:2,paper:'letter',orient:'auto',margin:8,scale:'actual',dx:0,dy:0,instr:true,foldLines:false,tabPos:'fold',split:false,splitGap:14,Gs:9,split3:false,splitGap2:14,Gs2:9,glue3Side:'strip',glue2Side:'back',pieces:{}};
+var DEF={W:119.06,H:119.06,D:19.05,S:22.23,Gb:9,F:12,Tb:20.5,Lt:59,Fd:47,Ls:53.6,Sa:16,Tt:17,Tw:34,insideArt:'color',win:true,winStyle:'cradle',winW:60.33,winH:53.98,winDx:0,winDy:0,attach:false,attachSide:'left',attachW:28.575,attachH:82.55,attachDx:0,attachDy:0,artFit:'edge',lines:true,hatch:true,bleed:2,paper:'letter',orient:'auto',margin:8,scale:'actual',dx:0,dy:0,instr:true,foldLines:false,tabPos:'fold',split:false,splitGap:14,Gs:9,glueV2:true,split3:false,splitGap2:14,Gs2:9,glue3Side:'strip',glue2Side:'back',pieces:{}};
 var LIM={W:[40,300],H:[40,300],D:[5,60],S:[5,70],Gb:[0,30],F:[0,40],Tb:[0,30],splitGap2:[8,60],Gs2:[3,50],Lt:[0,130],Fd:[0,100],Ls:[0,130],Sa:[0,60],Tt:[0,40],Tw:[10,200],winW:[10,200],winH:[10,200],winDx:[-100,100],winDy:[-100,100],attachW:[5,110],attachH:[10,117],attachDx:[-60,60],attachDy:[-60,60],bleed:[0,6],margin:[0,30],dx:[-10,10],dy:[-10,10],splitGap:[6,60],Gs:[3,30]};
 var PAPERS={letter:[215.9,279.4,'US Letter · 8.5 × 11 in'],a4:[210,297,'A4 · 210 × 297 mm'],legal:[215.9,355.6,'US Legal · 8.5 × 14 in'],tabloid:[279.4,431.8,'Tabloid · 11 × 17 in'],a3:[297,420,'A3 · 297 × 420 mm']};
 var OVERLAP=10,PREVIEW_DPI=150,noLines=false;
@@ -7161,15 +7162,15 @@ function appendBoxPanels(){
  note(b,'Walls, flaps, tabs and lips continue the colour of the panel they are attached to. Fit only applies to pieces still on an old live Cover link.');
  panelEl.append(d);
  d=section('Tray, walls and tabs',false);b=d._b;
- bn(b,'Side wall flap','F');bn(b,'Small tab length','Tb');b.append(btn('Just short of the spine width',function(){cfg.Tb=Math.max(0,Math.round((cfg.S-1.5)*10)/10);changed(cfg);commit();rebuildInspector();}));bn(b,'End glue band','Gb');
- note(b,'The side walls hang off the INSIDE panel and just fold in place, as do the small tabs. The only glue in the tray is the band on the end of the top wall (to BACK). Set the band to 0 to remove it.');
+ bn(b,'Side wall flap','F');bn(b,'Small tab length','Tb');b.append(btn('Just short of the spine width',function(){cfg.Tb=Math.max(0,Math.round((cfg.S-1.5)*10)/10);changed(cfg);commit();rebuildInspector();}));bn(b,'Glue tab width (every tab)','Gb');
+ note(b,'The side walls hang off the INSIDE panel and just fold in place, as do the small tabs. The only glue in the tray is the band on the end of the top wall (to BACK). Every hatched glue tab uses the same width and corner cut, set by Glue tab width. Set it to 0 to drop the end band (the split tabs then use 9 mm).');
  panelEl.append(d);
  d=section('Split into two pieces',false);b=d._b;
  b.append(checkC(cfg,'split','Cut the net in two between the spine and the back'));
- bn(b,'Gap between the pieces','splitGap');bn(b,'Glue tab on the back','Gs');
+ bn(b,'Gap between the pieces','splitGap');
  note(b,'The tray (glue band, top wall, INSIDE, wall strip, BACK) and the cover (SPINE, FRONT, side lip) become two pieces. BACK gets a full-height glue tab on its spine edge; glue the SPINE to it.');
  b.append(checkC(cfg,'split3','Also cut between the wall slot strip and BACK (three pieces)'));
- bn(b,'Gap before BACK','splitGap2');bn(b,'Glue tab width','Gs2');
+ bn(b,'Gap before BACK','splitGap2');
  bsel(b,'Glue tab on','glue3Side',[['strip','The wall slot strip piece'],['back','The BACK piece']]);
  bsel(b,'Spine split tab on','glue2Side',[['back','The BACK piece'],['cover','The cover piece']]);
  note(b,'The glue tab is full height and can sit on either side of each cut: on the strip or on BACK for this cut, and on BACK or on the cover for the spine cut. Glue the other piece to it. Together with the spine split this makes three pieces: INSIDE and strip, BACK, and the cover. It also works without the spine split.');
@@ -7213,7 +7214,7 @@ function arc(cx,cy,r,a0,a1){var p=[],n=6;for(var i=0;i<=n;i++){var a=(a0+(a1-a0)
    u = along the net, v = across it (0..H). */
 function geom(){
  var W=cfg.W,H=cfg.H,D=cfg.D,S=cfg.S,Gb=cfg.Gb,F=cfg.F,Tb=cfg.Tb,Lt=cfg.Lt,Ls=cfg.Ls,Tt=cfg.Tt,gc=3;
- var sp3=!!cfg.split3,i0=Gb+D,i1=i0+W,s0=i1+D,b0=s0+(sp3?cfg.splitGap2:0),Gs2=Math.min(cfg.Gs2,Math.max(3,cfg.splitGap2-3)),b1=b0+W,sp=!!cfg.split,s1=b1+(sp?cfg.splitGap:0),f0=s1+S,f1=f0+W,xs=f1+Ls,Gs=Math.min(cfg.Gs,Math.max(3,cfg.splitGap-3));
+ var sp3=!!cfg.split3,i0=Gb+D,i1=i0+W,s0=i1+D,b0=s0+(sp3?cfg.splitGap2:0),GT=cfg.Gb>0?cfg.Gb:9,Gs2=Math.min(GT,Math.max(3,cfg.splitGap2-3)),b1=b0+W,sp=!!cfg.split,s1=b1+(sp?cfg.splitGap:0),f0=s1+S,f1=f0+W,xs=f1+Ls,Gs=Math.min(GT,Math.max(3,cfg.splitGap-3));
  var Fd=Math.min(cfg.Fd,Lt),Sa=Math.min(cfg.Sa,H/2-12),Tw=Math.max(6,Math.min(cfg.Tw,H-2*Sa-8));
  var ty0=(H-Tw)/2,ty1=(H+Tw)/2,hasT=Tt>0&&Ls>0,hasG=Gb>0,tEnd=cfg.tabPos==='end';
  if(!tEnd)Tt=Math.min(Tt,Math.max(0,Ls-3));
@@ -7239,8 +7240,8 @@ function geom(){
  if(sp||sp3){
   var parts=[[]];
   out.forEach(function(q){if(typeof q==='string')parts.push([]);else parts[parts.length-1].push(q);});
-  if(sp)gtab=t2==='cover'?[[s1,0],[s1-Gs,2.5],[s1-Gs,H-2.5],[s1,H]]:[[b1,0],[b1+Gs,2.5],[b1+Gs,H-2.5],[b1,H]];
-  if(sp3)gtab3=t3==='back'?[[b0,0],[b0-Gs2,2.5],[b0-Gs2,H-2.5],[b0,H]]:[[s0,0],[s0+Gs2,2.5],[s0+Gs2,H-2.5],[s0,H]];
+  if(sp)gtab=t2==='cover'?[[s1,0],[s1-Gs,gc],[s1-Gs,H-gc],[s1,H]]:[[b1,0],[b1+Gs,gc],[b1+Gs,H-gc],[b1,H]];
+  if(sp3)gtab3=t3==='back'?[[b0,0],[b0-Gs2,gc],[b0-Gs2,H-gc],[b0,H]]:[[s0,0],[s0+Gs2,gc],[s0+Gs2,H-gc],[s0,H]];
   /* a tab is two inner corner points; on a left edge they close the loop bottom to top, on a right edge they bridge top to bottom */
   var tr=function(t){return [t[1],t[2]];},tl=function(t){return [t[2],t[1]];};
   if(sp&&!sp3){
