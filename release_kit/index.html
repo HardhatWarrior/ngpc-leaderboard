@@ -6994,8 +6994,8 @@ async function doExport(){
 $('modalClose').addEventListener('click',function(){$('modal').className='';});
 
 /* ---------- box engine ---------- */
-var DEF={W:119.06,H:119.06,D:19.05,S:22.23,Gb:9,F:12,Tb:20.5,Lt:59,Fd:47,Ls:53.6,Sa:16,Tt:17,Tw:34,insideArt:'color',win:true,winStyle:'cradle',winW:60.33,winH:53.98,winDx:0,winDy:0,artFit:'edge',lines:true,hatch:true,bleed:2,paper:'letter',orient:'auto',margin:8,scale:'actual',dx:0,dy:0,instr:true,foldLines:false,tabPos:'fold',split:false,splitGap:14,Gs:9,pieces:{}};
-var LIM={W:[40,300],H:[40,300],D:[5,60],S:[5,70],Gb:[0,30],F:[0,40],Tb:[0,30],Lt:[0,130],Fd:[0,100],Ls:[0,130],Sa:[0,60],Tt:[0,40],Tw:[10,200],winW:[10,200],winH:[10,200],winDx:[-100,100],winDy:[-100,100],bleed:[0,6],margin:[0,30],dx:[-10,10],dy:[-10,10],splitGap:[6,60],Gs:[3,30]};
+var DEF={W:119.06,H:119.06,D:19.05,S:22.23,Gb:9,F:12,Tb:20.5,Lt:59,Fd:47,Ls:53.6,Sa:16,Tt:17,Tw:34,insideArt:'color',win:true,winStyle:'cradle',winW:60.33,winH:53.98,winDx:0,winDy:0,attach:false,attachSide:'left',attachW:28.575,attachH:82.55,attachDx:0,attachDy:0,artFit:'edge',lines:true,hatch:true,bleed:2,paper:'letter',orient:'auto',margin:8,scale:'actual',dx:0,dy:0,instr:true,foldLines:false,tabPos:'fold',split:false,splitGap:14,Gs:9,pieces:{}};
+var LIM={W:[40,300],H:[40,300],D:[5,60],S:[5,70],Gb:[0,30],F:[0,40],Tb:[0,30],Lt:[0,130],Fd:[0,100],Ls:[0,130],Sa:[0,60],Tt:[0,40],Tw:[10,200],winW:[10,200],winH:[10,200],winDx:[-100,100],winDy:[-100,100],attachW:[5,110],attachH:[10,117],attachDx:[-60,60],attachDy:[-60,60],bleed:[0,6],margin:[0,30],dx:[-10,10],dy:[-10,10],splitGap:[6,60],Gs:[3,30]};
 var PAPERS={letter:[215.9,279.4,'US Letter · 8.5 × 11 in'],a4:[210,297,'A4 · 210 × 297 mm'],legal:[215.9,355.6,'US Legal · 8.5 × 14 in'],tabloid:[279.4,431.8,'Tabloid · 11 × 17 in'],a3:[297,420,'A3 · 297 × 420 mm']};
 var OVERLAP=10,PREVIEW_DPI=150,noLines=false;
 var cfg=freshCfg(),artCache=null,artTok=0;
@@ -7003,8 +7003,9 @@ function freshCfg(o){var c=Object.assign({},DEF,o||{});c.pieces=c.pieces&&typeof
 function cloneCfg(){return JSON.parse(JSON.stringify(cfg));}
 function sanitizeCfg(){
  Object.keys(LIM).forEach(function(k){var v=parseFloat(cfg[k]);if(!isFinite(v))v=DEF[k];cfg[k]=Math.min(LIM[k][1],Math.max(LIM[k][0],v));});
- ['split','win','lines','foldLines','hatch','instr'].forEach(function(k){cfg[k]=!!cfg[k];});
+ ['split','win','attach','lines','foldLines','hatch','instr'].forEach(function(k){cfg[k]=!!cfg[k];});
  if(['fold','end'].indexOf(cfg.tabPos)<0)cfg.tabPos='fold';
+ if(['left','right'].indexOf(cfg.attachSide)<0)cfg.attachSide='left';
  if(['edge','fill','stretch'].indexOf(cfg.artFit)<0)cfg.artFit='edge';
  if(['front','back','color'].indexOf(cfg.insideArt)<0)cfg.insideArt='front';
  if(['cradle','rect'].indexOf(cfg.winStyle)<0)cfg.winStyle='cradle';
@@ -7170,6 +7171,11 @@ function appendBoxPanels(){
  b.append(checkC(cfg,'win','Show the cartridge window'));
  bsel(b,'Style','winStyle',[['cradle','Cradle with fold-in flaps'],['rect','Plain cut-out']]);
  bn(b,'Window width','winW');bn(b,'Window height','winH');bn(b,'Move along','winDx');bn(b,'Move across','winDy');
+ b.append(mk('div',{className:'small',textContent:'Attachment provision'}));
+ b.append(checkC(cfg,'attach','Add an attachment provision (second cut-out for extra items)'));
+ bsel(b,'Attachment side','attachSide',[['left','Left of the cartridge'],['right','Right of the cartridge']]);
+ bn(b,'Attachment width','attachW');bn(b,'Attachment height','attachH');bn(b,'Attachment move along','attachDx');bn(b,'Attachment move across','attachDy');
+ note(b,'Default 1⅛″ × 3¼″ (28.6 × 82.6 mm), tall like the cartridge. When on, it is a fold-in cradle like the cartridge window, with the cartridge window moved over so the left margin, the gap between them and the right margin are equal. Move along and Move across on the window then nudge it from that spot.');
  note(b,'Default 2⅜″ × 2⅛″ (60.3 × 54.0 mm), centred on INSIDE. Solid lines are cuts, dashed lines are folds.');
  panelEl.append(d);
  d=section('Cover lips and tab',false);b=d._b;
@@ -7243,7 +7249,12 @@ function geom(){
  var slot=null;
  if(hasT){slot=[i1,ty0-0.75,i1,ty1+0.75];}
  var win=null;
- if(cfg.win){var wu=cfg.winH,wv=cfg.winW,cu=i0+W/2+cfg.winDx,cvv=H/2+cfg.winDy;win={x:cu-wu/2,y:cvv-wv/2,w:wu,h:wv};}
+ var att=null,agap=0;
+ if(cfg.attach){
+  var aw=cfg.attachW,ah=cfg.attachH;agap=Math.max(0,(W-aw-(cfg.win?cfg.winH:0))/(cfg.win?3:2));
+  att={x:(cfg.attachSide==='right'?i0+W-agap-aw:i0+agap)+cfg.attachDx,y:H/2-ah/2+cfg.attachDy,w:aw,h:ah};
+ }
+ if(cfg.win){var wu=cfg.winH,wv=cfg.winW,cu=(cfg.attach?(cfg.attachSide==='right'?i0+agap+wu/2:i0+2*agap+cfg.attachW+wu/2):i0+W/2)+cfg.winDx,cvv=H/2+cfg.winDy;win={x:cu-wu/2,y:cvv-wv/2,w:wu,h:wv};}
  var m=Math.max(D+F,Lt);
  var pcs=[
   {k:'top',n:'Top wall',r:[Gb,0,i0,H],o:'tb'},
@@ -7258,7 +7269,7 @@ function geom(){
   {k:'lipB',n:'Cover lip (lower)',r:[f0,H,f1,H+Lt],o:'blr'}
  ];
  if(Ls>0)pcs.push({k:'side',n:'Side lip and tab',r:[f1,0,xs+(hasT&&tEnd?Tt:0),H],o:'trb'});
- return {sp:sp,s1:s1,outs:outs,tabCut:tabCut,pieces:pcs,out:outs[0],tabs:tabs,folds:folds,slot:slot,win:win,Tw:Tw,W:W,H:H,D:D,S:S,Lt:Lt,Ls:Ls,Tt:Tt,Tb:Tb,F:F,Gb:Gb,i0:i0,i1:i1,b0:b0,b1:b1,f0:f0,f1:f1,xs:xs,
+ return {sp:sp,s1:s1,outs:outs,tabCut:tabCut,pieces:pcs,out:outs[0],tabs:tabs,folds:folds,slot:slot,win:win,att:att,Tw:Tw,W:W,H:H,D:D,S:S,Lt:Lt,Ls:Ls,Tt:Tt,Tb:Tb,F:F,Gb:Gb,i0:i0,i1:i1,b0:b0,b1:b1,f0:f0,f1:f1,xs:xs,
   b:{x0:0,y0:-m,x1:xs+(hasT&&tEnd?Tt:0),y1:H+m}};
 }
 function polyPath(ctx,pts,close){ctx.beginPath();pts.forEach(function(p,i){if(i)ctx.lineTo(p[0],p[1]);else ctx.moveTo(p[0],p[1]);});if(close!==false)ctx.closePath();}
@@ -7322,6 +7333,18 @@ function insideCanvas(art,pxmm){
  return panelCanvas(art&&art[g0],cfg.W,cfg.H,pxmm,cfg.artFit,art&&art.bg&&art.bg[g0]);
 }
 var foldOn=true;
+/* attachment provision: the same fold-in cradle as the cartridge window, long way along the panel, without thumb notches */
+function drawAttach(ctx,a){
+ ctx.save();ctx.translate(a.x,a.y);ctx.transform(0,1,1,0,0,0);
+ var wu=a.h,wv=a.w,U=function(f){return f*wu;},V=function(f){return f*wv;};
+ ctx.setLineDash([]);ctx.beginPath();
+ ctx.moveTo(U(0),V(0));ctx.lineTo(U(0.18),V(0.5));ctx.lineTo(U(0),V(1));
+ ctx.moveTo(U(1),V(0));ctx.lineTo(U(0.82),V(0.5));ctx.lineTo(U(1),V(1));
+ ctx.moveTo(U(0.18),V(0.5));ctx.lineTo(U(0.82),V(0.5));
+ ctx.stroke();
+ if(foldOn){ctx.lineWidth=0.2;ctx.setLineDash([2.2,1.6]);ctx.strokeRect(0,0,wu,wv);}
+ ctx.restore();
+}
 function drawCradle(ctx,w){
  var a=w.x,b=w.y,wu=w.w,wv=w.h;
  if(cfg.winStyle==='rect'){rrPath(ctx,a,b,wu,wv,3);ctx.stroke();return;}
@@ -7378,6 +7401,7 @@ function drawNet(ctx,art,pxmm,preview){
   ctx.lineWidth=0.22;g.outs.forEach(function(o){polyPath(ctx,o);ctx.stroke();});
   if(g.tabCut){polyPath(ctx,g.tabCut,false);ctx.stroke();}
   if(g.win)drawCradle(ctx,g.win);
+  if(g.att)drawAttach(ctx,g.att);
   if(g.slot){ctx.beginPath();ctx.moveTo(g.slot[0],g.slot[1]);ctx.lineTo(g.slot[2],g.slot[3]);ctx.lineWidth=0.6;ctx.stroke();ctx.lineWidth=0.22;}
   if(foldOn){ctx.lineWidth=0.2;ctx.setLineDash([2.2,1.6]);
   g.folds.forEach(function(f){ctx.beginPath();ctx.moveTo(f[0],f[1]);ctx.lineTo(f[2],f[3]);ctx.stroke();});}
@@ -7443,7 +7467,7 @@ function instrPage(L,k){
  var steps=[
   'Print at 100% (Actual size) on matte cardstock, about 160–250 gsm (65–110 lb). Turn off "Fit to page" in the print dialog.',
   tiled?'The net is spread over several pages. Print them all, overlap the neighbours by the marked '+OVERLAP+' mm, line up the corner crosses and tape from the back.':'The whole net fits on one page.',
-  'Cut around the solid outer line. Cut the solid lines of the cartridge cradle in the INSIDE panel and the slot on the fold at the end of INSIDE.',
+  'Cut around the solid outer line. Cut the solid lines of the cartridge cradle in the INSIDE panel'+(cfg.attach?', the attachment cut-out beside it,':'')+' and the slot on the fold at the end of INSIDE.',
   (cfg.foldLines?'Score every dashed line with a ruler and a dull tool (an empty pen works). Fold each crease so the printed side is on the outside.':'The fold lines are not printed, so no ink shows on the finished box. Line a ruler up with the cut-line corners and the window edges and score each crease with a dull tool (an empty pen works). Fold each crease so the printed side is on the outside.'),
   cfg.split?'The net is in two pieces: cut them apart. Fold the hatched glue tab on the right edge of BACK, put glue on it and attach the SPINE edge of the cover piece to it, lining the spine fold up with the back edge.':'The whole net is one piece.',
   'Build the tray: fold the wall strip up from BACK and fold INSIDE across so it sits parallel to BACK. Fold the side walls of INSIDE down and tuck their flaps in, then fold in the small tabs on the wall strip and spine. None of these are glued.',
