@@ -95,6 +95,7 @@
     var v = n.v, buf = n.buf, d = { version: v, slot: n.slot, era: ERAS[v] || "?", files: [] }, used, sp;
     if (v >= 5) { d.x8 = buf[648] & 1; d.ever = buf[649] & 0x3F; d.xq = Math.min(buf[656], 10); }
     if (v >= 4) {
+      d.cart = buf[77] & 1;
       used = buf[8] === 1;
       sp = buf.subarray(208, 208 + SUSP_SIZE);
       d.files.push(withInfo({ file: 1, used: used, spot: used && suspOk(sp) }, used ? recInfo(buf, v, 8) : {}));
@@ -153,11 +154,18 @@
     return { block: out, info: d, kept: k + 1 };
   }
   function blank(b, o) { for (var i = 0; i < BLK; i++) if (b[o + i] !== 0xFF) return false; return true; }
+  var EC_MARK = 0x1F4000, EC_MAGIC = [0x47, 0x4E, 0x45, 0x43, 1, 0x5A, 0xA5, 0];
+  function erasePending(rom) {
+    if (rom.length < EC_MARK + EC_MAGIC.length) return false;
+    for (var i = 0; i < EC_MAGIC.length; i++) if (rom[EC_MARK + i] !== EC_MAGIC[i]) return false;
+    return true;
+  }
   function romInfo(rom) { return rom.length >= B33 + BLK ? inspect(rom.subarray(B33, B33 + BLK)) : null; }
   function updateRom(old, nw, opt) {
     opt = opt || {};
     if (nw.length !== ROM_SIZE) throw new Error("the new build must be a full 2 MB Nocturne ROM");
     if (old.length < B33 + BLK) throw new Error("the old ROM is shorter than 2 MB: no save block in it");
+    if (erasePending(old)) throw new Error("the old cart was being erased (ERASE CART): it is wiped at its next boot - nothing to move");
     if (!opt.force && !blank(nw, B33)) throw new Error("the new ROM already holds a save");
     if (opt.content && !opt.force && !blank(nw, B32)) throw new Error("the new ROM already holds added content");
     var r = saveBlock(old.subarray(B33, B33 + BLK), opt.slot === undefined ? null : opt.slot, isV5Rom(nw));
