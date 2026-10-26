@@ -745,7 +745,7 @@ service cloud.firestore {
           && d.complete is bool
           && (!d.complete || d.journey == 5)
           && (d.pct < 100 || (d.complete && d.badges == 37))
-          && d.code is string && d.code.matches('^[A-HJ-NP-Z2-9]{36,208}$')
+          && d.code is string && d.code.matches('^[A-HJ-NP-Z2-9]{36,320}$')
           && d.source is string && d.source in ['qr', 'typed']
           && d.submittedAt is int
           && d.submittedAt <= request.time.toMillis() + 300000
@@ -1139,14 +1139,14 @@ service cloud.firestore {
     // Guardians of the Nocturne: the one TALE CODE a signed-in player last read on /gn/, kept so it
     // follows them to any device until they read a new one. Private: only that player can read,
     // write or delete it (not even other signed-in users). The page decodes and checks the code
-    // itself; this only bounds its shape (the game's alphabet, 6-208 symbols: TALE CODE v13 is up to 203, the format's max 208).
+    // itself; this only bounds its shape (the game's alphabet, 6-320 symbols: TALE CODE v15 is up to 301, the format's max 320).
     match /taleCodes/{uid} {
       allow read: if (request.auth != null && request.auth.uid == uid) || isAdmin();   // admins: /gn/'s admin panel lists them
       allow delete: if request.auth != null && request.auth.uid == uid;
       allow create, update: if request.auth != null && request.auth.uid == uid
         && request.resource.data.keys().hasOnly(['code', 'updatedAt'])
         && request.resource.data.code is string
-        && request.resource.data.code.matches('^[A-HJ-NP-Z2-9]{6,208}$')
+        && request.resource.data.code.matches('^[A-HJ-NP-Z2-9]{6,320}$')
         && request.resource.data.updatedAt is int;
     }
 

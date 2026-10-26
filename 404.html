@@ -41,7 +41,7 @@
     // Guardians of the Nocturne's TALE CODE QR is NGPC-DEV.COM/GN + the code with NO slash between
     // them, so the whole thing is one long first segment. A real game folder is never that long and
     // all-uppercase: hand the code to /gn/ in the hash, same as every other game's payload.
-    var gn = /^GN([A-Z2-9]{8,300})$/i.exec(first);
+    var gn = /^GN([A-Z2-9]{8,320})$/i.exec(first);
     if(gn){ location.replace('/gn/#' + gn[1].toUpperCase()); return; }
     var lower = first.toLowerCase();
     // Already lowercase and still not found -- a genuinely unknown path, not a casing mismatch.
