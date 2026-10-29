@@ -1577,7 +1577,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
       viewOnly = save === false && quiet === "view";
       if (save !== false) { try { localStorage.setItem(STORE, s); } catch (e) {} }   // a view (admin View, a stored reload) never replaces this browser's own tale
       if (save !== false) { saveCloud(s); autoSubmit(); }
-      else submitMsg("", "");
+      else { submitMsg("", ""); if (!viewOnly) showUnion(); }
       return true;
     } catch (e) {
       $("tale").hidden = true; lastAch = null;
@@ -1770,6 +1770,21 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
       .then(function () { submitting = false; $("submitbtn").disabled = !lastAch; });
   }
   $("submitbtn").addEventListener("click", function () { submitBoard($("ini").value, false); });
+  // your own tale, loaded without a fresh scan (a reload, the account's copy): show it merged with your board entry, as a scan does - read only, nothing is written
+  function showUnion() {
+    var a = lastAch, code = lastSyms;
+    if (!a || !code || !window.NGPC_AUTH || !NGPC_AUTH.db) return;
+    Promise.resolve(NGPC_AUTH.authReady).then(function () {
+      var u = NGPC_AUTH.currentUser;
+      if (!u || !u.uid || viewOnly || lastSyms !== code) return;
+      return NGPC_AUTH.db.collection("scores").doc("GN_" + u.uid).get().then(function (doc) {
+        var old = doc.exists ? doc.data() : null;
+        if (!old || typeof old.pct !== "number" || viewOnly || lastSyms !== code) return;
+        var m = achUnion(a, entryEarned(old), old.pct, old.complete);
+        m.journey = Math.max(a.journey, old.journey || 0); renderUnion(m, a);
+      });
+    }).catch(function () {});
+  }
   var autoDone = null;
   function autoSubmit() {
     if (!lastAch || !lastSyms || autoDone === lastSyms) return;
