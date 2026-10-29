@@ -1574,7 +1574,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
       lastSyms = s;
       $("codein").value = TC.codeRows(syms).join("\n");
       msg(ver < D.version ? "That code was made by an older build of the game. It is shown the way the current build would load it." : "", "note");
-      try { localStorage.setItem(STORE, s); } catch (e) {}
+      if (save !== false) { try { localStorage.setItem(STORE, s); } catch (e) {} }   // a view (admin View, a stored reload) never replaces this browser's own tale
       if (save !== false) { saveCloud(s); autoSubmit(); }
       else submitMsg("", "");
       return true;
