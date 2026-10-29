@@ -2153,9 +2153,9 @@ window.NGPC_APPS['cover']={
 (function(){
 'use strict';
 var BASE_DPI=192,SAFE=36,M=40;
-var size={wmm:103,hmm:120},W=0,H=0;
+var size={wmm:80,hmm:110},W=0,H=0;
 var FONT_LIST=['Press Start 2P','Bebas Neue','Orbitron','Chakra Petch','Archivo Black','Space Mono','IBM Plex Sans','Georgia','Courier New','Impact'];
-var PRESETS=[['ngpc','NGPC cover size · 103 × 120 mm',103,120],['a6','A6 · 105 × 148 mm',105,148],['a5','A5 · 148 × 210 mm',148,210],['sq','Square · 120 × 120 mm',120,120]];
+var PRESETS=[['ngman','NGPC manual, typical · 80 × 110 mm',80,110],['ngpc','NGPC cover size · 103 × 120 mm',103,120],['a6','A6 · 105 × 148 mm',105,148],['a5','A5 · 148 × 210 mm',148,210],['sq','Square · 120 × 120 mm',120,120]];
 var STORE_KEY='ngpc-manual-editor-v1';
 var imgs=window.NGPC_IMGS||(window.NGPC_IMGS={}),pages=[],cur=0,els=[];
 var selId=null,selIds=[],opts={snap:true,guides:true},zoomMode='fit',Z=1,DPR=1;
@@ -2215,7 +2215,7 @@ function makePage(kind,bgc){
  return {id:uid(),bg:bgc,els:list};
 }
 function seed(){
- size={wmm:103,hmm:120};applySizePx();
+ size={wmm:80,hmm:110};applySizePx();
  pages=[makePage('title','#10122b'),makePage('text'),makePage('imgtext'),makePage('text')];
  pages[1].els[0].text='GETTING STARTED';
  pages[2].els[1].text='CONTROLS';
@@ -2835,7 +2835,7 @@ function buildPage(){
  var sg=mk('div',{className:'grid'});
  sg.append(fldOf('Width (mm)',numC(size,'wmm',{min:30,max:400,step:0.5})),fldOf('Height (mm)',numC(size,'hmm',{min:30,max:400,step:0.5})));
  b.append(sg);
- b.append(mk('p',{className:'small',textContent:'Changing the size keeps items where they are, so re-check your layout afterwards. The default matches the front panel of your cover template.'}));
+ b.append(mk('p',{className:'small',textContent:'Changing the size keeps items where they are, so re-check your layout afterwards. The default, 80 × 110 mm, matches a typical NGPC game manual.'}));
  b.append(btn('Add page numbers to all pages',function(){
   var n=0;
   pages.forEach(function(x){
@@ -3896,7 +3896,7 @@ async function applyTemplateOrSeed(){
  try{raw=localStorage.getItem(TEMPLATE_KEY);}catch(e){}
  if(raw){try{await loadProject(JSON.parse(raw));used=true;}catch(e){used=false;}}
  if(!used){seed();layoutAll();
-  try{var fo=JSON.parse(serialize(false));var bp=JSON.parse(JSON.stringify(FACTORY_BACK));bp.id=uid();fo.pages.push(bp);fo.imgs=JSON.parse(JSON.stringify(FACTORY_IMGS));fo.cur=0;await loadProject(fo);}catch(e){}
+  try{var fo=JSON.parse(serialize(false));var bp=JSON.parse(JSON.stringify(FACTORY_BACK));bp.id=uid();var sx=W/779,sy=H/907;bp.els.forEach(function(e){if(e.type==='image'){var cx=(e.x+e.w/2)*sx,cy=(e.y+e.h/2)*sy,k=Math.min(sx,sy);e.w*=k;e.h*=k;e.x=cx-e.w/2;e.y=cy-e.h/2;}else{e.x*=sx;e.w*=sx;e.y*=sy;e.h*=sy;}});fo.pages.push(bp);fo.imgs=JSON.parse(JSON.stringify(FACTORY_IMGS));fo.cur=0;await loadProject(fo);}catch(e){}
  }
  return used;
 }
