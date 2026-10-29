@@ -1252,7 +1252,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
   var KIND_COLOR = ["#5d6277", "#74b05b", "#3d7a3f", "#c8a66a", "#efe2a0", "#2c5b9c", "#93602f", "#000000", "#d84a39"];
   var STORE = "gn-tale-code";
   var $ = function (id) { return document.getElementById(id); };
-  var lastSyms = null;
+  var lastSyms = null, viewOnly = false;   // viewOnly: an admin View is on screen - never saved to the viewer's account or board
   function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
   function pop(n) { var c = 0; while (n) { c += n & 1; n >>= 1; } return c; }
   function itemName(id) { return id ? D.items[id].name : "(none)"; }
@@ -1574,6 +1574,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
       lastSyms = s;
       $("codein").value = TC.codeRows(syms).join("\n");
       msg(ver < D.version ? "That code was made by an older build of the game. It is shown the way the current build would load it." : "", "note");
+      viewOnly = save === false && quiet === "view";
       if (save !== false) { try { localStorage.setItem(STORE, s); } catch (e) {} }   // a view (admin View, a stored reload) never replaces this browser's own tale
       if (save !== false) { saveCloud(s); autoSubmit(); }
       else submitMsg("", "");
@@ -1660,7 +1661,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
           var b = document.createElement("button");
           b.type = "button"; b.className = "btn-secondary"; b.textContent = "View";
           b.addEventListener("click", function () {
-            read(r.code, true, false);
+            read(r.code, "view", false);
             setSaveNote("Admin view: " + r.name + "'s tale (not saved to any account).");
             $("tale").scrollIntoView();
           });
@@ -1718,6 +1719,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
   function submitBoard(ini, auto) {
     if (submitting) return Promise.resolve();
     var a = lastAch, code = lastSyms;
+    if (viewOnly) { if (!auto) submitMsg("This is someone else's tale (admin view). Read your own code to submit.", "err"); return Promise.resolve(); }
     if (!a || !code) { if (!auto) submitMsg("Read a version 9 TALE CODE first (make it on the current build).", "err"); return Promise.resolve(); }
     if (!window.NGPC_AUTH || !NGPC_AUTH.db) { if (!auto) submitMsg("The board is not available right now.", "err"); return Promise.resolve(); }
     if (!auto && !/^[A-Z]{3}$/.test(ini || "")) { submitMsg("Type three initials, A to Z.", "err"); return Promise.resolve(); }
@@ -1786,7 +1788,7 @@ if (typeof module !== "undefined") module.exports = makeTaleCore;
     $("page-content").hidden = !ok;
     if (ok) subscribeBoard();
     if (ok && !booted) { booted = true; boot(); }
-    else if (ok && booted && curUser) { if (lastSyms) { saveCloud(lastSyms); autoSubmit(); } else loadStored(); }
+    else if (ok && booted && curUser) { if (lastSyms && !viewOnly) { saveCloud(lastSyms); autoSubmit(); } else loadStored(); }
   }
   if (window.NGPC_AUTH) {
     var art = $("header-art");
