@@ -3575,6 +3575,8 @@ function planSides(cfg){
  function nz(x){return x<n?x:null;}
  if(cfg.mode==='single'){
   for(i=0;i<n;i++)sides.push({slots:[i],label:'Page '+(i+1)});
+ }else if(cfg.mode==='stack'){
+  for(i=0;i<n;i+=2)sides.push({slots:[i,nz(i+1)],label:'Sheet '+(sides.length+1)+' (pages '+(i+1)+(i+1<n?' and '+(i+2):'')+')'});
  }else if(cfg.mode==='spreads'){
   sides.push({slots:[null,0],label:'Spread 1 (cover)'});
   for(i=1;i<n;i+=2)sides.push({slots:[i,nz(i+1)],label:'Spread '+(sides.length+1)});
@@ -3589,12 +3591,12 @@ function planSides(cfg){
  return sides;
 }
 function plLayout(cfg){
- var sides=planSides(cfg),twoUp=cfg.mode!=='single',pa=PAPERS[cfg.paper]||PAPERS.letter;
+ var sides=planSides(cfg),vert=cfg.mode==='stack',twoUp=cfg.mode==='booklet'||cfg.mode==='spreads',pa=PAPERS[cfg.paper]||PAPERS.letter;
  var land=cfg.orient==='landscape'||(cfg.orient==='auto'&&twoUp);
  var pw=land?Math.max(pa[0],pa[1]):Math.min(pa[0],pa[1]),ph=land?Math.min(pa[0],pa[1]):Math.max(pa[0],pa[1]);
- var needW=twoUp?2*size.wmm+cfg.gutter:size.wmm,needH=size.hmm,availW=pw-2*cfg.margin,availH=ph-2*cfg.margin,scale=1;
+ var needW=twoUp?2*size.wmm+cfg.gutter:size.wmm,needH=vert?2*size.hmm+cfg.gutter:size.hmm,availW=pw-2*cfg.margin,availH=ph-2*cfg.margin,scale=1;
  if(cfg.fit)scale=Math.min(1,availW/needW,availH/needH);
- return {sides:sides,pw:pw,ph:ph,scale:scale,twoUp:twoUp,needW:needW,needH:needH,fits:(needW<=availW+0.01&&needH<=availH+0.01)};
+ return {sides:sides,pw:pw,ph:ph,scale:scale,twoUp:twoUp,vert:vert,needW:needW,needH:needH,fits:(needW<=availW+0.01&&needH<=availH+0.01)};
 }
 function plGetPage(store,pi,dpi){var k=pi+'@'+dpi;if(!store[k])store[k]=pageCanvas(pi,dpi);return store[k];}
 function makeBleed(base,bp,mode){
@@ -3619,7 +3621,7 @@ function plGetBleed(store,pi,dpi,bp,mode){var k='b'+pi+'@'+dpi+'/'+bp+mode;if(!s
 function plDraw(x,L,side,sc,store,preview){
  var cfg=printCfg,pwm=size.wmm*L.scale,phm=size.hmm*L.scale,gut=cfg.gutter*L.scale;
  var nx=side.back?(cfg.bx||0):(cfg.fx||0),ny=side.back?(cfg.by||0):(cfg.fy||0);
- var cw=L.twoUp?2*pwm+gut:pwm,ox=(L.pw-cw)/2+nx,oy=(L.ph-phm)/2+ny,dpi=Math.max(72,Math.round(sc*25.4*L.scale));
+ var cw=L.twoUp?2*pwm+gut:pwm,ch=L.vert?2*phm+gut:phm,ox=(L.pw-cw)/2+nx,oy=(L.ph-ch)/2+ny,dpi=Math.max(72,Math.round(sc*25.4*L.scale));
  var bmode=cfg.bleedMode||'extend',eb=(cfg.bleed>0&&bmode!=='none')?cfg.bleed:0;
  x.fillStyle='#ffffff';x.fillRect(0,0,L.pw*sc,L.ph*sc);x.imageSmoothingQuality='high';
  if(eb>0){
@@ -3627,12 +3629,12 @@ function plDraw(x,L,side,sc,store,preview){
    if(pi==null)return;
    var base=plGetPage(store,pi,dpi),bp=Math.min(Math.round(eb*base.width/pwm),Math.floor(base.width/2),Math.floor(base.height/2));
    if(bp<1)return;
-   var r=(pwm*sc)/base.width,bx0=(ox+i*(pwm+gut))*sc,by0=oy*sc;
+   var r=(pwm*sc)/base.width,bx0=(ox+(L.vert?0:i*(pwm+gut)))*sc,by0=(oy+(L.vert?i*(phm+gut):0))*sc;
    x.drawImage(plGetBleed(store,pi,dpi,bp,bmode),bx0-bp*r,by0-bp*r,(base.width+2*bp)*r,(base.height+2*bp)*r);
   });
  }
  side.slots.forEach(function(pi,i){
-  var px0=(ox+i*(pwm+gut))*sc,py0=oy*sc,w=pwm*sc,h=phm*sc;
+  var px0=(ox+(L.vert?0:i*(pwm+gut)))*sc,py0=(oy+(L.vert?i*(phm+gut):0))*sc,w=pwm*sc,h=phm*sc;
   if(pi==null){
    if(preview){x.save();x.setLineDash([6,5]);x.strokeStyle='#b8b8c4';x.lineWidth=1;x.strokeRect(px0+0.5,py0+0.5,w-1,h-1);x.fillStyle='#9a9aa8';x.font='13px sans-serif';x.textAlign='center';x.fillText('blank page',px0+w/2,py0+h/2);x.restore();}
    return;
@@ -3643,12 +3645,13 @@ function plDraw(x,L,side,sc,store,preview){
  });
  if(cfg.marks==='marks'){
   x.save();x.strokeStyle='#000000';x.lineWidth=Math.max(1,0.12*sc);x.beginPath();
-  var off=(1+eb)*sc,len=3*sc,X0=ox*sc,X1=(ox+cw)*sc,Y0=oy*sc,Y1=(oy+phm)*sc;
+  var off=(1+eb)*sc,len=3*sc,X0=ox*sc,X1=(ox+cw)*sc,Y0=oy*sc,Y1=(oy+ch)*sc;
   [[X0,Y0,-1,-1],[X1,Y0,1,-1],[X0,Y1,-1,1],[X1,Y1,1,1]].forEach(function(q){
    x.moveTo(q[0]+q[2]*off,q[1]);x.lineTo(q[0]+q[2]*(off+len),q[1]);
    x.moveTo(q[0],q[1]+q[3]*off);x.lineTo(q[0],q[1]+q[3]*(off+len));
   });
   if(L.twoUp){var fx=(ox+pwm+gut/2)*sc;x.moveTo(fx,Y0-off);x.lineTo(fx,Y0-off-len);x.moveTo(fx,Y1+off);x.lineTo(fx,Y1+off+len);}
+  if(L.vert){var fy2=(oy+phm+gut/2)*sc;x.moveTo(X0-off,fy2);x.lineTo(X0-off-len,fy2);x.moveTo(X1+off,fy2);x.lineTo(X1+off+len,fy2);}
   x.stroke();x.restore();
  }
 }
@@ -3657,6 +3660,8 @@ function plInfoText(L){
  if(printCfg.mode==='booklet'){
   var N=Math.ceil(n/4)*4,sh=N/4;
   t.push(n+' pages → '+sh+' sheet'+(sh>1?'s':'')+' printed double-sided ('+L.sides.length+' sides)'+(N>n?', '+(N-n)+' blank page'+(N-n>1?'s':'')+' added to fill the last sheet':'')+'. Print double-sided, flip on short edge, then stack, fold in half and staple the spine.');
+ }else if(printCfg.mode==='stack'){
+  t.push(n+' pages, two per sheet (one above the other, upright), '+L.sides.length+' sheet'+(L.sides.length>1?'s':'')+' printed single-sided. Cut the pages apart along the middle crop marks.');
  }else if(printCfg.mode==='spreads'){
   t.push(L.sides.length+' spreads in reading order (cover alone on the right). Use this to review or print single-sided.');
  }else t.push(n+' single pages, one per sheet.');
@@ -3696,7 +3701,7 @@ function buildPlBar(){
   i.addEventListener('input',function(){var v=parseFloat(i.value);if(isFinite(v)){printCfg[key]=Math.max(min,Math.min(max,v));plRerender();scheduleSave();}});
   bar.append(fldOf(label,i));
  }
- sel('Layout','mode',[['booklet','Booklet (fold & staple)'],['spreads','Spreads (reading order)'],['single','Single pages']]);
+ sel('Layout','mode',[['booklet','Booklet (fold & staple)'],['stack','Two per sheet, top and bottom (portrait)'],['spreads','Spreads (reading order)'],['single','Single pages']]);
  sel('Paper','paper',Object.keys(PAPERS).map(function(k){return [k,PAPERS[k][2]];}));
  sel('Orientation','orient',[['auto','Automatic'],['landscape','Landscape'],['portrait','Portrait']]);
  num('Margin (mm)','margin',0,40);num('Gutter (mm)','gutter',0,30);
