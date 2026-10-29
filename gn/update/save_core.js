@@ -96,6 +96,7 @@
     if (v >= 5) { d.x8 = buf[648] & 1; d.ever = buf[649] & 0x3F; d.xq = Math.min(buf[656], 10); }
     if (v >= 5) { d.sv = buf[682] <= 2 ? buf[682] : 0; d.xse = buf[682] === 2 ? buf[851] & 1 : 0; }
     if (v >= 5) { d.pt = buf[1016] | (buf[1017] << 8); d.pts = buf[1018]; }
+    if (v >= 5) d.fc = [846, 1012].map(function (o) { return [buf[o] & 3, (buf[o] >> 2) & 15, (buf[o] >> 6) & 1]; });
     if (v >= 4) {
       d.cart = buf[77] & 1;
       used = buf[8] === 1;
