@@ -162,10 +162,10 @@
         const journey = res.complete ? 'NEW GAME+ '+res.journey+', COMPLETE (FREE PLAY)' : (res.journey ? 'NEW GAME+ '+res.journey : 'the first tale');
         return { note: res.pct+'%', earned: res.badges > 0, html:
           '<h2 class="g-title">'+esc(G.name)+'</h2>'+
-          '<div class="g-head"><div class="g-pct px tnum">'+res.pct+'%</div><div class="g-sum"><div class="tnum">'+res.badges+' of '+res.total+' badges</div>'+
+          '<div class="g-head"><div class="g-pct px tnum">'+res.pct+'%</div><div class="g-sum"><div class="tnum">'+res.badges+' of '+res.total+' badges'+(res.far && res.far.hid ? ' ('+res.far.hid+' remain in places not reached yet)' : '')+'</div>'+
           '<div class="bar"><i style="width:'+res.pct+'%"></i></div><div style="color:var(--dim)">Furthest journey: '+esc(journey)+'</div></div></div>'+
           badgeGrid(res.list)+
-          '<p class="fine">Worked out from '+esc(from)+'. Completion % is the weighted share of the badges earned; 100% needs every badge. '+
+          '<p class="fine">Worked out from '+esc(from)+'. Completion % is the weighted share of the badges earned; 100% needs every badge, including those in places the tale has not reached yet (they stay unnamed until it does). '+
           (ctx.self ? 'Others see these badges once you submit your tale to the COMPLETION BOARD on the '+link+'.' : '')+'</p>' };
       }
     },

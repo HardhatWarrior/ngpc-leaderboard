@@ -711,11 +711,14 @@ service cloud.firestore {
 
       // GUARDIANS OF THE NOCTURNE (gn/index.html's COMPLETION BOARD): the page decodes a version 9-11 TALE CODE
       // with tale_core.js (CRC-checked), derives the ACHIEVEMENTS badges and writes initials, completion %
-      // (0-100), badges lit (0-37: v10 adds the BESTIARY's 3), furthest journey (NEW GAME+ 0-5), COMPLETE and the code itself (so any
+      // (0-100), badges lit (0-69: v10 adds the BESTIARY's 3, nocturne_57 the far seas' 32), furthest journey (NEW GAME+ 0-5), COMPLETE and the code itself (so any
       // page can re-derive the badges). Each player keeps ONE entry at scores/GN_<uid>, replaceable only by
       // an entry that keeps every badge and grows the set or raises the % (gnStickyUpdate, below).
       // 100% needs COMPLETE. source: 'qr' (opened from the cart's QR deep link) or 'typed'.
-      // STICKY BADGES: `earned` is the list of badge indexes (0-35, the viewer's achievements() order, "100%" excluded)
+      // nocturne_57 (owner 2026-10-29): THE FAR SEAS' 32 badges COUNT - indexes 36-67 (east 36-45, south 46-56, south-east
+      // 57-67), so 68 badges + "100%" = 69; 100% needs all 68 (every west and far badge). Entries written before this were
+      // recomputed by the admin migration (scratchpad site57/migrate), as the grow-only update below cannot lower a %.
+      // STICKY BADGES: `earned` is the list of badge indexes (0-67, the viewer's achievements() order, "100%" excluded)
       // ever lit on any code this player submitted, so a NEW GAME+ code that unlights a journey-judged badge cannot
       // shrink the entry. `code` is the LATEST submitted code; badges/pct/journey/complete describe the union. An update
       // must keep every old badge (hasAll), never lower pct/journey/complete, and must grow the set or raise the %.
@@ -727,11 +730,12 @@ service cloud.firestore {
                 : (n.badges >= o.badges));
       }
       function gnEarnedOk(d) {
-        return d.earned is list && d.earned.size() <= 36
-          && d.earned.hasOnly([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35])
+        return d.earned is list && d.earned.size() <= 68
+          && d.earned.hasOnly([0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35,
+                               36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51, 52, 53, 54, 55, 56, 57, 58, 59, 60, 61, 62, 63, 64, 65, 66, 67])
           && d.earned.toSet().size() == d.earned.size()
-          && (d.badges == d.earned.size() || (d.earned.size() == 36 && d.badges == 37))
-          && ((d.pct == 100) == (d.earned.size() == 36));
+          && (d.badges == d.earned.size() || (d.earned.size() == 68 && d.badges == 69))
+          && ((d.pct == 100) == (d.earned.size() == 68));
       }
       function isNocturneScore(d) {
         return d.game == 'GN'
@@ -740,11 +744,11 @@ service cloud.firestore {
           && gnEarnedOk(d)
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.pct is int && d.pct >= 0 && d.pct <= 100
-          && d.badges is int && d.badges >= 0 && d.badges <= 37
+          && d.badges is int && d.badges >= 0 && d.badges <= 69
           && d.journey is int && d.journey >= 0 && d.journey <= 5
           && d.complete is bool
           && (!d.complete || d.journey == 5)
-          && (d.pct < 100 || (d.complete && d.badges == 37))
+          && (d.pct < 100 || (d.complete && d.badges == 69))
           && d.code is string && d.code.matches('^[A-HJ-NP-Z2-9]{36,320}$')
           && d.source is string && d.source in ['qr', 'typed']
           && d.submittedAt is int
