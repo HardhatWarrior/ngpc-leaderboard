@@ -1,0 +1,128 @@
+{
+  "slug": "sd",
+  "scores": [
+    {
+      "name": "HARDHATWARRIOR",
+      "initials": "DJD",
+      "score": 265,
+      "date": "2026-10-02"
+    },
+    {
+      "name": "HARDHATWARRIOR",
+      "initials": "DJD",
+      "score": 275,
+      "date": "2026-09-29"
+    },
+    {
+      "name": "HARDHATWARRIOR",
+      "initials": "DJD",
+      "score": 353,
+      "date": "2026-09-21"
+    }
+  ],
+  "board": "M",
+  "boards": {
+    "E": [
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 150,
+        "date": "2026-09-29"
+      },
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 151,
+        "date": "2026-10-03"
+      },
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 165,
+        "date": "2026-09-25"
+      },
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 179,
+        "date": "2026-09-20"
+      },
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 188,
+        "date": "2026-09-24"
+      },
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 225,
+        "date": "2026-10-01"
+      },
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 245,
+        "date": "2026-09-20"
+      },
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 246,
+        "date": "2026-10-02"
+      },
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 304,
+        "date": "2026-09-22"
+      },
+      {
+        "name": "ICERJO",
+        "initials": "AEJ",
+        "score": 369,
+        "date": "2026-09-30"
+      }
+    ],
+    "M": [
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 265,
+        "date": "2026-10-02"
+      },
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 275,
+        "date": "2026-09-29"
+      },
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 353,
+        "date": "2026-09-21"
+      }
+    ],
+    "H": [
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 291,
+        "date": "2026-10-02"
+      },
+      {
+        "name": "HARDHATWARRIOR",
+        "initials": "DJD",
+        "score": 381,
+        "date": "2026-09-21"
+      },
+      {
+        "name": "TIXUL",
+        "initials": "TIX",
+        "score": 530,
+        "date": "2026-09-20"
+      }
+    ]
+  }
+}

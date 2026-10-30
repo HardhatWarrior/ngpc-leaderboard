@@ -1,5 +1,5 @@
 {
-  "rev": 3,
+  "rev": 4,
   "games": [
     {
       "slug": "2k",
@@ -62,6 +62,27 @@
       "store_allowed": true,
       "downloads": 126,
       "added": "2026-09-16"
+    },
+    {
+      "slug": "ms",
+      "name": "Minesweeper",
+      "author": "HARDHATWARRIOR",
+      "version": "1.1",
+      "rom_rev": 1,
+      "rom_size": 2097152,
+      "rom_sha256": "62f5a23d4f4a18113a2ce262d03e01bc099f4c8fa5b9b8538ec7efeb91b19342",
+      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2Fms%2Fminesweeper_v1.1.ngp?alt=media&token=cf5ebbbd-869e-4fb5-b4a1-4d86e4033192",
+      "icon_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fms%2Ficon.png?alt=media&token=1c462586-3779-435f-b950-2b04fadc25e6",
+      "screenshots": [
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fms%2Ftitle.png?alt=media&token=5e74ae9d-8ab8-4db6-b446-318419330607",
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/submissions%2FL44BFbmiNkhi2vvLdrPUIxkvmfs2%2F9iAElrQRLjCJt4QV7slB%2Fextra1.png?alt=media&token=ca641297-e325-47e7-ba42-f43d6ca64427"
+      ],
+      "blurb": "Sweep to be sure.",
+      "description": "Sweep for the mines, but choose wisely, or BOOM!",
+      "save_compatible_since": 1,
+      "store_allowed": true,
+      "downloads": 52,
+      "added": "2026-09-22"
     },
     {
       "slug": "sb",

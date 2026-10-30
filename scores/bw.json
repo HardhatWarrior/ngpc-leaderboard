@@ -1,0 +1,41 @@
+{
+  "slug": "bw",
+  "scores": [
+    {
+      "name": "ICERJO",
+      "initials": "AEJ",
+      "score": 182,
+      "date": "2026-10-30"
+    },
+    {
+      "name": "HARDHATWARRIOR",
+      "initials": "DJD",
+      "score": 180,
+      "date": "2026-10-27"
+    },
+    {
+      "name": "ICERJO",
+      "initials": "AEJ",
+      "score": 157,
+      "date": "2026-10-29"
+    },
+    {
+      "name": "ICERJO",
+      "initials": "AEJ",
+      "score": 155,
+      "date": "2026-10-29"
+    },
+    {
+      "name": "ICERJO",
+      "initials": "AEJ",
+      "score": 143,
+      "date": "2026-10-26"
+    },
+    {
+      "name": "ICERJO",
+      "initials": "AEJ",
+      "score": 131,
+      "date": "2026-10-30"
+    }
+  ]
+}

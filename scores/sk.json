@@ -1,0 +1,35 @@
+{
+  "slug": "sk",
+  "scores": [
+    {
+      "name": "HARDHATWARRIOR",
+      "initials": "DJD",
+      "score": 55,
+      "date": "2026-10-04"
+    },
+    {
+      "name": "ICERJO",
+      "initials": "AEJ",
+      "score": 30,
+      "date": "2026-10-13"
+    },
+    {
+      "name": "AHCHAY",
+      "initials": "AKA",
+      "score": 24,
+      "date": "2026-10-22"
+    },
+    {
+      "name": "TIXUL",
+      "initials": "TIX",
+      "score": 20,
+      "date": "2026-10-03"
+    },
+    {
+      "name": "CLOUDYYAPPER",
+      "initials": "JPD",
+      "score": 3,
+      "date": "2026-10-02"
+    }
+  ]
+}
