@@ -34,7 +34,16 @@ function downloadUrl(slug, game) { return game.romPath; }
 // scores file yet: its board needs a rule (time-ascending, per-mode boards...) before it can be mirrored.
 const SCORE_RULES = {
   xn: { field: 'score' }, fu: { field: 'totalScore' }, '2k': { field: 'score' }, tt: { field: 'score' },
-  fk: { field: 'score' }, yz: { field: 'score' }, bk: { field: 'score' },
+  fk: { field: 'score' }, yz: { field: 'score' }, bk: { field: 'score' }, bw: { field: 'score' },
+  // Shut the Box: solo series only; lower total wins, then more boxes shut, less time, earlier submission.
+  sb: { field: 'total', fetch: 'all', pick: x => x.result === '1',
+        cmp: (a, b) => (a.total - b.total) || ((b.shut || 0) - (a.shut || 0)) || ((a.seconds || 0) - (b.seconds || 0)) || ((a.submittedAt || 0) - (b.submittedAt || 0)) },
+  // Sokoban: stars (more wins), then fewer moves over par, fewer total moves, earlier; one entry per player.
+  sk: { field: 'stars', fetch: 'all', pick: x => (Number(x.levelsSolved) || 0) >= 1, unique: true,
+        cmp: (a, b) => ((b.stars || 0) - (a.stars || 0)) || ((a.overParTotal || 0) - (b.overParTotal || 0)) || ((a.totalMoves || 0) - (b.totalMoves || 0)) || ((a.submittedAt || 0) - (b.submittedAt || 0)) },
+  // Sudoku: fastest time, one board per difficulty. `scores` is the Medium board (the file has a single list);
+  // `boards` carries all three.
+  sd: { field: 'time', dir: 'asc', boards: { field: 'difficulty', values: ['E', 'M', 'H'], main: 'M' } },
 };
 
 const isPng = (url) => { try { return /\.png$/i.test(decodeURIComponent(new URL(url).pathname)); } catch (e) { return false; } };
@@ -112,16 +121,30 @@ async function main() {
 
   // scores/<slug>.json: the top 10 for each listed game that has a ranking rule (spec section 2).
   const scoreFiles = {};
+  const entry = (x, field) => ({ name: String(x.username || x.initials || '').toUpperCase(), initials: x.initials || '', score: x[field], date: isoDate(x.submittedAt) });
+  const base = (code) => db.collection('scores').where('game', '==', code).where('approved', '==', true);
+  async function board(rule, code, extra) {
+    let q = base(code);
+    if (extra) q = q.where(extra.field, '==', extra.value);
+    if (rule.fetch === 'all') {   // ranked here: the page ranks with more than one sort key
+      let rows = (await q.get()).docs.map(d => d.data()).filter(rule.pick || (() => true)).sort(rule.cmp);
+      if (rule.unique) { const seen = new Set(); rows = rows.filter(x => { const k = x.uid || x.username; if (seen.has(k)) return false; seen.add(k); return true; }); }
+      return rows.slice(0, 10).map(x => entry(x, rule.field));
+    }
+    return (await q.orderBy(rule.field, rule.dir || 'desc').limit(10).get()).docs.map(d => entry(d.data(), rule.field));
+  }
   for (const g of games) {
     const rule = SCORE_RULES[g.slug];
     if (!rule) continue;
     const gdoc = snap.docs.find(d => d.id === g.slug).data();
     const code = gdoc.code || g.slug.toUpperCase();
-    const qs = await db.collection('scores').where('game', '==', code).where('approved', '==', true).orderBy(rule.field, 'desc').limit(10).get();
-    scoreFiles[g.slug] = JSON.stringify({
-      slug: g.slug,
-      scores: qs.docs.map(d => { const x = d.data(); return { name: String(x.username || x.initials || '').toUpperCase(), initials: x.initials || '', score: x[rule.field], date: isoDate(x.submittedAt) }; }),
-    }, null, 2) + '\n';
+    const out = { slug: g.slug };
+    if (rule.boards) {
+      const boards = {};
+      for (const v of rule.boards.values) boards[v] = await board(rule, code, { field: rule.boards.field, value: v });
+      out.scores = boards[rule.boards.main]; out.board = rule.boards.main; out.boards = boards;
+    } else out.scores = await board(rule, code);
+    scoreFiles[g.slug] = JSON.stringify(out, null, 2) + '\n';
   }
 
   const strip = (list) => JSON.stringify(list.map(x => { const c = Object.assign({}, x); delete c.downloads; return c; }));
