@@ -6,7 +6,7 @@ name: Build store catalog
 # since GitHub's `schedule` trigger has proven unreliable on this repo), and on demand from the Actions tab.
 # Commits made here use GITHUB_TOKEN, so they do not trigger further runs.
 #
-# To take this off the site: delete this file (and catalog.json). Nothing else depends on it.
+# To take this off the site: delete this file (and catalog.json, scores/). Nothing else depends on it.
 on:
   schedule:
     - cron: '*/30 * * * *'
@@ -46,7 +46,7 @@ jobs:
         run: |
           git config user.name "ngpc-leaderboard-bot"
           git config user.email "actions@users.noreply.github.com"
-          git add catalog.json
+          git add -A catalog.json scores
           if git diff --cached --quiet; then
             echo "Nothing to commit."
             exit 0

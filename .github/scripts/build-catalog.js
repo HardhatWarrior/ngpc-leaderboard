@@ -22,12 +22,20 @@ const path = require('path');
 
 const REPO_ROOT = path.join(__dirname, '..', '..');
 const OUT = path.join(REPO_ROOT, 'catalog.json');
+const SCORES_DIR = path.join(REPO_ROOT, 'scores');
 const PREVIEW = process.argv.includes('--preview');
 const ONLY = process.argv.slice(2).filter(a => !a.startsWith('--'));
 
 // Where the adapter fetches a ROM. The raw Storage link today; becomes the counted link (spec: /dl/<slug>) once that
 // endpoint exists, with no other change here.
 function downloadUrl(slug, game) { return game.romPath; }
+
+// How each listed game ranks its board (same query its leaderboard page runs). A game not listed here gets no
+// scores file yet: its board needs a rule (time-ascending, per-mode boards...) before it can be mirrored.
+const SCORE_RULES = {
+  xn: { field: 'score' }, fu: { field: 'totalScore' }, '2k': { field: 'score' }, tt: { field: 'score' },
+  fk: { field: 'score' }, yz: { field: 'score' }, bk: { field: 'score' },
+};
 
 const isPng = (url) => { try { return /\.png$/i.test(decodeURIComponent(new URL(url).pathname)); } catch (e) { return false; } };
 const isoDate = (ms) => (typeof ms === 'number' && ms > 0) ? new Date(ms).toISOString().slice(0, 10) : '';
@@ -102,12 +110,34 @@ async function main() {
     });
   }
 
+  // scores/<slug>.json: the top 10 for each listed game that has a ranking rule (spec section 2).
+  const scoreFiles = {};
+  for (const g of games) {
+    const rule = SCORE_RULES[g.slug];
+    if (!rule) continue;
+    const gdoc = snap.docs.find(d => d.id === g.slug).data();
+    const code = gdoc.code || g.slug.toUpperCase();
+    const qs = await db.collection('scores').where('game', '==', code).where('approved', '==', true).orderBy(rule.field, 'desc').limit(10).get();
+    scoreFiles[g.slug] = JSON.stringify({
+      slug: g.slug,
+      scores: qs.docs.map(d => { const x = d.data(); return { name: String(x.username || x.initials || '').toUpperCase(), initials: x.initials || '', score: x[rule.field], date: isoDate(x.submittedAt) }; }),
+    }, null, 2) + '\n';
+  }
+
   const strip = (list) => JSON.stringify(list.map(x => { const c = Object.assign({}, x); delete c.downloads; return c; }));
   const changed = strip(games) !== strip(prev.games || []);
   const rev = changed ? (prev.rev || 0) + 1 : (prev.rev || 1);
   const out = JSON.stringify({ rev: rev, games: games }, null, 2) + '\n';
 
-  if (PREVIEW) { console.log(out); console.log('(preview: ' + games.length + ' game(s), nothing written)'); return; }
+  if (PREVIEW) { console.log(out); Object.keys(scoreFiles).forEach(k => console.log(k + '.json ' + scoreFiles[k])); console.log('(preview: ' + games.length + ' game(s), nothing written)'); return; }
+  fs.mkdirSync(SCORES_DIR, { recursive: true });
+  for (const f of fs.readdirSync(SCORES_DIR)) if (f.endsWith('.json') && !(f.slice(0, -5) in scoreFiles)) fs.unlinkSync(path.join(SCORES_DIR, f));
+  let wrote = 0;
+  for (const k of Object.keys(scoreFiles)) {
+    const fp = path.join(SCORES_DIR, k + '.json');
+    if (!fs.existsSync(fp) || fs.readFileSync(fp, 'utf8') !== scoreFiles[k]) { fs.writeFileSync(fp, scoreFiles[k]); wrote++; }
+  }
+  if (wrote) console.log(wrote + ' score file(s) written.');
   const old = fs.existsSync(OUT) ? fs.readFileSync(OUT, 'utf8') : '';
   if (old === out) { console.log('catalog.json unchanged (rev ' + rev + ', ' + games.length + ' game(s)).'); return; }
   fs.writeFileSync(OUT, out);
