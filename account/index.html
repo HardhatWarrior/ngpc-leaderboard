@@ -409,6 +409,24 @@
       <div id="pr-msg"></div>
       </div>
     </section>
+
+    <!-- NGPC Wi-Fi adapter (cartridge store). Same gate as the Pocket Realm panel: only shown when the NgpNet
+         server's GET /api/adapters says this account is eligible (site admin + testers until it goes public). -->
+    <section class="panel" id="ad-panel" hidden>
+      <div class="panel-header collapsed" data-toggle="ad-body" role="button" tabindex="0" aria-expanded="false">
+        <h2>NGPC Wi-Fi adapter</h2>
+        <span class="chevron">&#9660;</span>
+      </div>
+      <div class="panel-body" id="ad-body" hidden>
+      <p class="hint" id="ad-testing-note" hidden>Testing: this panel is visible only to the site admin and selected testers until the store goes live.</p>
+      <p class="hint">Connect an adapter: open the store menu on your console, note the short code it shows, and type it here within 10 minutes. Scores your adapter sends then wait for you at the top of any page here, and you submit them with one click.</p>
+      <label>Code from the console<input type="text" id="ad-code" maxlength="7" autocomplete="off" spellcheck="false" placeholder="K7Q-4MX" style="text-transform:uppercase;font-family:'Press Start 2P','IBM Plex Mono',monospace;font-size:12px;letter-spacing:.12em"></label>
+      <label>Name for this adapter (optional)<input type="text" id="ad-label" maxlength="30" autocomplete="off" placeholder="Living room"></label>
+      <button class="btn-primary" id="ad-connect">Connect adapter</button>
+      <div id="ad-list" style="margin-top:14px"></div>
+      <div id="ad-msg"></div>
+      </div>
+    </section>
   </div>
 
   <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com &middot; <a href="mailto:support@ngpc-dev.com" style="color:inherit">support@ngpc-dev.com</a></footer>
@@ -1139,6 +1157,62 @@
   });
   prCode.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); el('pr-link').click(); } });
 
+  // ---- NGPC Wi-Fi adapter pairing (NgpNet /api/*) ----
+  const adPanel = el('ad-panel'), adMsg = el('ad-msg');
+  function adSetMsg(text, kind){ adMsg.innerHTML = text ? '<div class="msg '+kind+'">'+A.escapeHtml(text)+'</div>' : ''; }
+  async function adApi(method, path, body){
+    const user = A.auth.currentUser;
+    if(!user) throw new Error('Sign in first.');
+    const idToken = await user.getIdToken();
+    let r;
+    try{
+      r = await fetch(NGPNET_URL+path, { method, headers: Object.assign({ authorization:'Bearer '+idToken }, body ? { 'content-type':'application/json' } : {}), body: body ? JSON.stringify(body) : undefined });
+    }catch(e){ throw new Error('The store server could not be reached. Try again in a minute.'); }
+    const d = await r.json().catch(()=>null);
+    if(!d) throw new Error('The store server gave an unexpected answer (HTTP '+r.status+').');
+    if(!d.ok) throw new Error(d.error || ('HTTP '+r.status));
+    return d;
+  }
+  function renderAdapters(d){
+    adPanel.hidden = !d.eligible;
+    if(!d.eligible) return;
+    el('ad-testing-note').hidden = !!d.public;
+    const list = el('ad-list');
+    list.innerHTML = '';
+    if(!d.adapters.length){ list.innerHTML = '<div class="current-value">No adapters connected.</div>'; return; }
+    d.adapters.forEach(a=>{
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:6px';
+      const seen = a.last_seen ? 'last seen '+new Date(a.last_seen).toLocaleDateString() : 'not used yet';
+      row.innerHTML = '<span><b>'+A.escapeHtml(a.label)+'</b> <span class="hint" style="margin:0">&middot; '+A.escapeHtml(seen)+'</span></span>';
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'btn-secondary'; b.textContent = 'Remove';
+      b.addEventListener('click', async ()=>{
+        if(!confirm('Remove "'+a.label+'"? It will stop being able to send scores.')) return;
+        b.disabled = true; adSetMsg('', '');
+        try{ await adApi('DELETE', '/api/adapters/'+a.id); await loadAdapters(); adSetMsg('Adapter removed.', 'ok'); }
+        catch(e){ adSetMsg(e.message, 'err'); b.disabled = false; }
+      });
+      row.appendChild(b); list.appendChild(row);
+    });
+  }
+  async function loadAdapters(){
+    try{ renderAdapters(await adApi('GET', '/api/adapters')); }
+    catch(e){ adPanel.hidden = true; }
+  }
+  el('ad-connect').addEventListener('click', async ()=>{
+    const code = el('ad-code').value.replace(/[\s-]/g,'').toUpperCase();
+    if(code.length !== 6){ adSetMsg('The code from the console is 6 letters and numbers.', 'err'); return; }
+    el('ad-connect').disabled = true; adSetMsg('', '');
+    try{
+      await adApi('POST', '/api/pair/confirm', { code, label: el('ad-label').value.trim() || undefined });
+      el('ad-code').value = ''; el('ad-label').value = '';
+      await loadAdapters();
+      adSetMsg('Connected. The adapter finishes pairing within a few seconds.', 'ok');
+    }catch(e){ adSetMsg(e.message, 'err'); }
+    el('ad-connect').disabled = false;
+  });
+  el('ad-code').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); el('ad-connect').click(); } });
+
   A.onAuthChange((user)=>{
     if(user){
       signedOutMsg.hidden = true;
@@ -1147,8 +1221,10 @@
       loadSubmissions();
       loadAdminLinks(user);
       loadPocketRealm();
+      loadAdapters();
     } else {
       prPanel.hidden = true;
+      adPanel.hidden = true;
       el('admin-links').hidden = true;
       signedOutMsg.hidden = false;
       content.hidden = true;

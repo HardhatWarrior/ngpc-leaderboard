@@ -1026,6 +1026,10 @@ window.NGPC_AUTH = (function(){
     #acct-bar{ display:flex; justify-content:space-between; align-items:center; gap:10px; font-size:12px; color:var(--dim); margin-bottom:14px; }
     #acct-right{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; justify-content:flex-end; }
     #acct-right .acct-link{ white-space:nowrap; }
+    #acct-inbox{ margin:-6px 0 14px; padding:8px 10px; border:1px solid var(--border); border-radius:4px; font-size:12.5px; color:var(--dim); }
+    #acct-inbox .inbox-row{ display:flex; align-items:center; gap:12px; margin-top:6px; }
+    #acct-inbox .inbox-row a{ font-weight:600; }
+    #acct-inbox .inbox-x{ background:none; border:0; padding:0; color:var(--dim); font:inherit; text-decoration:underline; cursor:pointer; }
     #acct-avatar{ border-radius:3px; border:1px solid var(--border); display:block; image-rendering:pixelated; }
     #acct-owner{ display:flex; align-items:center; gap:10px; margin-right:4px; }
     #acct-owner[hidden]{ display:none; }
@@ -1195,6 +1199,10 @@ window.NGPC_AUTH = (function(){
       + '<a id="acct-status" class="acct-link">Signed out</a>'
       + '<button type="button" class="acct-link" id="acct-btn">Sign In / Sign Up</button></div>';
     shell.insertBefore(bar, shell.firstChild);
+    // Scores the player's NGPC Wi-Fi adapter has sent in (NgpNet /api/inbox) wait here until they open them.
+    const inboxEl = document.createElement('div');
+    inboxEl.id = 'acct-inbox'; inboxEl.hidden = true;
+    bar.after(inboxEl);
     const statusEl = bar.querySelector('#acct-status');
     const btnEl = bar.querySelector('#acct-btn');
     const avatarEl = bar.querySelector('#acct-avatar');
@@ -1225,6 +1233,50 @@ window.NGPC_AUTH = (function(){
         if(parts.length){ newEl.title = parts.join(' \u00b7 '); newEl.hidden = false; }
       }catch(e){ /* leave hidden */ }
     }
+    // Never throws: the server being down or the account not being eligible just leaves the banner hidden. The score
+    // text is not read here -- the link opens the game's leaderboard page with it as the #hash, exactly like a QR
+    // scan, so that page's own checks and rules do the submitting.
+    const NGPNET = (function(){ try{ return localStorage.getItem('ngpnet_url') || 'https://ngpnet.fly.dev'; }catch(e){ return 'https://ngpnet.fly.dev'; } })();
+    function inboxTarget(payload){
+      const m = /^NGPC-DEV\.COM\/([A-Z0-9]+)\/?(.*)$/i.exec(payload);
+      if(!m) return null;
+      const gn = /^GN([A-Z2-9]{8,320})$/i.exec(m[1]);
+      if(gn) return { game:'GN', href:'/gn/#'+gn[1].toUpperCase() };
+      return { game:m[1].toUpperCase(), href:'/'+m[1].toLowerCase()+'/'+(m[2] ? '#'+m[2] : '') };
+    }
+    async function inboxCall(method, path, body){
+      const u = auth.currentUser; if(!u) return null;
+      const tok = await u.getIdToken();
+      const r = await fetch(NGPNET+path, { method, keepalive:true, headers:Object.assign({ authorization:'Bearer '+tok }, body ? { 'content-type':'application/json' } : {}), body: body ? JSON.stringify(body) : undefined });
+      return r.json();
+    }
+    async function refreshInbox(user){
+      inboxEl.hidden = true; inboxEl.textContent = '';
+      if(!user) return;
+      try{
+        const d = await inboxCall('GET', '/api/inbox');
+        if(!d || !d.ok || !d.items || !d.items.length || !currentUser || currentUser.uid !== user.uid) return;
+        const rows = d.items.map(it=>({ it, t: inboxTarget(it.payload) })).filter(x=>x.t);
+        if(!rows.length) return;
+        const head = document.createElement('div');
+        head.className = 'inbox-head';
+        head.textContent = rows.length + ' score' + (rows.length===1?'':'s') + ' from your NGPC adapter, waiting to be submitted:';
+        inboxEl.appendChild(head);
+        rows.forEach(({it, t})=>{
+          const row = document.createElement('div'); row.className = 'inbox-row';
+          const a = document.createElement('a'); a.href = t.href; a.textContent = 'Submit ' + t.game + ' score';
+          a.addEventListener('click', ()=>{ inboxCall('POST', '/api/inbox/'+it.id, { state:'opened' }).catch(()=>{}); });
+          const x = document.createElement('button'); x.type = 'button'; x.className = 'inbox-x'; x.textContent = 'Dismiss';
+          x.addEventListener('click', ()=>{
+            row.remove();
+            if(!inboxEl.querySelector('.inbox-row')) inboxEl.hidden = true;
+            inboxCall('POST', '/api/inbox/'+it.id, { state:'dismissed' }).catch(()=>{});
+          });
+          row.appendChild(a); row.appendChild(x); inboxEl.appendChild(row);
+        });
+        inboxEl.hidden = false;
+      }catch(e){ /* leave hidden */ }
+    }
     btnEl.addEventListener('click', ()=>{
       if(signedIn) signOutNow();
       else modal.openModal('signin');
@@ -1238,6 +1290,7 @@ window.NGPC_AUTH = (function(){
         statusEl.href = '/account/';
         btnEl.textContent = 'Sign Out';
         refreshAdminBadge(user);
+        refreshInbox(user);
         ownerEl.hidden = user.uid !== ADMIN_UID;
         badgesEl.hidden = location.pathname.indexOf('/achievements') === 0;
         if(user.avatar){
@@ -1254,6 +1307,7 @@ window.NGPC_AUTH = (function(){
         newEl.hidden = true;
         ownerEl.hidden = true;
         badgesEl.hidden = true;
+        inboxEl.hidden = true;
       }
     });
   }
