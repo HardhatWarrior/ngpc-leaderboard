@@ -1,0 +1,56 @@
+name: Build store catalog
+
+# Rebuilds catalog.json (https://www.ngpc-dev.com/catalog.json) for the NGPC cartridge store from the games/ docs in
+# Firestore and commits it when it changed. See .github/scripts/build-catalog.js for the rules (which games are
+# listed, when `rev` goes up). Runs on a schedule, on every push (the same backstop auto-scaffold-games.yml uses,
+# since GitHub's `schedule` trigger has proven unreliable on this repo), and on demand from the Actions tab.
+# Commits made here use GITHUB_TOKEN, so they do not trigger further runs.
+#
+# To take this off the site: delete this file (and catalog.json). Nothing else depends on it.
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-catalog
+  cancel-in-progress: false
+
+jobs:
+  catalog:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install script dependencies
+        working-directory: .github/scripts
+        run: npm install --omit=dev
+
+      - name: Build catalog.json
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node .github/scripts/build-catalog.js
+
+      - name: Commit and push if it changed
+        run: |
+          git config user.name "ngpc-leaderboard-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add catalog.json
+          if git diff --cached --quiet; then
+            echo "Nothing to commit."
+            exit 0
+          fi
+          git commit -m "Update store catalog"
+          git pull --rebase -q
+          git push
