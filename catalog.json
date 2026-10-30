@@ -1,4 +1,26 @@
 {
-  "rev": 1,
-  "games": []
+  "rev": 2,
+  "games": [
+    {
+      "slug": "2k",
+      "name": "2048",
+      "author": "HARDHATWARRIOR",
+      "version": "1.2",
+      "rom_rev": 1,
+      "rom_size": 2097152,
+      "rom_sha256": "17a0879db9215c586bae5c5cb78d0ab06cd431c9b6310c5574d3ae127c1ae62d",
+      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2F2k%2F2048_v1.2.ngp?alt=media&token=1557b5d0-20e1-4091-94d1-ea6e14bc1d4c",
+      "icon_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2F2k%2Ficon.png?alt=media&token=740a6c65-10b4-4720-b917-06c8c899a2aa",
+      "screenshots": [
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2F2k%2Ftitle.png?alt=media&token=4d83eaf8-b4a0-4ec6-9c03-771af11a1a4b",
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2F2k%2Fextra1.png?alt=media&token=9e96594c-b732-4bb8-a138-003e9cf58ba2"
+      ],
+      "blurb": "2048 — Every Move Counts.",
+      "description": "2048 — Every Move Counts.",
+      "save_compatible_since": 1,
+      "store_allowed": true,
+      "downloads": 58,
+      "added": "2026-09-18"
+    }
+  ]
 }
