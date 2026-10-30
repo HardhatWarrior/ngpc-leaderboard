@@ -1,5 +1,6 @@
 {
   "slug": "bk",
+  "order": "desc",
   "scores": [
     {
       "name": "HARDHATWARRIOR",

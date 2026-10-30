@@ -1,5 +1,6 @@
 {
   "slug": "tt",
+  "order": "desc",
   "scores": [
     {
       "name": "HARDHATWARRIOR",

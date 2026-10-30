@@ -1,5 +1,6 @@
 {
   "slug": "sb",
+  "order": "asc",
   "scores": [
     {
       "name": "AHCHAY",
