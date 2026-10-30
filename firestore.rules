@@ -964,7 +964,7 @@ service cloud.firestore {
           // the game's manual (PDF, wiki page, anywhere), shown on a single-player game's about
           // page (games/about/); same http(s)-only restriction as siteUrl, for the same reason.
           || (isAssignedDev(resource.data)
-              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'visibility', 'emulator', 'version', 'showVersionOnTile', 'previewTesters', 'manualUrl'])
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['devStatus', 'romPath', 'romFileName', 'romUpdatedAt', 'updatedUntil', 'newUntil', 'titleImage', 'extraScreenshot1Path', 'extraScreenshot2Path', 'titleImageUpdatedAt', 'extraScreenshot1UpdatedAt', 'extraScreenshot2UpdatedAt', 'description', 'siteUrl', 'visibility', 'emulator', 'version', 'showVersionOnTile', 'previewTesters', 'manualUrl', 'storeAllowed', 'storeBlurb', 'iconPath', 'iconUpdatedAt', 'romRev', 'romSha256', 'romSize', 'saveCompatibleSince'])
               && request.resource.data.devStatus in ['coming-soon', 'dev', 'beta', 'final']
               && (!('description' in request.resource.data) || (request.resource.data.description is string && request.resource.data.description.size() <= 300))
               && (!('siteUrl' in request.resource.data) || (request.resource.data.siteUrl is string && (request.resource.data.siteUrl == '' || request.resource.data.siteUrl.matches('^https?://.+'))))
@@ -975,6 +975,17 @@ service cloud.firestore {
               && (!('showVersionOnTile' in request.resource.data) || request.resource.data.showVersionOnTile is bool)
               && (!('previewTesters' in request.resource.data) || (request.resource.data.previewTesters is list && request.resource.data.previewTesters.size() <= 20))
               && (!('titleImageUpdatedAt' in request.resource.data) || request.resource.data.titleImageUpdatedAt is int)
+              // Cartridge store (catalog.json, built from these fields): the author's opt-in, a one-line blurb, the 32x32
+              // icon, and the ROM facts the adapter checks a download against (rev counter, SHA-256, size) plus the oldest
+              // ROM rev whose saves still load.
+              && (!('storeAllowed' in request.resource.data) || request.resource.data.storeAllowed is bool)
+              && (!('storeBlurb' in request.resource.data) || (request.resource.data.storeBlurb is string && request.resource.data.storeBlurb.size() <= 100))
+              && (!('iconPath' in request.resource.data) || (request.resource.data.iconPath is string && request.resource.data.iconPath.matches('^https://.+') && request.resource.data.iconPath.size() <= 800))
+              && (!('iconUpdatedAt' in request.resource.data) || request.resource.data.iconUpdatedAt is int)
+              && (!('romRev' in request.resource.data) || (request.resource.data.romRev is int && request.resource.data.romRev >= 1 && request.resource.data.romRev <= 9999))
+              && (!('romSha256' in request.resource.data) || (request.resource.data.romSha256 is string && request.resource.data.romSha256.matches('^[0-9a-f]{64}$')))
+              && (!('romSize' in request.resource.data) || (request.resource.data.romSize is int && request.resource.data.romSize >= 1 && request.resource.data.romSize <= 4194304))
+              && (!('saveCompatibleSince' in request.resource.data) || (request.resource.data.saveCompatibleSince is int && request.resource.data.saveCompatibleSince >= 1 && request.resource.data.saveCompatibleSince <= 9999))
               && (!('extraScreenshot1UpdatedAt' in request.resource.data) || request.resource.data.extraScreenshot1UpdatedAt is int)
               && (!('extraScreenshot2UpdatedAt' in request.resource.data) || request.resource.data.extraScreenshot2UpdatedAt is int))
         ))

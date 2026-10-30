@@ -270,8 +270,33 @@
       <div class="current-value">Current ROM: <b id="rom-current">using the site's default build</b> <span class="art-timestamp" id="rom-timestamp"></span></div>
       <input type="file" id="rom-file" accept=".ngp,.ngc">
       <div class="current-value" style="margin-top:8px">Uploads require Firebase Storage to be enabled on this project (ask the site admin if this fails).</div>
+      <label style="margin-top:8px;display:flex;align-items:flex-start;gap:6px;font-size:12.5px;color:var(--dim);cursor:pointer">
+        <input type="checkbox" id="rom-breaks-saves" style="margin-top:2px"> <span>This release changes the save format &mdash; players&rsquo; older saves will not load (the cartridge store warns before updating)</span>
+      </label>
       <button type="button" class="action btn-primary" id="rom-upload" disabled>Upload ROM</button>
       <div id="rom-msg"></div>
+    </div>
+
+    <!-- Cartridge store: the opt-in and the details the NGPC cartridge store (Wi-Fi adapter) lists this game with.
+         catalog.json is built from games/{slug}; a game appears there only with the opt-in ticked, a ROM, an icon and a
+         blurb, and once it is out of coming-soon. -->
+    <div style="margin-top:20px">
+      <div class="field-label">Cartridge store</div>
+      <div class="current-value">Optional. Lets players install and update this game from the NGPC cartridge store (a Wi-Fi adapter on the link port).</div>
+      <label style="margin-top:8px;display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--cream);cursor:pointer">
+        <input type="checkbox" id="store-allowed-input"> List this game in the cartridge store
+      </label>
+      <div class="field-label" style="margin-top:12px">One-line blurb</div>
+      <input type="text" id="store-blurb-input" maxlength="100" placeholder="e.g. Dogfights high above the clouds">
+      <div class="field-label" style="margin-top:12px">Store icon (32&times;32 PNG)</div>
+      <div class="current-value" id="store-icon-current">No icon uploaded.</div>
+      <input type="file" id="store-icon-file" accept="image/png">
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button type="button" class="action btn-primary" id="store-icon-upload" disabled>Upload icon</button>
+        <button type="button" class="action btn-primary" id="store-save">Save store settings</button>
+      </div>
+      <div id="store-status" class="current-value" style="margin-top:8px"></div>
+      <div id="store-msg"></div>
     </div>
 
     <!-- Free-text blurb + a link back to the developer's own site (X/itch/personal page/etc) --
@@ -2063,7 +2088,17 @@
         const url = await ref.getDownloadURL();
         const now = Date.now();
         const THIRTY_DAYS = 30*24*60*60*1000;
-        await docRef.update({ romPath: url, romFileName: file.name, romUpdatedAt: now, updatedUntil: now+THIRTY_DAYS });
+        // The cartridge store checks a download against these: a rev counter (higher = update available), the size
+        // and SHA-256, and the oldest rev whose saves still load (this one, when the release breaks saves).
+        const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+        const sha = Array.from(new Uint8Array(digest)).map(b=>b.toString(16).padStart(2,'0')).join('');
+        const newRev = Math.min(9999, (data.romRev || 0) + 1);
+        const compat = el('rom-breaks-saves').checked ? newRev : (data.saveCompatibleSince || 1);
+        const storeFields = { romRev: newRev, romSha256: sha, romSize: file.size, saveCompatibleSince: compat };
+        await docRef.update(Object.assign({ romPath: url, romFileName: file.name, romUpdatedAt: now, updatedUntil: now+THIRTY_DAYS }, storeFields));
+        Object.assign(data, storeFields, { romPath: url });
+        el('rom-breaks-saves').checked = false;
+        if(window.paintStoreStatus) window.paintStoreStatus();
         romCurrent.textContent = file.name;
         updatedBadgeRow.hidden = false;
         romMsg.innerHTML = '<div class="msg ok">Uploaded — this game just moved to the top of "Most Recent" and shows an UPDATED badge for 30 days.</div>';
@@ -2075,6 +2110,79 @@
         romUpload.disabled = false;
       }
     });
+
+    // Cartridge store settings: opt-in, blurb, and the 32x32 icon (game-art/<slug>/icon.png, the same Storage path
+    // as the other game art, so the existing rules already let this game's developer write it).
+    (function(){
+      const allowedEl = el('store-allowed-input'), blurbEl = el('store-blurb-input');
+      const iconCur = el('store-icon-current'), iconFile = el('store-icon-file'), iconBtn = el('store-icon-upload');
+      const saveBtn = el('store-save'), statusEl = el('store-status'), msgEl = el('store-msg');
+      allowedEl.checked = !!data.storeAllowed;
+      blurbEl.value = data.storeBlurb || '';
+      function paintIcon(){
+        if(data.iconPath){
+          iconCur.innerHTML = 'Current: <img src="'+escapeHtml(data.iconPath)+'" width="32" height="32" alt="" style="vertical-align:middle;image-rendering:pixelated;border:1px solid var(--border);border-radius:3px;margin-left:6px">';
+          iconBtn.textContent = 'Replace icon';
+        } else { iconCur.textContent = 'No icon uploaded.'; iconBtn.textContent = 'Upload icon'; }
+      }
+      window.paintStoreStatus = function(){
+        const missing = [];
+        if(!data.romPath) missing.push('a ROM');
+        if(!data.iconPath) missing.push('an icon');
+        if(!(data.storeBlurb || '').trim()) missing.push('a blurb');
+        if(data.devStatus === 'coming-soon') missing.push('to leave "coming soon"');
+        const bits = ['ROM revision ' + (data.romRev || '\u2014')];
+        if(data.romSize) bits.push((data.romSize/1024).toFixed(0) + ' KB');
+        statusEl.textContent = (data.storeAllowed
+          ? (missing.length ? 'Not listed yet: still needs ' + missing.join(', ') + '. ' : 'Listed in the cartridge store. ')
+          : 'Not listed (the box above is off). ') + bits.join(' \u00b7 ') + '.';
+      };
+      paintIcon(); window.paintStoreStatus();
+      iconFile.addEventListener('change', ()=>{ iconBtn.disabled = !iconFile.files.length; });
+      iconBtn.addEventListener('click', async ()=>{
+        const file = iconFile.files[0];
+        if(!file) return;
+        if(file.type !== 'image/png'){ msgEl.innerHTML = '<div class="msg err">The icon must be a PNG.</div>'; return; }
+        iconBtn.disabled = true;
+        msgEl.innerHTML = '<div class="msg ok">Checking and uploading\u2026</div>';
+        try{
+          const dims = await new Promise((ok, no)=>{
+            const u = URL.createObjectURL(file), im = new Image();
+            im.onload = ()=>{ URL.revokeObjectURL(u); ok([im.naturalWidth, im.naturalHeight]); };
+            im.onerror = ()=>{ URL.revokeObjectURL(u); no(new Error('That file could not be read as an image.')); };
+            im.src = u;
+          });
+          if(dims[0] !== 32 || dims[1] !== 32) throw new Error('The icon must be exactly 32\u00d732 pixels (this one is ' + dims[0] + '\u00d7' + dims[1] + ').');
+          const ref = firebase.storage().ref().child('game-art/'+slug+'/icon.png');
+          await ref.put(file, { contentType:'image/png' });
+          const url = await ref.getDownloadURL();
+          const now = Date.now();
+          await docRef.update({ iconPath: url, iconUpdatedAt: now });
+          data.iconPath = url; data.iconUpdatedAt = now;
+          paintIcon(); window.paintStoreStatus();
+          iconFile.value = '';
+          msgEl.innerHTML = '<div class="msg ok">Icon uploaded.</div>';
+        }catch(e){
+          msgEl.innerHTML = '<div class="msg err">'+escapeHtml(e.message||'Upload failed')+'</div>';
+          iconBtn.disabled = false;
+        }
+      });
+      saveBtn.addEventListener('click', async ()=>{
+        saveBtn.disabled = true;
+        msgEl.innerHTML = '';
+        try{
+          const fields = { storeAllowed: allowedEl.checked, storeBlurb: blurbEl.value.trim() };
+          await docRef.update(fields);
+          Object.assign(data, fields);
+          window.paintStoreStatus();
+          msgEl.innerHTML = '<div class="msg ok">Saved.</div>';
+        }catch(e){
+          msgEl.innerHTML = '<div class="msg err">Couldn\u2019t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+        }finally{
+          saveBtn.disabled = false;
+        }
+      });
+    })();
 
     // Payload Editor -- admin only, and only for games whose leaderboard page has actually been
     // retrofitted to read games/{slug}.payloadSpec at runtime (see EDITABLE_PAYLOAD_GAMES' own
