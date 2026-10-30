@@ -36,7 +36,7 @@ const SCORE_RULES = {
   xn: { field: 'score' }, fu: { field: 'totalScore' }, '2k': { field: 'score' }, tt: { field: 'score' },
   fk: { field: 'score' }, yz: { field: 'score' }, bk: { field: 'score' }, bw: { field: 'score' },
   // Shut the Box: solo series only; lower total wins, then more boxes shut, less time, earlier submission.
-  sb: { field: 'total', fetch: 'all', pick: x => x.result === '1',
+  sb: { field: 'total', order: 'asc', fetch: 'all', pick: x => x.result === '1',
         cmp: (a, b) => (a.total - b.total) || ((b.shut || 0) - (a.shut || 0)) || ((a.seconds || 0) - (b.seconds || 0)) || ((a.submittedAt || 0) - (b.submittedAt || 0)) },
   // Sokoban: stars (more wins), then fewer moves over par, fewer total moves, earlier; one entry per player.
   sk: { field: 'stars', fetch: 'all', pick: x => (Number(x.levelsSolved) || 0) >= 1, unique: true,
@@ -138,7 +138,8 @@ async function main() {
     if (!rule) continue;
     const gdoc = snap.docs.find(d => d.id === g.slug).data();
     const code = gdoc.code || g.slug.toUpperCase();
-    const out = { slug: g.slug };
+    // `order`: which way is better, so the adapter does not have to guess (time and total games rank low-to-high).
+    const out = { slug: g.slug, order: rule.order || rule.dir || 'desc' };
     if (rule.boards) {
       const boards = {};
       for (const v of rule.boards.values) boards[v] = await board(rule, code, { field: rule.boards.field, value: v });
