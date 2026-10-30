@@ -1,5 +1,5 @@
 {
-  "rev": 2,
+  "rev": 3,
   "games": [
     {
       "slug": "2k",
@@ -21,6 +21,130 @@
       "store_allowed": true,
       "downloads": 58,
       "added": "2026-09-18"
+    },
+    {
+      "slug": "bk",
+      "name": "Breakout",
+      "author": "HARDHATWARRIOR",
+      "version": "1.1",
+      "rom_rev": 1,
+      "rom_size": 2097152,
+      "rom_sha256": "231898a1153164e82e1a824ef0b872ebab464cb32a75e291c8981680f9166de1",
+      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2Fbk%2Fbreakout_v1.1.ngp?alt=media&token=bab54a6e-15ff-4094-a2a1-acf062ea354a",
+      "icon_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fbk%2Ficon.png?alt=media&token=2fb85738-6e18-4729-a3fc-a41d8282a058",
+      "screenshots": [
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fbk%2Ftitle.png?alt=media&token=79870e5f-a303-4901-a15c-f2c1729e4b55",
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/submissions%2FL44BFbmiNkhi2vvLdrPUIxkvmfs2%2FP2KzUP4pzwOQG1dEFpmO%2Fextra1.png?alt=media&token=7f9d5495-35a4-4526-9824-6a3a8ecb58d2"
+      ],
+      "blurb": "♫ Tear down the wall! ♫",
+      "description": "♫ Tear down the wall! ♫",
+      "save_compatible_since": 1,
+      "store_allowed": true,
+      "downloads": 65,
+      "added": "2026-09-21"
+    },
+    {
+      "slug": "bw",
+      "name": "Neo Bowling",
+      "author": "HARDHATWARRIOR",
+      "version": "1.0",
+      "rom_rev": 1,
+      "rom_size": 2097152,
+      "rom_sha256": "f5d845dce64058b7df2e7fd1c37099309ebf63164d4ea9381739b4f57f701731",
+      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2Fbw%2FBowling_V1.0.ngp?alt=media&token=7be38de9-9edc-436e-8627-3a90b66f0261",
+      "icon_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fbw%2Ficon.png?alt=media&token=9030ef39-0df7-4a5b-a996-f2bab3cfd71e",
+      "screenshots": [
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fbw%2Fextra1.png?alt=media&token=81e19d20-6432-46d7-b40d-4fc2aaca6478"
+      ],
+      "blurb": "Can you score a perfect game?",
+      "description": "Neo Bowling: the alley that fits in your pocket.",
+      "save_compatible_since": 1,
+      "store_allowed": true,
+      "downloads": 126,
+      "added": "2026-09-16"
+    },
+    {
+      "slug": "sb",
+      "name": "Shut the Box",
+      "author": "HARDHATWARRIOR",
+      "version": "0.1",
+      "rom_rev": 1,
+      "rom_size": 2097152,
+      "rom_sha256": "a1271ae160c95b33014f3d5487b62078bcb64bfe435905c45f9c08fa29bc5502",
+      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2Fsb%2Fshutthebox_10.ngp?alt=media&token=d5c59c24-13de-4b1c-8952-636d111867bc",
+      "icon_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fsb%2Ficon.png?alt=media&token=e6237273-19fe-470f-b006-0757fd86236e",
+      "screenshots": [
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/submissions%2FL44BFbmiNkhi2vvLdrPUIxkvmfs2%2FLnQbc9mBFmLu7sIPY3XD%2Fscreenshot.png?alt=media&token=22c1131e-12c7-4b72-be05-cb8f0a04f8ee"
+      ],
+      "blurb": "Shut that box!",
+      "description": "Roll the dice, flip the tiles, and shut the box! Test your luck and strategy in this classic game of numbers. Can you close every tile?",
+      "save_compatible_since": 1,
+      "store_allowed": true,
+      "downloads": 6,
+      "added": "2026-10-24"
+    },
+    {
+      "slug": "sd",
+      "name": "Sudoku",
+      "author": "HARDHATWARRIOR",
+      "version": "1.0",
+      "rom_rev": 1,
+      "rom_size": 2097152,
+      "rom_sha256": "c1563ed8608fc4f5e35e129a0c2f208ef02ae616d3e83818fbc4b83233dc7568",
+      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2Fsd%2Fsudoku_v1.1.ngp?alt=media&token=1ea831d4-2039-4154-bcb2-94be19da02ce",
+      "icon_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fsd%2Ficon.png?alt=media&token=f6b82719-4586-4f99-b38b-cac022b108dc",
+      "screenshots": [
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fsd%2Ftitle.png?alt=media&token=b81f8c90-b4c3-45ba-aa1c-48e7fa1910bc",
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fsd%2Fextra1.png?alt=media&token=42bb462f-18de-4a91-88cd-38f3f80c121a"
+      ],
+      "blurb": "Every Number Has Its Place.",
+      "description": "Every Number Has Its Place.",
+      "save_compatible_since": 1,
+      "store_allowed": true,
+      "downloads": 61,
+      "added": "2026-09-20"
+    },
+    {
+      "slug": "sk",
+      "name": "Sokoban",
+      "author": "HARDHATWARRIOR",
+      "version": "1.0",
+      "rom_rev": 1,
+      "rom_size": 2097152,
+      "rom_sha256": "1bbe9c80ceae5fe29b66be5b74e7c182c82872e60afac3926c61bda952e5aa06",
+      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2Fsk%2Fsokoban_v1.0.ngp?alt=media&token=ede02fe8-771d-43bb-a3b9-b613a9afd056",
+      "icon_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fsk%2Ficon.png?alt=media&token=b98339db-7e52-45d0-8fbe-e3d68e094be7",
+      "screenshots": [
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fsk%2Ftitle.png?alt=media&token=8fa61851-872e-4fcd-86c2-f2ed687bed8c",
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fsk%2Fextra1.png?alt=media&token=91a8ee6b-19b6-4657-be28-dbfc2b048bd5"
+      ],
+      "blurb": "Boxes need a home.",
+      "description": "Think Ahead. Push to Victory!",
+      "save_compatible_since": 1,
+      "store_allowed": true,
+      "downloads": 24,
+      "added": "2026-10-01"
+    },
+    {
+      "slug": "tt",
+      "name": "Tetris",
+      "author": "HARDHATWARRIOR",
+      "version": "1.0",
+      "rom_rev": 1,
+      "rom_size": 2097152,
+      "rom_sha256": "8e8787dc03b388222754596d56c6164a4e1579e64ad907f214698bcccd435188",
+      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2Ftt%2Ftetris_v1.0.ngp?alt=media&token=d2b3d350-8f16-4e6e-a7d6-beae3a0ee6b5",
+      "icon_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Ftt%2Ficon.png?alt=media&token=109b95c6-b828-4f12-b3bc-ae6370954756",
+      "screenshots": [
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Ftt%2Ftitle.png?alt=media&token=25157cae-a3cc-418e-84dc-9401f8a027ca",
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Ftt%2Fextra1.png?alt=media&token=54f1b6d0-b1dd-42e0-9f12-25cabdb4a7fe"
+      ],
+      "blurb": "Drop. Stack. Clear. Repeat.",
+      "description": "Drop. Stack. Clear. Repeat.",
+      "save_compatible_since": 1,
+      "store_allowed": true,
+      "downloads": 56,
+      "added": "2026-09-17"
     }
   ]
 }
