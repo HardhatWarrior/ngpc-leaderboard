@@ -83,6 +83,18 @@
     </section>
 
     <section class="panel">
+      <h2>Start from a TALE CODE</h2>
+      <p class="hint">Paste your TALE CODE and get the site's current ROM with that tale already in it. Flash it to a cart, and the
+        first boot loads the tale (only on a cart whose save was never written: an ERASE or any save keeps what is there).
+        Needs nocturne_58 or later.</p>
+      <label class="f">TALE CODE <textarea id="tcCode" rows="5" spellcheck="false" autocomplete="off" style="font:13px 'IBM Plex Mono',monospace;color:var(--cream);background:var(--navy);border:1px solid var(--border);border-radius:8px;padding:9px 10px;width:100%;text-transform:uppercase"></textarea></label>
+      <div class="found" id="tcFound"></div>
+      <label class="f">ROM (optional: leave empty to use the site's current build) <input type="file" id="tcRom" accept=".ngp,.ngc,.bin"></label>
+      <button type="button" id="tcGo" disabled>Make the ROM with this tale</button>
+      <div id="tcMsg"></div>
+    </section>
+
+    <section class="panel">
       <h2>What carries over</h2>
       <p class="hint" style="margin:0">nocturne_19 and later: the whole save as it is (tale, map, QUIT &amp; SAVE spot, settings, MUSIC ROOM, BESTIARY).
         Older builds had FILE 1-3: the file you pick becomes the tale and the new build converts it on load, exactly as if
@@ -196,6 +208,63 @@
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
     say("Saved " + name + " with " + fileText(r.info, r.info.files[r.kept - 1]) + ". Flash it to your cart, then pick CONTINUE on the title screen.", "ok");
+  });
+
+  /* ---- a TALE CODE into a ROM (nocturne_58 tale.c tale_inject: the symbols after "NGTCINJ:", 0-terminated) ---- */
+  var TC_ALPHA = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789", TC_SALT = "GN-TALE-CODE", TC_MAX = 320, INJ_TAG = "NGTCINJ:";
+  function tsay(t, kind) { $("tcMsg").innerHTML = ""; if (!t) return; var d = document.createElement("div"); d.className = "msg " + kind; d.textContent = t; $("tcMsg").appendChild(d); }
+  function tcClean(t) { return t.toUpperCase().replace(/^.*\//, "").replace(/[\s-]/g, ""); }
+  function tcCheck(c) {                         /* tale.c check_syms: CRC-16/CCITT over the salt + the data symbols */
+    if (c.length < 6) return "too short";
+    if (c.length > TC_MAX) return "too long (" + c.length + " symbols, at most " + TC_MAX + ")";
+    for (var i = 0; i < c.length; i++) if (TC_ALPHA.indexOf(c[i]) < 0) return "\"" + c[i] + "\" is not a TALE CODE symbol";
+    var crc = 0xFFFF, n = c.length - 3;
+    function add(b) { crc ^= b << 8; for (var k = 0; k < 8; k++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xFFFF : (crc << 1) & 0xFFFF; }
+    for (i = 0; i < TC_SALT.length; i++) add(TC_SALT.charCodeAt(i));
+    for (i = 0; i < n; i++) add(TC_ALPHA.indexOf(c[i]));
+    var v = crc & 0x7FFF, want = TC_ALPHA[(v >> 10) & 31] + TC_ALPHA[(v >> 5) & 31] + TC_ALPHA[v & 31];
+    return c.slice(n) === want ? "" : "its check symbols do not match (a symbol is mistyped)";
+  }
+  function findTag(b) {
+    var t = INJ_TAG, i, k;
+    for (i = 0; i + t.length <= b.length; i++) {
+      for (k = 0; k < t.length && b[i + k] === t.charCodeAt(k); k++) {}
+      if (k === t.length) return i;
+    }
+    return -1;
+  }
+  function tcReady() {
+    var c = tcClean($("tcCode").value), bad = c ? tcCheck(c) : "x";
+    $("tcFound").textContent = c ? (bad ? "Not a valid code: " + bad + "." : "Valid code, " + c.length + " symbols.") : "";
+    $("tcGo").disabled = !!bad;
+    return bad ? null : c;
+  }
+  $("tcCode").addEventListener("input", function () { tsay(""); tcReady(); });
+  $("tcGo").addEventListener("click", function () {
+    var c = tcReady();
+    if (!shown || !c) return;
+    $("tcGo").disabled = true; tsay("Getting the ROM…", "note");
+    var own = $("tcRom").files && $("tcRom").files[0];
+    var got = own ? read($("tcRom")) : (gameData && gameData.romPath
+      ? fetch(gameData.romPath).then(function (r) { if (!r.ok) throw new Error("Could not download the site's ROM (" + r.status + ")."); return r.arrayBuffer(); })
+          .then(function (ab) { return { name: (gameData.romFileName || "nocturne.ngp"), b: new Uint8Array(ab) }; })
+      : Promise.reject(new Error("The site has no Nocturne ROM uploaded. Pick a ROM file instead.")));
+    got.then(function (rom) {
+      var b = new Uint8Array(rom.b), at = findTag(b);
+      if (b.length !== SC.ROM_SIZE) throw new Error(rom.name + " is not a full 2 MB Nocturne ROM.");
+      if (at < 0) throw new Error(rom.name + " is older than nocturne_58 and cannot take a TALE CODE. Use a newer build.");
+      if (b[at + INJ_TAG.length]) throw new Error(rom.name + " already holds a TALE CODE. Use a fresh copy of the build.");
+      if (SC.romInfo(b) && SC.romInfo(b).files.some(function (f) { return f.used; })) throw new Error(rom.name + " already holds a save, so the code would be ignored. Use a fresh copy of the build.");
+      for (var i = 0; i < c.length; i++) b[at + INJ_TAG.length + i] = c.charCodeAt(i);
+      b[at + INJ_TAG.length + c.length] = 0;
+      var name = rom.name.replace(/\.(ngp|ngc|bin)$/i, "") + "_with_tale.ngp";
+      var url = URL.createObjectURL(new Blob([b], { type: "application/octet-stream" }));
+      var a = document.createElement("a");
+      a.href = url; a.download = name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+      tsay("Saved " + name + ". Flash it to your cart (a full write, so the old save is gone), then pick YOUR TALE on the title screen.", "ok");
+    }).catch(function (e) { tsay(e.message, "err"); }).then(function () { tcReady(); });
   });
 })();
 </script>
