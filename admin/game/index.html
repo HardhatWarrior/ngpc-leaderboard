@@ -277,28 +277,6 @@
       <div id="rom-msg"></div>
     </div>
 
-    <!-- Cartridge store: the opt-in and the details the NGPC cartridge store (Wi-Fi adapter) lists this game with.
-         catalog.json is built from games/{slug}; a game appears there only with the opt-in ticked, a ROM, an icon and a
-         blurb, and once it is out of coming-soon. -->
-    <div style="margin-top:20px">
-      <div class="field-label">Cartridge store</div>
-      <div class="current-value">Optional. Lets players install and update this game from the NGPC cartridge store (a Wi-Fi adapter on the link port).</div>
-      <label style="margin-top:8px;display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--cream);cursor:pointer">
-        <input type="checkbox" id="store-allowed-input"> List this game in the cartridge store
-      </label>
-      <div class="field-label" style="margin-top:12px">One-line blurb</div>
-      <input type="text" id="store-blurb-input" maxlength="100" placeholder="e.g. Dogfights high above the clouds">
-      <div class="field-label" style="margin-top:12px">Store icon (32&times;32 PNG)</div>
-      <div class="current-value" id="store-icon-current">No icon uploaded.</div>
-      <input type="file" id="store-icon-file" accept="image/png">
-      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-        <button type="button" class="action btn-primary" id="store-icon-upload" disabled>Upload icon</button>
-        <button type="button" class="action btn-primary" id="store-save">Save store settings</button>
-      </div>
-      <div id="store-status" class="current-value" style="margin-top:8px"></div>
-      <div id="store-msg"></div>
-    </div>
-
     <!-- Free-text blurb + a link back to the developer's own site (X/itch/personal page/etc) --
          shown on this game's own leaderboard page directly under its screenshots, wrapped so a
          long description or URL can't push that panel wider on mobile (see bk/index.html's own
@@ -344,6 +322,28 @@
       <datalist id="game-dev-list"></datalist>
       <button type="button" class="action btn-primary" id="game-dev-save" style="margin-top:8px">Save developer</button>
       <div id="game-dev-msg"></div>
+    </div>
+
+    <!-- Cartridge store: the opt-in and the details the NGPC cartridge store (Wi-Fi adapter) lists this game with.
+         catalog.json is built from games/{slug}; a game appears there only with the opt-in ticked, a ROM, an icon and a
+         blurb, and once it is out of coming-soon. -->
+    <div style="margin-top:20px">
+      <div class="field-label">Cartridge store</div>
+      <div class="current-value">Optional. Lets players install and update this game from the NGPC cartridge store (a Wi-Fi adapter on the link port).</div>
+      <label style="margin-top:8px;display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--cream);cursor:pointer">
+        <input type="checkbox" id="store-allowed-input"> List this game in the cartridge store
+      </label>
+      <div class="field-label" style="margin-top:12px">One-line blurb</div>
+      <input type="text" id="store-blurb-input" maxlength="100" placeholder="e.g. Dogfights high above the clouds">
+      <div class="field-label" style="margin-top:12px">Store icon (32&times;32 PNG)</div>
+      <div class="current-value" id="store-icon-current">No icon uploaded.</div>
+      <input type="file" id="store-icon-file" accept="image/png">
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+        <button type="button" class="action btn-primary" id="store-icon-upload" disabled>Upload icon</button>
+        <button type="button" class="action btn-primary" id="store-save">Save store settings</button>
+      </div>
+      <div id="store-status" class="current-value" style="margin-top:8px"></div>
+      <div id="store-msg"></div>
     </div>
 
     <!-- Lets a developer (or admin) grant OTHER accounts early access to this game's leaderboard
