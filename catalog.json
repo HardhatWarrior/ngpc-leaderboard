@@ -1,5 +1,5 @@
 {
-  "rev": 5,
+  "rev": 6,
   "games": [
     {
       "slug": "2k",
@@ -172,10 +172,10 @@
       "name": "Xenon 2",
       "author": "NAPOMEX",
       "version": "0.7.1",
-      "rom_rev": 2,
+      "rom_rev": 4,
       "rom_size": 3099740,
-      "rom_sha256": "df966b3034de8047210921b4c87690265278e287a601b0814cc05133e4aaff1c",
-      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2Fxn%2Fxenon.ngp?alt=media&token=2ac28e81-78bf-43cf-9091-d95ef36d1193",
+      "rom_sha256": "be958dff575437e71fbc7399b802ef5dcef2830abac96e5e65586b6795dc273e",
+      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2Fxn%2Fxenon_scorelink_20261101.ngp?alt=media&token=0a5b7983-ff2f-4c4e-820e-42cfc8e39aaf",
       "icon_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fxn%2Ficon.png?alt=media&token=d46140bc-dec9-4c0b-9a77-3fe7301ab614",
       "screenshots": [
         "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/submissions%2FpLUkotuyUnMeZ8M3h8hRFmkZRgq1%2FiqSh6MZDWIomNjy5ZVv7%2Fscreenshot.png?alt=media&token=06059041-ef6d-41fb-8b2b-71df73c22754"
