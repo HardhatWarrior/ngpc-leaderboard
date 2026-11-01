@@ -308,6 +308,23 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
+      // Ghost 'N Goblins - A Portal Too Far: game, initials, score (8 digits, 1..99999999), stage reached (1..7),
+      // timeBonus (0..score; points earned from stage completion), source, submittedAt, required uid/username.
+      // The payload's CRC-16 and version digit are verified by the page and not stored.
+      function isGhostNGoblinsScore(d) {
+        return d.game == 'GG'
+          && d.keys().hasOnly(['game', 'initials', 'score', 'stage', 'timeBonus', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.score is int && d.score >= 1 && d.score <= 99999999
+          && d.stage is int && d.stage >= 1 && d.stage <= 7
+          && d.timeBonus is int && d.timeBonus >= 0 && d.timeBonus <= d.score
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
       // Over Rev: game, initials (1-8 chars, not 3 -- this game's QR carries a free-typed name,
       // not fixed initials), rules/course/car/tune/mode/difficulty/transmission/ticks/won/
       // localRecord/event/sequence/raw, source, submittedAt, required uid/username. Sorted
@@ -823,6 +840,7 @@ service cloud.firestore {
       // '_', so every other game's add() is unaffected.
       allow create: if (((request.resource.data.game == 'BATMAN' && isBatmanScore(request.resource.data)) && ((request.resource.data.kind == 'overall' && scoreId == 'BATMAN_' + request.auth.uid) || (request.resource.data.kind == 'stage' && scoreId == 'BATMAN_' + request.auth.uid + '_' + string(request.resource.data.stage)))) || (request.resource.data.game == 'BW' && isBowlingScore(request.resource.data)) || (request.resource.data.game == 'TT' && isTetrisScore(request.resource.data)) || (request.resource.data.game == 'YZ' && isYahtzeeScore(request.resource.data)) || (request.resource.data.game == 'FK' && isFarkleScore(request.resource.data)) || (request.resource.data.game == '2K' && is2048Score(request.resource.data)) || (request.resource.data.game == 'OV' && isOverRevScore(request.resource.data)) || (request.resource.data.game == 'GD' && isGardeniaScore(request.resource.data)) || (request.resource.data.game == 'SD' && isSudokuScore(request.resource.data)) || (request.resource.data.game == 'XN' && isXenon2Score(request.resource.data)) || (request.resource.data.game == 'BK' && isBreakoutScore(request.resource.data)) || (request.resource.data.game == 'MS' && isMinesweeperScore(request.resource.data)) || (request.resource.data.game == 'DDMR' && isDonTDieMrRobotScore(request.resource.data)) || (request.resource.data.game == 'RVNG' && isFruityPalsRevengeScore(request.resource.data)) || (request.resource.data.game == 'HGS' && isHoratioGoesSnowboardingScore(request.resource.data)) || (request.resource.data.game == 'FU' && isFurryScore(request.resource.data)) || (request.resource.data.game == 'CA' && isCarcassonneScore(request.resource.data))
           || (request.resource.data.game == 'SB' && isShutTheBoxScore(request.resource.data))
+          || (request.resource.data.game == 'GG' && isGhostNGoblinsScore(request.resource.data))
           || ((request.resource.data.game == 'SK' && isSokobanScore(request.resource.data)) && scoreId == 'SK_' + request.auth.uid)
           || ((request.resource.data.game == 'RD' && isRedDragonScore(request.resource.data)) && scoreId == 'RD_' + request.auth.uid + '_' + request.resource.data.heroId)
           || ((request.resource.data.game == 'PERSIA' && isPersiaScore(request.resource.data)) && scoreId == 'PERSIA_' + request.auth.uid)
