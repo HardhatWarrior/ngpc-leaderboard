@@ -1,5 +1,5 @@
 {
-  "rev": 4,
+  "rev": 5,
   "games": [
     {
       "slug": "2k",
@@ -166,6 +166,26 @@
       "store_allowed": true,
       "downloads": 56,
       "added": "2026-09-17"
+    },
+    {
+      "slug": "xn",
+      "name": "Xenon 2",
+      "author": "NAPOMEX",
+      "version": "0.7.1",
+      "rom_rev": 2,
+      "rom_size": 3099740,
+      "rom_sha256": "df966b3034de8047210921b4c87690265278e287a601b0814cc05133e4aaff1c",
+      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2Fxn%2Fxenon.ngp?alt=media&token=2ac28e81-78bf-43cf-9091-d95ef36d1193",
+      "icon_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fxn%2Ficon.png?alt=media&token=d46140bc-dec9-4c0b-9a77-3fe7301ab614",
+      "screenshots": [
+        "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/submissions%2FpLUkotuyUnMeZ8M3h8hRFmkZRgq1%2FiqSh6MZDWIomNjy5ZVv7%2Fscreenshot.png?alt=media&token=06059041-ef6d-41fb-8b2b-71df73c22754"
+      ],
+      "blurb": "Bitmap Brothers' legendary shmup, ported to the NGPC.",
+      "description": "Xenon 2 Megablast is the classic Bitmap Brothers vertical shoot ’em up from the Amiga. Blast through waves of alien hordes, collect credits, visit the shop to upgrade your ship with new weapons and face huge end bosses. Now ported to the Neo Geo Pocket Color, including voice output on real hardware.",
+      "save_compatible_since": 1,
+      "store_allowed": true,
+      "downloads": 83,
+      "added": "2026-09-20"
     }
   ]
 }

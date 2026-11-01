@@ -1,0 +1,18 @@
+{
+  "slug": "xn",
+  "order": "desc",
+  "scores": [
+    {
+      "name": "NAPOMEX",
+      "initials": "NAP",
+      "score": 50150,
+      "date": "2026-09-20"
+    },
+    {
+      "name": "HARDHATWARRIOR",
+      "initials": "DJD",
+      "score": 3820,
+      "date": "2026-09-20"
+    }
+  ]
+}
