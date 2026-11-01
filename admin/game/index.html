@@ -275,6 +275,10 @@
       </label>
       <button type="button" class="action btn-primary" id="rom-upload" disabled>Upload ROM</button>
       <div id="rom-msg"></div>
+      <div id="updated-badge-row" hidden style="margin-top:12px">
+      <div class="current-value">This game currently shows an <b>UPDATED</b> badge on the main page (expires automatically 30 days after upload).</div>
+      <button type="button" class="action" style="background:transparent;border:1px solid var(--border);color:var(--dim)" id="clear-updated">Turn off UPDATED badge now</button>
+      </div>
     </div>
 
     <!-- Free-text blurb + a link back to the developer's own site (X/itch/personal page/etc) --
@@ -311,18 +315,6 @@
       <div id="game-manual-msg"></div>
     </div>
 
-    <!-- Admin only: who the game's developer is (games/{slug}.developerUid) -- the account that can
-         manage this page, is credited on a single-player game's about page, and gets coming-soon
-         preview access. Set automatically when a submission is approved; this is how a game added
-         without one (e.g. from /admin/add-game/) gets assigned or reassigned afterward. -->
-    <div id="game-dev-block" style="margin-top:20px" hidden>
-      <div class="field-label">Developer</div>
-      <div class="current-value" id="game-dev-current"></div>
-      <input type="text" id="game-dev-input" list="game-dev-list" placeholder="Start typing a username (blank = none)" autocomplete="off">
-      <datalist id="game-dev-list"></datalist>
-      <button type="button" class="action btn-primary" id="game-dev-save" style="margin-top:8px">Save developer</button>
-      <div id="game-dev-msg"></div>
-    </div>
 
     <!-- Cartridge store: the opt-in and the details the NGPC cartridge store (Wi-Fi adapter) lists this game with.
          catalog.json is built from games/{slug}; a game appears there only with the opt-in ticked, a ROM, an icon and a
@@ -365,10 +357,6 @@
     </div>
 
 
-    <div id="updated-badge-row" hidden style="margin-top:16px">
-      <div class="current-value">This game currently shows an <b>UPDATED</b> badge on the main page (expires automatically 30 days after upload).</div>
-      <button type="button" class="action" style="background:transparent;border:1px solid var(--border);color:var(--dim)" id="clear-updated">Turn off UPDATED badge now</button>
-    </div>
 
     <!-- Title screen + up to two extra screenshots/GIFs, stored on this same games/{slug} doc
          (titleImage/extraScreenshot1Path/extraScreenshot2Path) -- titleImage also doubles as the
@@ -530,10 +518,23 @@
        scoresArchive/ (kept as data, just off the live board) in one pass -- see the handler. -->
   <section class="panel" id="reset-panel" hidden>
     <div class="panel-header collapsed" data-toggle="reset-body" role="button" tabindex="0" aria-expanded="false">
-      <h2 style="margin:0">Reset Leaderboard <span class="spec-note">(admin only)</span></h2>
+      <h2 style="margin:0">Admin <span class="spec-note">(admin only)</span></h2>
       <span class="chevron">&#9660;</span>
     </div>
     <div class="panel-body" id="reset-body" hidden style="margin-top:14px">
+    <!-- Admin only: who the game's developer is (games/{slug}.developerUid) -- the account that can
+         manage this page, is credited on a single-player game's about page, and gets coming-soon
+         preview access. Set automatically when a submission is approved; this is how a game added
+         without one (e.g. from /admin/add-game/) gets assigned or reassigned afterward. -->
+    <div id="game-dev-block" hidden>
+      <div class="field-label">Developer</div>
+      <div class="current-value" id="game-dev-current"></div>
+      <input type="text" id="game-dev-input" list="game-dev-list" placeholder="Start typing a username (blank = none)" autocomplete="off">
+      <datalist id="game-dev-list"></datalist>
+      <button type="button" class="action btn-primary" id="game-dev-save" style="margin-top:8px">Save developer</button>
+      <div id="game-dev-msg"></div>
+    </div>
+      <div class="field-label" style="margin-top:20px">Reset leaderboard</div>
       <div class="current-value" style="margin-bottom:6px">Moves every submission for this game off the live board into an archive collection (<b>scoresArchive</b>) so the data is kept. Players can submit fresh scores right away. This can&rsquo;t be undone from this page.</div>
       <input type="text" id="reset-confirm-input" placeholder="" autocomplete="off">
       <button type="button" class="action btn-primary" id="reset-run" style="margin-top:10px" disabled>Archive &amp; reset</button>
