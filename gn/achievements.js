@@ -856,7 +856,8 @@ function makeTaleCore(D) {
   }
   function mstStep(f) {
     var c = lvCap(f);
-    return c >= (D.lvZ || 99) ? 5000 : c >= (D.lvY || 99) ? 4000 : c >= (D.lvX || 99) ? 3000 : MST.step;
+    var s = c >= (D.lvZ || 99) ? 5000 : c >= (D.lvY || 99) ? 4000 : c >= (D.lvX || 99) ? 3000 : MST.step;
+    return (s >> 3) * (8 + Math.min(D.ngpMax, f.ngp || 0));
   }
   function stats(f) {
     var row = D.levels[f.lv - 1];
@@ -1041,7 +1042,7 @@ function makeTaleCore(D) {
   function codeVersion(syms) { return syms.length ? syms[0] >> 1 : 0; }
   return { farFix: farFix, farJ: farJ, v15of: v15of, needs15: needs15, verOf: verOf, ybeCount: ybeCount, zbeCount: zbeCount, bitsOf: bitsOf, xbeCount: xbeCount, bestBits: bestBits, bestHex: bestHex, bestCount: bestCount, v9of: v9of, v9Fit: v9Fit, ttl1Of: ttl1Of, artHas: artHas, encode: encode, decode: decode, migrate: migrate, lvCap: lvCap, lvTop: lvTop,
  keyMigrate: keyMigrate, keepMigrate: keepMigrate, towerFit: towerFit, v8of: v8of, ngqPicks: ngqPicks, arcOf: arcOf, causeOf: causeOf, dayWord: dayWord, qdHas: qdHas, checkFile: checkFile, fitNotes: fitNotes, placeNotes: placeNotes, landing: landing,
-           parseCode: parseCode, codeRows: codeRows, stats: stats, kindAt: kindAt, isGear: isGear, kindOf: kindOf,
+           parseCode: parseCode, codeRows: codeRows, stats: stats, mstStep: mstStep, kindAt: kindAt, isGear: isGear, kindOf: kindOf,
            clone: clone, codeVersion: codeVersion, Bad: Bad, FL_MASK: FL_MASK, KINDS: KINDS };
 }
 if (typeof module !== "undefined") module.exports = makeTaleCore;

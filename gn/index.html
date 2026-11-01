@@ -1130,7 +1130,8 @@ function makeTaleCore(D) {
   }
   function mstStep(f) {
     var c = lvCap(f);
-    return c >= (D.lvZ || 99) ? 5000 : c >= (D.lvY || 99) ? 4000 : c >= (D.lvX || 99) ? 3000 : MST.step;
+    var s = c >= (D.lvZ || 99) ? 5000 : c >= (D.lvY || 99) ? 4000 : c >= (D.lvX || 99) ? 3000 : MST.step;
+    return (s >> 3) * (8 + Math.min(D.ngpMax, f.ngp || 0));
   }
   function stats(f) {
     var row = D.levels[f.lv - 1];
@@ -1315,7 +1316,7 @@ function makeTaleCore(D) {
   function codeVersion(syms) { return syms.length ? syms[0] >> 1 : 0; }
   return { farFix: farFix, farJ: farJ, v15of: v15of, needs15: needs15, verOf: verOf, ybeCount: ybeCount, zbeCount: zbeCount, bitsOf: bitsOf, xbeCount: xbeCount, bestBits: bestBits, bestHex: bestHex, bestCount: bestCount, v9of: v9of, v9Fit: v9Fit, ttl1Of: ttl1Of, artHas: artHas, encode: encode, decode: decode, migrate: migrate, lvCap: lvCap, lvTop: lvTop,
  keyMigrate: keyMigrate, keepMigrate: keepMigrate, towerFit: towerFit, v8of: v8of, ngqPicks: ngqPicks, arcOf: arcOf, causeOf: causeOf, dayWord: dayWord, qdHas: qdHas, checkFile: checkFile, fitNotes: fitNotes, placeNotes: placeNotes, landing: landing,
-           parseCode: parseCode, codeRows: codeRows, stats: stats, kindAt: kindAt, isGear: isGear, kindOf: kindOf,
+           parseCode: parseCode, codeRows: codeRows, stats: stats, mstStep: mstStep, kindAt: kindAt, isGear: isGear, kindOf: kindOf,
            clone: clone, codeVersion: codeVersion, Bad: Bad, FL_MASK: FL_MASK, KINDS: KINDS };
 }
 if (typeof module !== "undefined") module.exports = makeTaleCore;
@@ -1420,7 +1421,7 @@ if (typeof module !== "undefined") module.exports = makeTaleFarPublic;
     var row = D.levels[f.lv - 1], bonus = 3 * pop(f.saved);
     var wp = f.weapon ? D.items[f.weapon].power : 0, ap = f.armor ? D.items[f.armor].power : 0;
     return {
-      maxhp: Math.min(255, row[1] + f.b_hp), maxmp: row[2] + (f.b_mp || 0),
+      maxhp: TC.stats(f)[0], maxmp: TC.stats(f)[1],
       atk: Math.min(255, row[3] + bonus + f.b_atk + wp), def: Math.min(255, row[4] + bonus + f.b_def + ap), agi: row[5]
     };
   }
@@ -1716,8 +1717,8 @@ if (typeof module !== "undefined") module.exports = makeTaleFarPublic;
       xpLbl = f.xp + " / " + nxt + " XP to LV " + (f.lv + 1);
     } else {
       var past = f.xp - row[0];
-      xpPct = Math.max(0, Math.min(100, 100 * past / D.mst.step));
-      xpLbl = past + " / " + D.mst.step + " XP to the next MASTERY POINT";
+      xpPct = Math.max(0, Math.min(100, 100 * past / TC.mstStep(f)));
+      xpLbl = past + " / " + TC.mstStep(f) + " XP to the next MASTERY POINT";
     }
     $("p-hero").innerHTML =
       '<h2>Status</h2><div class="hero-top"><span class="hero-name">ARDEN</span><span class="hero-lv">LV ' + f.lv + "</span>" +
