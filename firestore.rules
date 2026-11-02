@@ -142,6 +142,9 @@ service cloud.firestore {
           && request.resource.data.keys().hasOnly(['recoveryEmail'])
           && (!('recoveryEmail' in request.resource.data) || request.resource.data.recoveryEmail is string);
         allow delete: if request.auth != null && request.auth.uid == uid && docId == 'contact';
+        // private/notice: a pop-up note an admin leaves for this player (auth.js shows it on sign-in). Only an
+        // admin writes it (the admin script uses the Admin SDK); the player can clear it once they have read it.
+        allow delete: if request.auth != null && request.auth.uid == uid && docId == 'notice';
       }
     }
 

@@ -1036,6 +1036,11 @@ window.NGPC_AUTH = (function(){
     #acct-new{ background:var(--danger,#e5615a); color:#fff; font-size:9px; font-weight:700; letter-spacing:.06em; padding:2px 5px; border-radius:999px; text-decoration:none; line-height:1.3; }
     #acct-new[hidden]{ display:none; }
     .acct-link{ background:none; border:none; color:var(--accent2); font:inherit; font-size:12px; cursor:pointer; padding:0; text-decoration:underline; width:auto; }
+    #notice-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:1100; }
+    #notice-modal{ background:var(--panel); border:1px solid var(--accent2); border-radius:14px; padding:22px; width:100%; max-width:380px; }
+    #notice-modal h3{ margin:0 0 10px; font-size:16px; color:var(--cream); }
+    #notice-modal p{ margin:0 0 16px; font-size:13.5px; line-height:1.5; color:var(--cream); white-space:pre-line; }
+    #notice-ok{ background:var(--accent); color:var(--accent-ink); border:1px solid var(--accent); border-radius:8px; padding:9px 18px; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
     #auth-overlay{ position:fixed; inset:0; background:rgba(0,0,0,.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:1000; }
     #auth-overlay[hidden]{ display:none; }
     #auth-modal{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:22px; width:100%; max-width:340px; position:relative; }
@@ -1277,6 +1282,26 @@ window.NGPC_AUTH = (function(){
         inboxEl.hidden = false;
       }catch(e){ /* leave hidden */ }
     }
+    // A pop-up note an admin left for this player (users/{uid}/private/notice = {title, text}); shown once per
+    // sign-in until they press OK, which deletes it. Never throws: no note or a failed read shows nothing.
+    async function showNotice(user){
+      const old = document.getElementById('notice-overlay'); if(old) old.remove();
+      if(!user) return;
+      try{
+        const ref = db.collection('users').doc(user.uid).collection('private').doc('notice');
+        const snap = await ref.get();
+        if(!snap.exists || !currentUser || currentUser.uid !== user.uid) return;
+        const d = snap.data();
+        const ov = document.createElement('div'); ov.id = 'notice-overlay';
+        const box = document.createElement('div'); box.id = 'notice-modal';
+        box.setAttribute('role','dialog'); box.setAttribute('aria-modal','true');
+        const h = document.createElement('h3'); h.textContent = String(d.title || 'A message from NGPC High Scores');
+        const p = document.createElement('p'); p.textContent = String(d.text || '');
+        const ok = document.createElement('button'); ok.type = 'button'; ok.id = 'notice-ok'; ok.textContent = 'OK';
+        ok.addEventListener('click', ()=>{ ov.remove(); ref.delete().catch(()=>{}); });
+        box.append(h, p, ok); ov.appendChild(box); document.body.appendChild(ov); ok.focus();
+      }catch(e){ /* leave hidden */ }
+    }
     btnEl.addEventListener('click', ()=>{
       if(signedIn) signOutNow();
       else modal.openModal('signin');
@@ -1291,6 +1316,7 @@ window.NGPC_AUTH = (function(){
         btnEl.textContent = 'Sign Out';
         refreshAdminBadge(user);
         refreshInbox(user);
+        showNotice(user);
         ownerEl.hidden = user.uid !== ADMIN_UID;
         badgesEl.hidden = location.pathname.indexOf('/achievements') === 0;
         if(user.avatar){
