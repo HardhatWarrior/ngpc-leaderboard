@@ -233,6 +233,10 @@
 
   footer{ text-align:center; color:var(--dim); font-size:11px; }
   footer a{ color:var(--accent2); }
+  .tag-suggestions{ position:absolute; top:100%; left:0; right:0; margin-top:4px; background:var(--panel2); border:1px solid var(--border); border-radius:8px; max-height:180px; overflow-y:auto; z-index:5; box-shadow:0 8px 20px rgba(0,0,0,.35); }
+  .tag-suggestion{ display:block; width:100%; text-align:left; background:none; border:none; color:var(--cream); font-size:12.5px; padding:8px 10px; cursor:pointer; }
+  .tag-suggestion:hover, .tag-suggestion.active{ background:rgba(92,143,214,.15); }
+  .tag-suggestions[hidden]{ display:none; }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
@@ -330,7 +334,10 @@
     <div class="panel-body" id="notice-body" hidden>
       <p class="hint">Leaves a pop-up note that appears the next time that player is signed in, and stays until they press OK. Use it to reach someone we have no email for.</p>
       <label class="field-label" for="notice-user">Username</label>
-      <input type="text" id="notice-user" maxlength="16" autocomplete="off" style="max-width:220px">
+      <div style="position:relative;max-width:220px">
+        <input type="text" id="notice-user" maxlength="16" autocomplete="off" placeholder="Type a username&hellip;" style="width:100%">
+        <div class="tag-suggestions" id="notice-suggestions" hidden></div>
+      </div>
       <div id="notice-pending" class="hint" style="margin-top:8px"></div>
       <label class="field-label" for="notice-title" style="margin-top:12px">Title</label>
       <input type="text" id="notice-title" maxlength="80" style="width:100%;max-width:420px">
@@ -1204,7 +1211,7 @@
     }
     contentEl.hidden = false;
   // ---- Message a Player: users/{uid}/private/notice (auth.js shows it as a pop-up on sign-in) ----
-  (function(){
+  const setNoticeNames = (function(){
     const db = NGPC_AUTH.db;
     const uEl = el('notice-user'), tEl = el('notice-title'), xEl = el('notice-text'), mEl = el('notice-msg'), pEl = el('notice-pending');
     async function refFor(){
@@ -1242,11 +1249,35 @@
         await ref.delete(); showPending(); mEl.textContent = 'Removed.';
       }catch(e){ mEl.textContent = 'Couldn’t remove: ' + ((e&&e.message)||'error'); }
     });
+    // Type-ahead over the real usernames (set once the player list has loaded), same behaviour as the testers entry.
+    const sEl = el('notice-suggestions');
+    let names = [], active = -1;
+    const close = ()=>{ sEl.hidden = true; sEl.innerHTML = ''; active = -1; };
+    const matches = ()=>{ const q = uEl.value.trim().toLowerCase(); return q ? names.filter(n=>n.toLowerCase().includes(q)).slice(0, 8) : []; };
+    const draw = (m)=>{
+      if(!m.length){ close(); return; }
+      sEl.innerHTML = m.map((n,i)=>'<button type="button" class="tag-suggestion'+(i===active?' active':'')+'">'+escapeHtml(n)+'</button>').join('');
+      sEl.hidden = false;
+    };
+    const pick = (n)=>{ uEl.value = n; close(); showPending(); };
+    sEl.addEventListener('mousedown', (e)=>{ const b = e.target.closest('button'); if(!b) return; e.preventDefault(); pick(b.textContent); });
+    uEl.addEventListener('input', ()=>{ active = -1; draw(matches()); });
+    uEl.addEventListener('focus', ()=>{ if(uEl.value.trim()) draw(matches()); });
+    uEl.addEventListener('blur', ()=>setTimeout(close, 150));
+    uEl.addEventListener('keydown', (e)=>{
+      const m = matches();
+      if(e.key === 'ArrowDown' && m.length){ e.preventDefault(); active = Math.min(active+1, m.length-1); draw(m); }
+      else if(e.key === 'ArrowUp' && m.length){ e.preventDefault(); active = Math.max(active-1, 0); draw(m); }
+      else if(e.key === 'Enter' && active >= 0){ e.preventDefault(); pick(m[active]); }
+      else if(e.key === 'Escape') close();
+    });
     el('notice-content').hidden = false;
+    return (list)=>{ names = list.slice().sort((a,b)=>a.localeCompare(b)); };
   })();
     let users = [];
     try{
       users = await loadUsers(NGPC_AUTH.db);
+      setNoticeNames(users.map(u=>u.username));
     }catch(e){
       statusEl.innerHTML = '<div class="msg err">Couldn’t load players: '+escapeHtml((e&&e.message)||'unknown error')
         +'. If you just added account approval, make sure the updated firestore.rules has been'
