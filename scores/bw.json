@@ -3,9 +3,33 @@
   "order": "desc",
   "scores": [
     {
+      "name": "ASOBIT",
+      "initials": "GLA",
+      "score": 202,
+      "date": "2026-11-02"
+    },
+    {
+      "name": "ASOBIT",
+      "initials": "GLA",
+      "score": 191,
+      "date": "2026-11-02"
+    },
+    {
+      "name": "ASOBIT",
+      "initials": "GLA",
+      "score": 191,
+      "date": "2026-11-02"
+    },
+    {
       "name": "ICERJO",
       "initials": "AEJ",
       "score": 189,
+      "date": "2026-11-02"
+    },
+    {
+      "name": "ASOBIT",
+      "initials": "GLA",
+      "score": 184,
       "date": "2026-11-02"
     },
     {
@@ -21,6 +45,12 @@
       "date": "2026-10-30"
     },
     {
+      "name": "ASOBIT",
+      "initials": "GLA",
+      "score": 180,
+      "date": "2026-11-02"
+    },
+    {
       "name": "HARDHATWARRIOR",
       "initials": "DJD",
       "score": 180,
@@ -31,36 +61,6 @@
       "initials": "GLA",
       "score": 175,
       "date": "2026-10-31"
-    },
-    {
-      "name": "JAJABINX35",
-      "initials": "ALI",
-      "score": 171,
-      "date": "2026-11-01"
-    },
-    {
-      "name": "ICERJO",
-      "initials": "AEJ",
-      "score": 157,
-      "date": "2026-10-29"
-    },
-    {
-      "name": "HARDHATWARRIOR",
-      "initials": "DJD",
-      "score": 157,
-      "date": "2026-10-31"
-    },
-    {
-      "name": "ICERJO",
-      "initials": "AEJ",
-      "score": 155,
-      "date": "2026-10-29"
-    },
-    {
-      "name": "ICERJO",
-      "initials": "AEJ",
-      "score": 143,
-      "date": "2026-10-26"
     }
   ]
 }
