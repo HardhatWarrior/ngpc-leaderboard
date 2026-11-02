@@ -145,6 +145,12 @@ service cloud.firestore {
         // private/notice: a pop-up note an admin leaves for this player (auth.js shows it on sign-in). Only an
         // admin writes it (the admin script uses the Admin SDK); the player can clear it once they have read it.
         allow delete: if request.auth != null && request.auth.uid == uid && docId == 'notice';
+        allow delete: if isAdmin() && docId == 'notice';
+        allow create, update: if isAdmin() && docId == 'notice'
+          && request.resource.data.keys().hasOnly(['title', 'text', 'createdAt'])
+          && request.resource.data.title is string && request.resource.data.title.size() <= 80
+          && request.resource.data.text is string && request.resource.data.text.size() <= 600
+          && request.resource.data.createdAt is int;
       }
     }
 
