@@ -3,6 +3,12 @@
   "order": "desc",
   "scores": [
     {
+      "name": "ICERJO",
+      "initials": "AEJ",
+      "score": 189,
+      "date": "2026-11-02"
+    },
+    {
       "name": "HARDHATWARRIOR",
       "initials": "DJD",
       "score": 183,
@@ -55,12 +61,6 @@
       "initials": "AEJ",
       "score": 143,
       "date": "2026-10-26"
-    },
-    {
-      "name": "HARDHATWARRIOR",
-      "initials": "DJD",
-      "score": 137,
-      "date": "2026-10-31"
     }
   ]
 }
