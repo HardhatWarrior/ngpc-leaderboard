@@ -1132,7 +1132,7 @@ function pop(n) { var c = 0; while (n) { c += n & 1; n >>= 1; } return c; }
     var bsN = D.bsN || 129, bs = f.best ? TC.bestCount(f) : 0;
     add("Bestiary", "FIRST PAGE", bs + " / " + bsN + " entries", 1, bs > 0);
     add("Bestiary", "HALF THE BESTIARY", Math.ceil(bsN / 2) + " entries", 2, 2 * bs >= bsN);
-    add("Bestiary", "THE WHOLE BESTIARY", "every monster and boss, every NEW GAME+ colour", 3, bs === bsN, true);
+    add("Bestiary", "THE WEST'S BESTIARY", "every home-seas monster and boss, every NEW GAME+ color", 3, bs === bsN, true);
     var FB = farAch(f);
     FB.forEach(function (sea, i) {
       var t = sea.r ? farText(i) : null;

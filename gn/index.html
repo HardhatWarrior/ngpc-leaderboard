@@ -1597,7 +1597,7 @@ if (typeof module !== "undefined") module.exports = makeTaleFarPublic;
     var bsN = D.bsN || 129, bs = f.best ? TC.bestCount(f) : 0;
     add("Bestiary", "FIRST PAGE", bs + " / " + bsN + " entries", 1, bs > 0);
     add("Bestiary", "HALF THE BESTIARY", Math.ceil(bsN / 2) + " entries", 2, 2 * bs >= bsN);
-    add("Bestiary", "THE WHOLE BESTIARY", "every monster and boss, every NEW GAME+ colour", 3, bs === bsN, true);
+    add("Bestiary", "THE WEST'S BESTIARY", "every home-seas monster and boss, every NEW GAME+ color", 3, bs === bsN, true);
     var FB = farAch(f);
     FB.forEach(function (sea, i) {
       var t = sea.r ? farText(i) : null;
@@ -1709,7 +1709,7 @@ if (typeof module !== "undefined") module.exports = makeTaleFarPublic;
         for (var k = 0; k < cnt; k++) r.push([be.n[k] + ["", " +I", " +II"][v], be.w[k], !!bits[k + [0, FAR[s][2], FAR[s][3]][v]]]);
         return r;
       };
-      out += sec(be.t, [["Own colours (the first journey you reach this sea)", far(0, n)],
+      out += sec(be.t, [["Own colors (the first journey you reach this sea)", far(0, n)],
                         ["+I (your 2nd, 4th and 6th journeys here)", far(1, m1)], ["+II (your 3rd and 5th journeys here)", far(2, m1)]]);
     }
     return '<h2>Bestiary <span class="dim" style="text-transform:none;letter-spacing:0">(' + fnd + "/" + tot + ")</span></h2>" +
