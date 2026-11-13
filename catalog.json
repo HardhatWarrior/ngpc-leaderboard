@@ -19,7 +19,7 @@
       "description": "2048 — Every Move Counts.",
       "save_compatible_since": 1,
       "store_allowed": true,
-      "downloads": 62,
+      "downloads": 63,
       "added": "2026-09-18"
     },
     {
@@ -60,7 +60,7 @@
       "description": "Neo Bowling: the alley that fits in your pocket.",
       "save_compatible_since": 1,
       "store_allowed": true,
-      "downloads": 130,
+      "downloads": 131,
       "added": "2026-09-16"
     },
     {
@@ -81,7 +81,7 @@
       "description": "Sweep for the mines, but choose wisely, or BOOM!",
       "save_compatible_since": 1,
       "store_allowed": true,
-      "downloads": 57,
+      "downloads": 59,
       "added": "2026-09-22"
     },
     {
@@ -101,7 +101,7 @@
       "description": "Roll the dice, flip the tiles, and shut the box! Test your luck and strategy in this classic game of numbers. Can you close every tile?",
       "save_compatible_since": 1,
       "store_allowed": true,
-      "downloads": 8,
+      "downloads": 9,
       "added": "2026-10-24"
     },
     {
@@ -143,7 +143,7 @@
       "description": "Think Ahead. Push to Victory!",
       "save_compatible_since": 1,
       "store_allowed": true,
-      "downloads": 27,
+      "downloads": 28,
       "added": "2026-10-01"
     },
     {
@@ -184,7 +184,7 @@
       "description": "Xenon 2 Megablast is the classic Bitmap Brothers vertical shoot ’em up from the Amiga. Blast through waves of alien hordes, collect credits, visit the shop to upgrade your ship with new weapons and face huge end bosses. Now ported to the Neo Geo Pocket Color, including voice output on real hardware.",
       "save_compatible_since": 1,
       "store_allowed": true,
-      "downloads": 90,
+      "downloads": 91,
       "added": "2026-09-20"
     }
   ]
