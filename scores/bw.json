@@ -3,6 +3,12 @@
   "order": "desc",
   "scores": [
     {
+      "name": "HARDHATWARRIOR",
+      "initials": "DJD",
+      "score": 276,
+      "date": "2026-11-13"
+    },
+    {
       "name": "ASOBIT",
       "initials": "GLA",
       "score": 202,
@@ -55,12 +61,6 @@
       "initials": "DJD",
       "score": 180,
       "date": "2026-10-27"
-    },
-    {
-      "name": "ASOBIT",
-      "initials": "GLA",
-      "score": 175,
-      "date": "2026-10-31"
     }
   ]
 }
