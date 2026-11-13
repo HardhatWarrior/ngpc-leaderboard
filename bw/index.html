@@ -912,6 +912,9 @@
   const BW_PRIZE_RAW = [175, 200, 225, 250, 275];   // raw (handicap-free) game each prize level needs
   function prizeLevelFor(raw){ return BW_PRIZE_RAW.filter(t=>raw >= t).length; }
   function prizeBallNames(level){ return BW_BALL_COLOURS.slice(6, 6 + level); }
+  // the found balls (a v3 code's 9 bits, cart ids 11-19, calendar order)
+  const BW_FOUND_BALLS = ['HEARTS','SHAMROCK','EASTER EGG','LIBERTY','PUMPKIN','HARVEST','SNOWFLAKE','FIREWORKS','LUCKY 13'];
+  function foundBallNames(bits){ return BW_FOUND_BALLS.filter((n,i)=>(bits >> i) & 1); }
   function xfCrc(syms){
     let crc = 0xFFFF;
     const feed = b => { crc ^= b << 8; for(let i=0;i<8;i++) crc = (crc & 0x8000) ? ((crc << 1) ^ 0x1021) & 0xFFFF : (crc << 1) & 0xFFFF; };
@@ -1679,11 +1682,17 @@
     if(Number.isInteger(career.prize)) return career.prize;
     return career.hasBest ? prizeLevelFor(career.bestScore - career.bestHcp) : 0;
   }
-  function career1pRows(c, prize){
+  // the holiday balls and LUCKY 13 kept: only the raw (owner-only) code carries them
+  function careerFound(code){
+    if(code){ try{ return decodeStatsCode(code).found; }catch(e){ /* fall through */ } }
+    return 0;
+  }
+  function career1pRows(c, prize, found){
+    const balls = prize == null ? [] : prizeBallNames(prize).concat(foundBallNames(found || 0));
     return [
       ['Games played', c.games], ['Frames', c.frames], ['Strikes', c.strikes], ['Spares', c.spares], ['Turkeys', c.turkeys],
       ['Best on the cart', c.hasBest ? (c.bestIni + ' ' + c.bestScore + (c.bestHcp ? ' (hcp +' + c.bestHcp + ')' : '')) : '\u2013'],
-      ['Prize balls', prizeBallNames(prize).join(', ') || '\u2013'],
+      ['Prize balls', balls.join(', ') || '\u2013'],
     ].filter(r=>prize != null || r[0] !== 'Prize balls');
   }
   function careerVsRows(c){
@@ -1772,7 +1781,7 @@
     el('career-empty').hidden = !!career;
     el('career-save').textContent = career ? 'Update stats code' : 'Save stats code';
     if(career){
-      el('career-1p').innerHTML = careerRows(career1pRows(career, careerPrize(career, savedCode)));
+      el('career-1p').innerHTML = careerRows(career1pRows(career, careerPrize(career, savedCode), careerFound(savedCode)));
       el('career-vs').innerHTML = careerRows(careerVsRows(career));
       el('career-src').textContent = 'From your stats code, saved ' + fmtWhen(career.submittedAt) + '. Update it any time from HISCORES > STATS CODE on the cart.';
       // The code as the cart made it, only ever shown to its owner: the page reads codes, it never
