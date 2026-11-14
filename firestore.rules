@@ -351,6 +351,32 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
+      // Pocket Sprint (SPR5): one record per QR. recordType C = championship points for a cup, R = full race
+      // time, T = best Time Attack lap. recordValue = points (C) or 60 Hz ticks (R/T); rankValue = 50000 -
+      // points (C) or the ticks (R/T) and is what the boards sort by, ascending. Each exact division
+      // (type + cup/track + mode/traps + laps) is its own board.
+      function isPocketSprintScore(d) {
+        return d.game == 'SPR'
+          && d.keys().hasOnly(['game', 'initials', 'recordType', 'trackCupID', 'modeTraps', 'lapCount', 'recordValue', 'rankValue', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.recordType in ['C', 'R', 'T']
+          && d.trackCupID is int && d.modeTraps is int && d.lapCount is int
+          && d.recordValue is int && d.rankValue is int
+          && (d.recordType == 'C'
+            ? (d.trackCupID >= 0 && d.trackCupID <= 2 && d.modeTraps >= 0 && d.modeTraps <= 2 && d.lapCount in [3, 5, 10]
+               && d.recordValue >= 1 && d.recordValue <= 50000 && d.rankValue == 50000 - d.recordValue)
+            : d.recordType == 'R'
+            ? (d.trackCupID >= 0 && d.trackCupID <= 11 && d.modeTraps >= 0 && d.modeTraps <= 2 && d.lapCount in [3, 5, 10]
+               && d.recordValue >= 1 && d.recordValue <= 65535 && d.rankValue == d.recordValue)
+            : (d.trackCupID >= 0 && d.trackCupID <= 11 && d.modeTraps >= 0 && d.modeTraps <= 1 && d.lapCount == 1
+               && d.recordValue >= 1 && d.recordValue <= 65535 && d.rankValue == d.recordValue))
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
       // Over Rev: game, initials (1-8 chars, not 3 -- this game's QR carries a free-typed name,
       // not fixed initials), rules/course/car/tune/mode/difficulty/transmission/ticks/won/
       // localRecord/event/sequence/raw, source, submittedAt, required uid/username. Sorted
@@ -868,6 +894,7 @@ service cloud.firestore {
           || (request.resource.data.game == 'SB' && isShutTheBoxScore(request.resource.data))
           || (request.resource.data.game == 'GG' && isGhostNGoblinsScore(request.resource.data))
           || (request.resource.data.game == 'PNG' && isPangNGPCScore(request.resource.data))
+          || (request.resource.data.game == 'SPR' && isPocketSprintScore(request.resource.data))
           || ((request.resource.data.game == 'SK' && isSokobanScore(request.resource.data)) && scoreId == 'SK_' + request.auth.uid)
           || ((request.resource.data.game == 'RD' && isRedDragonScore(request.resource.data)) && scoreId == 'RD_' + request.auth.uid + '_' + request.resource.data.heroId)
           || ((request.resource.data.game == 'PERSIA' && isPersiaScore(request.resource.data)) && scoreId == 'PERSIA_' + request.auth.uid)

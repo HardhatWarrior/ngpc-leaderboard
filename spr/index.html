@@ -83,6 +83,15 @@
   #page-content[hidden]{ display:none; }
   .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
   .panel .hint{ margin:0 0 16px; color:var(--dim); font-size:12.5px; line-height:1.5; }
+  .mode-toggle{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+  .mode-btn{
+    width:auto; background:transparent; border:1px solid var(--border); color:var(--dim);
+    border-radius:8px; padding:8px 14px; font:inherit; font-size:12.5px; font-weight:600; cursor:pointer;
+  }
+  .mode-btn:hover{ border-color:var(--accent2); }
+  .mode-btn.active{ border-color:var(--accent); color:var(--cream); background:rgba(92,143,214,.14); }
+
+  select.mode-btn{ background:var(--panel); color:var(--cream); max-width:100%; }
   #board-status{ font-size:12px; color:var(--dim); margin-bottom:10px; min-height:1.4em; }
   .row{ display:grid; grid-template-columns:34px 1fr auto; align-items:center; gap:12px; padding:10px 8px; border-radius:8px; }
   .row ~ .row{ border-top:1px solid var(--border); }
@@ -204,6 +213,14 @@
 
     <section class="panel">
       <h2>Leaderboard</h2>
+      <div class="mode-toggle" id="type-toggle">
+        <button type="button" class="mode-btn" data-type="C">Championship</button>
+        <button type="button" class="mode-btn active" data-type="R">Race</button>
+        <button type="button" class="mode-btn" data-type="T">Time Attack</button>
+      </div>
+      <div class="mode-toggle"><select id="place-select" class="mode-btn" aria-label="Track or cup"></select></div>
+      <div class="mode-toggle" id="mode-toggle"></div>
+      <div class="mode-toggle" id="laps-toggle"></div>
       <div id="board-status"></div>
       <div id="board"></div>
     </section>
@@ -230,34 +247,33 @@
   const btnScan = el('btn-scan'), scanLive = el('scan-live'), scanFallback = el('scan-fallback');
   const scanVideo = el('scan-video'), scanFile = el('scan-file');
 
+  const div = { type:'R', place:0, mode:0, laps:3 };   // the exact division on screen: records never mix across these
   let db = null, pending = null, unsubscribeBoard = null;
 
+  // Records: C = best championship points for a cup, R = best full race time, T = best Time Attack lap.
+  // record_value = points (C) or 60 Hz ticks (R/T); rank_value = 50000 - points (C) or the ticks (R/T), sorted ASC.
+  const LAPS_OK = [3,5,10];
   function parsePocketSprintPayload(text){
     if(text.length !== 23) return {error:"That code is the wrong length — rescan with the whole code in frame."};
-    const formatVersionStr = text.slice(3,4);
-    if(!/^\d{1}$/.test(formatVersionStr)) return {error:"That code has an unreadable format version."};
-    const formatVersion = parseInt(formatVersionStr,10);
+    if(text[3] !== '5') return {error:"That code is from a Pocket Sprint version this page doesn't read."};
     const initials = text.slice(4,7);
     if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
-    const recordTypeStr = text.slice(7,8);
-    if(!/^\d{1}$/.test(recordTypeStr)) return {error:"That code has an unreadable record type."};
-    const recordType = parseInt(recordTypeStr,10);
-    const trackCupIDStr = text.slice(8,10);
-    if(!/^\d{2}$/.test(trackCupIDStr)) return {error:"That code has an unreadable track / cup id."};
-    const trackCupID = parseInt(trackCupIDStr,10);
-    const modeTrapsStr = text.slice(10,11);
-    if(!/^\d{1}$/.test(modeTrapsStr)) return {error:"That code has an unreadable mode / traps."};
-    const modeTraps = parseInt(modeTrapsStr,10);
-    const lapCountStr = text.slice(11,13);
-    if(!/^\d{2}$/.test(lapCountStr)) return {error:"That code has an unreadable lap count."};
-    const lapCount = parseInt(lapCountStr,10);
-    const recordValueStr = text.slice(13,18);
-    if(!/^\d{5}$/.test(recordValueStr)) return {error:"That code has an unreadable record_value."};
-    const recordValue = parseInt(recordValueStr,10);
-    const rankValueStr = text.slice(18,23);
-    if(!/^\d{5}$/.test(rankValueStr)) return {error:"That code has an unreadable rank_value."};
-    const rankValue = parseInt(rankValueStr,10);
-    return { game:QR_GAME_CODE, formatVersion, initials, recordType, trackCupID, modeTraps, lapCount, recordValue, rankValue };
+    const recordType = text[7];
+    if(!/^[CRT]$/.test(recordType)) return {error:"That code has an unreadable record type."};
+    if(!/^\d{15}$/.test(text.slice(8))) return {error:"That code has an unreadable record."};
+    const trackCupID = parseInt(text.slice(8,10),10), modeTraps = parseInt(text[10],10), lapCount = parseInt(text.slice(11,13),10);
+    const recordValue = parseInt(text.slice(13,18),10), rankValue = parseInt(text.slice(18,23),10);
+    if(recordType === 'C'){
+      if(trackCupID > 2 || modeTraps > 2 || LAPS_OK.indexOf(lapCount) < 0) return {error:"That code has an unreadable cup, mode or lap count."};
+      if(recordValue < 1 || recordValue > 50000) return {error:"That code's points are out of range."};
+      if(rankValue !== 50000 - recordValue) return {error:"That code didn't scan cleanly (key mismatch) — rescan it."};
+    } else {
+      if(trackCupID > 11) return {error:"That code has an unreadable track."};
+      if(recordType === 'R' ? (modeTraps > 2 || LAPS_OK.indexOf(lapCount) < 0) : (modeTraps > 1 || lapCount !== 1)) return {error:"That code has an unreadable mode or lap count."};
+      if(recordValue < 1 || recordValue > 65535) return {error:"That code's time is out of range."};
+      if(rankValue !== recordValue) return {error:"That code didn't scan cleanly (key mismatch) — rescan it."};
+    }
+    return { game:QR_GAME_CODE, initials, recordType, trackCupID, modeTraps, lapCount, recordValue, rankValue };
   }
 
   function parsePayload(text){
@@ -283,22 +299,27 @@
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
-  function formatDisplayValue(o){ return String(o.rankValue).padStart(5,'0'); }
+  const CUPS = ['Rookie Rally','Apex Challenge','Crown Circuit'];
+  const TRACKS = ['Park Switchback','Canyon Hairpin','Neon Chicane','Harbour Run','Meadow Forks','Copper Creek','Frost Fang','Dockside Dash','Redline Ridge','Midnight Maze','Storm Coast','Royal Gauntlet'];
+  const MODES = ['Normal','Reverse','Weapons'];
+  const TYPE_NAMES = { C:'Championship', R:'Race', T:'Time Attack' };
 
-  // TODO -- the submission's own "scorecard reconstruction" field asked for something this
-  // generator can't safely auto-implement from free text. The developer's exact request:
-  //   "Sort rank_value ASC within each exact record division. C: record_value is the saved BEST POINTS championship total, including existing completion/win/sweep bonuses; rank_value MUST equal 50000-record_value, so higher actual points rank first. Display C as record_value integer POINTS, not as a time or the inverted ranking key. R/T: record_value is saved elapsed ticks at 60 ticks/second and rank_value MUST equal record_value, so faster times rank first. Display minutes=floor(record_value/3600), seconds=floor(record_value/60)%60, milliseconds=floor(((record_value%60)*1000+30)/60), as mm:ss.mmm. Equal record_value in a division is a tie at stored precision. Validate C points 1..50000 and R/T ticks 1..65535. Do not combine C/R/T, different cups/tracks, modes, lap counts or trap settings in a single ranked division."
-  // Implement it by hand (likely inside renderScorecardHTML and/or formatDisplayValue below),
-  // then delete this comment.
+  // C shows points; R/T show mm:ss.mmm from 60 Hz ticks.
+  function formatDisplayValue(o){
+    if(o.recordType === 'C') return o.recordValue + ' pts';
+    const v = o.recordValue, ms = Math.floor(((v%60)*1000+30)/60);
+    return String(Math.floor(v/3600)).padStart(2,'0')+':'+String(Math.floor(v/60)%60).padStart(2,'0')+'.'+String(ms).padStart(3,'0');
+  }
+  const placeName = (o)=> o.recordType === 'C' ? CUPS[o.trackCupID] : TRACKS[o.trackCupID];
+  const modeName = (o)=> o.recordType === 'T' ? (o.modeTraps ? 'Traps on' : 'Traps off') : MODES[o.modeTraps];
+  const divisionLabel = (o)=> TYPE_NAMES[o.recordType]+' · '+placeName(o)+' · '+modeName(o)+(o.recordType === 'T' ? '' : ' · '+o.lapCount+' laps');
 
   function renderScorecardHTML(data){
-    const rows = '<tr><td>Format Version</td><td class="tk-val tnum">'+data.formatVersion+'</td></tr>'+
-      '<tr><td>Record Type</td><td class="tk-val tnum">'+data.recordType+'</td></tr>'+
-      '<tr><td>Track / Cup Id</td><td class="tk-val tnum">'+data.trackCupID+'</td></tr>'+
-      '<tr><td>Mode / Traps</td><td class="tk-val tnum">'+data.modeTraps+'</td></tr>'+
-      '<tr><td>Lap Count</td><td class="tk-val tnum">'+data.lapCount+'</td></tr>'+
-      '<tr><td>Record_value</td><td class="tk-val tnum">'+data.recordValue+'</td></tr>'+
-      '<tr><td>Rank_value</td><td class="tk-val tnum">'+data.rankValue+'</td></tr>';
+    const rows = '<tr><td>Record</td><td class="tk-val">'+TYPE_NAMES[data.recordType]+'</td></tr>'+
+      '<tr><td>'+(data.recordType === 'C' ? 'Cup' : 'Track')+'</td><td class="tk-val">'+escapeHtml(placeName(data))+'</td></tr>'+
+      '<tr><td>'+(data.recordType === 'T' ? 'Traps' : 'Mode')+'</td><td class="tk-val">'+escapeHtml(modeName(data))+'</td></tr>'+
+      (data.recordType === 'T' ? '' : '<tr><td>Laps</td><td class="tk-val tnum">'+data.lapCount+'</td></tr>')+
+      '<tr><td>'+(data.recordType === 'C' ? 'Points' : 'Time')+'</td><td class="tk-val tnum">'+formatDisplayValue(data)+'</td></tr>';
     return '<table class="tk-sheet">'+rows+'</table>';
   }
 
@@ -317,7 +338,7 @@
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.rankValue!=null?String(data.rankValue):'-')+'</div>'+
+        '<div class="score-val tnum">'+(data.recordValue!=null?formatDisplayValue(data):'-')+'</div>'+
       '</div>';
       const detailHtml = '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data)+'</div>';
       return rowHtml + detailHtml;
@@ -352,18 +373,39 @@
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('rankValue','asc').limit(10);
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('recordType','==',div.type).where('trackCupID','==',div.place).where('modeTraps','==',div.mode).where('lapCount','==',div.type==='T'?1:div.laps).where('approved','==',true).orderBy('rankValue','asc').limit(10);
     unsubscribeBoard = q.onSnapshot(
       (snap)=>{ renderBoard(snap.docs); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
     );
   }
 
+  function btns(host, items, cur, key){
+    host.innerHTML = items.map(it=>'<button type="button" class="mode-btn'+(it.v===cur?' active':'')+'" data-'+key+'="'+it.v+'">'+it.t+'</button>').join('');
+  }
+  function drawSelectors(){
+    document.querySelectorAll('#type-toggle .mode-btn').forEach(b=>b.classList.toggle('active', b.dataset.type===div.type));
+    const places = div.type === 'C' ? CUPS : TRACKS;
+    el('place-select').innerHTML = places.map((n,i)=>'<option value="'+i+'"'+(i===div.place?' selected':'')+'>'+n+'</option>').join('');
+    btns(el('mode-toggle'), (div.type === 'T' ? ['Traps off','Traps on'] : MODES).map((t,v)=>({v,t})), div.mode, 'mode');
+    btns(el('laps-toggle'), div.type === 'T' ? [] : LAPS_OK.map(v=>({v,t:v+' laps'})), div.laps, 'laps');
+  }
+  function setDivision(next){
+    Object.assign(div, next);
+    if(div.type === 'T' && div.mode > 1) div.mode = 0;
+    drawSelectors(); subscribeBoard();
+  }
+  document.querySelectorAll('#type-toggle .mode-btn').forEach(b=>b.addEventListener('click', ()=>setDivision({ type:b.dataset.type, place:0 })));
+  el('place-select').addEventListener('change', (e)=>setDivision({ place:Number(e.target.value) }));
+  el('mode-toggle').addEventListener('click', (e)=>{ const b = e.target.closest('[data-mode]'); if(b) setDivision({ mode:Number(b.dataset.mode) }); });
+  el('laps-toggle').addEventListener('click', (e)=>{ const b = e.target.closest('[data-laps]'); if(b) setDivision({ laps:Number(b.dataset.laps) }); });
+
   function initDb(){
     if(!firebase || !firebase.firestore){ boardStatusEl.innerHTML = '<div class="msg err">Firestore module not available</div>'; return; }
     try{
       db = firebase.firestore();
       boardStatusEl.textContent = '';
+      drawSelectors();
       subscribeBoard();
     }catch(e){
       boardStatusEl.innerHTML = '<div class="msg err">Firestore init failed: '+escapeHtml(e.message)+'</div>';
@@ -386,7 +428,7 @@
     pending = parsed;
     el('confirm-initials').textContent = parsed.initials || '';
     el('confirm-score').textContent = formatDisplayValue(parsed);
-    el('confirm-src').textContent = 'From a scanned QR code';
+    el('confirm-src').textContent = divisionLabel(parsed) + ' · From a scanned QR code';
     el('confirm-scorecard').innerHTML = renderScorecardHTML(parsed);
     confirmMsg.innerHTML = '';
     showStage('confirm');
@@ -584,6 +626,7 @@
     initDb();
     const fromEntry = payloadFromEntry();
     if(fromEntry){
+      setDivision({ type:fromEntry.recordType, place:fromEntry.trackCupID, mode:fromEntry.modeTraps, laps:fromEntry.lapCount === 1 ? div.laps : fromEntry.lapCount });
       openConfirm(fromEntry);
       history.replaceState(null, '', location.pathname);
     }
