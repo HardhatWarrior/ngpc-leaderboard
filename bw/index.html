@@ -677,7 +677,7 @@
 </div>
 
 <script src="/auth.js"></script>
-<script src="/bw/bw-shared.js?v=3"></script>
+<script src="/bw/bw-shared.js?v=4"></script>
 <script>
 (function(){
   "use strict";
@@ -1908,25 +1908,31 @@
   // approved score, which the tournament panel loads) ----
   const TROPHY_SVG = '<svg viewBox="0 0 16 16" aria-hidden="true"><path fill="currentColor" d="M4 1.5h8V5a4 4 0 0 1-3 3.87V11h2.5v1.5h-7V11H7V8.87A4 4 0 0 1 4 5zM2 2.5h1.5V5c0 .3.03.6.09.9A2.5 2.5 0 0 1 2 3.5zM12.5 2.5H14v1a2.5 2.5 0 0 1-1.59 2.4c.06-.3.09-.6.09-.9z"/><rect x="4" y="13" width="8" height="1.5" fill="currentColor"/></svg>';
   function achievementsFor(uid, ownScores, viewer){
-    const perfect = BW_SHARED.perfectGames(ownScores.filter(d=>d.uid === uid));
+    const own = ownScores.filter(d=>d.uid === uid);
+    const perfect = BW_SHARED.perfectGames(own);
+    const c250 = BW_SHARED.clubGames(own, 250), c200 = BW_SHARED.clubGames(own, 200), turkeys = BW_SHARED.turkeyGames(own);
     const titles = (tScores && tournamentVisible(viewer))
       ? BW_SHARED.champions(gameData, tScores, Date.now()).filter(c=>c.entry.k === uid) : [];
-    return {perfect, titles};
+    return {perfect, titles, c250, c200, turkeys};
   }
   // the badges, and a line naming them (the dates of the perfect games, the events won)
   function achHTML(a){
-    if(!a.perfect.length && !a.titles.length) return '';
+    if(!a.perfect.length && !a.titles.length && !a.c200.length && !a.turkeys.length) return '';
     const n = k => k > 1 ? ' <b>\u00d7' + k + '</b>' : '';
     let chips = '', note = [];
     if(a.perfect.length){
       chips += '<span class="ach">300 CLUB' + n(a.perfect.length) + '</span>';
       note.push('Perfect game' + (a.perfect.length > 1 ? 's' : '') + ': ' + a.perfect.map(d=>fmtWhen(d.submittedAt)).join(', '));
     }
+    // 200 / 250 CLUB and TURKEY: chips only (counts), the note stays for perfect games and titles
+    if(a.c250.length) chips += '<span class="ach" title="Verified games of 250 or more">250 CLUB' + n(a.c250.length) + '</span>';
+    if(a.c200.length) chips += '<span class="ach" title="Verified games of 200 or more">200 CLUB' + n(a.c200.length) + '</span>';
+    if(a.turkeys.length) chips += '<span class="ach" title="Verified games with three strikes in a row">TURKEY' + n(a.turkeys.length) + '</span>';
     if(a.titles.length){
       chips += '<span class="ach champ">' + TROPHY_SVG + 'CHAMPION' + n(a.titles.length) + '</span>';
       note.push('Won ' + a.titles.map(c=>c.ev.name).join(', '));
     }
-    return '<div class="ach-row">' + chips + '</div><div class="ach-note">' + escapeHtml(note.join(' \u00b7 ')) + '</div>';
+    return '<div class="ach-row">' + chips + '</div>' + (note.length ? '<div class="ach-note">' + escapeHtml(note.join(' \u00b7 ')) + '</div>' : '');
   }
   // after the standings or the clock change: redraw the leaderboard if its trophies moved, and My stats
   function refreshChampions(){

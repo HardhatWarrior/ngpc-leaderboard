@@ -173,7 +173,7 @@
       key:'bw', name:'Neo Bowling',
       // The 300 Club (verified perfect games) and tournament titles: same rules as the player's profile page.
       async load(ctx){
-        await loadScript('/bw/bw-shared.js');
+        await loadScript('/bw/bw-shared.js?v=4');
         const S = window.BW_SHARED;
         let game = null;
         try{ const d = await A.db.collection('games').doc('bw').get(); game = d.exists ? d.data() : null; }catch(e){}
@@ -184,9 +184,11 @@
         // features is where it is switched On).
         if(!S.featureVisible(game, 'careerStats', ctx.viewer, A)){
           return { note:'testing', earned:false, html:
-            '<h2 class="g-title">Neo Bowling</h2><div class="empty">Neo Bowling badges (the 300 CLUB and tournament CHAMPION) are being tested and are not public yet.</div>' };
+            '<h2 class="g-title">Neo Bowling</h2><div class="empty">Neo Bowling badges (the 300 CLUB, 250 and 200 CLUBs, TURKEY and tournament CHAMPION) are being tested and are not public yet.</div>' };
         }
         const perfect = S.perfectGames(mine), now = Date.now();
+        const c250 = S.clubGames(mine, 250), c200 = S.clubGames(mine, 200), turkeys = S.turkeyGames(mine);
+        const times = (k, one, many) => k > 1 ? k + ' ' + many : '1 ' + one;
         let titles = [];
         const finals = S.events(game).filter(ev=>S.status(ev, now) === 'final');
         const played = finals.some(ev=>mine.some(d=>d.version === 3 && d.verified === true && d.submittedAt >= ev.startsAt && d.submittedAt < ev.endsAt));
@@ -198,12 +200,15 @@
         }
         const list = [
           { grp:'', name:'300 CLUB', sub: perfect.length ? (perfect.length > 1 ? perfect.length+' perfect games: ' : 'Perfect game: ') + perfect.map(d=>fmtDate(d.submittedAt)).join(', ') : 'a verified perfect game (12 strikes)', on: perfect.length > 0, big:true },
+          { grp:'', name:'250 CLUB', sub: c250.length ? times(c250.length, 'game', 'games') + ' of 250+, first ' + fmtDate(c250[0].submittedAt) : 'a verified game of 250 or more', on: c250.length > 0 },
+          { grp:'', name:'200 CLUB', sub: c200.length ? times(c200.length, 'game', 'games') + ' of 200+, first ' + fmtDate(c200[0].submittedAt) : 'a verified game of 200 or more', on: c200.length > 0 },
+          { grp:'', name:'TURKEY', sub: turkeys.length ? times(turkeys.length, 'game', 'games') + ' with three strikes in a row, first ' + fmtDate(turkeys[0].submittedAt) : 'three strikes in a row in a verified game', on: turkeys.length > 0 },
           { grp:'', name:'CHAMPION', sub: titles.length ? 'Won ' + titles.map(c=>c.ev.name).join(', ') : 'win a Neo Bowling tournament', on: titles.length > 0, big:true },
         ];
         const got = list.filter(b=>b.on).length;
         return { note: got+' of '+list.length, earned: got > 0, html:
           '<h2 class="g-title">Neo Bowling</h2>'+badgeGrid(list)+
-          '<p class="fine">Perfect games are counted from verified scores; tournament titles from finished events.</p>' };
+          '<p class="fine">Perfect games, the 200 and 250 Clubs and turkeys are counted from verified scores; tournament titles from finished events.</p>' };
       }
     }
   ];

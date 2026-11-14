@@ -133,16 +133,37 @@
   // first scan: every field it carries matches. (Two real 300s differ in the cart's game count or
   // average, except in rare cases past the cart's 999-game count; counting those once is the price
   // of a re-scanned photo never earning a second badge.)
-  function perfectGames(scores){
+  function perfectGames(scores){ return badgeGames(scores, isPerfect); }
+  // the games passing test, oldest first, a re-scanned code counted once (as perfectGames)
+  function badgeGames(scores, test){
     const seen = new Set();
-    return scores.filter(isPerfect).slice().sort((a,b)=>a.submittedAt - b.submittedAt).filter(d=>{
+    return scores.filter(test).slice().sort((a,b)=>a.submittedAt - b.submittedAt).filter(d=>{
       const key = [playerKey(d), d.initials, d.weight, d.avg10, d.avgGames].join('|');
       if(seen.has(key)) return false;
       seen.add(key);
       return true;
     });
   }
+  function isVerified(d){ return !!d && d.version === 3 && d.verified === true && Array.isArray(d.rolls); }
+  // The 200 / 250 Clubs: a verified game of at least min (the game's own score, no handicap)
+  function clubGames(scores, min){ return badgeGames(scores, d=>isVerified(d) && d.score >= min); }
+  // The longest run of strikes in a game's rolls (frames 1-9 one ball each; the 10th's fresh racks)
+  function strikeRun(rolls){
+    let run = 0, best = 0, i = 0;
+    const hit = s => { run = s ? run + 1 : 0; if(run > best) best = run; };
+    for(let f = 0; f < 9 && i < rolls.length; f++){
+      if(rolls[i] === 10){ hit(true); i++; } else { hit(false); i += 2; }
+    }
+    const b = rolls.slice(i, i + 3);
+    if(b.length > 0) hit(b[0] === 10);
+    if(b.length > 1) hit(b[0] === 10 && b[1] === 10);
+    if(b.length > 2) hit((b[0] === 10 && b[1] === 10) || (b[0] !== 10 && b[0] + b[1] === 10) ? b[2] === 10 : false);
+    return best;
+  }
+  // Turkey: three strikes in a row in a verified game
+  function turkeyGames(scores){ return badgeGames(scores, d=>isVerified(d) && strikeRun(d.rolls) >= 3); }
 
   window.BW_SHARED = {HCP_MIN_GAMES, handicapFor, strikeStats, featureLevel, featureVisible, events, shown, status,
-                      playerKey, compare, standings, snapshotFor, eventHandicap, champions, isPerfect, perfectGames};
+                      playerKey, compare, standings, snapshotFor, eventHandicap, champions, isPerfect, perfectGames,
+                      clubGames, strikeRun, turkeyGames};
 })();
