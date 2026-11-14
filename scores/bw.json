@@ -11,6 +11,12 @@
     {
       "name": "HARDHATWARRIOR",
       "initials": "DJD",
+      "score": 244,
+      "date": "2026-11-14"
+    },
+    {
+      "name": "HARDHATWARRIOR",
+      "initials": "DJD",
       "score": 209,
       "date": "2026-11-13"
     },
@@ -55,12 +61,6 @@
       "initials": "AEJ",
       "score": 182,
       "date": "2026-10-30"
-    },
-    {
-      "name": "ASOBIT",
-      "initials": "GLA",
-      "score": 180,
-      "date": "2026-11-02"
     }
   ]
 }
