@@ -719,6 +719,46 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
+      // NEO TURF MASTERS (retail cart + leaderboard IPS patch, tm/index.html): the exact record
+      // tm/'s confirm handler writes. course 0-2 (Japan/USA/Germany), level 0-3, legend = Golf Set
+      // of Legend used, holes = strokes on each of the 18 holes (1-35), total = their sum (lower is
+      // better). The QR's base-36 checksum is verified client-side then dropped. Any number of
+      // docs per player (a plain best-score board). See TurfMastersLB/NOTES.md.
+      function isTurfMastersScore(d) {
+        return d.game == 'TM'
+          && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'course', 'level', 'legend', 'holes', 'total', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.formatVersion is string && d.formatVersion == '1'
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.course is int && d.course >= 0 && d.course <= 2
+          && d.level is int && d.level >= 0 && d.level <= 3
+          && d.legend is bool
+          && d.holes is list && d.holes.size() == 18
+          && d.holes[0] is int && d.holes[0] >= 1 && d.holes[0] <= 35
+          && d.holes[1] is int && d.holes[1] >= 1 && d.holes[1] <= 35
+          && d.holes[2] is int && d.holes[2] >= 1 && d.holes[2] <= 35
+          && d.holes[3] is int && d.holes[3] >= 1 && d.holes[3] <= 35
+          && d.holes[4] is int && d.holes[4] >= 1 && d.holes[4] <= 35
+          && d.holes[5] is int && d.holes[5] >= 1 && d.holes[5] <= 35
+          && d.holes[6] is int && d.holes[6] >= 1 && d.holes[6] <= 35
+          && d.holes[7] is int && d.holes[7] >= 1 && d.holes[7] <= 35
+          && d.holes[8] is int && d.holes[8] >= 1 && d.holes[8] <= 35
+          && d.holes[9] is int && d.holes[9] >= 1 && d.holes[9] <= 35
+          && d.holes[10] is int && d.holes[10] >= 1 && d.holes[10] <= 35
+          && d.holes[11] is int && d.holes[11] >= 1 && d.holes[11] <= 35
+          && d.holes[12] is int && d.holes[12] >= 1 && d.holes[12] <= 35
+          && d.holes[13] is int && d.holes[13] >= 1 && d.holes[13] <= 35
+          && d.holes[14] is int && d.holes[14] >= 1 && d.holes[14] <= 35
+          && d.holes[15] is int && d.holes[15] >= 1 && d.holes[15] <= 35
+          && d.holes[16] is int && d.holes[16] >= 1 && d.holes[16] <= 35
+          && d.holes[17] is int && d.holes[17] >= 1 && d.holes[17] <= 35
+          && d.total is int && d.total == d.holes[0] + d.holes[1] + d.holes[2] + d.holes[3] + d.holes[4] + d.holes[5] + d.holes[6] + d.holes[7] + d.holes[8] + d.holes[9] + d.holes[10] + d.holes[11] + d.holes[12] + d.holes[13] + d.holes[14] + d.holes[15] + d.holes[16] + d.holes[17]
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
       // RED DRAGON (Legend of the Red Dragon clone): game, formatVersion, heroId, initials (the
       // hero's name, 1-8 letters), cls, level, experience, dragonKills, daysPlayed, status, source,
       // submittedAt, required uid/username -- the exact record rd/index.html's confirm handler
@@ -892,6 +932,7 @@ service cloud.firestore {
       // '_', so every other game's add() is unaffected.
       allow create: if (((request.resource.data.game == 'BATMAN' && isBatmanScore(request.resource.data)) && ((request.resource.data.kind == 'overall' && scoreId == 'BATMAN_' + request.auth.uid) || (request.resource.data.kind == 'stage' && scoreId == 'BATMAN_' + request.auth.uid + '_' + string(request.resource.data.stage)))) || (request.resource.data.game == 'BW' && isBowlingScore(request.resource.data)) || (request.resource.data.game == 'TT' && isTetrisScore(request.resource.data)) || (request.resource.data.game == 'YZ' && isYahtzeeScore(request.resource.data)) || (request.resource.data.game == 'FK' && isFarkleScore(request.resource.data)) || (request.resource.data.game == '2K' && is2048Score(request.resource.data)) || (request.resource.data.game == 'OV' && isOverRevScore(request.resource.data)) || (request.resource.data.game == 'GD' && isGardeniaScore(request.resource.data)) || (request.resource.data.game == 'SD' && isSudokuScore(request.resource.data)) || (request.resource.data.game == 'XN' && isXenon2Score(request.resource.data)) || (request.resource.data.game == 'BK' && isBreakoutScore(request.resource.data)) || (request.resource.data.game == 'MS' && isMinesweeperScore(request.resource.data)) || (request.resource.data.game == 'DDMR' && isDonTDieMrRobotScore(request.resource.data)) || (request.resource.data.game == 'RVNG' && isFruityPalsRevengeScore(request.resource.data)) || (request.resource.data.game == 'HGS' && isHoratioGoesSnowboardingScore(request.resource.data)) || (request.resource.data.game == 'FU' && isFurryScore(request.resource.data)) || (request.resource.data.game == 'CA' && isCarcassonneScore(request.resource.data))
           || (request.resource.data.game == 'SB' && isShutTheBoxScore(request.resource.data))
+          || (request.resource.data.game == 'TM' && isTurfMastersScore(request.resource.data))
           || (request.resource.data.game == 'GG' && isGhostNGoblinsScore(request.resource.data))
           || (request.resource.data.game == 'PNG' && isPangNGPCScore(request.resource.data))
           || (request.resource.data.game == 'SPR' && isPocketSprintScore(request.resource.data))

@@ -671,6 +671,22 @@ window.NGPC_AUTH = (function(){
     seconds = Number(seconds)||0;
     return Math.floor(seconds/60)+':'+String(seconds%60).padStart(2,'0');
   }
+  // NEO TURF MASTERS (tm/, retail cart + leaderboard patch): holes = strokes per hole (18),
+  // total = their sum, lower is better; course/level/legend as tm/index.html's own tables.
+  const TM_COURSES = ['Japan', 'U.S.A.', 'Germany'];
+  const TM_LEVELS = ['Easy', 'Normal', 'Hard', 'Very Hard'];
+  function renderTurfMastersScorecardHTML(data){
+    const holes = Array.isArray(data.holes) ? data.holes : [];
+    let out = 0, inn = 0;
+    holes.forEach((v,i)=>{ if(i < 9) out += Number(v)||0; else inn += Number(v)||0; });
+    const rows = '<tr><td>Course</td><td class="tk-val">'+escapeHtml(TM_COURSES[data.course]||'?')+'</td></tr>'+
+      '<tr><td>Level</td><td class="tk-val">'+escapeHtml(TM_LEVELS[data.level]||'?')+'</td></tr>'+
+      '<tr><td>Golf Set of Legend</td><td class="tk-val">'+(data.legend?'Used':'Not used')+'</td></tr>'+
+      '<tr><td>Holes 1-9</td><td class="tk-val tnum">'+holes.slice(0,9).map(n=>Number(n)||0).join(' ')+' = '+out+'</td></tr>'+
+      '<tr><td>Holes 10-18</td><td class="tk-val tnum">'+holes.slice(9,18).map(n=>Number(n)||0).join(' ')+' = '+inn+'</td></tr>'+
+      '<tr><td>Total strokes</td><td class="tk-val tnum">'+(Number(data.total)||0)+'</td></tr>';
+    return '<table class="tk-sheet">'+rows+'</table>';
+  }
   function renderShutTheBoxScorecardHTML(data){
     const rounds = Array.isArray(data.rounds) ? data.rounds : [];
     const names = {'1':'Solo series', W:'Match won', L:'Match lost', D:'Match drawn'};
@@ -852,6 +868,7 @@ window.NGPC_AUTH = (function(){
       case 'PERSIA': return persiaSummary(data) !== null;
       case 'RD': return rdIsHero(data);
       case 'SB': return Array.isArray(data.rounds) && data.rounds.length > 0 && data.total !== undefined;
+      case 'TM': return Array.isArray(data.holes) && data.holes.length === 18 && data.total !== undefined;
       case 'OV':
         // Same "skip rather than crash" stance overrev/index.html's own board rendering takes on
         // a corrupted/legacy stored doc -- OverRevProtocol comes from overrev/protocol.js, which
@@ -874,6 +891,7 @@ window.NGPC_AUTH = (function(){
       case 'PERSIA': return renderPersiaScorecardHTML(data);
       case 'RD': return rdIsHero(data) ? renderRedDragonHeroHTML(data) : '';
       case 'SB': return renderShutTheBoxScorecardHTML(data);
+      case 'TM': return renderTurfMastersScorecardHTML(data);
       case 'OV':
         try{ return renderOverRevScorecardHTML(Object.assign({}, data, OverRevProtocol.decode(data.raw))); }
         catch(e){ return ''; }
@@ -910,6 +928,10 @@ window.NGPC_AUTH = (function(){
       // Numbers + fixed words only -- callers put this into innerHTML unescaped.
       const r = {'1':'solo', W:'won', L:'lost', D:'drew'}[data.result] || '';
       return [r, (Number(data.shut)||0)+' shut', sbClock(data.seconds)].filter(Boolean).join(' · ');
+    }
+    if(data.game==='TM'){
+      // Fixed names only -- callers put this into innerHTML unescaped.
+      return [TM_COURSES[data.course]||'', TM_LEVELS[data.level]||'', data.legend ? 'Legend clubs' : ''].filter(Boolean).join(' · ');
     }
     if(data.game==='ACES'){
       // Fixed names only -- callers put this into innerHTML unescaped.
@@ -953,6 +975,8 @@ window.NGPC_AUTH = (function(){
     if(data.game === 'RD') return Number.isFinite(data.experience) ? (data.experience+' XP') : '-';
     // SHUT THE BOX ranks by `total` tiles left open, ascending -- no `score` field.
     if(data.game === 'SB') return Number.isFinite(data.total) ? (data.total+' LEFT') : '-';
+    // NEO TURF MASTERS ranks by `total` strokes, ascending -- no `score` field.
+    if(data.game === 'TM') return Number.isFinite(data.total) ? (data.total+' STROKES') : '-';
     // GUARDIANS OF THE NOCTURNE ranks by completion % (gn/'s ACHIEVEMENTS) -- no `score` field.
     if(data.game === 'GN') return Number.isFinite(data.pct) ? (data.pct+'% COMPLETE') : '-';
     // POCKET SPRINT ranks by `recordValue` (no `score` field): championship points (C), or 60 Hz ticks (R/T) shown as mm:ss.mmm.
