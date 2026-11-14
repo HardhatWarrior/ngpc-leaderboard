@@ -281,7 +281,7 @@
       <div style="overflow-x:auto">
         <table>
           <thead>
-            <tr><th>Game</th><th>Status</th><th>Active</th><th>Pinned</th><th>Section</th><th>Developer</th><th>New Badge</th><th></th></tr>
+            <tr><th>Game</th><th>Status</th><th>Active</th><th>Pinned</th><th>Section</th><th>Developer</th><th>Store</th><th>New Badge</th><th></th></tr>
           </thead>
           <tbody id="games-rows"></tbody>
         </table>
@@ -780,6 +780,20 @@
       return '<button type="button" class="badge '+(solo?'pending':'promote-dev')+'" data-action="toggle-section" data-slug="'+encodeURIComponent(g.slug)+'" style="cursor:pointer;border:none" title="Click to move to the '+(solo?'main grid':'single-player page')+'">'
         + (solo ? 'Solo' : 'Main') + '</button>';
     }
+    // Read-only: whether this game is in the cartridge-store catalog. Same test as build-catalog.js: the developer
+    // ticked "List in cartridge store" (storeAllowed) AND it has a ROM, icon and blurb and is out of Coming Soon
+    // and not hidden. The catalog itself rebuilds every 30 minutes, so a change shows there a little later.
+    function storeCell(g){
+      if(g.storeAllowed !== true) return '<span class="badge disabled" style="margin-left:0" title="The developer has not opted in to the cartridge store">Off</span>';
+      const missing = [];
+      if(!g.romPath) missing.push('a ROM');
+      if(!g.iconPath) missing.push('an icon');
+      if(!String(g.storeBlurb || '').trim()) missing.push('a blurb');
+      if(g.devStatus === 'coming-soon') missing.push('to leave Coming Soon');
+      if(g.visibility === 'hidden') missing.push('to be un-hidden');
+      if(!missing.length) return '<span class="badge approved" title="Opted in and ready: listed in the store catalog (rebuilt every 30 minutes)">In store</span>';
+      return '<span class="badge pending" title="Opted in, but still needs: '+escapeHtml(missing.join(', '))+'">Waiting</span>';
+    }
     gamesRowsEl.innerHTML = games.map(g=>{
       const currentDevName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '—';
       return '<tr data-game-row="'+encodeURIComponent(g.slug)+'">'+
@@ -789,6 +803,7 @@
         '<td>'+pinCell(g)+'</td>'+
         '<td>'+sectionCell(g)+'</td>'+
         '<td>'+escapeHtml(currentDevName)+'</td>'+
+        '<td>'+storeCell(g)+'</td>'+
         '<td>'+newBadgeCell(g)+'</td>'+
         '<td><a href="/admin/game/?slug='+encodeURIComponent(g.slug)+'">Manage</a></td>'+
       '</tr>';
