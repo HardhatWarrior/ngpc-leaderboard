@@ -752,7 +752,7 @@
   function applySort(mode){
     const counts = countsCache[activePeriod];
     gridEl.querySelectorAll('.cat-heading').forEach(h=>h.remove());
-    tileEls.forEach(t=>{ t.hidden = false; });
+    tileEls.forEach(t=>{ t.style.display = ''; });
     el('category-toggle').hidden = mode !== 'category';
     if(mode === 'category'){
       drawCategoryChips();
@@ -761,7 +761,7 @@
       list.forEach(t=>{
         const c = catOf(t);
         const show = activeCategory === 'all' || activeCategory === c;
-        t.hidden = !show;
+        t.style.display = show ? '' : 'none';   // not .hidden: .tile's own display rule would override the attribute
         if(show && c !== last){ const h = document.createElement('div'); h.className = 'cat-heading'; h.textContent = c; gridEl.appendChild(h); last = c; }
         gridEl.appendChild(t);
       });
