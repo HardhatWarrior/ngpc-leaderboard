@@ -280,9 +280,10 @@
   let db = null, pending = null, unsubscribeBoard = null, gameData = null;
 
   // ---- Rogue Aces payload (games/aces' submission spec) ----
-  // QR text = NGPC-DEV.COM/ACES/<payload>, 18 chars: ACES | mode(2, 00-03) | initials(3) | score(5, 00001-65535) |
-  // CRC(4 hex). The CRC is CRC16-CCITT (poly 0x1021, init 0xFFFF) over the 10 characters between ACES and the CRC
-  // (mode + initials + score); verified here, then dropped. Each mode is its own board: modes are not comparable.
+  // QR text = NGPC-DEV.COM/ACES/<payload>: ACES | mode(2, 00-03) | initials(3) | score | CRC(4 hex). Two score widths:
+  // OLD = 5 decimal digits (00001-65535), 18 chars; NEW = 8 hex digits (u32, 00000001-FFFFFFFF), 21 chars.
+  // Both stay accepted so codes from the previous cart build still work. The CRC is CRC16-CCITT (poly 0x1021, init 0xFFFF) over the 10 characters between ACES and the CRC
+  // (mode + initials + score text); verified here, then dropped. Each mode is its own board: modes are not comparable.
   const AC_PREFIX = 'NGPC-DEV.COM/ACES/';
   const AC_MODES = ['Rookie', 'Squadron Leader', 'Wing Commander', 'Ace'];
   function acCrc(str){
@@ -296,11 +297,14 @@
   function parseAcesPayload(text){
     const p = text.indexOf(AC_PREFIX) === 0 ? text.slice(AC_PREFIX.length) : text;
     if(p.slice(0,4) !== QR_GAME_CODE) return {error:"That code doesn't look like a Rogue Aces score."};
-    if(p.length !== 18) return {error: p.length < 18 ? "That code is too short — rescan with the whole code in frame." : "That code is too long to be a Rogue Aces score — rescan just the one code."};
-    if(!/^ACES0[0-3][A-Z]{3}[0-9]{5}[0-9A-F]{4}$/.test(p)) return {error:"That code doesn't look like a Rogue Aces score."};
-    if(acCrc(p.slice(4,14)) !== p.slice(14)) return {error:"That code didn't scan cleanly (checksum mismatch) — rescan it."};
-    const score = +p.slice(9,14);
-    if(score < 1 || score > 65535) return {error:"That run has no points yet, so there's nothing to put on the board."};
+    if(p.length !== 18 && p.length !== 21) return {error: p.length < 18 ? "That code is too short — rescan with the whole code in frame." : "That code is too long to be a Rogue Aces score — rescan just the one code."};
+    const wide = p.length === 21;   // new u32 hex score
+    const re = wide ? /^ACES0[0-3][A-Z]{3}[0-9A-F]{8}[0-9A-F]{4}$/ : /^ACES0[0-3][A-Z]{3}[0-9]{5}[0-9A-F]{4}$/;
+    if(!re.test(p)) return {error:"That code doesn't look like a Rogue Aces score."};
+    const end = wide ? 17 : 14;
+    if(acCrc(p.slice(4,end)) !== p.slice(end)) return {error:"That code didn't scan cleanly (checksum mismatch) — rescan it."};
+    const score = wide ? parseInt(p.slice(9,end),16) : +p.slice(9,end);
+    if(score < 1 || score > 4294967295) return {error:"That run has no points yet, so there's nothing to put on the board."};
     return { game:QR_GAME_CODE, mode:+p.slice(5,6), initials:p.slice(6,9), score:score };
   }
 

@@ -169,6 +169,10 @@
   .sort-btn.active{ border-color:var(--accent); color:var(--cream); background:rgba(178,58,82,.14); }
 
   .period-toggle{ display:flex; justify-content:flex-end; gap:6px; margin-top:8px; }
+  .category-toggle{ display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+  .category-toggle[hidden]{ display:none; }
+  .cat-heading{ grid-column:1 / -1; color:var(--cream); font-size:13px; font-weight:700; text-transform:uppercase; letter-spacing:.12em; padding-bottom:6px; border-bottom:1px solid var(--border); margin-top:8px; }
+  .cat-heading:first-child{ margin-top:0; }
   .period-toggle[hidden]{ display:none; }
   .period-btn{ font-size:10.5px; padding:5px 10px; }
 
@@ -372,6 +376,7 @@
       <button type="button" class="sort-btn active" id="sort-recent" data-sort="recent">Most Recent</button>
       <button type="button" class="sort-btn" id="sort-active" data-sort="active">Most Active</button>
       <button type="button" class="sort-btn" id="sort-alpha" data-sort="alpha">A&ndash;Z</button>
+      <button type="button" class="sort-btn" id="sort-category" data-sort="category">Category</button>
       <span class="sort-status" id="sort-status"></span>
     </div>
   </div>
@@ -380,6 +385,8 @@
     <button type="button" class="sort-btn period-btn active" id="period-week" data-period="week">This Week</button>
     <button type="button" class="sort-btn period-btn" id="period-all" data-period="all">All Time</button>
   </div>
+
+  <div class="category-toggle" id="category-toggle" hidden></div>
 
   <div id="grid-status" class="grid-heading" style="margin-top:-8px"></div>
   <div id="grid">
@@ -487,6 +494,7 @@
     // -- that element can also contain the optional right-justified version span now (see below),
     // which would otherwise get swept into the alphabetical comparison too.
     a.dataset.name = data.name || slug;
+    a.dataset.category = data.category || '';   // admin-set on /admin/game/; one per game. Read by applySort('category').
     const isComingSoon = data.devStatus === 'coming-soon';
     // See loadGames()'s own comment: a doc with no `visibility` yet falls back to the old
     // `active` boolean this field replaced. 'inactive' gets the exact same unclickable treatment
@@ -727,8 +735,38 @@
     const bl = el('badges-link'); if(bl) bl.hidden = !(user && user.username);
   });
 
+  // Category sort: tiles grouped under a heading per category (fixed order below, then any unknown ones, then
+  // Uncategorised), A-Z inside each group. Chips above the grid filter to one category ("All" = every group).
+  const CATEGORY_ORDER = ['Puzzle', 'Tabletop', 'Arcade', 'Action / Platformer', 'Shooter / Flight', 'Racing', 'RPG / Adventure'];
+  let activeCategory = 'all';
+  const catOf = (t)=> t.dataset.category || 'Other';
+  function catRank(c){ const i = CATEGORY_ORDER.indexOf(c); return i < 0 ? (c === 'Other' ? 1000 : 500) : i; }
+  function drawCategoryChips(){
+    const host = el('category-toggle');
+    const present = Array.from(new Set(tileEls.map(catOf))).sort((a,b)=>catRank(a)-catRank(b) || a.localeCompare(b));
+    if(activeCategory !== 'all' && present.indexOf(activeCategory) < 0) activeCategory = 'all';
+    host.innerHTML = ['all'].concat(present).map(c=>'<button type="button" class="sort-btn'+(c===activeCategory?' active':'')+'" data-cat="'+escapeHtml(c)+'">'+(c==='all'?'All':escapeHtml(c))+'</button>').join('');
+  }
+  el('category-toggle').addEventListener('click', (e)=>{ const b = e.target.closest('[data-cat]'); if(!b) return; activeCategory = b.dataset.cat; applySort('category'); });
+
   function applySort(mode){
     const counts = countsCache[activePeriod];
+    gridEl.querySelectorAll('.cat-heading').forEach(h=>h.remove());
+    tileEls.forEach(t=>{ t.hidden = false; });
+    el('category-toggle').hidden = mode !== 'category';
+    if(mode === 'category'){
+      drawCategoryChips();
+      const list = tileEls.slice().sort((a,b)=>catRank(catOf(a))-catRank(catOf(b)) || catOf(a).localeCompare(catOf(b)) || a.dataset.name.localeCompare(b.dataset.name));
+      let last = null;
+      list.forEach(t=>{
+        const c = catOf(t);
+        const show = activeCategory === 'all' || activeCategory === c;
+        t.hidden = !show;
+        if(show && c !== last){ const h = document.createElement('div'); h.className = 'cat-heading'; h.textContent = c; gridEl.appendChild(h); last = c; }
+        gridEl.appendChild(t);
+      });
+      return;
+    }
     const sorted = tileEls.slice().sort((a, b)=>{
       if(mode === 'alpha'){
         return a.dataset.name.localeCompare(b.dataset.name);

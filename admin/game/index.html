@@ -263,6 +263,13 @@
       <div id="pin-msg"></div>
     </div>
 
+    <!-- Admin only. One category per game, used by the homepage "Category" sort (grouping + filter chips). -->
+    <div id="category-panel" hidden style="margin-top:10px">
+      <label for="category-select" style="display:block;margin-bottom:6px">Homepage category</label>
+      <select id="category-select"><option value="">(none)</option></select>
+      <div id="category-msg"></div>
+    </div>
+
     <div class="current-value" style="margin-top:16px" id="stats-line">Downloaded &mdash; times &middot; Played &mdash; times (in-browser)</div>
     <div class="current-value" id="scan-source-line">Loading scan-source breakdown&hellip;</div>
 
@@ -1669,6 +1676,19 @@
     // games still sort sensibly among themselves (most recently pinned first) -- see index.html's
     // own applySort().
     if(isAdmin){
+      el('category-panel').hidden = false;
+      const catSel = el('category-select');
+      ['Puzzle', 'Tabletop', 'Arcade', 'Action / Platformer', 'Shooter / Flight', 'Racing', 'RPG / Adventure'].forEach(c=>{ const o = document.createElement('option'); o.value = c; o.textContent = c; catSel.appendChild(o); });
+      if(data.category && !Array.from(catSel.options).some(o=>o.value === data.category)){ const o = document.createElement('option'); o.value = data.category; o.textContent = data.category; catSel.appendChild(o); }
+      catSel.value = data.category || '';
+      catSel.addEventListener('change', async ()=>{
+        const msg = el('category-msg'); msg.innerHTML = ''; catSel.disabled = true;
+        try{
+          await docRef.update({category: catSel.value || null});
+          msg.innerHTML = '<div class="msg ok">Saved.</div>';
+        }catch(e){ msg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>'; }
+        finally{ catSel.disabled = false; }
+      });
       el('pin-panel').hidden = false;
       let currentPinned = !!data.pinnedAt;
       const pinRow = el('pin-row');
