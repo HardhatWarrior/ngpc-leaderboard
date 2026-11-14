@@ -737,7 +737,7 @@
 
   // Category sort: tiles grouped under a heading per category (fixed order below, then any unknown ones, then
   // Uncategorised), A-Z inside each group. Chips above the grid filter to one category ("All" = every group).
-  const CATEGORY_ORDER = ['Puzzle', 'Tabletop', 'Arcade', 'Action / Platformer', 'Shooter / Flight', 'Racing', 'RPG / Adventure'];
+  const CATEGORY_ORDER = ['Puzzle', 'Tabletop', 'Arcade', 'Action / Platformer', 'Shooter / Flight', 'Racing', 'Sports', 'RPG / Adventure'];
   let activeCategory = 'all';
   const catOf = (t)=> t.dataset.category || 'Other';
   function catRank(c){ const i = CATEGORY_ORDER.indexOf(c); return i < 0 ? (c === 'Other' ? 1000 : 500) : i; }

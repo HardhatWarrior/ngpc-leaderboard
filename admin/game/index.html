@@ -1708,7 +1708,7 @@
     if(isAdmin){
       el('category-panel').hidden = false;
       const catSel = el('category-select');
-      ['Puzzle', 'Tabletop', 'Arcade', 'Action / Platformer', 'Shooter / Flight', 'Racing', 'RPG / Adventure'].forEach(c=>{ const o = document.createElement('option'); o.value = c; o.textContent = c; catSel.appendChild(o); });
+      ['Puzzle', 'Tabletop', 'Arcade', 'Action / Platformer', 'Shooter / Flight', 'Racing', 'Sports', 'RPG / Adventure'].forEach(c=>{ const o = document.createElement('option'); o.value = c; o.textContent = c; catSel.appendChild(o); });
       if(data.category && !Array.from(catSel.options).some(o=>o.value === data.category)){ const o = document.createElement('option'); o.value = data.category; o.textContent = data.category; catSel.appendChild(o); }
       catSel.value = data.category || '';
       catSel.addEventListener('change', async ()=>{
@@ -1867,6 +1867,7 @@
         const saveBtn = el('game-dev-save');
         const msgEl = el('game-dev-msg');
         const byName = new Map(), byUid = new Map();
+        const DEV_LABELS = ['SNK'];
         try{
           const snap = await db.collection('users').get();
           const names = [];
@@ -1878,27 +1879,30 @@
             names.push(name);
           });
           names.sort((a, b)=>a.localeCompare(b));
-          el('game-dev-list').innerHTML = names.map(n=>'<option value="'+escapeHtml(n)+'"></option>').join('');
+          // Non-account developers (no uid): stored as developerLabel, shown as plain text. Add more here if needed.
+          el('game-dev-list').innerHTML = DEV_LABELS.concat(names).map(n=>'<option value="'+escapeHtml(n)+'"></option>').join('');
         }catch(e){ /* leave the list empty; a typed name just won't resolve */ }
         function paint(){
-          const name = data.developerUid ? (byUid.get(data.developerUid) || '(unknown account)') : null;
+          const name = data.developerUid ? (byUid.get(data.developerUid) || '(unknown account)') : (data.developerLabel || null);
           currentEl.innerHTML = name ? 'Current: <b>'+escapeHtml(name)+'</b>' : 'No developer assigned (managed by the site admin).';
-          inputEl.value = name && byUid.has(data.developerUid) ? name : '';
+          inputEl.value = name && (byUid.has(data.developerUid) || (!data.developerUid && data.developerLabel)) ? name : '';
         }
         paint();
         blockEl.hidden = false;
         saveBtn.addEventListener('click', async ()=>{
           const typed = inputEl.value.trim().replace(/^@/, '');
-          const uid = typed ? byName.get(typed.toLowerCase()) : null;
-          if(typed && !uid){
+          const label = DEV_LABELS.find(l=>l.toLowerCase() === typed.toLowerCase()) || null;
+          const uid = (typed && !label) ? byName.get(typed.toLowerCase()) : null;
+          if(typed && !uid && !label){
             msgEl.innerHTML = '<div class="msg err">No account named \u201c'+escapeHtml(typed)+'\u201d \u2014 pick one from the list.</div>';
             return;
           }
           saveBtn.disabled = true;
           msgEl.innerHTML = '';
           try{
-            await docRef.update({developerUid: uid || null});
+            await docRef.update({developerUid: uid || null, developerLabel: label});
             data.developerUid = uid || null;
+            data.developerLabel = label;
             paint();
             msgEl.innerHTML = '<div class="msg ok">Saved.</div>';
           }catch(e){

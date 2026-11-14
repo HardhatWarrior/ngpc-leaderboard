@@ -90,7 +90,7 @@ async function main() {
       if (!PREVIEW) await doc.ref.update({ romSha256: sha, romSize: size, romRev: g.romRev || 1 });
     }
 
-    let author = '';
+    let author = (!g.developerUid && g.developerLabel) ? String(g.developerLabel).toUpperCase() : '';
     if (g.developerUid) {
       if (!(g.developerUid in nameCache)) {
         const u = await db.collection('users').doc(g.developerUid).get();

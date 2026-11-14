@@ -154,6 +154,12 @@
     if(data.version){ el('game-version').textContent = data.version; el('game-version').hidden = false; }
     // Credit the developer, if one is assigned -- looked up by uid (users/ is publicly readable)
     // rather than copying a username onto the game doc, so a later rename can't leave it stale.
+    if(!data.developerUid && data.developerLabel){
+      // A developer with no account (e.g. SNK): plain text, no profile link.
+      el('created-by-link').textContent = String(data.developerLabel).toUpperCase();
+      el('created-by-link').removeAttribute('href');
+      el('created-by').hidden = false;
+    }
     if(data.developerUid){
       NGPC_AUTH.db.collection('users').doc(data.developerUid).get().then(function(u){
         const name = u.exists ? u.data().username : null;

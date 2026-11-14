@@ -803,7 +803,7 @@
     const SORT_KEYS = {
       name: g=>g.name||g.slug, status: g=>statusLabel(g.devStatus), active: g=>VISIBILITY_LABEL[gameVisibility(g)],
       pinned: g=>g.pinnedAt ? 'Pinned' : 'Not pinned', section: g=>g.section === 'solo' ? 'Solo' : 'Main',
-      dev: g=>g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '', store: storeState,
+      dev: g=>g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : (g.developerLabel || ''), store: storeState,
       new: g=>(g.newUntil && g.newUntil > Date.now()) ? 'NEW' : '',
     };
     let sortKey = 'name', sortDir = 1;
@@ -819,7 +819,7 @@
     }
     function renderGameRows(){
       gamesRowsEl.innerHTML = sortedGames().map(g=>{
-      const currentDevName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '—';
+      const currentDevName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : (g.developerLabel || '—');
       return '<tr data-game-row="'+encodeURIComponent(g.slug)+'">'+
         '<td>'+escapeHtml(g.name||g.slug)+'</td>'+
         '<td>'+statusLabel(g.devStatus)+'</td>'+
