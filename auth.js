@@ -955,6 +955,14 @@ window.NGPC_AUTH = (function(){
     if(data.game === 'SB') return Number.isFinite(data.total) ? (data.total+' LEFT') : '-';
     // GUARDIANS OF THE NOCTURNE ranks by completion % (gn/'s ACHIEVEMENTS) -- no `score` field.
     if(data.game === 'GN') return Number.isFinite(data.pct) ? (data.pct+'% COMPLETE') : '-';
+    // POCKET SPRINT ranks by `recordValue` (no `score` field): championship points (C), or 60 Hz ticks (R/T) shown as mm:ss.mmm.
+    if(data.game === 'SPR'){
+      const v = data.recordValue;
+      if(!Number.isFinite(v)) return '-';
+      if(data.recordType === 'C') return v+' PTS';
+      const ms = Math.floor(((v%60)*1000+30)/60);
+      return String(Math.floor(v/3600)).padStart(2,'0')+':'+String(Math.floor(v/60)%60).padStart(2,'0')+'.'+String(ms).padStart(3,'0');
+    }
     return data.score!=null ? data.score : '-';
   }
 
