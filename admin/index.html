@@ -54,6 +54,9 @@
   #denied{ text-align:center; color:var(--dim); font-size:13.5px; padding:40px 0; }
 
   table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+  #games-head th[data-sort]{ cursor:pointer; user-select:none; white-space:nowrap; }
+  #games-head th[data-sort]:hover{ color:var(--cream); }
+  #games-head th .sort-ind{ margin-left:4px; color:var(--accent2); }
   th{ text-align:left; color:var(--dim); font-size:10.5px; text-transform:uppercase; letter-spacing:.06em; padding:8px 10px; border-bottom:1px solid var(--border); }
   td{ padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:middle; }
   tr:last-child td{ border-bottom:none; }
@@ -281,7 +284,7 @@
       <div style="overflow-x:auto">
         <table>
           <thead>
-            <tr><th>Game</th><th>Status</th><th>Active</th><th>Pinned</th><th>Section</th><th>Developer</th><th>Store</th><th>New Badge</th><th></th></tr>
+            <tr id="games-head"><th data-sort="name">Game</th><th data-sort="status">Status</th><th data-sort="active">Active</th><th data-sort="pinned">Pinned</th><th data-sort="section">Section</th><th data-sort="dev">Developer</th><th data-sort="store">Store</th><th data-sort="new">New Badge</th><th></th></tr>
           </thead>
           <tbody id="games-rows"></tbody>
         </table>
@@ -794,7 +797,28 @@
       if(!missing.length) return '<span class="badge approved" title="Opted in and ready: listed in the store catalog (rebuilt every 30 minutes)">In store</span>';
       return '<span class="badge pending" title="Opted in, but still needs: '+escapeHtml(missing.join(', '))+'">Waiting</span>';
     }
-    gamesRowsEl.innerHTML = games.map(g=>{
+    // Click a header to sort A-Z; click again for Z-A. The row buttons update `games` in place, so re-rendering is safe.
+    const storeState = (g)=> g.storeAllowed !== true ? 'Off'
+      : (g.romPath && g.iconPath && String(g.storeBlurb || '').trim() && g.devStatus !== 'coming-soon' && g.visibility !== 'hidden') ? 'In store' : 'Waiting';
+    const SORT_KEYS = {
+      name: g=>g.name||g.slug, status: g=>statusLabel(g.devStatus), active: g=>VISIBILITY_LABEL[gameVisibility(g)],
+      pinned: g=>g.pinnedAt ? 'Pinned' : 'Not pinned', section: g=>g.section === 'solo' ? 'Solo' : 'Main',
+      dev: g=>g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '', store: storeState,
+      new: g=>(g.newUntil && g.newUntil > Date.now()) ? 'NEW' : '',
+    };
+    let sortKey = 'name', sortDir = 1;
+    function sortedGames(){
+      const f = SORT_KEYS[sortKey];
+      return games.slice().sort((x,y)=>sortDir * String(f(x)).localeCompare(String(f(y)), undefined, {sensitivity:'base'}) || (x.name||x.slug).localeCompare(y.name||y.slug));
+    }
+    function drawHeads(){
+      document.querySelectorAll('#games-head th[data-sort]').forEach(th=>{
+        const old = th.querySelector('.sort-ind'); if(old) old.remove();
+        if(th.dataset.sort === sortKey){ const i = document.createElement('span'); i.className = 'sort-ind'; i.textContent = sortDir > 0 ? '\u25B2' : '\u25BC'; th.appendChild(i); }
+      });
+    }
+    function renderGameRows(){
+      gamesRowsEl.innerHTML = sortedGames().map(g=>{
       const currentDevName = g.developerUid ? (uidToUsername[g.developerUid] || '(unknown)') : '—';
       return '<tr data-game-row="'+encodeURIComponent(g.slug)+'">'+
         '<td>'+escapeHtml(g.name||g.slug)+'</td>'+
@@ -808,6 +832,14 @@
         '<td><a href="/admin/game/?slug='+encodeURIComponent(g.slug)+'">Manage</a></td>'+
       '</tr>';
     }).join('');
+      drawHeads();
+    }
+    document.getElementById('games-head').addEventListener('click', (e)=>{
+      const th = e.target.closest('th[data-sort]'); if(!th) return;
+      if(sortKey === th.dataset.sort) sortDir = -sortDir; else { sortKey = th.dataset.sort; sortDir = 1; }
+      renderGameRows();
+    });
+    renderGameRows();
 
     // Manual on/off admin override -- separate from the automatic newUntil set at approval time
     // (or reset when a developer leaves "coming soon", see games/{slug}'s own rules comment).
