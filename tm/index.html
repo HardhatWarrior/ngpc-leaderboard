@@ -96,6 +96,9 @@
   .tm-hole .val{ font-family:"IBM Plex Mono",monospace; font-size:12px; font-weight:600; color:var(--cream); margin-top:2px; }
   .tm-hole.sum{ background:var(--panel2); }
   .tm-hole.sum .val{ color:var(--accent2); }
+  .tm-hole .par{ font-size:8px; color:var(--dim); margin-top:1px; }
+  .tm-hole .val.under{ color:#6fcf7f; }
+  .tm-hole .val.over{ color:#e8776b; }
   .tm-sheet{ width:100%; border-collapse:collapse; margin:8px 0 14px; font-size:11.5px; }
   .tm-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
   .tm-sheet td.tm-val{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
@@ -229,6 +232,13 @@
   const GAME_SLUG = 'tm';
   const SUBMIT_SOURCE = new URLSearchParams(location.search).get('src') === 'capture' ? 'capture' : 'qr';
   const COURSE_NAMES = ['Japan', 'U.S.A.', 'Germany'];
+  // Per-hole pars (from the game's own scorecard); null = not yet known for that course.
+  const COURSE_PARS = [[4,4,3,5,4,4,5,3,4, 4,4,3,4,4,5,3,4,5], null, [4,4,3,5,4,4,5,3,4, 5,3,4,4,3,4,4,5,4]];
+  function toPar(data){
+    const pars = COURSE_PARS[data.course]; if(!pars) return '';
+    const d = (Number(data.total)||0) - pars.reduce((a,b)=>a+b,0);
+    return d === 0 ? 'E' : (d > 0 ? '+'+d : String(d));
+  }
   const LEVEL_NAMES = ['Easy', 'Normal', 'Hard', 'Very Hard'];
   let activeTab = 0;
 
@@ -310,17 +320,24 @@
 
   function renderCardHTML(data){
     const holes = Array.isArray(data.holes) ? data.holes : [];
-    const cell = (lbl, v, cls)=>'<div class="tm-hole'+(cls?' '+cls:'')+'"><div class="lbl">'+lbl+'</div><div class="val">'+v+'</div></div>';
-    let out = 0, inn = 0, html = '<div class="tm-card">';
-    for(let i=0;i<9;i++){ const v = Number(holes[i])||0; out += v; html += cell(i+1, v); }
-    html += cell('OUT', out, 'sum');
-    for(let i=9;i<18;i++){ const v = Number(holes[i])||0; inn += v; html += cell(i+1, v); }
-    html += cell('IN', inn, 'sum') + '</div>';
+    const pars = COURSE_PARS[data.course];
+    const cell = (lbl, v, cls, par)=>{
+      const vc = par == null ? '' : (v < par ? ' under' : (v > par ? ' over' : ''));
+      return '<div class="tm-hole'+(cls?' '+cls:'')+'"><div class="lbl">'+lbl+'</div>'+
+        (pars ? '<div class="par">'+(par == null ? '' : 'P'+par)+'</div>' : '')+
+        '<div class="val'+vc+'">'+v+'</div></div>';
+    };
+    let out = 0, inn = 0, pOut = 0, pIn = 0, html = '<div class="tm-card">';
+    for(let i=0;i<9;i++){ const v = Number(holes[i])||0; out += v; const p = pars ? pars[i] : null; pOut += p||0; html += cell(i+1, v, '', p); }
+    html += cell('OUT', out, 'sum', pars ? pOut : null);
+    for(let i=9;i<18;i++){ const v = Number(holes[i])||0; inn += v; const p = pars ? pars[i] : null; pIn += p||0; html += cell(i+1, v, '', p); }
+    html += cell('IN', inn, 'sum', pars ? pIn : null) + '</div>';
     html += '<table class="tm-sheet">'+
       '<tr><td>Course</td><td class="tm-val">'+escapeHtml(COURSE_NAMES[data.course]||'?')+'</td></tr>'+
       '<tr><td>Level</td><td class="tm-val">'+escapeHtml(LEVEL_NAMES[data.level]||'?')+'</td></tr>'+
       '<tr><td>Golf Set of Legend</td><td class="tm-val">'+(data.legend?'Used':'Not used')+'</td></tr>'+
       '<tr><td>Total strokes</td><td class="tm-val tnum">'+(Number(data.total)||0)+'</td></tr>'+
+      (pars ? '<tr><td>To par ('+pars.reduce((a,b)=>a+b,0)+')</td><td class="tm-val tnum">'+toPar(data)+'</td></tr>' : '')+
       '</table>';
     return html;
   }
@@ -346,7 +363,7 @@
       const rank = i+1;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
       const legend = data.legend ? '<span class="lg-badge" title="Golf Set of Legend used">LEGEND</span>' : '';
-      const meta = [fmtWhen(data.submittedAt), escapeHtml(LEVEL_NAMES[data.level]||''), legend, usernameLine].filter(Boolean).join(' · ');
+      const meta = [fmtWhen(data.submittedAt), toPar(data), escapeHtml(LEVEL_NAMES[data.level]||''), legend, usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
       const rowHtml = '<div class="row has-detail'+(rank===1?' top1':'')+'" data-detail="d'+i+'">'+
