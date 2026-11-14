@@ -1,0 +1,22 @@
+    // GENERATED DRAFT by scaffold-game.js from gameSubmissions/umzUjo761sNtBSwUJowu -- review every bound below
+    // (widths are a plain "10^width - 1" guess; tighten or loosen per the developer's real spec)
+    // before pasting this into firestore.rules' own OR-chain, same as every other isXScore(). Any
+    // "TODO"/manual field noted in the generated spr/index.html parser also needs its own
+    // check added here by hand -- this generator only covers fixed-width fields.
+    function isPocketSprintScore(d) {
+      return d.game == 'SPR'
+        && d.keys().hasOnly(['game', 'initials', 'formatVersion', 'recordType', 'trackCupID', 'modeTraps', 'lapCount', 'recordValue', 'rankValue', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+        && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+        && d.formatVersion is int && d.formatVersion >= 0 && d.formatVersion <= 9
+        && d.recordType is int && d.recordType >= 0 && d.recordType <= 9
+        && d.trackCupID is int && d.trackCupID >= 0 && d.trackCupID <= 99
+        && d.modeTraps is int && d.modeTraps >= 0 && d.modeTraps <= 9
+        && d.lapCount is int && d.lapCount >= 0 && d.lapCount <= 99
+        && d.recordValue is int && d.recordValue >= 0 && d.recordValue <= 99999
+        && d.rankValue is int && d.rankValue >= 0 && d.rankValue <= 99999
+        && d.source is string && d.source in ['qr', 'capture']
+        && d.submittedAt is int
+        && d.submittedAt <= request.time.toMillis() + 300000
+        && d.submittedAt >= request.time.toMillis() - 300000
+        && hasValidIdentity(d);
+    }
