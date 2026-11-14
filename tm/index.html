@@ -232,8 +232,9 @@
   const GAME_SLUG = 'tm';
   const SUBMIT_SOURCE = new URLSearchParams(location.search).get('src') === 'capture' ? 'capture' : 'qr';
   const COURSE_NAMES = ['Japan', 'U.S.A.', 'Germany'];
-  // Per-hole pars (from the game's own scorecard); null = not yet known for that course.
-  const COURSE_PARS = [[4,4,3,5,4,4,5,3,4, 4,4,3,4,4,5,3,4,5], null, [4,4,3,5,4,4,5,3,4, 5,3,4,4,3,4,4,5,4]];
+  // Per-hole pars, indexed by course (0 Japan, 1 U.S.A., 2 Germany).
+  // Read from the cart ROM hole table (0x1BBC0, 18 B/hole: USA, Germany, Japan order), confirmed on the in-game scorecard.
+  const COURSE_PARS = [[4,4,3,4,5,4,4,5,3, 4,5,4,4,3,4,5,3,4], [4,4,3,5,4,4,4,5,3, 4,5,3,4,4,3,4,5,4], [4,4,3,5,4,4,5,3,4, 5,3,4,4,3,4,4,5,4]];
   function toPar(data){
     const pars = COURSE_PARS[data.course]; if(!pars) return '';
     const d = (Number(data.total)||0) - pars.reduce((a,b)=>a+b,0);
