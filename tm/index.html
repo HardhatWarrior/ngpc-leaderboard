@@ -214,8 +214,8 @@
         <button type="button" class="mode-btn active" data-tab="0">Japan</button>
         <button type="button" class="mode-btn" data-tab="1">U.S.A.</button>
         <button type="button" class="mode-btn" data-tab="2">Germany</button>
-        <button type="button" class="mode-btn" data-tab="3">Australia</button>
-        <button type="button" class="mode-btn" data-tab="4">Scotland</button>
+        <!-- hidden until 5-course build is ready: <button type="button" class="mode-btn" data-tab="3">Australia</button> -->
+        <!-- hidden until 5-course build is ready: <button type="button" class="mode-btn" data-tab="4">Scotland</button> -->
       </div>
       <div id="board-status"></div>
       <div id="board"></div>
@@ -283,7 +283,7 @@
     const initials = text.slice(3,6);
     if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code has unreadable initials."};
     const course = parseInt(text[6], 10), level = parseInt(text[7], 10);
-    if(!(course >= 0 && course <= 4)) return {error:"That code has an unknown course."};
+    if(!(course >= 0 && course <= 2)) return {error:"That code has an unknown course."};
     if(!(level >= 0 && level <= 3)) return {error:"That code has an unknown level."};
     if(text[8] !== '0' && text[8] !== '1') return {error:"That code has an unreadable Legend flag."};
     const holes = [];
