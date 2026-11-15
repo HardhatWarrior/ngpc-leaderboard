@@ -673,7 +673,7 @@ window.NGPC_AUTH = (function(){
   }
   // NEO TURF MASTERS (tm/, retail cart + leaderboard patch): holes = strokes per hole (18),
   // total = their sum, lower is better; course/level/legend as tm/index.html's own tables.
-  const TM_COURSES = ['Japan', 'U.S.A.', 'Germany'];
+  const TM_COURSES = ['Japan', 'U.S.A.', 'Germany', 'Australia', 'Scotland'];
   const TM_LEVELS = ['Easy', 'Normal', 'Hard', 'Very Hard'];
   function renderTurfMastersScorecardHTML(data){
     const holes = Array.isArray(data.holes) ? data.holes : [];

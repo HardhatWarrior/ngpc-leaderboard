@@ -214,6 +214,8 @@
         <button type="button" class="mode-btn active" data-tab="0">Japan</button>
         <button type="button" class="mode-btn" data-tab="1">U.S.A.</button>
         <button type="button" class="mode-btn" data-tab="2">Germany</button>
+        <button type="button" class="mode-btn" data-tab="3">Australia</button>
+        <button type="button" class="mode-btn" data-tab="4">Scotland</button>
       </div>
       <div id="board-status"></div>
       <div id="board"></div>
@@ -231,10 +233,11 @@
   const QR_GAME_CODE = 'TM';
   const GAME_SLUG = 'tm';
   const SUBMIT_SOURCE = new URLSearchParams(location.search).get('src') === 'capture' ? 'capture' : 'qr';
-  const COURSE_NAMES = ['Japan', 'U.S.A.', 'Germany'];
+  const COURSE_NAMES = ['Japan', 'U.S.A.', 'Germany', 'Australia', 'Scotland'];
   // Per-hole pars, indexed by course (0 Japan, 1 U.S.A., 2 Germany).
   // Read from the cart ROM hole table (0x1BBC0, 18 B/hole: USA, Germany, Japan order), confirmed on the in-game scorecard.
-  const COURSE_PARS = [[4,4,3,4,5,4,4,5,3, 4,5,4,4,3,4,5,3,4], [4,4,3,5,4,4,4,5,3, 4,5,3,4,4,3,4,5,4], [4,4,3,5,4,4,5,3,4, 5,3,4,4,3,4,4,5,4]];
+  const COURSE_PARS = [[4,4,3,4,5,4,4,5,3, 4,5,4,4,3,4,5,3,4], [4,4,3,5,4,4,4,5,3, 4,5,3,4,4,3,4,5,4], [4,4,3,5,4,4,5,3,4, 5,3,4,4,3,4,4,5,4],
+    [4,4,3,5,4,4,5,3,4, 4,4,3,4,4,5,3,4,5], [4,4,4,3,5,4,5,3,4, 4,4,3,4,5,4,3,5,4]];
   function toPar(data){
     const pars = COURSE_PARS[data.course]; if(!pars) return '';
     const d = (Number(data.total)||0) - pars.reduce((a,b)=>a+b,0);
@@ -280,7 +283,7 @@
     const initials = text.slice(3,6);
     if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code has unreadable initials."};
     const course = parseInt(text[6], 10), level = parseInt(text[7], 10);
-    if(!(course >= 0 && course <= 2)) return {error:"That code has an unknown course."};
+    if(!(course >= 0 && course <= 4)) return {error:"That code has an unknown course."};
     if(!(level >= 0 && level <= 3)) return {error:"That code has an unknown level."};
     if(text[8] !== '0' && text[8] !== '1') return {error:"That code has an unreadable Legend flag."};
     const holes = [];

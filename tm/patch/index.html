@@ -21,6 +21,8 @@
   #status{ margin-top:14px; font-size:14px; min-height:1.4em; }
   .ok{ color:var(--ok); } .bad{ color:var(--bad); }
   .mono{ font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--dim); }
+  .variant{ display:grid; gap:8px; margin:6px 0 14px; font-size:14px; }
+  .variant label{ cursor:pointer; }
   #dl{ display:none; margin-top:14px; background:var(--accent); color:#1a1a1a; font-weight:600; text-decoration:none; padding:11px 16px; border-radius:8px; text-align:center; }
 </style>
 </head>
@@ -34,17 +36,27 @@
       <li>Choose it below. It is checked against the known-good dump.</li>
       <li>Download the patched ROM and play a 1 PLAYER STROKE PLAY round. The QR appears after hole 18.</li>
     </ol>
+    <div class="variant">
+      <label><input type="radio" name="v" value="std" checked> <b>Standard</b>: Japan, U.S.A., Germany (2 MB, any cart)</label>
+      <label><input type="radio" name="v" value="5c"> <b>5 courses (beta)</b>: adds Australia and Scotland (4 MB ROM, needs a 4 MB-capable flash cart)</label>
+    </div>
     <label class="drop" id="drop">Tap to choose your ROM, or drop it here
       <input type="file" id="file" accept=".ngc,.ngp,.bin,.zip,application/octet-stream">
     </label>
     <div id="status"></div>
     <a id="dl" href="#">Download patched ROM</a>
   </div>
-  <p class="mono">Prefer your own tools? <a href="/tm/turfmasters_lb.ips" download>Download the .ips</a> and apply it with any IPS patcher (Floating IPS, RomPatcher.js).<br><a href="/tm/">&larr; Back to the leaderboard</a></p>
+  <p class="mono">Prefer your own tools? <a href="/tm/turfmasters_lb.ips" download>Download the .ips</a> (or the <a href="/tm/turfmasters_5c.ips" download>5-course .ips</a>) and apply it with any IPS patcher (Floating IPS, RomPatcher.js).<br><a href="/tm/">&larr; Back to the leaderboard</a></p>
 </main>
 <script>
 (function(){
-  const SRC_SIZE = 2097152, SRC_CRC = 0x317A66D2, OUT_CRC = 0x0C9F1F05;
+  const SRC_SIZE = 2097152, SRC_CRC = 0x317A66D2;
+  const VARIANTS = {
+    std: {ips:'/tm/turfmasters_lb.ips', size:2097152, crc:0x8C6F51C8, name:'Neo Turf Masters (Leaderboard).ngc'},
+    '5c': {ips:'/tm/turfmasters_5c.ips', size:4194304, crc:0xEB30ABAA, name:'Neo Turf Masters (Leaderboard, 5 courses).ngc'}
+  };
+  const KNOWN = Object.values(VARIANTS).map(v=>v.crc);
+  let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');
   const T = new Uint32Array(256);
   for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; T[n]=c>>>0; }
@@ -73,30 +85,33 @@
     say('Checking ' + file.name + '…');
     let rom = new Uint8Array(await file.arrayBuffer());
     const crc = crc32(rom);
-    if(rom.length === SRC_SIZE && crc === OUT_CRC){ say('That ROM already has the leaderboard patch.', 'ok'); return; }
+    const V = VARIANTS[document.querySelector('input[name=v]:checked').value];
+    if(KNOWN.includes(crc)){ say('That ROM already has a leaderboard patch.', 'ok'); return; }
     if(rom.length !== SRC_SIZE || crc !== SRC_CRC){
       say('Not a clean Neo Turf Masters (World) dump (size ' + rom.length + ', CRC32 ' + hex(crc) + '; expected ' + SRC_SIZE + ' / ' + hex(SRC_CRC) + '). Unzip it first, and make sure it is unmodified.', 'bad');
       return;
     }
     try{
-      const r = await fetch('/tm/turfmasters_lb.ips', {cache:'no-cache'});
+      if(V.size > rom.length){ const big = new Uint8Array(V.size).fill(0xFF); big.set(rom); rom = big; }
+      const r = await fetch(V.ips, {cache:'no-cache'});
       if(!r.ok) throw new Error('could not download the patch (' + r.status + ')');
       rom = applyIps(rom, new Uint8Array(await r.arrayBuffer()));
     }catch(e){ say('Patch failed: ' + e.message, 'bad'); return; }
     const out = crc32(rom);
-    if(out !== OUT_CRC){ say('Patched ROM failed verification (CRC32 ' + hex(out) + '). The patch on the server may be newer than this page; reload and try again.', 'bad'); return; }
+    if(out !== V.crc){ say('Patched ROM failed verification (CRC32 ' + hex(out) + '). The patch on the server may be newer than this page; reload and try again.', 'bad'); return; }
     if(dl.href.startsWith('blob:')) URL.revokeObjectURL(dl.href);
     dl.href = URL.createObjectURL(new Blob([rom], {type:'application/octet-stream'}));
-    dl.download = 'Neo Turf Masters (Leaderboard).ngc';
+    dl.download = V.name;
     dl.style.display = 'block';
     say('Verified and patched (CRC32 ' + hex(out) + ').', 'ok');
   }
 
   const inp = document.getElementById('file'), drop = document.getElementById('drop');
-  inp.addEventListener('change', ()=>handle(inp.files[0]));
+  inp.addEventListener('change', ()=>{ lastFile = inp.files[0]; handle(lastFile); });
+  document.querySelectorAll('input[name=v]').forEach(x=>x.addEventListener('change', ()=>{ if(lastFile) handle(lastFile); }));
   ['dragenter','dragover'].forEach(e=>drop.addEventListener(e, ev=>{ ev.preventDefault(); drop.classList.add('over'); }));
   ['dragleave','drop'].forEach(e=>drop.addEventListener(e, ev=>{ ev.preventDefault(); drop.classList.remove('over'); }));
-  drop.addEventListener('drop', ev=>handle(ev.dataTransfer.files[0]));
+  drop.addEventListener('drop', ev=>{ lastFile = ev.dataTransfer.files[0]; handle(lastFile); });
 })();
 </script>
 </body>

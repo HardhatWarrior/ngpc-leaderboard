@@ -729,7 +729,7 @@ service cloud.firestore {
           && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'course', 'level', 'legend', 'holes', 'total', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.formatVersion is string && d.formatVersion == '1'
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
-          && d.course is int && d.course >= 0 && d.course <= 2
+          && d.course is int && d.course >= 0 && d.course <= 4
           && d.level is int && d.level >= 0 && d.level <= 3
           && d.legend is bool
           && d.holes is list && d.holes.size() == 18
