@@ -125,6 +125,12 @@
     return out + (grp !== null ? '</div>' : '');
   }
 
+  // Completion head (% + "n of m badges" + bar), the same markup Nocturne's tab uses.
+  function pctHead(got, total){
+    const pct = total ? Math.round(got*100/total) : 0;
+    return { pct: pct, html: '<div class="g-head"><div class="g-pct px tnum">'+pct+'%</div><div class="g-sum"><div class="tnum">'+got+' of '+total+' badges</div>'+
+      '<div class="bar"><i style="width:'+pct+'%"></i></div></div></div>' };
+  }
   // ---- Games that offer badges. Adding one = one more entry here: load(ctx) returns null when the game
   // has nothing to show for this player at all (the tab is left out), else {note, earned, html}. ctx is
   // {uid, username, self, viewer, scores: this player's approved score docs}. ----
@@ -205,9 +211,9 @@
           { grp:'', name:'TURKEY', sub: turkeys.length ? times(turkeys.length, 'game', 'games') + ' with three strikes in a row, first ' + fmtDate(turkeys[0].submittedAt) : 'three strikes in a row in a verified game', on: turkeys.length > 0 },
           { grp:'', name:'CHAMPION', sub: titles.length ? 'Won ' + titles.map(c=>c.ev.name).join(', ') : 'win a Neo Bowling tournament', on: titles.length > 0, big:true },
         ];
-        const got = list.filter(b=>b.on).length;
-        return { note: got+' of '+list.length, earned: got > 0, html:
-          '<h2 class="g-title">Neo Bowling</h2>'+badgeGrid(list)+
+        const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
+        return { note: head.pct+'%', earned: got > 0, html:
+          '<h2 class="g-title">Neo Bowling</h2>'+head.html+badgeGrid(list)+
           '<p class="fine">Perfect games, the 200 and 250 Clubs and turkeys are counted from verified scores; tournament titles from finished events.</p>' };
       }
     },
@@ -248,9 +254,9 @@
           { grp:'', name:'GLOBETROTTER', sub: played.size === 5 ? 'Played all five courses' : 'play a round on all five courses (' + played.size + ' of 5)', on: played.size === 5 },
           { grp:'', name:'GRAND SLAM', sub: slam.size === 5 ? 'Under par on all five courses' : 'under par on all five courses (' + slam.size + ' of 5)', on: slam.size === 5, big:true },
         ];
-        const got = list.filter(b=>b.on).length;
-        return { note: got+' of '+list.length, earned: got > 0, html:
-          '<h2 class="g-title">Neo Turf Masters</h2>'+badgeGrid(list)+
+        const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
+        return { note: head.pct+'%', earned: got > 0, html:
+          '<h2 class="g-title">Neo Turf Masters</h2>'+head.html+badgeGrid(list)+
           '<p class="fine">Counted from approved hole-by-hole cards on the <a href="/tm/">Turf Masters leaderboard</a>. Rounds played with the Legend clubs do not count toward badges.</p>' };
       }
     }
