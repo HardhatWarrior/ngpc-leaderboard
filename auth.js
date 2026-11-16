@@ -933,6 +933,10 @@ window.NGPC_AUTH = (function(){
       // Fixed names only -- callers put this into innerHTML unescaped.
       return [TM_COURSES[data.course]||'', TM_LEVELS[data.level]||'', data.legend ? 'Legend clubs' : ''].filter(Boolean).join(' · ');
     }
+    if(data.game==='CB'){
+      // Fixed names only -- callers put this into innerHTML unescaped.
+      return [{K:'Checkers',C:'Chess',B:'Backgammon'}[data.variant]||'', {E:'Easy',N:'Normal',H:'Hard'}[data.level]||'', (data.variant==='B' && data.margin===3) ? 'backgammon' : ((data.variant==='B' && data.margin===2) ? 'gammon' : '')].filter(Boolean).join(' · ');
+    }
     if(data.game==='ACES'){
       // Fixed names only -- callers put this into innerHTML unescaped.
       return ['Rookie','Squadron Leader','Wing Commander','Ace'][data.mode] || '';
@@ -977,6 +981,8 @@ window.NGPC_AUTH = (function(){
     if(data.game === 'SB') return Number.isFinite(data.total) ? (data.total+' LEFT') : '-';
     // NEO TURF MASTERS ranks by `total` strokes, ascending -- no `score` field.
     if(data.game === 'TM') return Number.isFinite(data.total) ? (data.total+' STROKES') : '-';
+    // CLASSIC BOARD GAMES ranks by `moves` (turns in backgammon), ascending -- no `score` field.
+    if(data.game === 'CB') return Number.isFinite(data.moves) ? (data.moves+(data.variant==='B' ? ' TURNS' : ' MOVES')) : '-';
     // GUARDIANS OF THE NOCTURNE ranks by completion % (gn/'s ACHIEVEMENTS) -- no `score` field.
     if(data.game === 'GN') return Number.isFinite(data.pct) ? (data.pct+'% COMPLETE') : '-';
     // POCKET SPRINT ranks by `recordValue` (no `score` field): championship points (C), or 60 Hz ticks (R/T) shown as mm:ss.mmm.
