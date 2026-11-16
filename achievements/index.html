@@ -210,6 +210,49 @@
           '<h2 class="g-title">Neo Bowling</h2>'+badgeGrid(list)+
           '<p class="fine">Perfect games, the 200 and 250 Clubs and turkeys are counted from verified scores; tournament titles from finished events.</p>' };
       }
+    },
+    {
+      key:'tm', name:'Neo Turf Masters',
+      // From the player's approved hole-by-hole cards (scores with game 'TM'). Rounds played with the Golf Set of
+      // Legend never count (the board ranks them last too). Pars per course: the same table as tm/index.html.
+      async load(ctx){
+        const PARS = [[4,4,3,4,5,4,4,5,3, 4,5,4,4,3,4,5,3,4], [4,4,3,5,4,4,4,5,3, 4,5,3,4,4,3,4,5,4], [4,4,3,5,4,4,5,3,4, 5,3,4,4,3,4,4,5,4],
+                      [4,4,3,5,4,4,5,3,4, 4,4,3,4,4,5,3,4,5], [4,4,4,3,5,4,5,3,4, 4,4,3,4,5,4,3,5,4]];
+        const COURSES = ['Japan', 'U.S.A.', 'Germany', 'Australia', 'Scotland'];
+        const all = ctx.scores.filter(d=>d.game === 'TM' && Array.isArray(d.holes) && d.holes.length === 18 && PARS[d.course]);
+        if(!all.length) return null;
+        const rounds = all.filter(d=>!d.legend).sort((a,b)=>(a.submittedAt||0)-(b.submittedAt||0));
+        const first = (test)=>{ const d = rounds.find(test); return d ? d : null; };
+        const diffs = (d)=>d.holes.map((s,i)=>s - PARS[d.course][i]);
+        const par = (d)=>PARS[d.course].reduce((a,b)=>a+b,0);
+        const under = (d)=>d.total < par(d);
+        const when = (d)=>d ? ' (' + COURSES[d.course] + ', ' + fmtDate(d.submittedAt) + ')' : '';
+        const ace = first(d=>d.holes.some(s=>s === 1));
+        const alb = first(d=>diffs(d).some(x=>x <= -3));
+        const eagle = first(d=>diffs(d).some(x=>x <= -2));
+        const train = first(d=>{ const x = diffs(d); for(let i=0;i<16;i++) if(x[i]<0 && x[i+1]<0 && x[i+2]<0) return true; return false; });
+        const clean = first(d=>diffs(d).every(x=>x <= 0));
+        const up = first(under);
+        const pro = first(d=>d.total <= par(d) - 10);
+        const vh = first(d=>d.level === 3 && under(d));
+        const played = new Set(rounds.map(d=>d.course)), slam = new Set(rounds.filter(under).map(d=>d.course));
+        const list = [
+          { grp:'', name:'HOLE IN ONE', sub: ace ? 'Aced a hole'+when(ace) : 'ace any hole', on: !!ace, big:true },
+          { grp:'', name:'ALBATROSS', sub: alb ? '3 under on a hole'+when(alb) : '3 under par on a single hole', on: !!alb },
+          { grp:'', name:'EAGLE', sub: eagle ? '2 under on a hole'+when(eagle) : '2 under par on a single hole', on: !!eagle },
+          { grp:'', name:'BIRDIE TRAIN', sub: train ? '3 in a row'+when(train) : 'three birdies (or better) in a row', on: !!train },
+          { grp:'', name:'BOGEY-FREE', sub: clean ? 'No hole over par'+when(clean) : 'a round with no hole over par', on: !!clean },
+          { grp:'', name:'UNDER PAR', sub: up ? 'Finished under par'+when(up) : 'finish a round under par', on: !!up },
+          { grp:'', name:'TOUR PRO', sub: pro ? '10 or more under'+when(pro) : 'a round 10 or more under par', on: !!pro },
+          { grp:'', name:'VERY HARD', sub: vh ? 'Under par on Very Hard'+when(vh) : 'an under-par round on Very Hard', on: !!vh },
+          { grp:'', name:'GLOBETROTTER', sub: played.size === 5 ? 'Played all five courses' : 'play a round on all five courses (' + played.size + ' of 5)', on: played.size === 5 },
+          { grp:'', name:'GRAND SLAM', sub: slam.size === 5 ? 'Under par on all five courses' : 'under par on all five courses (' + slam.size + ' of 5)', on: slam.size === 5, big:true },
+        ];
+        const got = list.filter(b=>b.on).length;
+        return { note: got+' of '+list.length, earned: got > 0, html:
+          '<h2 class="g-title">Neo Turf Masters</h2>'+badgeGrid(list)+
+          '<p class="fine">Counted from approved hole-by-hole cards on the <a href="/tm/">Turf Masters leaderboard</a>. Rounds played with the Legend clubs do not count toward badges.</p>' };
+      }
     }
   ];
 
