@@ -1539,7 +1539,7 @@
     el('play-page-link').href = data.section === 'solo' ? '/play/solo/?g='+encodeURIComponent(slug) : '/play/'+(PLAY_FOLDER[slug] || slug)+'/';
     const downloads = data.romDownloads || 0;
     // Patch-distributed games (Turf Masters): patched ROMs downloaded from the patch page + raw .ips downloads.
-    const hasPatch = ('patchApplied' in data) || ('patchApplied5c' in data) || ('ipsDownloads' in data);
+    const hasPatch = slug === 'tm' || ('patchApplied' in data) || ('patchApplied5c' in data) || ('ipsDownloads' in data);
     const dlText = hasPatch
       ? 'Patched ROMs <b>'+((data.patchApplied||0)+(data.patchApplied5c||0))+'</b> (standard <b>'+(data.patchApplied||0)+'</b>, 5-course <b>'+(data.patchApplied5c||0)+'</b>) &middot; .ips downloads <b>'+(data.ipsDownloads||0)+'</b>'
       : 'Downloaded <b>'+downloads+'</b> time'+(downloads===1?'':'s');
