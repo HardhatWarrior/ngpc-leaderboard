@@ -1132,7 +1132,14 @@ service cloud.firestore {
         // requirement, same as a plain download link never required one; still can't be set to an
         // arbitrary/negative value or touch any other field.
         || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['romDownloads'])
-            && request.resource.data.romDownloads == (('romDownloads' in resource.data) ? resource.data.romDownloads : 0) + 1);
+            && request.resource.data.romDownloads == (('romDownloads' in resource.data) ? resource.data.romDownloads : 0) + 1)
+        // Turf Masters patch page: patched-ROM downloads per variant and raw .ips downloads, same +1-only shape.
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['patchApplied'])
+            && request.resource.data.patchApplied == (('patchApplied' in resource.data) ? resource.data.patchApplied : 0) + 1)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['patchApplied5c'])
+            && request.resource.data.patchApplied5c == (('patchApplied5c' in resource.data) ? resource.data.patchApplied5c : 0) + 1)
+        || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['ipsDownloads'])
+            && request.resource.data.ipsDownloads == (('ipsDownloads' in resource.data) ? resource.data.ipsDownloads : 0) + 1);
       allow delete: if isAdmin();
     }
 

@@ -25,6 +25,9 @@
   .variant label{ cursor:pointer; }
   #dl{ display:none; margin-top:14px; background:var(--accent); color:#1a1a1a; font-weight:600; text-decoration:none; padding:11px 16px; border-radius:8px; text-align:center; }
 </style>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
 </head>
 <body>
 <main>
@@ -102,6 +105,7 @@
     if(dl.href.startsWith('blob:')) URL.revokeObjectURL(dl.href);
     dl.href = URL.createObjectURL(new Blob([rom], {type:'application/octet-stream'}));
     dl.download = V.name;
+    dl.dataset.counter = (V === VARIANTS['5c']) ? 'patchApplied5c' : 'patchApplied';
     dl.style.display = 'block';
     say('Verified and patched (CRC32 ' + hex(out) + ').', 'ok');
   }
@@ -112,7 +116,12 @@
   ['dragenter','dragover'].forEach(e=>drop.addEventListener(e, ev=>{ ev.preventDefault(); drop.classList.add('over'); }));
   ['dragleave','drop'].forEach(e=>drop.addEventListener(e, ev=>{ ev.preventDefault(); drop.classList.remove('over'); }));
   drop.addEventListener('drop', ev=>{ lastFile = ev.dataTransfer.files[0]; handle(lastFile); });
+  // download counts (games/tm: patchApplied / patchApplied5c / ipsDownloads; shown on admin/game)
+  function count(field){ try{ if(window.NGPC_AUTH && NGPC_AUTH.trackGameCounter) NGPC_AUTH.trackGameCounter('tm', field); }catch(e){} }
+  dl.addEventListener('click', ()=>{ if(dl.dataset.counter) count(dl.dataset.counter); });
+  document.querySelectorAll('a[href$=".ips"]').forEach(a=>a.addEventListener('click', ()=>count('ipsDownloads')));
 })();
 </script>
+<script src="/auth.js"></script>
 </body>
 </html>

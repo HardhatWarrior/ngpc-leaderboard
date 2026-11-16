@@ -146,6 +146,17 @@ window.NGPC_AUTH = (function(){
     }catch(e){ /* non-critical */ }
   }
 
+  // Other public +1-only counters on a game doc (firestore.rules games/{slug} allows exactly these, +1 each):
+  // the Turf Masters patch page counts patched-ROM downloads per variant and raw .ips downloads.
+  const GAME_COUNTERS = ['patchApplied', 'patchApplied5c', 'ipsDownloads'];
+  function trackGameCounter(slug, field){
+    if(GAME_COUNTERS.indexOf(field) < 0) return;
+    try{
+      const upd = {}; upd[field] = firebase.firestore.FieldValue.increment(1);
+      db.collection('games').doc(slug).set(upd, { merge: true }).catch(()=>{});
+    }catch(e){ /* non-critical */ }
+  }
+
   const EMAIL_DOMAIN = 'users.ngpc-dev.com';
   const USERNAME_RE = /^[A-Za-z0-9_]{3,16}$/;
 
@@ -1409,7 +1420,7 @@ window.NGPC_AUTH = (function(){
     packColor, unpackColor, css255FromWord, renderAvatarToCanvas, drawAvatarCell,
     TRANSPARENT, isTransparent,
     AVATAR_SIZE, AVATAR_CELLS, USERNAME_RE,
-    friendlyAuthError, escapeHtml, notifyAdmin, notifyUser, trackRomDownload, pathKeyFromLocation,
+    friendlyAuthError, escapeHtml, notifyAdmin, notifyUser, trackRomDownload, trackGameCounter, pathKeyFromLocation,
     scoreHasDetail, scoreDetailHTML, scoreInlineMeta, scoreValueDisplay,
     ADMIN_UID, isSiteAdmin, isGameManager, canPreviewGame, requestPasswordReset,
     authReady, openSignInModal,

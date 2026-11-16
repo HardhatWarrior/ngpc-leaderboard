@@ -1538,6 +1538,11 @@
     el('lb-page-link').href = data.leaderboardPath || ('/'+slug+'/');
     el('play-page-link').href = data.section === 'solo' ? '/play/solo/?g='+encodeURIComponent(slug) : '/play/'+(PLAY_FOLDER[slug] || slug)+'/';
     const downloads = data.romDownloads || 0;
+    // Patch-distributed games (Turf Masters): patched ROMs downloaded from the patch page + raw .ips downloads.
+    const hasPatch = ('patchApplied' in data) || ('patchApplied5c' in data) || ('ipsDownloads' in data);
+    const dlText = hasPatch
+      ? 'Patched ROMs <b>'+((data.patchApplied||0)+(data.patchApplied5c||0))+'</b> (standard <b>'+(data.patchApplied||0)+'</b>, 5-course <b>'+(data.patchApplied5c||0)+'</b>) &middot; .ips downloads <b>'+(data.ipsDownloads||0)+'</b>'
+      : 'Downloaded <b>'+downloads+'</b> time'+(downloads===1?'':'s');
     // Every game with an in-browser player has a count, whichever emulator it uses (the count is the play
     // page's own loads): hand-built games via the PLAY_FOLDER table, single-player games on the shared
     // /play/solo/ page (key play_solo_<slug>), everything else at /play/<slug>/. A renamed slug keeps its
@@ -1549,13 +1554,13 @@
     if(playFolder){
       Promise.all(playKeys.map(k=>db.collection('pageViews').doc(k).get())).then(pvDocs=>{
         const plays = pvDocs.reduce((n,d)=>n + ((d.exists && d.data().total) || 0), 0);
-        statsLineEl.innerHTML = 'Downloaded <b>'+downloads+'</b> time'+(downloads===1?'':'s')
+        statsLineEl.innerHTML = dlText
           +' &middot; Played <b>'+plays+'</b> time'+(plays===1?'':'s')+' (in-browser)';
       }).catch(()=>{
-        statsLineEl.innerHTML = 'Downloaded <b>'+downloads+'</b> time'+(downloads===1?'':'s')+' &middot; Play count unavailable';
+        statsLineEl.innerHTML = dlText+' &middot; Play count unavailable';
       });
     } else {
-      statsLineEl.innerHTML = 'Downloaded <b>'+downloads+'</b> time'+(downloads===1?'':'s')+' &middot; No in-browser player for this game';
+      statsLineEl.innerHTML = dlText+' &middot; No in-browser player for this game';
     }
 
     // Scan-source breakdown: 'qr' is a real camera/photo scan (incl. the on-device QR's own deep
