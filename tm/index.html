@@ -102,7 +102,7 @@
   .tm-sheet{ width:100%; border-collapse:collapse; margin:8px 0 14px; font-size:11.5px; }
   .tm-sheet td{ padding:3px 6px; border-bottom:1px solid var(--border); }
   .tm-sheet td.tm-val{ text-align:right; font-family:"IBM Plex Mono",monospace; color:var(--cream); }
-  .lg-badge{ display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:9px; font-weight:700; letter-spacing:.5px; padding:1px 5px; border-radius:3px; border:1px solid #e8c547; color:#e8c547; vertical-align:middle; }
+  .lg-badge{ display:inline-block; font-family:"IBM Plex Mono",monospace; font-size:9px; font-weight:700; letter-spacing:.5px; padding:1px 5px; border-radius:3px; border:1px solid #e0443a; color:#fff; background:#c0392b; vertical-align:middle; }
   .patch-note{ font-size:11px; color:var(--dim); max-width:260px; }
 
   .scan-video-wrap{ position:relative; aspect-ratio:1; border-radius:10px; overflow:hidden; background:#000; margin-bottom:10px; }
@@ -209,7 +209,7 @@
 
     <section class="panel">
       <h2>Leaderboard</h2>
-      <p class="hint">Fewest total strokes. Ties go to the harder level, then a round without the Legend clubs, then the earlier submission. Tap a row for the hole-by-hole card.</p>
+      <p class="hint">Fewest total strokes. Rounds played with the Legend clubs always rank below rounds without them. Ties go to the harder level, then the earlier submission. Tap a row for the hole-by-hole card.</p>
       <div class="mode-toggle">
         <button type="button" class="mode-btn active" data-tab="0">Japan</button>
         <button type="button" class="mode-btn" data-tab="1">U.S.A.</button>
@@ -346,9 +346,9 @@
     return html;
   }
 
-  // Fewest strokes; ties: harder level, then no Legend set, then the earlier submission.
+  // Legend-club rounds always rank below the rest; then fewest strokes, harder level, earlier submission.
   function compareScores(a, b){
-    return (a.total - b.total) || ((b.level||0) - (a.level||0)) || ((a.legend?1:0) - (b.legend?1:0)) || ((a.submittedAt||0) - (b.submittedAt||0));
+    return ((a.legend?1:0) - (b.legend?1:0)) || (a.total - b.total) || ((b.level||0) - (a.level||0)) || ((a.submittedAt||0) - (b.submittedAt||0));
   }
 
   async function renderBoard(){

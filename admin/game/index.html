@@ -1268,7 +1268,7 @@
         {name:'Checksum', width:'2', format:'base-36', notes:'(sum of QR-alphanumeric indexes of the 30 chars before it) mod 1296; verified client-side, not stored'},
       ],
       totalLength: '16 (prefix) + 32 = 48 chars, fixed',
-      sortField: 'total (asc), then level (desc), then no Legend first, then earliest',
+      sortField: 'no Legend first (Legend rounds always below), then total (asc), then level (desc), then earliest',
       scorecard: 'Nothing derived beyond the checks: total must equal the sum of the 18 holes. One board tab per course on /tm/. Full spec: TurfMastersLB/NOTES.md + submission-template.json.',
       example: 'NGPC-DEV.COM/TM/TM1DAV0119879989978989799791507C',
       exampleIsReal: true,
