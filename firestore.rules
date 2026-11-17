@@ -1402,6 +1402,32 @@ service cloud.firestore {
       }
     }
 
+    // tm_career/{uid} -- a player's Neo Turf Masters career stats, from the 5-course patch's STATS QR (STATS > OVERALL
+    // RECORDS, OPTION), decoded and checksum-checked in tm/index.html's parseStatsPayload(). Public read (like scores);
+    // only the owner writes their own doc, under their real username. Field ranges = the QR's base-36 widths.
+    match /tm_career/{uid} {
+      function isN(v, mx) { return v is int && v >= 0 && v <= mx; }
+      function isTurfCareer(d) {
+        return d.keys().hasOnly(['uid', 'username', 'submittedAt', 'version', 'tc', 'jpBest', 'jpRounds', 'jpStrokes', 'jpHio', 'jpAlb', 'usBest', 'usRounds', 'usStrokes', 'usHio', 'usAlb', 'geBest', 'geRounds', 'geStrokes', 'geHio', 'geAlb', 'auBest', 'auRounds', 'auStrokes', 'auHio', 'auAlb', 'scBest', 'scRounds', 'scStrokes', 'scHio', 'scAlb', 'holes', 'fairways', 'gir', 'putts', 'under', 'par', 'over'])
+          && d.uid == uid
+          && d.username is string && d.username == get(/databases/$(database)/documents/users/$(uid)).data.username
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && d.version == 1
+          && isN(d.tc, 1295)
+          && d.jpBest is int && d.jpBest >= 0 && d.jpBest <= 255 && isN(d.jpRounds, 46655) && isN(d.jpStrokes, 1679615) && isN(d.jpHio, 1295) && isN(d.jpAlb, 1295)
+          && d.usBest is int && d.usBest >= 0 && d.usBest <= 255 && isN(d.usRounds, 46655) && isN(d.usStrokes, 1679615) && isN(d.usHio, 1295) && isN(d.usAlb, 1295)
+          && d.geBest is int && d.geBest >= 0 && d.geBest <= 255 && isN(d.geRounds, 46655) && isN(d.geStrokes, 1679615) && isN(d.geHio, 1295) && isN(d.geAlb, 1295)
+          && d.auBest is int && d.auBest >= 0 && d.auBest <= 255 && isN(d.auRounds, 46655) && isN(d.auStrokes, 1679615) && isN(d.auHio, 1295) && isN(d.auAlb, 1295)
+          && d.scBest is int && d.scBest >= 0 && d.scBest <= 255 && isN(d.scRounds, 46655) && isN(d.scStrokes, 1679615) && isN(d.scHio, 1295) && isN(d.scAlb, 1295)
+          && isN(d.holes, 1679615) && isN(d.fairways, 1679615) && isN(d.gir, 1679615) && isN(d.putts, 1679615) && isN(d.under, 1679615) && isN(d.par, 1679615) && isN(d.over, 1679615);
+      }
+      allow read: if true;
+      allow create, update: if request.auth != null && request.auth.uid == uid && isTurfCareer(request.resource.data);
+      allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
+    }
+
     // Default-deny for every other collection -- Firestore denies unmatched
     // paths by default anyway, but this makes the intent explicit as the
     // schema grows (Phase 3 comments/, etc).

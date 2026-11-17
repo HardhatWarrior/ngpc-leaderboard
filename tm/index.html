@@ -114,8 +114,12 @@
   .btn-primary{ background:var(--accent); color:var(--accent-ink); } .btn-primary:hover:not(:disabled){ background:#7aa2f7; }
   .btn-secondary{ background:transparent; border:1px solid var(--border); color:var(--cream); margin-top:8px; }
   .btn-secondary:hover:not(:disabled){ border-color:var(--accent2); }
-  #confirm-view, #success-view{ display:none; }
-  #confirm-view.show, #success-view.show{ display:block; }
+  #confirm-view, #success-view, #stats-view{ display:none; }
+  #confirm-view.show, #success-view.show, #stats-view.show{ display:block; }
+  .tm-stats{ width:100%; border-collapse:collapse; font-size:13px; margin:8px 0; }
+  .tm-stats th, .tm-stats td{ padding:3px 6px; text-align:right; border-bottom:1px solid var(--border); }
+  .tm-stats th:first-child, .tm-stats td:first-child{ text-align:left; }
+  .tm-stats th{ color:var(--dim); font-weight:600; }
   #idle-view.hide{ display:none; }
   .confirm-score{ text-align:center; padding:18px 0 20px; }
   .confirm-score .who{ font-family:"Press Start 2P",monospace; font-size:16px; letter-spacing:.04em; color:var(--cream); }
@@ -200,11 +204,30 @@
         <div id="confirm-msg"></div>
       </div>
 
+      <div id="stats-view">
+        <div class="confirm-score">
+          <div class="who">CAREER</div>
+          <div class="what" id="stats-rounds">0</div>
+          <div class="src">rounds played, from the cart&rsquo;s STATS QR</div>
+        </div>
+        <div id="stats-card"></div>
+        <button class="btn-primary" id="btn-stats-save">Save to my profile</button>
+        <button class="btn-secondary" id="btn-stats-back">Cancel</button>
+        <div id="stats-msg"></div>
+      </div>
+
       <div id="success-view">
         <div class="success-icon">&#127881;</div>
         <p id="success-text">Score submitted to the leaderboard.</p>
         <button class="btn-secondary" id="btn-again">Back to leaderboard</button>
       </div>
+    </section>
+
+    <section class="panel" id="mystats-panel" hidden>
+      <h2>My career stats</h2>
+      <p class="hint">From the cart&rsquo;s STATS QR (5-course patch: STATS &gt; OVERALL RECORDS, press OPTION). Scan it again any time to update.</p>
+      <div id="mystats-card"></div>
+      <p class="hint" id="mystats-when"></p>
     </section>
 
     <section class="panel">
@@ -300,10 +323,88 @@
              legend:text[8] === '1', holes:holes, total:total };
   }
 
+  // Career STATS QR, 100 chars after "NGPC-DEV.COM/TM/" (TurfMastersLB/stq/stq.c), base 36 big digit first:
+  //   0-2 "TS1"; 5 courses (Japan, U.S.A., Germany, Australia, Scotland) x [best 2, rounds 3, strokes 4, holes in one 2,
+  //   albatrosses 2]; totals: holes 4, fairways hit 4, greens in regulation 4, putts 4, under-par 4, par 4, over-par holes 4;
+  //   triple crowns 2; checksum 2 = sum of the QR-alphanumeric indexes of chars 0-97 mod 1296.
+  const TS_LEN = 100;
+  function parseStatsPayload(text){
+    if(text.length !== TS_LEN || !/^[0-9A-Z]+$/.test(text)) return {error:"That stats code is the wrong length ("+text.length+" of "+TS_LEN+" characters)."};
+    if(text[2] !== '1') return {error:'That stats code is a newer format ("'+text[2]+'") than this page understands.'};
+    let sum = 0;
+    for(let i=0;i<TS_LEN-2;i++) sum += QR_ALNUM.indexOf(text[i]);
+    if(sum % 1296 !== parseInt(text.slice(TS_LEN-2), 36)) return {error:"That stats code didn't scan cleanly (checksum mismatch). Rescan it."};
+    let p = 3;
+    const take = n => { const v = parseInt(text.slice(p, p+n), 36); p += n; return v; };
+    const courses = [];
+    for(let c=0;c<5;c++) courses.push({best:take(2), rounds:take(3), strokes:take(4), hio:take(2), alb:take(2)});
+    const t = {holes:take(4), fairways:take(4), gir:take(4), putts:take(4), under:take(4), par:take(4), over:take(4)};
+    const tc = take(2);
+    return {kind:'stats', courses, totals:t, tc};
+  }
+  function statsCardHTML(st){
+    const C = st.courses, T = st.totals;
+    const rounds = C.reduce((a,c)=>a+c.rounds,0), strokes = C.reduce((a,c)=>a+c.strokes,0);
+    const bests = C.map((c,i)=>({b:c.best, i})).filter(x=>x.b>0);
+    const best = bests.length ? bests.reduce((a,x)=>x.b<a.b?x:a) : null;
+    const pct = (n,d) => d ? (100*n/d).toFixed(1)+'%' : '&ndash;';
+    const avg = (n,d) => d ? (n/d).toFixed(2) : '&ndash;';
+    const rel = b => { const r = b-72; return r===0 ? 'E' : (r>0?'+':'')+r; };
+    let h = '<table class="tm-stats">'+
+      '<tr><td>Rounds</td><td>'+rounds+'</td></tr>'+
+      '<tr><td>Average score</td><td>'+avg(strokes,rounds)+'</td></tr>'+
+      '<tr><td>Best round</td><td>'+(best ? best.b+' ('+rel(best.b)+', '+escapeHtml(COURSE_NAMES[best.i])+')' : '&ndash;')+'</td></tr>'+
+      '<tr><td>Holes in one</td><td>'+C.reduce((a,c)=>a+c.hio,0)+'</td></tr>'+
+      '<tr><td>Albatrosses</td><td>'+C.reduce((a,c)=>a+c.alb,0)+'</td></tr>'+
+      '<tr><td>Triple Crowns</td><td>'+st.tc+'</td></tr>'+
+      '<tr><td>Under par / par / over par</td><td>'+pct(T.under,T.holes)+' / '+pct(T.par,T.holes)+' / '+pct(T.over,T.holes)+'</td></tr>'+
+      '<tr><td>Driving accuracy</td><td>'+pct(T.fairways, rounds*14)+'</td></tr>'+
+      '<tr><td>Greens at par</td><td>'+pct(T.gir,T.holes)+'</td></tr>'+
+      '<tr><td>Putts per hole</td><td>'+avg(T.putts,T.holes)+'</td></tr></table>';
+    h += '<table class="tm-stats"><tr><th>Course</th><th>Rounds</th><th>Best</th><th>Average</th><th>HIO</th></tr>';
+    C.forEach((c,i)=>{ h += '<tr><td>'+escapeHtml(COURSE_NAMES[i])+'</td><td>'+c.rounds+'</td><td>'+(c.best>0 ? c.best+' ('+rel(c.best)+')' : '&ndash;')+'</td><td>'+avg(c.strokes,c.rounds)+'</td><td>'+c.hio+'</td></tr>'; });
+    return h+'</table>';
+  }
+  const TM_PFX = ['jp','us','ge','au','sc'];
+  function statsToDoc(st, user){
+    const d = {uid:user.uid, username:user.username, submittedAt:Date.now(), version:1, tc:st.tc};
+    st.courses.forEach((c,i)=>{ const k = TM_PFX[i]; d[k+'Best']=c.best; d[k+'Rounds']=c.rounds; d[k+'Strokes']=c.strokes; d[k+'Hio']=c.hio; d[k+'Alb']=c.alb; });
+    Object.keys(st.totals).forEach(k=>{ d[k] = st.totals[k]; });
+    return d;
+  }
+  function docToStats(d){
+    return {courses: TM_PFX.map(k=>({best:d[k+'Best']|0, rounds:d[k+'Rounds']|0, strokes:d[k+'Strokes']|0, hio:d[k+'Hio']|0, alb:d[k+'Alb']|0})),
+            totals: {holes:d.holes|0, fairways:d.fairways|0, gir:d.gir|0, putts:d.putts|0, under:d.under|0, par:d.par|0, over:d.over|0}, tc:d.tc|0};
+  }
+  let pendingStats = null;
+  function openStats(st){
+    pendingStats = st;
+    el('stats-rounds').textContent = String(st.courses.reduce((a,c)=>a+c.rounds,0));
+    el('stats-card').innerHTML = statsCardHTML(st);
+    el('stats-msg').innerHTML = '';
+    el('btn-stats-save').disabled = false;
+    showStage('stats');
+  }
+  async function loadMyStats(user){
+    const panel = el('mystats-panel');
+    const d0 = db || (window.NGPC_AUTH && NGPC_AUTH.db);
+    if(!user || !d0){ panel.hidden = true; return; }
+    try{
+      const doc = await d0.collection('tm_career').doc(user.uid).get();
+      if(!doc.exists){ panel.hidden = true; return; }
+      const d = doc.data();
+      el('mystats-card').innerHTML = statsCardHTML(docToStats(d));
+      el('mystats-when').textContent = d.submittedAt ? 'Saved '+new Date(d.submittedAt).toLocaleDateString() : '';
+      panel.hidden = false;
+    }catch(e){ panel.hidden = true; }
+  }
+
   function parsePayload(text){
     text = (text||'').trim();
     if(!text) return {error:"That code is too short to be a valid score."};
-    return parseTurfPayload(text.toUpperCase());
+    text = text.toUpperCase();
+    if(text.slice(0,2) === 'TS') return parseStatsPayload(text);
+    return parseTurfPayload(text);
   }
 
   function lastPathSegment(text){
@@ -449,6 +550,7 @@
     idleView.classList.toggle('hide', stage!=='idle');
     confirmView.classList.toggle('show', stage==='confirm');
     successView.classList.toggle('show', stage==='success');
+    el('stats-view').classList.toggle('show', stage==='stats');
   }
 
   function openConfirm(parsed){
@@ -469,7 +571,7 @@
       return;
     }
     resetScanUI();
-    openConfirm(result);
+    if(result.kind === 'stats') openStats(result); else openConfirm(result);
   }
 
   let cameraStream = null, scanRAF = null;
@@ -646,6 +748,23 @@
   });
 
   el('btn-again').addEventListener('click', ()=>{ pending = null; showStage('idle'); });
+  el('btn-stats-back').addEventListener('click', ()=>{ pendingStats = null; showStage('idle'); });
+  el('btn-stats-save').addEventListener('click', async ()=>{
+    const user = window.NGPC_AUTH && NGPC_AUTH.currentUser, msg = el('stats-msg'), btn = el('btn-stats-save');
+    if(!user || !user.username){ msg.innerHTML = '<div class="msg err">Sign in to save your stats.</div>'; return; }
+    if(!pendingStats) return;
+    btn.disabled = true;
+    try{
+      await (db || NGPC_AUTH.db).collection('tm_career').doc(user.uid).set(statsToDoc(pendingStats, user));
+      pendingStats = null;
+      el('success-text').textContent = 'Career stats saved to your profile.';
+      showStage('success');
+      loadMyStats(user);
+    }catch(e){
+      btn.disabled = false;
+      msg.innerHTML = '<div class="msg err">Save failed: '+escapeHtml(e.message || 'unknown')+'</div>';
+    }
+  });
 
   let gateInitialized = false;
   function isAuthorizedViewer(user){
@@ -661,8 +780,7 @@
     initDb();
     const fromEntry = payloadFromEntry();
     if(fromEntry){
-      setTab(fromEntry.course);
-      openConfirm(fromEntry);
+      if(fromEntry.kind === 'stats') openStats(fromEntry); else { setTab(fromEntry.course); openConfirm(fromEntry); }
       history.replaceState(null, '', location.pathname);
     }
   }
@@ -694,6 +812,7 @@
       : Promise.resolve();
 
     NGPC_AUTH.onAuthChange((user)=>{
+      loadMyStats(user);
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();
