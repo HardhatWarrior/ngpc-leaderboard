@@ -262,6 +262,67 @@
     }
   ];
 
+  // ---- Score-board games: every badge is a test over the player's approved scores for one game. Each def is
+  // {name, sub (how to earn it), test(d) -> true when that score earns it, big?}; the first earning score dates it.
+  function boardProvider(key, name, game, defs, fine, extra){
+    return { key:key, name:name, async load(ctx){
+      const mine = ctx.scores.filter(d=>d.game === game).sort((a,b)=>(a.submittedAt||0)-(b.submittedAt||0));
+      if(!mine.length) return null;
+      const list = defs.map(b=>{
+        const hit = mine.find(b.test);
+        return { grp:b.grp||'', name:b.name, sub: hit ? (b.got ? b.got(hit) : 'Earned ' + fmtDate(hit.submittedAt)) : b.sub, on: !!hit, big: !!b.big };
+      });
+      const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
+      return { note: head.pct+'%', earned: got > 0, html:
+        '<h2 class="g-title">'+esc(name)+'</h2>'+head.html+badgeGrid(list)+'<p class="fine">'+fine+'</p>' };
+    } };
+  }
+  const pts = (n, label)=>({ name:label, sub:'a score of '+n.toLocaleString()+' or more', test:d=>d.score >= n,
+                             got:d=>'Scored '+d.score.toLocaleString()+', '+fmtDate(d.submittedAt) });
+  const mmss = (t)=>Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+  PROVIDERS.push(
+    // The 2048 board keeps only the score, not the tile: a tile of 2^n needs at least (n-1)*2^n points of merging.
+    boardProvider('2k','2048','2K',[
+      { name:'512 TILE',  sub:'a score of 4,096 or more',  test:d=>d.score >= 4096,  got:d=>'Scored '+d.score.toLocaleString()+', '+fmtDate(d.submittedAt) },
+      { name:'1024 TILE', sub:'a score of 9,216 or more',  test:d=>d.score >= 9216,  got:d=>'Scored '+d.score.toLocaleString()+', '+fmtDate(d.submittedAt) },
+      { name:'2048 TILE', sub:'a score of 20,480 or more', test:d=>d.score >= 20480, got:d=>'Scored '+d.score.toLocaleString()+', '+fmtDate(d.submittedAt), big:true },
+    ], 'The board stores your score, not the tile, so these use the score that reaching each tile guarantees. Counted from approved scores on the <a href="/2k/">2048 leaderboard</a>.'),
+    boardProvider('tt','Tetris','TT',[ pts(10000,'10K'), pts(50000,'50K'), pts(100000,'100K') ],
+      'Counted from approved scores on the <a href="/tt/">Tetris leaderboard</a>.'),
+    boardProvider('bk','Breakout','BK',[ pts(5000,'5K'), pts(15000,'15K') ],
+      'Counted from approved scores on the <a href="/bk/">Breakout leaderboard</a>.'),
+    boardProvider('ms','Minesweeper','MS',[
+      { name:'EASY CLEARED',   sub:'clear an Easy board',   test:d=>d.difficulty === 0, got:d=>'Cleared in '+mmss(d.time)+', '+fmtDate(d.submittedAt) },
+      { name:'NORMAL CLEARED', sub:'clear a Normal board',  test:d=>d.difficulty === 1, got:d=>'Cleared in '+mmss(d.time)+', '+fmtDate(d.submittedAt) },
+    ], 'Counted from approved times on the <a href="/ms/">Minesweeper leaderboard</a>.'),
+    boardProvider('sd','Sudoku','SD',[
+      { grp:'Solved', name:'EASY',   sub:'solve an Easy puzzle',   test:d=>d.difficulty === 'E', got:d=>'Solved in '+mmss(d.time)+', '+fmtDate(d.submittedAt) },
+      { grp:'Solved', name:'MEDIUM', sub:'solve a Medium puzzle',  test:d=>d.difficulty === 'M', got:d=>'Solved in '+mmss(d.time)+', '+fmtDate(d.submittedAt) },
+      { grp:'Solved', name:'HARD',   sub:'solve a Hard puzzle',    test:d=>d.difficulty === 'H', got:d=>'Solved in '+mmss(d.time)+', '+fmtDate(d.submittedAt) },
+      { grp:'Speed',  name:'EASY SPEED',   sub:'an Easy puzzle in under 3:00',   test:d=>d.difficulty === 'E' && d.time < 180, got:d=>'Easy in '+mmss(d.time)+', '+fmtDate(d.submittedAt) },
+      { grp:'Speed',  name:'MEDIUM SPEED', sub:'a Medium puzzle in under 5:00',  test:d=>d.difficulty === 'M' && d.time < 300, got:d=>'Medium in '+mmss(d.time)+', '+fmtDate(d.submittedAt) },
+      { grp:'Speed',  name:'HARD SPEED',   sub:'a Hard puzzle in under 6:00',    test:d=>d.difficulty === 'H' && d.time < 360, got:d=>'Hard in '+mmss(d.time)+', '+fmtDate(d.submittedAt) },
+    ], 'Counted from approved times on the <a href="/sd/">Sudoku leaderboard</a>.'),
+    // Sokoban keeps one progressive entry per player, so levelsSolved / stars only ever go up.
+    boardProvider('sk','Sokoban','SK',[
+      { name:'10 LEVELS', sub:'solve 10 levels', test:d=>d.levelsSolved >= 10 },
+      { name:'20 LEVELS', sub:'solve 20 levels', test:d=>d.levelsSolved >= 20 },
+      { name:'30 LEVELS', sub:'solve all 30 levels', test:d=>d.levelsSolved >= 30, big:true },
+      { name:'PERFECT',   sub:'all 90 stars',    test:d=>d.stars >= 90, got:d=>'All 90 stars, '+fmtDate(d.submittedAt), big:true },
+    ], 'Counted from your progress entry on the <a href="/sk/">Sokoban leaderboard</a>.'),
+    boardProvider('yz','Neo Yahtzee','YZ',[
+      pts(200,'200 CLUB'), pts(300,'300 CLUB'),
+      { name:'YAHTZEE!', sub:'score a Yahtzee in a game', big:true,
+        test:d=>Array.isArray(d.categoryScores) && d.categoryScores[11] === 50, got:d=>'Rolled a Yahtzee, '+fmtDate(d.submittedAt) },
+    ], 'Counted from approved games on the <a href="/yz/">Neo Yahtzee leaderboard</a>.'),
+    boardProvider('ca','Carcassonne','CA',[ pts(100,'100 POINTS'), pts(200,'200 POINTS'), pts(250,'250 POINTS') ],
+      'Counted from approved scores on the <a href="/ca/">Carcassonne leaderboard</a>.'),
+    boardProvider('sb','Shut the Box','SB',[
+      { name:'SHUT THE BOX', sub:'shut the box in a round (a round total of 0)', big:true,
+        test:d=>Array.isArray(d.rounds) && d.rounds.some(r=>r === 0), got:d=>'Shut the box, '+fmtDate(d.submittedAt) },
+    ], 'Counted from approved series on the <a href="/sb/">Shut the Box leaderboard</a>.')
+  );
+
   async function boot(){
     if(!A){ setStatus('Badges are not available right now (a required library failed to load).', true); return; }
     await A.authReady;
