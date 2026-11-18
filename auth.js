@@ -696,7 +696,10 @@ window.NGPC_AUTH = (function(){
       '<tr><td>Golf Set of Legend</td><td class="tk-val">'+(data.legend?'Used':'Not used')+'</td></tr>'+
       '<tr><td>Holes 1-9</td><td class="tk-val tnum">'+holes.slice(0,9).map(n=>Number(n)||0).join(' ')+' = '+out+'</td></tr>'+
       '<tr><td>Holes 10-18</td><td class="tk-val tnum">'+holes.slice(9,18).map(n=>Number(n)||0).join(' ')+' = '+inn+'</td></tr>'+
-      '<tr><td>Total strokes</td><td class="tk-val tnum">'+(Number(data.total)||0)+'</td></tr>';
+      '<tr><td>Total strokes</td><td class="tk-val tnum">'+(Number(data.total)||0)+'</td></tr>'+
+      (Number.isInteger(data.fairways) ? '<tr><td>Fairways hit</td><td class="tk-val tnum">'+data.fairways+'</td></tr>' : '')+
+      (Number.isInteger(data.gir) ? '<tr><td>Greens in regulation</td><td class="tk-val tnum">'+data.gir+' of 18</td></tr>' : '')+
+      (Number.isInteger(data.putts) ? '<tr><td>Putts</td><td class="tk-val tnum">'+data.putts+'</td></tr>' : '');
     return '<table class="tk-sheet">'+rows+'</table>';
   }
   function renderShutTheBoxScorecardHTML(data){

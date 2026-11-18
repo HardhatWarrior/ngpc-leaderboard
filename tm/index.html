@@ -294,20 +294,39 @@
   //   30-31 checksum    sum of QR-alphanumeric indexes of chars 0-29, mod 1296, 2 base-36 digits
   // The checksum is verified here and not stored.
   const QR_ALNUM = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
-  // TM1 = 32 chars; TM2 (2026-11-17) = TM1 + one golfer digit after the Legend flag (33 chars).
+  // TM1 = 32 chars; TM2 (2026-11-17) = TM1 + one golfer digit after the Legend flag (33 chars);
+  // TM3 = TM2 + after the total: fairways hit (1, base 36), greens in regulation (1), putts (2) = 37 chars.
   const GOLFER_NAMES = ['Young Hero', 'Power Golfer', 'Shot Maker', 'Putt Master', 'Veteran', 'Technician'];
+  // Round stats rows: under/par/over from the holes (every format); fairways, greens in regulation and putts (TM3 cards).
+  function tmRoundStats(data, pars){
+    const holes = Array.isArray(data.holes) ? data.holes.map(Number) : [];
+    const pct = (n,d) => d ? ' ('+Math.round(100*n/d)+'%)' : '';
+    let h = '';
+    if(pars && holes.length === 18){
+      let u = 0, e = 0, o = 0;
+      holes.forEach((s,i)=>{ if(s < pars[i]) u++; else if(s === pars[i]) e++; else o++; });
+      h += '<tr><td>Under / par / over</td><td class="tm-val tnum">'+u+' / '+e+' / '+o+'</td></tr>';
+    }
+    if(Number.isInteger(data.fairways)){
+      const fwHoles = pars ? pars.filter(p=>p > 3).length : 0;
+      h += '<tr><td>Fairways hit</td><td class="tm-val tnum">'+data.fairways+(fwHoles ? ' of '+fwHoles+pct(data.fairways, fwHoles) : '')+'</td></tr>';
+    }
+    if(Number.isInteger(data.gir)) h += '<tr><td>Greens in regulation</td><td class="tm-val tnum">'+data.gir+' of 18'+pct(data.gir, 18)+'</td></tr>';
+    if(Number.isInteger(data.putts)) h += '<tr><td>Putts</td><td class="tm-val tnum">'+data.putts+' ('+(data.putts/18).toFixed(2)+' per hole)</td></tr>';
+    return h;
+  }
   function parseTurfPayload(text){
     if(text.slice(0,2) !== QR_GAME_CODE) return {error:'Unknown game code "'+text.slice(0,2)+'".'};
     const ver = text[2];
-    if(ver !== '1' && ver !== '2') return {error:'That code is a newer format ("'+ver+'") than this page understands.'};
-    const TM_LEN = ver === '2' ? 33 : 32, H = ver === '2' ? 10 : 9;
+    if(ver !== '1' && ver !== '2' && ver !== '3') return {error:'That code is a newer format ("'+ver+'") than this page understands.'};
+    const TM_LEN = ver === '3' ? 37 : ver === '2' ? 33 : 32, H = ver === '1' ? 9 : 10;
     if(text.length !== TM_LEN) return {error:"That code is the wrong length for a Neo Turf Masters score ("+text.length+" of "+TM_LEN+" characters)."};
     if(!/^[0-9A-Z]+$/.test(text)) return {error:"That code has characters that can't be in a Neo Turf Masters score."};
     let sum = 0;
     for(let i=0;i<TM_LEN-2;i++) sum += QR_ALNUM.indexOf(text[i]);
     if(sum % 1296 !== parseInt(text.slice(TM_LEN-2), 36)) return {error:"That code didn't scan cleanly (checksum mismatch). Rescan it."};
     let golfer = null;
-    if(ver === '2'){ golfer = parseInt(text[9], 10); if(!(golfer >= 0 && golfer <= 5)) return {error:"That code has an unknown golfer."}; }
+    if(ver !== '1'){ golfer = parseInt(text[9], 10); if(!(golfer >= 0 && golfer <= 5)) return {error:"That code has an unknown golfer."}; }
     const initials = text.slice(3,6);
     if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code has unreadable initials."};
     const course = parseInt(text[6], 10), level = parseInt(text[7], 10);
@@ -324,8 +343,13 @@
     const total = parseInt(text.slice(H+18,H+21), 10);
     const hsum = holes.reduce((a,b)=>a+b, 0);
     if(hsum !== total) return {error:"That code's total ("+total+") doesn't match its holes ("+hsum+")."};
+    let rs = null;
+    if(ver === '3'){
+      rs = {fairways:parseInt(text[H+21], 36), gir:parseInt(text[H+22], 36), putts:parseInt(text.slice(H+23,H+25), 36)};
+      if(!(rs.fairways <= 18 && rs.gir <= 18 && rs.putts <= total)) return {error:"That code has unreadable round stats."};
+    }
     return { game:QR_GAME_CODE, formatVersion:ver, initials:initials, course:course, level:level,
-             legend:text[8] === '1', golfer:golfer, holes:holes, total:total };
+             legend:text[8] === '1', golfer:golfer, holes:holes, total:total, rs:rs, ...(rs || {}) };
   }
 
   // Career STATS QR, 100 chars after "NGPC-DEV.COM/TM/" (TurfMastersLB/stq/stq.c), base 36 big digit first:
@@ -449,6 +473,7 @@
       '<tr><td>Golf Set of Legend</td><td class="tm-val">'+(data.legend?'Used':'Not used')+'</td></tr>'+
       '<tr><td>Total strokes</td><td class="tm-val tnum">'+(Number(data.total)||0)+'</td></tr>'+
       (pars ? '<tr><td>To par ('+pars.reduce((a,b)=>a+b,0)+')</td><td class="tm-val tnum">'+toPar(data)+'</td></tr>' : '')+
+      tmRoundStats(data, pars)+
       '</table>';
     return html;
   }
@@ -737,6 +762,7 @@
       approved: !!authedUser.approved,
     };
     if(pending.golfer != null) record.golfer = pending.golfer;
+    if(pending.rs){ record.fairways = pending.rs.fairways; record.gir = pending.rs.gir; record.putts = pending.rs.putts; }
     try{
       const res = await writeScore(record);
       btn.disabled = false;
