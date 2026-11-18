@@ -495,6 +495,64 @@
     </div>
   </section>
 
+  <!-- Turf Masters only, admin only: games/tm.tmFeatures {tournaments, tournamentsTesters} (On / Testers /
+       Off, as Bowling) and games/tm.tmTournaments [{id, name, startsAt, endsAt, course 0-4, level 0-3,
+       players [{uid, username}] ([] = open to everyone), entry 'one' | 'best', prize?, closed?}]. tm/index.html
+       (TurfMastersLB/tools/gen_tm_tourn.py) builds each board from approved TM scores in the window on that
+       course and level, without the Legend clubs. -->
+  <section class="panel" id="tm-features-panel" hidden>
+    <div class="panel-header collapsed" data-toggle="tm-features-body" role="button" tabindex="0" aria-expanded="false">
+      <h2 style="margin:0">Turf Masters features <span class="spec-note">(admin only)</span></h2>
+      <span class="chevron">&#9660;</span>
+    </div>
+    <div class="panel-body" id="tm-features-body" hidden style="margin-top:14px">
+      <div class="current-value" style="margin-bottom:10px">Off: only you and the developer see it, as a preview. Testers: also the accounts under Preview access above. On: everyone.</div>
+      <div class="field-label">Tournaments (Tournaments panel on /tm/)</div>
+      <div class="status-row" id="tm-tourney-row" style="margin-bottom:0">
+        <button type="button" class="status-btn" data-value="off">Off</button>
+        <button type="button" class="status-btn" data-value="testers">Testers</button>
+        <button type="button" class="status-btn" data-value="on">On</button>
+      </div>
+      <button type="button" class="action btn-primary" id="tm-features-save" style="margin-top:14px">Save</button>
+      <div id="tm-features-msg"></div>
+
+      <div class="field-label" style="margin-top:22px">Tournaments (times in your local time zone<span id="tm-t-tz"></span>; players see them in theirs)</div>
+      <div class="tourney-list" id="tm-tourney-list"></div>
+      <form class="tourney-form" id="tm-tourney-form" autocomplete="off">
+        <label class="t-wide"><span class="field-label">Name</span>
+          <input type="text" id="tm-t-name" maxlength="60" placeholder="e.g. Fujiyama Open" required></label>
+        <label><span class="field-label">Starts</span>
+          <input type="datetime-local" id="tm-t-start" required></label>
+        <label><span class="field-label">Ends</span>
+          <input type="datetime-local" id="tm-t-end" required></label>
+        <label><span class="field-label">Course</span>
+          <select id="tm-t-course"><option value="0">Japan</option><option value="1">U.S.A.</option><option value="2">Germany</option><option value="3">Australia (5-course patch)</option><option value="4">Scotland (5-course patch)</option></select></label>
+        <label><span class="field-label">Difficulty</span>
+          <select id="tm-t-level"><option value="0">Easy</option><option value="1" selected>Normal</option><option value="2">Hard</option><option value="3">Very Hard</option></select></label>
+        <label><span class="field-label">Entries</span>
+          <select id="tm-t-entry"><option value="best">Multiple: best round counts</option><option value="one">One: first round counts</option></select></label>
+        <label><span class="field-label">Players</span>
+          <select id="tm-t-players"><option value="any">Anyone</option><option value="selected">Selected players only</option></select></label>
+        <div class="t-wide" id="tm-t-pick" hidden>
+          <span class="field-label">Selected players</span>
+          <div class="current-value" id="tm-t-chosen" style="margin:4px 0 8px">None yet.</div>
+          <div class="current-value" id="tm-t-known" style="display:flex;flex-wrap:wrap;gap:6px 14px"></div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <input type="text" id="tm-t-adduser" maxlength="16" placeholder="Add by username" style="flex:1 1 180px;margin-top:0">
+            <button type="button" class="action btn-secondary" id="tm-t-addbtn" style="width:auto;margin:0">Add</button>
+          </div>
+        </div>
+        <label class="t-wide"><span class="field-label">Prize (optional)</span>
+          <input type="text" id="tm-t-prize" maxlength="120" placeholder="e.g. Bragging rights"></label>
+        <div class="t-actions">
+          <button type="submit" class="action btn-primary" id="tm-t-save">Add tournament</button>
+          <button type="button" class="action btn-secondary" id="tm-t-cancel" hidden>Cancel edit</button>
+        </div>
+      </form>
+      <div id="tm-tourney-msg"></div>
+    </div>
+  </section>
+
   <!-- Admin-only, and only for games whose leaderboard page has been retrofitted to read
        games/{slug}.payloadSpec at runtime (see tt/index.html's own getPayloadSpec()) instead of a
        hardcoded field layout -- currently just Tetris. Editing a game NOT on that list here would
@@ -641,6 +699,175 @@
       await check();
     });
     check();
+  }
+
+  /* ---- Turf Masters: games/tm.tmFeatures switch + games/tm.tmTournaments, edited from tm-features-panel ---- */
+  function initTmFeatures(docRef, data){
+    const f = data.tmFeatures || {};
+    let level = f.tournaments === true ? 'on' : (f.tournamentsTesters === true ? 'testers' : 'off');
+    const row = el('tm-tourney-row');
+    const paint = ()=>row.querySelectorAll('.status-btn').forEach(b=>b.classList.toggle('active', b.dataset.value === level));
+    paint();
+    row.querySelectorAll('.status-btn').forEach(b=>b.addEventListener('click', ()=>{ level = b.dataset.value; paint(); }));
+    el('tm-features-save').addEventListener('click', async ()=>{
+      const btn = el('tm-features-save'), msg = el('tm-features-msg');
+      msg.innerHTML = ''; btn.disabled = true;
+      try{
+        await docRef.update({ tmFeatures: { tournaments: level === 'on', tournamentsTesters: level === 'testers' } });
+        msg.innerHTML = '<div class="msg ok">Saved. Reload /tm/ to see it.</div>';
+      }catch(e){
+        msg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+      }finally{ btn.disabled = false; }
+    });
+  }
+  function initTmTournaments(db, docRef, data){
+    const COURSES = ['Japan', 'U.S.A.', 'Germany', 'Australia', 'Scotland'], LEVELS = ['Easy', 'Normal', 'Hard', 'Very Hard'];
+    let events = Array.isArray(data.tmTournaments) ? data.tmTournaments.slice() : [];
+    let editingId = null, armedDelete = null, chosen = [], known = [];
+    const listEl = el('tm-tourney-list'), formEl = el('tm-tourney-form'), msgEl = el('tm-tourney-msg');
+    const pad = n => String(n).padStart(2,'0');
+    const toLocalInput = ms => { const d = new Date(ms); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes()); };
+    const fmt = ms => new Date(ms).toLocaleString(undefined,{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit',timeZoneName:'short'});
+    try { const tz = Intl.DateTimeFormat().resolvedOptions().timeZone; if(tz) el('tm-t-tz').textContent = ', ' + tz.replace(/_/g, ' '); } catch(e){}
+    function status(ev){ const now = Date.now(); return now < ev.startsAt ? 'upcoming' : now < ev.endsAt ? 'live' : 'final'; }
+    function render(){
+      events.sort((a,b)=>((a.closed === true) - (b.closed === true)) || (b.startsAt - a.startsAt));
+      listEl.innerHTML = events.length ? events.map(ev=>{
+        const st = status(ev), closed = ev.closed === true, inv = Array.isArray(ev.players) && ev.players.length;
+        return '<div class="tourney-item'+(closed?' closed':'')+'" data-id="'+escapeHtml(ev.id)+'"><div class="t-main">'
+          + '<div class="t-name">'+escapeHtml(ev.name)+'<span class="t-pill '+st+'">'+st+'</span>'
+          + (closed ? '<span class="t-pill closed">closed</span>' : '')+'</div>'
+          + '<div class="t-meta">'+escapeHtml(fmt(ev.startsAt))+' – '+escapeHtml(fmt(ev.endsAt))+'</div>'
+          + '<div class="t-meta">'+escapeHtml(COURSES[ev.course]||'?')+' · '+escapeHtml(LEVELS[ev.level]||'?')+' · '
+          + (ev.entry === 'one' ? 'one round (first counts)' : 'best round counts')+' · '
+          + (inv ? escapeHtml(ev.players.map(p=>'@'+p.username).join(', ')) : 'open to everyone')+'</div>'
+          + (ev.prize ? '<div class="t-meta">Prize: '+escapeHtml(ev.prize)+'</div>' : '')
+          + '</div><div class="t-btns">'
+          + (closed ? '<button type="button" class="action btn-secondary" data-act="reopen">Reopen</button>'
+             : st === 'final' ? '<button type="button" class="action btn-secondary" data-act="close" title="Hide it from /tm/">Close</button>' : '')
+          + '<button type="button" class="action btn-secondary" data-act="edit">Edit</button>'
+          + '<button type="button" class="action btn-secondary" data-act="delete">'+(armedDelete===ev.id?'Confirm delete':'Delete')+'</button>'
+          + '</div></div>';
+      }).join('') : '<p class="hint" style="margin:4px 0 0">No tournaments yet. Add one below.</p>';
+    }
+    // players: anyone with a Turf Masters score (tick boxes) plus any account added by username
+    function renderPick(){
+      el('tm-t-pick').hidden = el('tm-t-players').value !== 'selected';
+      el('tm-t-chosen').innerHTML = chosen.length ? chosen.map(p=>'<span style="margin-right:10px">@'+escapeHtml(p.username)
+        + ' <a href="#" data-drop="'+escapeHtml(p.uid)+'" title="Remove">&times;</a></span>').join('') : 'None yet.';
+      el('tm-t-known').innerHTML = known.length ? known.map(p=>'<label style="display:flex;gap:5px;align-items:center;font-size:12.5px">'
+        + '<input type="checkbox" data-uid="'+escapeHtml(p.uid)+'"'+(chosen.some(c=>c.uid===p.uid)?' checked':'')+' style="width:auto;margin:0">@'+escapeHtml(p.username)+'</label>').join('')
+        : '<span>No Turf Masters players found yet. Add players by username.</span>';
+    }
+    db.collection('scores').where('game','==','TM').get().then(snap=>{
+      const m = new Map();
+      snap.docs.forEach(d=>{ const x = d.data(); if(x.uid && x.username && !m.has(x.uid)) m.set(x.uid, {uid:x.uid, username:x.username}); });
+      known = Array.from(m.values()).sort((a,b)=>a.username.localeCompare(b.username));
+      renderPick();
+    }).catch(()=>{ known = []; renderPick(); });
+    el('tm-t-players').addEventListener('change', renderPick);
+    el('tm-t-known').addEventListener('change', (e)=>{
+      const cb = e.target.closest('input[data-uid]'); if(!cb) return;
+      const p = known.find(k=>k.uid === cb.dataset.uid); if(!p) return;
+      chosen = cb.checked ? (chosen.some(c=>c.uid===p.uid) ? chosen : chosen.concat([p])) : chosen.filter(c=>c.uid !== p.uid);
+      renderPick();
+    });
+    el('tm-t-chosen').addEventListener('click', (e)=>{
+      const a = e.target.closest('a[data-drop]'); if(!a) return;
+      e.preventDefault(); chosen = chosen.filter(c=>c.uid !== a.dataset.drop); renderPick();
+    });
+    el('tm-t-addbtn').addEventListener('click', async ()=>{
+      const name = el('tm-t-adduser').value.trim().replace(/^@/, '');
+      msgEl.innerHTML = '';
+      if(!name) return;
+      try{
+        let snap = await db.collection('users').where('username','==',name).limit(1).get();
+        if(snap.empty) snap = await db.collection('users').where('username','==',name.toLowerCase()).limit(1).get();
+        if(snap.empty){ msgEl.innerHTML = '<div class="msg err">No account named @'+escapeHtml(name)+'.</div>'; return; }
+        const d = snap.docs[0];
+        if(!chosen.some(c=>c.uid === d.id)) chosen = chosen.concat([{uid:d.id, username:d.data().username}]);
+        el('tm-t-adduser').value = '';
+        renderPick();
+      }catch(e){ msgEl.innerHTML = '<div class="msg err">Lookup failed: '+escapeHtml(e.message||'unknown error')+'</div>'; }
+    });
+    function resetForm(){
+      editingId = null; chosen = [];
+      formEl.reset();
+      el('tm-t-level').value = '1';
+      el('tm-t-save').textContent = 'Add tournament';
+      el('tm-t-cancel').hidden = true;
+      renderPick();
+    }
+    async function persist(next, okText){
+      msgEl.innerHTML = '';
+      try{
+        await docRef.update({ tmTournaments: next });
+        events = next;
+        msgEl.innerHTML = '<div class="msg ok">'+escapeHtml(okText)+'</div>';
+        return true;
+      }catch(e){
+        msgEl.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
+        return false;
+      }finally{ render(); }
+    }
+    listEl.addEventListener('click', async (e)=>{
+      const btn = e.target.closest('button[data-act]'); if(!btn) return;
+      const id = btn.closest('.tourney-item').dataset.id, ev = events.find(x=>x.id===id);
+      if(!ev) return;
+      if(btn.dataset.act === 'close' || btn.dataset.act === 'reopen'){
+        armedDelete = null;
+        const closing = btn.dataset.act === 'close';
+        const next = events.map(x=>{ if(x.id !== id) return x; const y = Object.assign({}, x); if(closing) y.closed = true; else delete y.closed; return y; });
+        await persist(next, (closing ? 'Closed “' : 'Reopened “') + ev.name + '”' + (closing ? ': it’s off /tm/.' : ': it’s back on /tm/.'));
+        return;
+      }
+      if(btn.dataset.act === 'edit'){
+        armedDelete = null; editingId = id;
+        el('tm-t-name').value = ev.name;
+        el('tm-t-start').value = toLocalInput(ev.startsAt);
+        el('tm-t-end').value = toLocalInput(ev.endsAt);
+        el('tm-t-course').value = String(ev.course);
+        el('tm-t-level').value = String(ev.level);
+        el('tm-t-entry').value = ev.entry === 'one' ? 'one' : 'best';
+        chosen = Array.isArray(ev.players) ? ev.players.slice() : [];
+        el('tm-t-players').value = chosen.length ? 'selected' : 'any';
+        el('tm-t-prize').value = ev.prize || '';
+        el('tm-t-save').textContent = 'Save changes';
+        el('tm-t-cancel').hidden = false;
+        renderPick(); render();
+        formEl.scrollIntoView({behavior:'smooth', block:'nearest'});
+      } else if(armedDelete !== id){
+        armedDelete = id; render();   // a second click deletes
+      } else {
+        armedDelete = null;
+        if(editingId === id) resetForm();
+        await persist(events.filter(x=>x.id!==id), 'Deleted “'+ev.name+'”.');
+      }
+    });
+    el('tm-t-cancel').addEventListener('click', ()=>{ resetForm(); msgEl.innerHTML = ''; });
+    formEl.addEventListener('submit', async (e)=>{
+      e.preventDefault();
+      msgEl.innerHTML = '';
+      const name = el('tm-t-name').value.trim();
+      const startsAt = new Date(el('tm-t-start').value).getTime(), endsAt = new Date(el('tm-t-end').value).getTime();
+      const selected = el('tm-t-players').value === 'selected';
+      if(!name || !isFinite(startsAt) || !isFinite(endsAt)){ msgEl.innerHTML = '<div class="msg err">Give the tournament a name, a start and an end.</div>'; return; }
+      if(endsAt <= startsAt){ msgEl.innerHTML = '<div class="msg err">The end has to be after the start.</div>'; return; }
+      if(selected && !chosen.length){ msgEl.innerHTML = '<div class="msg err">Pick at least one player, or set Players to Anyone.</div>'; return; }
+      const ev = { id: editingId || ('t'+Date.now().toString(36)), name, startsAt, endsAt,
+        course: Number(el('tm-t-course').value), level: Number(el('tm-t-level').value),
+        entry: el('tm-t-entry').value === 'one' ? 'one' : 'best',
+        players: selected ? chosen.map(p=>({uid:p.uid, username:p.username})) : [],
+        prize: el('tm-t-prize').value.trim() };
+      const was = editingId ? events.find(x=>x.id===editingId) : null;
+      if(was && was.closed === true) ev.closed = true;
+      const next = editingId ? events.map(x=>x.id===editingId ? ev : x) : events.concat([ev]);
+      const btn = el('tm-t-save'); btn.disabled = true;
+      const ok = await persist(next, (editingId ? 'Saved “' : 'Added “') + name + '”.');
+      btn.disabled = false;
+      if(ok) resetForm();
+    });
+    render(); renderPick();
   }
 
   function initBwTournaments(docRef, data){
@@ -1630,6 +1857,11 @@
       });
       initBwCodeLock(db);
       initBwTournaments(docRef, data);
+    }
+    if(isAdmin && slug === 'tm'){
+      el('tm-features-panel').hidden = false;
+      initTmFeatures(docRef, data);
+      initTmTournaments(db, docRef, data);
     }
 
     let currentStatus = data.devStatus || 'dev';

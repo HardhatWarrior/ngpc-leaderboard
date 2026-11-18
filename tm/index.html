@@ -85,6 +85,18 @@
   .res-badge.W{ color:var(--good); border-color:var(--good); }
   .res-badge.L{ color:var(--danger); border-color:var(--danger); }
   .res-badge.D{ color:var(--accent2); border-color:var(--accent2); }
+  /* ---------- tournaments ---------- */
+  .t-note{ font-size:12px; color:var(--dim); background:rgba(92,143,214,.10); border:1px solid rgba(92,143,214,.3); border-radius:8px; padding:8px 10px; margin:0 0 12px; }
+  .t-head{ display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin:4px 0 6px; }
+  .t-name{ font-size:16px; font-weight:700; color:var(--cream); }
+  .t-pill{ font-family:"IBM Plex Mono",monospace; font-size:10px; font-weight:700; letter-spacing:.5px; padding:2px 7px; border-radius:4px; border:1px solid var(--border); color:var(--dim); text-transform:uppercase; }
+  .t-pill.live{ color:var(--good); border-color:var(--good); }
+  .t-pill.upcoming{ color:var(--accent2); border-color:var(--accent2); }
+  .t-when{ font-size:12.5px; color:var(--dim); margin:0 0 4px; }
+  .t-left{ font-family:"IBM Plex Mono",monospace; font-size:13px; color:var(--cream); margin:0 0 10px; }
+  .t-chips{ display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; }
+  .t-chip{ font-size:11.5px; color:var(--cream); background:var(--navy); border:1px solid var(--border); border-radius:999px; padding:3px 10px; }
+  .t-prize{ font-size:12.5px; color:var(--cream); margin:0 0 10px; }
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
   .row.has-detail{ cursor:pointer; } .row.has-detail:hover{ background:rgba(92,143,214,.08); }
   .row-detail{ padding:2px 8px 14px; }
@@ -228,6 +240,13 @@
       <p class="hint">From the cart&rsquo;s STATS QR (5-course patch: STATS &gt; OVERALL RECORDS, press OPTION). Scan it again any time to update.</p>
       <div id="mystats-card"></div>
       <p class="hint" id="mystats-when"></p>
+    </section>
+
+    <section class="panel" id="tm-tourney-panel" hidden>
+      <h2>Tournaments</h2>
+      <div class="t-note" id="tm-t-note" hidden></div>
+      <div class="mode-toggle" id="tm-t-tabs"></div>
+      <div id="tm-t-body"></div>
     </section>
 
     <section class="panel">
@@ -525,6 +544,144 @@
     if(detailId) el(detailId).hidden = !el(detailId).hidden;
   });
 
+  // ---------- tournaments (games/tm.tmTournaments, Manage Game > Turf Masters features) ----------
+  const tmT = { viewer: null, pick: null, timer: null, shown: null };
+  const tmOpenCards = new Set();
+  function tmLevel(){
+    const f = (gameData && gameData.tmFeatures) || {};
+    return f.tournaments === true ? 'on' : (f.tournamentsTesters === true ? 'testers' : 'off');
+  }
+  // On: everyone. Testers: the Preview access list (+ admin, developer). Off: admin + developer, as a preview.
+  function tmVisible(user){
+    const lv = tmLevel(), A = window.NGPC_AUTH;
+    if(lv === 'on') return true;
+    if(!user || !A) return false;
+    return lv === 'testers' ? A.canPreviewGame(user, gameData) : A.isGameManager(user, gameData);
+  }
+  function tmEvents(){
+    const list = (gameData && Array.isArray(gameData.tmTournaments)) ? gameData.tmTournaments : [];
+    return list.filter(e=>e && e.closed !== true && Number.isFinite(e.startsAt) && Number.isFinite(e.endsAt));
+  }
+  function tmStatus(ev){ const n = Date.now(); return n < ev.startsAt ? 'upcoming' : n < ev.endsAt ? 'live' : 'final'; }
+  // live first, then the next upcoming, then finished ones newest first
+  function tmOrdered(){
+    const order = {live:0, upcoming:1, final:2};
+    return tmEvents().slice().sort((a,b)=>{
+      const sa = tmStatus(a), sb = tmStatus(b);
+      if(sa !== sb) return order[sa] - order[sb];
+      return sa === 'upcoming' ? a.startsAt - b.startsAt : b.startsAt - a.startsAt;
+    });
+  }
+  function tmInvited(ev){ return Array.isArray(ev.players) && ev.players.length ? ev.players : null; }
+  function tmEligible(ev, d){
+    if(d.course !== ev.course || d.level !== ev.level || d.legend) return false;
+    if(!(d.submittedAt >= ev.startsAt && d.submittedAt < ev.endsAt)) return false;
+    const inv = tmInvited(ev);
+    return !inv || inv.some(p=>p.uid === d.uid);
+  }
+  // one row per player: 'one' = their first round in the window, 'best' = their fewest strokes (earlier breaks ties)
+  function tmStandings(ev, extra){
+    const by = new Map();
+    latestDocs.map(x=>x.data()).concat(extra ? [extra] : []).filter(d=>tmEligible(ev, d)).forEach(d=>{
+      const k = d.uid || d.username || d.initials, cur = by.get(k);
+      if(!cur){ by.set(k, {d:d, n:1}); return; }
+      cur.n++;
+      const better = ev.entry === 'one' ? d.submittedAt < cur.d.submittedAt
+        : (d.total < cur.d.total || (d.total === cur.d.total && d.submittedAt < cur.d.submittedAt));
+      if(better) cur.d = d;
+    });
+    return Array.from(by.values()).sort((a,b)=>(a.d.total - b.d.total) || (a.d.submittedAt - b.d.submittedAt));
+  }
+  function tmFmt(ms){ return new Date(ms).toLocaleString(undefined,{weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short'}); }
+  function tmLeft(ms){
+    ms = Math.max(0, ms);
+    const t = Math.floor(ms/1000), d = Math.floor(t/86400), h = Math.floor(t%86400/3600), m = Math.floor(t%3600/60), s = t%60;
+    return (d ? d + 'd ' : '') + h + 'h ' + String(m).padStart(2,'0') + 'm ' + String(s).padStart(2,'0') + 's';
+  }
+  function tmLeftText(ev){
+    const st = tmStatus(ev), n = Date.now();
+    return st === 'live' ? 'Ends in ' + tmLeft(ev.endsAt - n) : st === 'upcoming' ? 'Starts in ' + tmLeft(ev.startsAt - n) : 'Final results';
+  }
+  // the line added to the submit confirmation when the round counts in a live event the player can see
+  function tmCountedNote(rec){
+    if(!tmVisible(tmT.viewer)) return '';
+    const notes = [];
+    tmEvents().filter(ev=>tmStatus(ev) === 'live' && tmEligible(ev, rec)).forEach(ev=>{
+      if(ev.entry === 'one'){
+        const prior = latestDocs.map(x=>x.data()).some(d=>d.uid === rec.uid && tmEligible(ev, d) && d.submittedAt < rec.submittedAt);
+        notes.push(prior ? ev.name + ' takes one round per player, and your first one already counts.' : 'This is your round in ' + ev.name + '.');
+      } else notes.push('Counted in ' + ev.name + ' (your best round there counts).');
+    });
+    return notes.length ? ' ' + notes.join(' ') : '';
+  }
+  async function tmRenderTournament(){
+    const panel = el('tm-tourney-panel'), list = tmOrdered(), user = tmT.viewer;
+    const visible = !!db && list.length > 0 && tmVisible(user);
+    panel.hidden = !visible;
+    if(tmT.timer){ clearInterval(tmT.timer); tmT.timer = null; }
+    if(!visible) return;
+    const note = el('tm-t-note'), lv = tmLevel();
+    note.hidden = lv === 'on';
+    note.textContent = lv === 'testers' ? 'Testing: only invited testers can see tournaments. They aren’t public yet.'
+      : 'Preview: only you can see this. Players see it once Tournaments is switched on under Manage Game > Turf Masters features.';
+    if(!tmT.pick || !list.some(e=>e.id === tmT.pick)) tmT.pick = list[0].id;
+    const ev = list.find(e=>e.id === tmT.pick);
+    const tabs = el('tm-t-tabs');
+    tabs.hidden = list.length < 2;
+    tabs.innerHTML = list.map(e=>'<button type="button" class="mode-btn'+(e.id === ev.id ? ' active' : '')+'" data-tid="'+escapeHtml(e.id)+'">'+escapeHtml(e.name)+'</button>').join('');
+    const st = tmStatus(ev), inv = tmInvited(ev);
+    const chips = [COURSE_NAMES[ev.course] || '?', LEVEL_NAMES[ev.level] || '?',
+      inv ? 'Invited players only' : 'Open to everyone',
+      ev.entry === 'one' ? 'One round: your first round counts' : 'Best round counts: play as often as you like',
+      'No Legend clubs'];
+    let h = '<div class="t-head"><span class="t-name">'+escapeHtml(ev.name)+'</span><span class="t-pill '+st+'">'+(st === 'final' ? 'final' : st)+'</span></div>'
+      + '<p class="t-when">'+escapeHtml(tmFmt(ev.startsAt))+' – '+escapeHtml(tmFmt(ev.endsAt))+'</p>'
+      + '<p class="t-left" id="tm-t-left">'+escapeHtml(tmLeftText(ev))+'</p>'
+      + '<div class="t-chips">'+chips.map(c=>'<span class="t-chip">'+escapeHtml(c)+'</span>').join('')+'</div>'
+      + (ev.prize ? '<p class="t-prize">Prize: '+escapeHtml(ev.prize)+'</p>' : '')
+      + (inv ? '<p class="t-when">Players: '+inv.map(p=>'@'+escapeHtml(String(p.username||'?').toUpperCase())).join(', ')+'</p>' : '');
+    const rows = st === 'upcoming' ? [] : tmStandings(ev);
+    if(!rows.length){
+      h += '<div class="empty-state">'+(st === 'upcoming' ? 'Rounds count from the start time.' : st === 'live' ? 'No rounds yet. Play '+escapeHtml(COURSE_NAMES[ev.course])+' on '+escapeHtml(LEVEL_NAMES[ev.level])+' and scan your QR.' : 'No rounds were entered.')+'</div>';
+      el('tm-t-body').innerHTML = h;
+    } else {
+      const uids = rows.map(r=>r.d.uid).filter(Boolean);
+      const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
+      h += rows.map((r,i)=>{
+        const d = r.d, rank = i + 1, key = 't' + i;
+        const user = d.username ? '<a href="/user/?u='+encodeURIComponent(d.username)+'">@'+escapeHtml(d.username.toUpperCase())+'</a>' : '';
+        const meta = [toPar(d), ev.entry === 'best' && r.n > 1 ? r.n + ' rounds' : '', fmtWhen(d.submittedAt), user].filter(Boolean).join(' · ');
+        const av = d.uid && avatars[d.uid] ? '<canvas class="row-avatar" data-tavatar="'+i+'"></canvas>' : '';
+        return '<div class="row has-detail'+(rank === 1 ? ' top1' : '')+'" data-tdetail="'+key+'">'
+          + '<div class="rank">'+(rank === 1 ? (st === 'final' ? '🏆' : '⛳') : '#'+rank)+'</div>'
+          + '<div><div class="initials">'+av+escapeHtml(d.initials||'???')+'</div><div class="row-meta">'+meta+'</div></div>'
+          + '<div class="score-val tnum">'+(Number(d.total)||0)+'<small>STROKES</small></div></div>'
+          + '<div class="row-detail" id="tm-tcard-'+key+'"'+(tmOpenCards.has(ev.id+key) ? '' : ' hidden')+'>'+renderCardHTML(d)+'</div>';
+      }).join('');
+      el('tm-t-body').innerHTML = h;
+      rows.forEach((r,i)=>{
+        const c = el('tm-t-body').querySelector('[data-tavatar="'+i+'"]');
+        if(c && window.NGPC_AUTH) NGPC_AUTH.renderAvatarToCanvas(c, avatars[r.d.uid], 48/NGPC_AUTH.AVATAR_SIZE);
+      });
+    }
+    tmT.shown = st;
+    tmT.timer = setInterval(()=>{
+      if(tmStatus(ev) !== tmT.shown){ tmRenderTournament(); return; }   // crossed the start or the end
+      const left = el('tm-t-left'); if(left) left.textContent = tmLeftText(ev);
+    }, 1000);
+  }
+  el('tm-t-tabs').addEventListener('click', (e)=>{
+    const b = e.target.closest('button[data-tid]'); if(!b) return;
+    tmT.pick = b.dataset.tid; tmOpenCards.clear(); tmRenderTournament();
+  });
+  el('tm-t-body').addEventListener('click', (e)=>{
+    if(e.target.closest('a')) return;
+    const row = e.target.closest('.row.has-detail'); if(!row) return;
+    const key = row.dataset.tdetail, card = el('tm-tcard-'+key); if(!card) return;
+    card.hidden = !card.hidden;
+    const id = tmT.pick + key; if(card.hidden) tmOpenCards.delete(id); else tmOpenCards.add(id);
+  });
+
   function friendlyDbError(e){
     const code = e && e.code;
     switch(code){
@@ -542,7 +699,7 @@
     if(!db) return;
     const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).limit(500);
     unsubscribeBoard = q.onSnapshot(
-      (snap)=>{ latestDocs = snap.docs; renderBoard(); },
+      (snap)=>{ latestDocs = snap.docs; renderBoard(); tmRenderTournament(); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
     );
   }
@@ -767,7 +924,7 @@
       const res = await writeScore(record);
       btn.disabled = false;
       if(res.ok){
-        el('success-text').textContent = pending.initials + ' — ' + pending.total + ' strokes on ' + COURSE_NAMES[pending.course] + ' submitted to the leaderboard.';
+        el('success-text').textContent = pending.initials + ' — ' + pending.total + ' strokes on ' + COURSE_NAMES[pending.course] + ' submitted to the leaderboard.' + tmCountedNote(record);
         setTab(pending.course);
         pending = null;
         showStage('success');
@@ -851,6 +1008,7 @@
       if(!user) resetScanUI();
       gameDocPromise.then(()=>{
         applyAccessGate(user);
+        tmT.viewer = user; tmRenderTournament();
         var adminLinkEl = el('admin-link');
         if(adminLinkEl) adminLinkEl.hidden = !NGPC_AUTH.isGameManager(user, gameData);
       });
