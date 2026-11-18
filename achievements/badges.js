@@ -139,6 +139,16 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
         const vh = first(d=>d.level === 3 && under(d));
         const played = new Set(rounds.map(d=>d.course)), slam = new Set(rounds.filter(under).map(d=>d.course));
         const cast = new Set(rounds.filter(d=>Number.isInteger(d.golfer) && d.golfer >= 0 && d.golfer <= 5).map(d=>d.golfer));   // TM2 cards only
+        // TM3 cards only: the round's fairways hit, greens in regulation and putts
+        const r3 = (test)=>first(d=>d.formatVersion === '3' && Number.isInteger(d.putts) && test(d));
+        const fwHoles = (d)=>PARS[d.course].filter(p=>p > 3).length;
+        const fwAll = r3(d=>d.fairways >= fwHoles(d));
+        const pin = r3(d=>d.gir >= 15);
+        const flaw = r3(d=>d.fairways >= fwHoles(d) && d.gir === 18);
+        const hot = r3(d=>d.putts <= 27);
+        const onep = r3(d=>d.putts <= 18);
+        const scr = r3(d=>under(d) && d.gir < 9);
+        const stars = new Set(rounds.filter(d=>under(d) && Number.isInteger(d.golfer) && d.golfer >= 0 && d.golfer <= 5).map(d=>d.golfer));
         const list = [
           { grp:'', name:'HOLE IN ONE', sub: ace ? 'Aced a hole'+when(ace) : 'ace any hole', on: !!ace, big:true },
           { grp:'', name:'ALBATROSS', sub: alb ? '3 under on a hole'+when(alb) : '3 under par on a single hole', on: !!alb },
@@ -150,12 +160,19 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
           { grp:'', name:'VERY HARD', sub: vh ? 'Under par on Very Hard'+when(vh) : 'an under-par round on Very Hard', on: !!vh },
           { grp:'', name:'GLOBETROTTER', sub: played.size === 5 ? 'Played all five courses' : 'play a round on all five courses (' + played.size + ' of 5)', on: played.size === 5 },
           { grp:'', name:'FULL ROSTER', sub: cast.size === 6 ? 'Played a round with all six golfers' : 'play a round with all six golfers (' + cast.size + ' of 6)', on: cast.size === 6 },
+          { grp:'', name:'FAIRWAY FINDER', sub: fwAll ? 'Hit every fairway'+when(fwAll) : 'hit every fairway in a round', on: !!fwAll },
+          { grp:'', name:'PIN SEEKER', sub: pin ? '15+ greens in regulation'+when(pin) : '15 or more greens in regulation in a round', on: !!pin },
+          { grp:'', name:'FLAWLESS', sub: flaw ? 'Every fairway and all 18 greens'+when(flaw) : 'every fairway and all 18 greens in regulation in a round', on: !!flaw, big:true },
+          { grp:'', name:'HOT PUTTER', sub: hot ? '27 putts or fewer'+when(hot) : 'a round of 27 putts or fewer', on: !!hot },
+          { grp:'', name:'ONE-PUTT ROUND', sub: onep ? '18 putts or fewer'+when(onep) : 'a round of 18 putts or fewer', on: !!onep },
+          { grp:'', name:'SCRAMBLER', sub: scr ? 'Under par with under 9 greens'+when(scr) : 'finish under par while hitting fewer than 9 greens', on: !!scr },
+          { grp:'', name:'ALL-STAR', sub: stars.size === 6 ? 'Under par with all six golfers' : 'an under-par round with each of the six golfers (' + stars.size + ' of 6)', on: stars.size === 6, big:true },
           { grp:'', name:'GRAND SLAM', sub: slam.size === 5 ? 'Under par on all five courses' : 'under par on all five courses (' + slam.size + ' of 5)', on: slam.size === 5, big:true },
         ];
         const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
         return { note: head.pct+'%', earned: got > 0, list: list, html:
           '<h2 class="g-title">Neo Turf Masters</h2>'+head.html+badgeGrid(list)+
-          '<p class="fine">Counted from approved hole-by-hole cards on the <a href="/tm/">Turf Masters leaderboard</a>. Rounds played with the Legend clubs do not count toward badges.</p>' };
+          '<p class="fine">Counted from approved hole-by-hole cards on the <a href="/tm/">Turf Masters leaderboard</a>. Rounds played with the Legend clubs do not count toward badges. Fairway, green and putt badges need cards from the TM3 patch (fairways, greens and putts on the card).</p>' };
       }
     }
   ];
