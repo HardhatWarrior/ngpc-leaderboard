@@ -39,6 +39,8 @@
   button{ font:inherit; border:none; border-radius:8px; padding:11px 16px; cursor:pointer; font-weight:600; font-size:13.5px; background:var(--accent); color:var(--accent-ink); }
   button:hover{ background:#7aa6e3; }
   /* game tabs */
+  .sortrow{ display:flex; align-items:center; gap:8px; font-size:12px; color:var(--dim); margin-bottom:10px; }
+  .sortrow select{ background:var(--navy); color:var(--cream); border:1px solid var(--border); border-radius:6px; padding:6px 8px; font:inherit; font-size:12.5px; }
   .tabs{ display:flex; flex-wrap:wrap; gap:8px; }
   .tab{ background:transparent; color:var(--cream); border:1px solid var(--border); padding:9px 12px; font-size:12.5px; display:flex; align-items:center; gap:8px; }
   .tab:hover{ border-color:var(--accent2); background:transparent; }
@@ -86,6 +88,14 @@
 
   <section class="panel" id="tabs-panel" hidden>
     <p class="hint" style="margin-bottom:10px">Badges a game awards for what a player has done in it. Pick a game.</p>
+    <label class="sortrow" for="sort">Sort games by
+      <select id="sort">
+        <option value="pct">Completion %</option>
+        <option value="recent">Most recent</option>
+        <option value="az">A&ndash;Z</option>
+        <option value="fixed">Default order</option>
+      </select>
+    </label>
     <div class="tabs" id="tabs" role="tablist"></div>
   </section>
 
@@ -95,7 +105,7 @@
 </div>
 
 <script src="/auth.js"></script>
-<script src="/achievements/badges.js?v=2"></script>
+<script src="/achievements/badges.js?v=3"></script>
 <script>
 (function(){
   "use strict";
@@ -166,8 +176,21 @@
     if(!results.length){ setStatus('No game with badges has anything to show here yet.'); return; }
 
     const want = (params.get('g') || '').toLowerCase();
-    let cur = results.findIndex(x=>x.p.key === want);
-    if(cur < 0) cur = Math.max(0, results.findIndex(x=>x.r.earned));
+    const baseOrder = results.slice();
+    // "Most recent" = the player's latest approved submission for that game.
+    const lastAt = (x)=>scores.reduce((m,d)=>d.game === x.p.key.toUpperCase() ? Math.max(m, d.submittedAt || 0) : m, 0);
+    const pctOf = (x)=>parseInt(x.r.note, 10) || 0;
+    function sortResults(mode){
+      const keep = results[cur] || null;
+      const arr = baseOrder.slice();
+      if(mode === 'pct') arr.sort((a,b)=>pctOf(b)-pctOf(a) || baseOrder.indexOf(a)-baseOrder.indexOf(b));
+      else if(mode === 'recent') arr.sort((a,b)=>lastAt(b)-lastAt(a) || baseOrder.indexOf(a)-baseOrder.indexOf(b));
+      else if(mode === 'az') arr.sort((a,b)=>a.p.name.localeCompare(b.p.name));
+      results.length = 0; arr.forEach(x=>results.push(x));
+      return keep ? results.indexOf(keep) : 0;
+    }
+    let cur = baseOrder.findIndex(x=>x.p.key === want);
+    if(cur < 0) cur = Math.max(0, baseOrder.findIndex(x=>x.r.earned));
     function show(i){
       cur = i;
       el('tabs').innerHTML = results.map((x,k)=>
@@ -178,7 +201,10 @@
       try{ const u = new URL(location.href); u.searchParams.set('g', results[cur].p.key); history.replaceState(null,'',u); }catch(e){}
     }
     el('tabs').addEventListener('click', e=>{ const b = e.target.closest('.tab'); if(b) show(+b.dataset.i); });
+    // the selected game stays selected while the order changes; the first load keeps today's default (?g= or first earned)
+    el('sort').addEventListener('change', ()=>{ show(sortResults(el('sort').value)); });
     el('tabs-panel').hidden = results.length < 2;
+    cur = sortResults(el('sort').value);
     show(cur);
   }
   boot();

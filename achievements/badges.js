@@ -55,12 +55,8 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
         }
         if(!res && entry){ res = G.fromEntry(entry); from = 'the COMPLETION BOARD entry'; }
         const link = '<a href="/gn/">Guardians of the Nocturne page</a>';
-        if(!res){
-          return { note:'not started', earned:false, list:[], html:
-            '<h2 class="g-title">'+esc(G.name)+'</h2><div class="empty">' + (ctx.self
-              ? 'No tale yet. Open the '+link+', read your TALE CODE from the cartridge (YOUR TALE &rsaquo; TALE CODE), and your badges appear here.'
-              : esc(ctx.username)+' has not shared a tale for this game yet. Badges show up once they read their TALE CODE and post it to the COMPLETION BOARD.') + '</div>' };
-        }
+        // Like every other game: no tale shared (no board entry) means no tab.
+        if(!res) return null;
         const journey = res.complete ? 'NEW GAME+ '+res.journey+', COMPLETE (FREE PLAY)' : (res.journey ? 'NEW GAME+ '+res.journey : 'the first tale');
         return { note: res.pct+'%', earned: res.badges > 0, list: res.list, html:
           '<h2 class="g-title">'+esc(G.name)+'</h2>'+
@@ -81,6 +77,7 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
         try{ const d = await A.db.collection('games').doc('bw').get(); game = d.exists ? d.data() : null; }catch(e){}
         if(!S || !game) return null;
         const mine = ctx.scores.filter(d=>d.game === 'BW');
+        if(!mine.length) return null;   // no Neo Bowling submissions: no tab, like the other games
         // the same Career stats visibility switch the profile uses (Off / Testers / On)
         // While Career stats is Off or Testers, the tab still shows but says why it is empty (Manage Game > Bowling
         // features is where it is switched On).
