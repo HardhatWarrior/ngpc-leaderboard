@@ -746,12 +746,14 @@ service cloud.firestore {
       // NEO TURF MASTERS (retail cart + leaderboard IPS patch, tm/index.html): the exact record
       // tm/'s confirm handler writes. course 0-2 (Japan/USA/Germany), level 0-3, legend = Golf Set
       // of Legend used, holes = strokes on each of the 18 holes (1-35), total = their sum (lower is
-      // better). The QR's base-36 checksum is verified client-side then dropped. Any number of
+      // better). formatVersion '2' (TM2 QR) adds golfer 0-5 (Young Hero, Power Golfer, Shot Maker, Putt Master,
+      // Veteran, Technician); '1' docs have none. The QR's base-36 checksum is verified client-side then dropped. Any number of
       // docs per player (a plain best-score board). See TurfMastersLB/NOTES.md.
       function isTurfMastersScore(d) {
         return d.game == 'TM'
-          && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'course', 'level', 'legend', 'holes', 'total', 'source', 'submittedAt', 'uid', 'username', 'approved'])
-          && d.formatVersion is string && d.formatVersion == '1'
+          && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'course', 'level', 'legend', 'golfer', 'holes', 'total', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.formatVersion is string && (d.formatVersion == '1' || d.formatVersion == '2')
+          && (d.formatVersion == '1' ? !('golfer' in d) : (d.golfer is int && d.golfer >= 0 && d.golfer <= 5))
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.course is int && d.course >= 0 && d.course <= 4
           && d.level is int && d.level >= 0 && d.level <= 3

@@ -692,6 +692,7 @@ window.NGPC_AUTH = (function(){
     holes.forEach((v,i)=>{ if(i < 9) out += Number(v)||0; else inn += Number(v)||0; });
     const rows = '<tr><td>Course</td><td class="tk-val">'+escapeHtml(TM_COURSES[data.course]||'?')+'</td></tr>'+
       '<tr><td>Level</td><td class="tk-val">'+escapeHtml(TM_LEVELS[data.level]||'?')+'</td></tr>'+
+      (Number.isInteger(data.golfer) && data.golfer >= 0 && data.golfer <= 5 ? '<tr><td>Golfer</td><td class="tk-val">'+['Young Hero','Power Golfer','Shot Maker','Putt Master','Veteran','Technician'][data.golfer]+'</td></tr>' : '')+
       '<tr><td>Golf Set of Legend</td><td class="tk-val">'+(data.legend?'Used':'Not used')+'</td></tr>'+
       '<tr><td>Holes 1-9</td><td class="tk-val tnum">'+holes.slice(0,9).map(n=>Number(n)||0).join(' ')+' = '+out+'</td></tr>'+
       '<tr><td>Holes 10-18</td><td class="tk-val tnum">'+holes.slice(9,18).map(n=>Number(n)||0).join(' ')+' = '+inn+'</td></tr>'+

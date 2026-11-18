@@ -294,15 +294,20 @@
   //   30-31 checksum    sum of QR-alphanumeric indexes of chars 0-29, mod 1296, 2 base-36 digits
   // The checksum is verified here and not stored.
   const QR_ALNUM = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ $%*+-./:';
-  const TM_LEN = 32;
+  // TM1 = 32 chars; TM2 (2026-11-17) = TM1 + one golfer digit after the Legend flag (33 chars).
+  const GOLFER_NAMES = ['Young Hero', 'Power Golfer', 'Shot Maker', 'Putt Master', 'Veteran', 'Technician'];
   function parseTurfPayload(text){
     if(text.slice(0,2) !== QR_GAME_CODE) return {error:'Unknown game code "'+text.slice(0,2)+'".'};
+    const ver = text[2];
+    if(ver !== '1' && ver !== '2') return {error:'That code is a newer format ("'+ver+'") than this page understands.'};
+    const TM_LEN = ver === '2' ? 33 : 32, H = ver === '2' ? 10 : 9;
     if(text.length !== TM_LEN) return {error:"That code is the wrong length for a Neo Turf Masters score ("+text.length+" of "+TM_LEN+" characters)."};
-    if(!/^[0-9A-Z]{32}$/.test(text)) return {error:"That code has characters that can't be in a Neo Turf Masters score."};
-    if(text[2] !== '1') return {error:'That code is a newer format ("'+text[2]+'") than this page understands.'};
+    if(!/^[0-9A-Z]+$/.test(text)) return {error:"That code has characters that can't be in a Neo Turf Masters score."};
     let sum = 0;
-    for(let i=0;i<30;i++) sum += QR_ALNUM.indexOf(text[i]);
-    if(sum % 1296 !== parseInt(text.slice(30,32), 36)) return {error:"That code didn't scan cleanly (checksum mismatch). Rescan it."};
+    for(let i=0;i<TM_LEN-2;i++) sum += QR_ALNUM.indexOf(text[i]);
+    if(sum % 1296 !== parseInt(text.slice(TM_LEN-2), 36)) return {error:"That code didn't scan cleanly (checksum mismatch). Rescan it."};
+    let golfer = null;
+    if(ver === '2'){ golfer = parseInt(text[9], 10); if(!(golfer >= 0 && golfer <= 5)) return {error:"That code has an unknown golfer."}; }
     const initials = text.slice(3,6);
     if(!/^[A-Z]{3}$/.test(initials)) return {error:"That code has unreadable initials."};
     const course = parseInt(text[6], 10), level = parseInt(text[7], 10);
@@ -311,16 +316,16 @@
     if(text[8] !== '0' && text[8] !== '1') return {error:"That code has an unreadable Legend flag."};
     const holes = [];
     for(let i=0;i<18;i++){
-      const v = parseInt(text[9+i], 36);
+      const v = parseInt(text[H+i], 36);
       if(!(v >= 1)) return {error:"Hole "+(i+1)+" has no strokes recorded. Only finished 18-hole rounds can be submitted."};
       holes.push(v);
     }
-    if(!/^\d{3}$/.test(text.slice(27,30))) return {error:"That code has an unreadable total."};
-    const total = parseInt(text.slice(27,30), 10);
+    if(!/^\d{3}$/.test(text.slice(H+18,H+21))) return {error:"That code has an unreadable total."};
+    const total = parseInt(text.slice(H+18,H+21), 10);
     const hsum = holes.reduce((a,b)=>a+b, 0);
     if(hsum !== total) return {error:"That code's total ("+total+") doesn't match its holes ("+hsum+")."};
-    return { game:QR_GAME_CODE, formatVersion:'1', initials:initials, course:course, level:level,
-             legend:text[8] === '1', holes:holes, total:total };
+    return { game:QR_GAME_CODE, formatVersion:ver, initials:initials, course:course, level:level,
+             legend:text[8] === '1', golfer:golfer, holes:holes, total:total };
   }
 
   // Career STATS QR, 100 chars after "NGPC-DEV.COM/TM/" (TurfMastersLB/stq/stq.c), base 36 big digit first:
@@ -440,6 +445,7 @@
     html += '<table class="tm-sheet">'+
       '<tr><td>Course</td><td class="tm-val">'+escapeHtml(COURSE_NAMES[data.course]||'?')+'</td></tr>'+
       '<tr><td>Level</td><td class="tm-val">'+escapeHtml(LEVEL_NAMES[data.level]||'?')+'</td></tr>'+
+      (data.golfer != null && GOLFER_NAMES[data.golfer] ? '<tr><td>Golfer</td><td class="tm-val">'+escapeHtml(GOLFER_NAMES[data.golfer])+'</td></tr>' : '')+
       '<tr><td>Golf Set of Legend</td><td class="tm-val">'+(data.legend?'Used':'Not used')+'</td></tr>'+
       '<tr><td>Total strokes</td><td class="tm-val tnum">'+(Number(data.total)||0)+'</td></tr>'+
       (pars ? '<tr><td>To par ('+pars.reduce((a,b)=>a+b,0)+')</td><td class="tm-val tnum">'+toPar(data)+'</td></tr>' : '')+
@@ -717,7 +723,7 @@
     confirmMsg.innerHTML = '<div class="msg ok">Submitting…</div>';
     const record = {
       game: QR_GAME_CODE,
-      formatVersion: '1',
+      formatVersion: pending.formatVersion || '1',
       initials: pending.initials,
       course: pending.course,
       level: pending.level,
@@ -730,6 +736,7 @@
       username: authedUser.username,
       approved: !!authedUser.approved,
     };
+    if(pending.golfer != null) record.golfer = pending.golfer;
     try{
       const res = await writeScore(record);
       btn.disabled = false;
