@@ -97,6 +97,10 @@
   .t-chips{ display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; }
   .t-chip{ font-size:11.5px; color:var(--cream); background:var(--navy); border:1px solid var(--border); border-radius:999px; padding:3px 10px; }
   .t-prize{ font-size:12.5px; color:var(--cream); margin:0 0 10px; }
+  .t-code{ display:flex; flex-wrap:wrap; align-items:baseline; gap:4px 12px; background:var(--navy); border:1px solid var(--accent2); border-radius:8px; padding:10px 12px; margin:0 0 12px; }
+  .t-codelbl{ font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--dim); }
+  .t-codeval{ font-family:"IBM Plex Mono",monospace; font-size:20px; font-weight:600; letter-spacing:.12em; color:var(--cream); }
+  .t-codehint{ flex-basis:100%; font-size:12px; color:var(--dim); }
   .empty-state{ color:var(--dim); font-size:13px; padding:18px 4px; text-align:center; }
   .row.has-detail{ cursor:pointer; } .row.has-detail:hover{ background:rgba(92,143,214,.08); }
   .row-detail{ padding:2px 8px 14px; }
@@ -334,11 +338,24 @@
     if(Number.isInteger(data.putts)) h += '<tr><td>Putts</td><td class="tm-val tnum">'+data.putts+' ('+(data.putts/18).toFixed(2)+' per hole)</td></tr>';
     return h;
   }
+  // Tournament codes (cart: TurfMastersLB/trn/trn.c, admin: Manage Game > Turf Masters features): 8 chars 0-9 A-Z =
+  // id (3) | S = course + 5*(level + 4*golfer mask) (3) | check = (7 + sum value_i*(i+3)) mod 1296 (2). null = not a code.
+  const TM_B36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  function tmCodeInfo(c){
+    if(typeof c !== 'string' || !/^[0-9A-Z]{8}$/.test(c)) return null;
+    const v = Array.from(c).map(ch=>TM_B36.indexOf(ch));
+    let chk = 7; for(let i=0;i<6;i++) chk += v[i]*(i+3);
+    if(chk % 1296 !== v[6]*36 + v[7]) return null;
+    const s = v[3]*1296 + v[4]*36 + v[5];
+    const course = s % 5, q = Math.floor(s/5), level = q % 4, mask = Math.floor(q/4);
+    if(mask > 63) return null;
+    return {id: v[0]*1296 + v[1]*36 + v[2], course, level, mask};
+  }
   function parseTurfPayload(text){
     if(text.slice(0,2) !== QR_GAME_CODE) return {error:'Unknown game code "'+text.slice(0,2)+'".'};
     const ver = text[2];
-    if(ver !== '1' && ver !== '2' && ver !== '3') return {error:'That code is a newer format ("'+ver+'") than this page understands.'};
-    const TM_LEN = ver === '3' ? 37 : ver === '2' ? 33 : 32, H = ver === '1' ? 9 : 10;
+    if(ver !== '1' && ver !== '2' && ver !== '3' && ver !== '4') return {error:'That code is a newer format ("'+ver+'") than this page understands.'};
+    const TM_LEN = ver === '4' ? 45 : ver === '3' ? 37 : ver === '2' ? 33 : 32, H = ver === '1' ? 9 : 10;
     if(text.length !== TM_LEN) return {error:"That code is the wrong length for a Neo Turf Masters score ("+text.length+" of "+TM_LEN+" characters)."};
     if(!/^[0-9A-Z]+$/.test(text)) return {error:"That code has characters that can't be in a Neo Turf Masters score."};
     let sum = 0;
@@ -362,13 +379,17 @@
     const total = parseInt(text.slice(H+18,H+21), 10);
     const hsum = holes.reduce((a,b)=>a+b, 0);
     if(hsum !== total) return {error:"That code's total ("+total+") doesn't match its holes ("+hsum+")."};
-    let rs = null;
-    if(ver === '3'){
+    let rs = null, tcode = null;
+    if(ver === '3' || ver === '4'){
       rs = {fairways:parseInt(text[H+21], 36), gir:parseInt(text[H+22], 36), putts:parseInt(text.slice(H+23,H+25), 36)};
       if(!(rs.fairways <= 18 && rs.gir <= 18 && rs.putts <= total)) return {error:"That code has unreadable round stats."};
     }
+    if(ver === '4'){   // TM4 = a TOURNAMENT round: the tournament's 8-char code after the putts
+      tcode = text.slice(H+25, H+33);
+      if(!tmCodeInfo(tcode)) return {error:"That code has an unreadable tournament code."};
+    }
     return { game:QR_GAME_CODE, formatVersion:ver, initials:initials, course:course, level:level,
-             legend:text[8] === '1', golfer:golfer, holes:holes, total:total, rs:rs, ...(rs || {}) };
+             legend:text[8] === '1', golfer:golfer, holes:holes, total:total, rs:rs, ...(rs || {}), ...(tcode ? {tcode:tcode} : {}) };
   }
 
   // Career STATS QR, 100 chars after "NGPC-DEV.COM/TM/" (TurfMastersLB/stq/stq.c), base 36 big digit first:
@@ -572,12 +593,14 @@
       return sa === 'upcoming' ? a.startsAt - b.startsAt : b.startsAt - a.startsAt;
     });
   }
-  function tmInvited(ev){ return Array.isArray(ev.players) && ev.players.length ? ev.players : null; }
+  // golfers 0 Young Hero, 1 Power Golfer, 2 Shot Maker, 3 Putt Master, 4 Veteran, 5 Technician (GOLFER_NAMES)
+  function tmGolfers(ev){ return Array.isArray(ev.golfers) && ev.golfers.length ? ev.golfers : null; }
   function tmEligible(ev, d){
     if(d.course !== ev.course || d.level !== ev.level || d.legend) return false;
     if(!(d.submittedAt >= ev.startsAt && d.submittedAt < ev.endsAt)) return false;
-    const inv = tmInvited(ev);
-    return !inv || inv.some(p=>p.uid === d.uid);
+    if(ev.code && d.tcode !== ev.code) return false;      // coded tournaments: only rounds played from the cart's TOURNAMENT menu with this code
+    const g = tmGolfers(ev);
+    return !g || (Number.isInteger(d.golfer) && g.indexOf(d.golfer) >= 0);
   }
   // one row per player: 'one' = their first round in the window, 'best' = their fewest strokes (earlier breaks ties)
   function tmStandings(ev, extra){
@@ -629,17 +652,19 @@
     const tabs = el('tm-t-tabs');
     tabs.hidden = list.length < 2;
     tabs.innerHTML = list.map(e=>'<button type="button" class="mode-btn'+(e.id === ev.id ? ' active' : '')+'" data-tid="'+escapeHtml(e.id)+'">'+escapeHtml(e.name)+'</button>').join('');
-    const st = tmStatus(ev), inv = tmInvited(ev);
+    const st = tmStatus(ev), gl = tmGolfers(ev);
     const chips = [COURSE_NAMES[ev.course] || '?', LEVEL_NAMES[ev.level] || '?',
-      inv ? 'Invited players only' : 'Open to everyone',
+      gl ? (gl.length === 1 ? 'Golfer: ' + GOLFER_NAMES[gl[0]] : 'Golfers: ' + gl.map(i=>GOLFER_NAMES[i]).join(', ')) : 'Any golfer',
       ev.entry === 'one' ? 'One round: your first round counts' : 'Best round counts: play as often as you like',
       'No Legend clubs'];
     let h = '<div class="t-head"><span class="t-name">'+escapeHtml(ev.name)+'</span><span class="t-pill '+st+'">'+(st === 'final' ? 'final' : st)+'</span></div>'
       + '<p class="t-when">'+escapeHtml(tmFmt(ev.startsAt))+' – '+escapeHtml(tmFmt(ev.endsAt))+'</p>'
       + '<p class="t-left" id="tm-t-left">'+escapeHtml(tmLeftText(ev))+'</p>'
       + '<div class="t-chips">'+chips.map(c=>'<span class="t-chip">'+escapeHtml(c)+'</span>').join('')+'</div>'
+      + (ev.code ? '<div class="t-code"><span class="t-codelbl">Tournament code</span><span class="t-codeval">'+escapeHtml(ev.code.slice(0,4)+'-'+ev.code.slice(4))+'</span>'
+          + '<span class="t-codehint">On the cart (5-course patch): main menu &gt; TOURNAMENT, enter this code. Only rounds played that way count.</span></div>' : '')
       + (ev.prize ? '<p class="t-prize">Prize: '+escapeHtml(ev.prize)+'</p>' : '')
-      + (inv ? '<p class="t-when">Players: '+inv.map(p=>'@'+escapeHtml(String(p.username||'?').toUpperCase())).join(', ')+'</p>' : '');
+      + (gl && !ev.code ? '<p class="t-when">Only rounds played with '+(gl.length === 1 ? 'this golfer' : 'one of these golfers')+' count (the golfer is on the score QR from the current patch).</p>' : '');
     const rows = st === 'upcoming' ? [] : tmStandings(ev);
     if(!rows.length){
       h += '<div class="empty-state">'+(st === 'upcoming' ? 'Rounds count from the start time.' : st === 'live' ? 'No rounds yet. Play '+escapeHtml(COURSE_NAMES[ev.course])+' on '+escapeHtml(LEVEL_NAMES[ev.level])+' and scan your QR.' : 'No rounds were entered.')+'</div>';
@@ -650,7 +675,7 @@
       h += rows.map((r,i)=>{
         const d = r.d, rank = i + 1, key = 't' + i;
         const user = d.username ? '<a href="/user/?u='+encodeURIComponent(d.username)+'">@'+escapeHtml(d.username.toUpperCase())+'</a>' : '';
-        const meta = [toPar(d), ev.entry === 'best' && r.n > 1 ? r.n + ' rounds' : '', fmtWhen(d.submittedAt), user].filter(Boolean).join(' · ');
+        const meta = [toPar(d), Number.isInteger(d.golfer) ? escapeHtml(GOLFER_NAMES[d.golfer] || '') : '', ev.entry === 'best' && r.n > 1 ? r.n + ' rounds' : '', fmtWhen(d.submittedAt), user].filter(Boolean).join(' · ');
         const av = d.uid && avatars[d.uid] ? '<canvas class="row-avatar" data-tavatar="'+i+'"></canvas>' : '';
         return '<div class="row has-detail'+(rank === 1 ? ' top1' : '')+'" data-tdetail="'+key+'">'
           + '<div class="rank">'+(rank === 1 ? (st === 'final' ? '🏆' : '⛳') : '#'+rank)+'</div>'
@@ -920,6 +945,7 @@
     };
     if(pending.golfer != null) record.golfer = pending.golfer;
     if(pending.rs){ record.fairways = pending.rs.fairways; record.gir = pending.rs.gir; record.putts = pending.rs.putts; }
+    if(pending.tcode) record.tcode = pending.tcode;
     try{
       const res = await writeScore(record);
       btn.disabled = false;

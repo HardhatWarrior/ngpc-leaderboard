@@ -497,9 +497,9 @@
 
   <!-- Turf Masters only, admin only: games/tm.tmFeatures {tournaments, tournamentsTesters} (On / Testers /
        Off, as Bowling) and games/tm.tmTournaments [{id, name, startsAt, endsAt, course 0-4, level 0-3,
-       players [{uid, username}] ([] = open to everyone), entry 'one' | 'best', prize?, closed?}]. tm/index.html
+       golfers [0-5 ...] ([] = any golfer), entry 'one' | 'best', prize?, closed?}]. tm/index.html
        (TurfMastersLB/tools/gen_tm_tourn.py) builds each board from approved TM scores in the window on that
-       course and level, without the Legend clubs. -->
+       course and level, without the Legend clubs, with an allowed golfer. -->
   <section class="panel" id="tm-features-panel" hidden>
     <div class="panel-header collapsed" data-toggle="tm-features-body" role="button" tabindex="0" aria-expanded="false">
       <h2 style="margin:0">Turf Masters features <span class="spec-note">(admin only)</span></h2>
@@ -531,16 +531,11 @@
           <select id="tm-t-level"><option value="0">Easy</option><option value="1" selected>Normal</option><option value="2">Hard</option><option value="3">Very Hard</option></select></label>
         <label><span class="field-label">Entries</span>
           <select id="tm-t-entry"><option value="best">Multiple: best round counts</option><option value="one">One: first round counts</option></select></label>
-        <label><span class="field-label">Players</span>
-          <select id="tm-t-players"><option value="any">Anyone</option><option value="selected">Selected players only</option></select></label>
-        <div class="t-wide" id="tm-t-pick" hidden>
-          <span class="field-label">Selected players</span>
-          <div class="current-value" id="tm-t-chosen" style="margin:4px 0 8px">None yet.</div>
-          <div class="current-value" id="tm-t-known" style="display:flex;flex-wrap:wrap;gap:6px 14px"></div>
-          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
-            <input type="text" id="tm-t-adduser" maxlength="16" placeholder="Add by username" style="flex:1 1 180px;margin-top:0">
-            <button type="button" class="action btn-secondary" id="tm-t-addbtn" style="width:auto;margin:0">Add</button>
-          </div>
+        <label><span class="field-label">Golfers</span>
+          <select id="tm-t-golfmode"><option value="any">Any golfer</option><option value="selected">Selected golfers only</option></select></label>
+        <div class="t-wide" id="tm-t-golfpick" hidden>
+          <span class="field-label">Allowed golfers</span>
+          <div class="current-value" id="tm-t-golfers" style="display:flex;flex-wrap:wrap;gap:6px 16px;margin-top:4px"></div>
         </div>
         <label class="t-wide"><span class="field-label">Prize (optional)</span>
           <input type="text" id="tm-t-prize" maxlength="120" placeholder="e.g. Bragging rights"></label>
@@ -720,10 +715,20 @@
       }finally{ btn.disabled = false; }
     });
   }
+  // Tournament codes, same format as the cart (TurfMastersLB/trn/trn.c) and /tm/'s tmCodeInfo(): id (3) |
+  // S = course + 5*(level + 4*golfer mask) (3) | check = (7 + sum value_i*(i+3)) mod 1296 (2), all base 36.
+  function tmMakeCode(id, course, level, golfers){
+    const A = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let mask = 0; (golfers || []).forEach(g=>{ mask |= 1 << g; });
+    const s = course + 5 * (level + 4 * mask);
+    const body = [A[Math.floor(id/1296)], A[Math.floor(id/36)%36], A[id%36], A[Math.floor(s/1296)], A[Math.floor(s/36)%36], A[s%36]];
+    let chk = 7; body.forEach((c,i)=>{ chk += A.indexOf(c) * (i + 3); }); chk %= 1296;
+    return body.join('') + A[Math.floor(chk/36)] + A[chk%36];
+  }
   function initTmTournaments(db, docRef, data){
     const COURSES = ['Japan', 'U.S.A.', 'Germany', 'Australia', 'Scotland'], LEVELS = ['Easy', 'Normal', 'Hard', 'Very Hard'];
     let events = Array.isArray(data.tmTournaments) ? data.tmTournaments.slice() : [];
-    let editingId = null, armedDelete = null, chosen = [], known = [];
+    let editingId = null, armedDelete = null, chosen = [];
     const listEl = el('tm-tourney-list'), formEl = el('tm-tourney-form'), msgEl = el('tm-tourney-msg');
     const pad = n => String(n).padStart(2,'0');
     const toLocalInput = ms => { const d = new Date(ms); return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())+'T'+pad(d.getHours())+':'+pad(d.getMinutes()); };
@@ -733,15 +738,17 @@
     function render(){
       events.sort((a,b)=>((a.closed === true) - (b.closed === true)) || (b.startsAt - a.startsAt));
       listEl.innerHTML = events.length ? events.map(ev=>{
-        const st = status(ev), closed = ev.closed === true, inv = Array.isArray(ev.players) && ev.players.length;
+        const st = status(ev), closed = ev.closed === true, gl = Array.isArray(ev.golfers) && ev.golfers.length;
         return '<div class="tourney-item'+(closed?' closed':'')+'" data-id="'+escapeHtml(ev.id)+'"><div class="t-main">'
           + '<div class="t-name">'+escapeHtml(ev.name)+'<span class="t-pill '+st+'">'+st+'</span>'
           + (closed ? '<span class="t-pill closed">closed</span>' : '')+'</div>'
           + '<div class="t-meta">'+escapeHtml(fmt(ev.startsAt))+' – '+escapeHtml(fmt(ev.endsAt))+'</div>'
           + '<div class="t-meta">'+escapeHtml(COURSES[ev.course]||'?')+' · '+escapeHtml(LEVELS[ev.level]||'?')+' · '
           + (ev.entry === 'one' ? 'one round (first counts)' : 'best round counts')+' · '
-          + (inv ? escapeHtml(ev.players.map(p=>'@'+p.username).join(', ')) : 'open to everyone')+'</div>'
+          + (gl ? escapeHtml(ev.golfers.map(i=>['Young Hero','Power Golfer','Shot Maker','Putt Master','Veteran','Technician'][i]).join(', ')) : 'any golfer')+'</div>'
           + (ev.prize ? '<div class="t-meta">Prize: '+escapeHtml(ev.prize)+'</div>' : '')
+          + (ev.code ? '<div class="t-meta">Code: <b style="font-family:monospace;letter-spacing:.1em;color:var(--cream)">'+escapeHtml(ev.code.slice(0,4)+'-'+ev.code.slice(4))+'</b> (players enter it under TOURNAMENT on the cart)</div>'
+             : '<div class="t-meta">No code yet: Edit and Save to give it one.</div>')
           + '</div><div class="t-btns">'
           + (closed ? '<button type="button" class="action btn-secondary" data-act="reopen">Reopen</button>'
              : st === 'final' ? '<button type="button" class="action btn-secondary" data-act="close" title="Hide it from /tm/">Close</button>' : '')
@@ -750,45 +757,18 @@
           + '</div></div>';
       }).join('') : '<p class="hint" style="margin:4px 0 0">No tournaments yet. Add one below.</p>';
     }
-    // players: anyone with a Turf Masters score (tick boxes) plus any account added by username
+    // golfers (in-game characters): tick boxes, stored as their QR index
+    const GOLFERS = ['Young Hero', 'Power Golfer', 'Shot Maker', 'Putt Master', 'Veteran', 'Technician'];
     function renderPick(){
-      el('tm-t-pick').hidden = el('tm-t-players').value !== 'selected';
-      el('tm-t-chosen').innerHTML = chosen.length ? chosen.map(p=>'<span style="margin-right:10px">@'+escapeHtml(p.username)
-        + ' <a href="#" data-drop="'+escapeHtml(p.uid)+'" title="Remove">&times;</a></span>').join('') : 'None yet.';
-      el('tm-t-known').innerHTML = known.length ? known.map(p=>'<label style="display:flex;gap:5px;align-items:center;font-size:12.5px">'
-        + '<input type="checkbox" data-uid="'+escapeHtml(p.uid)+'"'+(chosen.some(c=>c.uid===p.uid)?' checked':'')+' style="width:auto;margin:0">@'+escapeHtml(p.username)+'</label>').join('')
-        : '<span>No Turf Masters players found yet. Add players by username.</span>';
+      el('tm-t-golfpick').hidden = el('tm-t-golfmode').value !== 'selected';
+      el('tm-t-golfers').innerHTML = GOLFERS.map((n,i)=>'<label style="display:flex;gap:5px;align-items:center;font-size:12.5px">'
+        + '<input type="checkbox" data-g="'+i+'"'+(chosen.indexOf(i) >= 0 ? ' checked' : '')+' style="width:auto;margin:0">'+escapeHtml(n)+'</label>').join('');
     }
-    db.collection('scores').where('game','==','TM').get().then(snap=>{
-      const m = new Map();
-      snap.docs.forEach(d=>{ const x = d.data(); if(x.uid && x.username && !m.has(x.uid)) m.set(x.uid, {uid:x.uid, username:x.username}); });
-      known = Array.from(m.values()).sort((a,b)=>a.username.localeCompare(b.username));
-      renderPick();
-    }).catch(()=>{ known = []; renderPick(); });
-    el('tm-t-players').addEventListener('change', renderPick);
-    el('tm-t-known').addEventListener('change', (e)=>{
-      const cb = e.target.closest('input[data-uid]'); if(!cb) return;
-      const p = known.find(k=>k.uid === cb.dataset.uid); if(!p) return;
-      chosen = cb.checked ? (chosen.some(c=>c.uid===p.uid) ? chosen : chosen.concat([p])) : chosen.filter(c=>c.uid !== p.uid);
-      renderPick();
-    });
-    el('tm-t-chosen').addEventListener('click', (e)=>{
-      const a = e.target.closest('a[data-drop]'); if(!a) return;
-      e.preventDefault(); chosen = chosen.filter(c=>c.uid !== a.dataset.drop); renderPick();
-    });
-    el('tm-t-addbtn').addEventListener('click', async ()=>{
-      const name = el('tm-t-adduser').value.trim().replace(/^@/, '');
-      msgEl.innerHTML = '';
-      if(!name) return;
-      try{
-        let snap = await db.collection('users').where('username','==',name).limit(1).get();
-        if(snap.empty) snap = await db.collection('users').where('username','==',name.toLowerCase()).limit(1).get();
-        if(snap.empty){ msgEl.innerHTML = '<div class="msg err">No account named @'+escapeHtml(name)+'.</div>'; return; }
-        const d = snap.docs[0];
-        if(!chosen.some(c=>c.uid === d.id)) chosen = chosen.concat([{uid:d.id, username:d.data().username}]);
-        el('tm-t-adduser').value = '';
-        renderPick();
-      }catch(e){ msgEl.innerHTML = '<div class="msg err">Lookup failed: '+escapeHtml(e.message||'unknown error')+'</div>'; }
+    el('tm-t-golfmode').addEventListener('change', renderPick);
+    el('tm-t-golfers').addEventListener('change', (e)=>{
+      const cb = e.target.closest('input[data-g]'); if(!cb) return;
+      const g = Number(cb.dataset.g);
+      chosen = cb.checked ? (chosen.indexOf(g) >= 0 ? chosen : chosen.concat([g]).sort()) : chosen.filter(x=>x !== g);
     });
     function resetForm(){
       editingId = null; chosen = [];
@@ -829,8 +809,8 @@
         el('tm-t-course').value = String(ev.course);
         el('tm-t-level').value = String(ev.level);
         el('tm-t-entry').value = ev.entry === 'one' ? 'one' : 'best';
-        chosen = Array.isArray(ev.players) ? ev.players.slice() : [];
-        el('tm-t-players').value = chosen.length ? 'selected' : 'any';
+        chosen = Array.isArray(ev.golfers) ? ev.golfers.slice() : [];
+        el('tm-t-golfmode').value = chosen.length ? 'selected' : 'any';
         el('tm-t-prize').value = ev.prize || '';
         el('tm-t-save').textContent = 'Save changes';
         el('tm-t-cancel').hidden = false;
@@ -850,20 +830,27 @@
       msgEl.innerHTML = '';
       const name = el('tm-t-name').value.trim();
       const startsAt = new Date(el('tm-t-start').value).getTime(), endsAt = new Date(el('tm-t-end').value).getTime();
-      const selected = el('tm-t-players').value === 'selected';
+      const selected = el('tm-t-golfmode').value === 'selected';
       if(!name || !isFinite(startsAt) || !isFinite(endsAt)){ msgEl.innerHTML = '<div class="msg err">Give the tournament a name, a start and an end.</div>'; return; }
       if(endsAt <= startsAt){ msgEl.innerHTML = '<div class="msg err">The end has to be after the start.</div>'; return; }
-      if(selected && !chosen.length){ msgEl.innerHTML = '<div class="msg err">Pick at least one player, or set Players to Anyone.</div>'; return; }
+      if(selected && !chosen.length){ msgEl.innerHTML = '<div class="msg err">Tick at least one golfer, or set Golfers to Any golfer.</div>'; return; }
       const ev = { id: editingId || ('t'+Date.now().toString(36)), name, startsAt, endsAt,
         course: Number(el('tm-t-course').value), level: Number(el('tm-t-level').value),
         entry: el('tm-t-entry').value === 'one' ? 'one' : 'best',
-        players: selected ? chosen.map(p=>({uid:p.uid, username:p.username})) : [],
+        golfers: selected ? chosen.slice() : [],
         prize: el('tm-t-prize').value.trim() };
       const was = editingId ? events.find(x=>x.id===editingId) : null;
       if(was && was.closed === true) ev.closed = true;
+      // the code's id stays with the tournament; the rest of the code follows its course / level / golfers
+      let cid = was && Number.isInteger(was.codeId) ? was.codeId : -1;
+      const taken = new Set(events.filter(x=>x.id !== editingId && Number.isInteger(x.codeId)).map(x=>x.codeId));
+      while(cid < 0 || taken.has(cid)) cid = Math.floor(Math.random() * 46656);
+      ev.codeId = cid; ev.code = tmMakeCode(cid, ev.course, ev.level, ev.golfers);
       const next = editingId ? events.map(x=>x.id===editingId ? ev : x) : events.concat([ev]);
       const btn = el('tm-t-save'); btn.disabled = true;
-      const ok = await persist(next, (editingId ? 'Saved “' : 'Added “') + name + '”.');
+      const fmtc = c => c.slice(0,4) + '-' + c.slice(4);
+      const ok = await persist(next, (editingId ? 'Saved “' : 'Added “') + name + '”. Code: ' + fmtc(ev.code) + '.'
+        + (was && was.code && was.code !== ev.code ? ' The code changed (it was ' + fmtc(was.code) + '); rounds played with the old code no longer count.' : ''));
       btn.disabled = false;
       if(ok) resetForm();
     });
@@ -1485,7 +1472,7 @@
       urlNote: 'Scheme- and "WWW."-less, same convention as the in-house games. Payload is 0-9 and A-Z only. Produced by the leaderboard IPS patch for the retail cart (TurfMastersLB/).',
       fields: [
         {name:'Game code', width:'2', format:'fixed', notes:'"TM"'},
-        {name:'Format version', width:'1', format:'fixed', notes:'"3" (current); "2" = no round stats; "1" = no Golfer either; all still accepted'},
+        {name:'Format version', width:'1', format:'fixed', notes:'"3" (current); "4" = a TOURNAMENT round (+ code); "2" = no round stats; "1" = no Golfer either; all still accepted'},
         {name:'Initials', width:'3', format:'A-Z', notes:''},
         {name:'Course', width:'1', format:'0-4', notes:'0 Japan, 1 U.S.A., 2 Germany, 3 Australia, 4 Scotland (3/4 need the 5-course patch)'},
         {name:'Level', width:'1', format:'0-3', notes:'0 Easy, 1 Normal, 2 Hard, 3 Very Hard'},
@@ -1495,23 +1482,25 @@
         {name:'Total', width:'3', format:'numeric, zero-padded', notes:'total strokes; LOWER IS BETTER; must equal the hole sum'},
         {name:'Fairways hit', width:'1', format:'base-36', notes:'v3 only: fairways hit this round'},
         {name:'Greens in regulation', width:'1', format:'base-36', notes:'v3 only'},
-        {name:'Putts', width:'2', format:'base-36', notes:'v3 only: putts this round'},
+        {name:'Putts', width:'2', format:'base-36', notes:'v3/v4: putts this round'},
+        {name:'Tournament code', width:'8', format:'0-9A-Z', notes:'v4 only: the code entered under TOURNAMENT (id 3 | course+5*(level+4*golfer mask) 3 | check 2)'},
         {name:'Checksum', width:'2', format:'base-36', notes:'(sum of QR-alphanumeric indexes of every char before it) mod 1296; verified client-side, not stored'},
       ],
-      totalLength: '16 (prefix) + 37 = 53 chars (v3); v2 = 33, v1 = 32',
+      totalLength: '16 (prefix) + 37 = 53 chars (v3); v4 = 45, v2 = 33, v1 = 32',
       sortField: 'no Legend first (Legend rounds always below), then total (asc), then level (desc), then earliest',
       scorecard: 'Nothing derived beyond the checks: total must equal the sum of the 18 holes. One board tab per course on /tm/. Full spec: TurfMastersLB/NOTES.md + submission-template.json.',
       example: 'NGPC-DEV.COM/TM/TM3AAA3105887998A78897899799149C0207I',
       exampleIsReal: true,
       firestore: [
         {field:'game', type:'"TM" (fixed)'},
-        {field:'formatVersion', type:'string, "1", "2" or "3"'},
+        {field:'formatVersion', type:'string, "1" - "4"'},
         {field:'initials', type:'string, ^[A-Z]{3}$'},
         {field:'course', type:'int, 0–4'},
         {field:'level', type:'int, 0–3'},
         {field:'legend', type:'bool'},
         {field:'golfer', type:'int, 0–5 (v2/v3; absent on v1 docs)'},
-        {field:'fairways / gir / putts', type:'int each (v3 only): 0–18 / 0–18 / 0–630'},
+        {field:'fairways / gir / putts', type:'int each (v3/v4): 0–18 / 0–18 / 0–630'},
+        {field:'tcode', type:'string ^[0-9A-Z]{8}$ (v4 only): tournament code'},
         {field:'holes', type:'list<int>, 18 entries, each 1–35'},
         {field:'total', type:'int (= sum of holes)'},
       ],

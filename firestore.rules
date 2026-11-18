@@ -748,16 +748,19 @@ service cloud.firestore {
       // of Legend used, holes = strokes on each of the 18 holes (1-35), total = their sum (lower is
       // better). formatVersion '2' (TM2 QR) adds golfer 0-5 (Young Hero, Power Golfer, Shot Maker, Putt Master,
       // Veteran, Technician); '1' docs have none. '3' (TM3) also has the round's
-      // fairways hit, greens in regulation and putts (the cart's per-round counters, P1 record 0x4149 +38/+39/+40). The QR's base-36 checksum is verified client-side then dropped. Any number of
+      // fairways hit, greens in regulation and putts (the cart's per-round counters, P1 record 0x4149 +38/+39/+40).
+      // '4' (TM4) = a '3' round played from the cart's TOURNAMENT menu: + tcode, the tournament's 8-char code. The QR's base-36 checksum is verified client-side then dropped. Any number of
       // docs per player (a plain best-score board). See TurfMastersLB/NOTES.md.
       function isTurfMastersScore(d) {
         return d.game == 'TM'
-          && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'course', 'level', 'legend', 'golfer', 'fairways', 'gir', 'putts', 'holes', 'total', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'course', 'level', 'legend', 'golfer', 'fairways', 'gir', 'putts', 'tcode', 'holes', 'total', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.formatVersion is string
-          && ((d.formatVersion == '1' && !d.keys().hasAny(['golfer', 'fairways', 'gir', 'putts']))
-              || (d.formatVersion == '2' && d.keys().hasAll(['golfer']) && !d.keys().hasAny(['fairways', 'gir', 'putts'])
+          && ((d.formatVersion == '1' && !d.keys().hasAny(['golfer', 'fairways', 'gir', 'putts', 'tcode']))
+              || (d.formatVersion == '2' && d.keys().hasAll(['golfer']) && !d.keys().hasAny(['fairways', 'gir', 'putts', 'tcode'])
                   && d.golfer is int && d.golfer >= 0 && d.golfer <= 5)
-              || (d.formatVersion == '3' && d.keys().hasAll(['golfer', 'fairways', 'gir', 'putts'])
+              || (((d.formatVersion == '3' && !d.keys().hasAny(['tcode']))
+                   || (d.formatVersion == '4' && d.tcode is string && d.tcode.matches('^[0-9A-Z]{8}$')))
+                  && d.keys().hasAll(['golfer', 'fairways', 'gir', 'putts'])
                   && d.golfer is int && d.golfer >= 0 && d.golfer <= 5
                   && d.fairways is int && d.fairways >= 0 && d.fairways <= 18
                   && d.gir is int && d.gir >= 0 && d.gir <= 18

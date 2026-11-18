@@ -137,7 +137,7 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
         const played = new Set(rounds.map(d=>d.course)), slam = new Set(rounds.filter(under).map(d=>d.course));
         const cast = new Set(rounds.filter(d=>Number.isInteger(d.golfer) && d.golfer >= 0 && d.golfer <= 5).map(d=>d.golfer));   // TM2 cards only
         // TM3 cards only: the round's fairways hit, greens in regulation and putts
-        const r3 = (test)=>first(d=>d.formatVersion === '3' && Number.isInteger(d.putts) && test(d));
+        const r3 = (test)=>first(d=>(d.formatVersion === '3' || d.formatVersion === '4') && Number.isInteger(d.putts) && test(d));   // TM3 / TM4 cards
         const fwHoles = (d)=>PARS[d.course].filter(p=>p > 3).length;
         const fwAll = r3(d=>d.fairways >= fwHoles(d));
         const pin = r3(d=>d.gir >= 15);
