@@ -767,24 +767,7 @@ service cloud.firestore {
           && d.level is int && d.level >= 0 && d.level <= 3
           && d.legend is bool
           && d.holes is list && d.holes.size() == 18
-          && d.holes[0] is int && d.holes[0] >= 1 && d.holes[0] <= 35
-          && d.holes[1] is int && d.holes[1] >= 1 && d.holes[1] <= 35
-          && d.holes[2] is int && d.holes[2] >= 1 && d.holes[2] <= 35
-          && d.holes[3] is int && d.holes[3] >= 1 && d.holes[3] <= 35
-          && d.holes[4] is int && d.holes[4] >= 1 && d.holes[4] <= 35
-          && d.holes[5] is int && d.holes[5] >= 1 && d.holes[5] <= 35
-          && d.holes[6] is int && d.holes[6] >= 1 && d.holes[6] <= 35
-          && d.holes[7] is int && d.holes[7] >= 1 && d.holes[7] <= 35
-          && d.holes[8] is int && d.holes[8] >= 1 && d.holes[8] <= 35
-          && d.holes[9] is int && d.holes[9] >= 1 && d.holes[9] <= 35
-          && d.holes[10] is int && d.holes[10] >= 1 && d.holes[10] <= 35
-          && d.holes[11] is int && d.holes[11] >= 1 && d.holes[11] <= 35
-          && d.holes[12] is int && d.holes[12] >= 1 && d.holes[12] <= 35
-          && d.holes[13] is int && d.holes[13] >= 1 && d.holes[13] <= 35
-          && d.holes[14] is int && d.holes[14] >= 1 && d.holes[14] <= 35
-          && d.holes[15] is int && d.holes[15] >= 1 && d.holes[15] <= 35
-          && d.holes[16] is int && d.holes[16] >= 1 && d.holes[16] <= 35
-          && d.holes[17] is int && d.holes[17] >= 1 && d.holes[17] <= 35
+          && d.holes.hasOnly([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32, 33, 34, 35])   // every hole 1-35 strokes (one check: Firestore caps evaluated expressions per write)
           && d.total is int && d.total == d.holes[0] + d.holes[1] + d.holes[2] + d.holes[3] + d.holes[4] + d.holes[5] + d.holes[6] + d.holes[7] + d.holes[8] + d.holes[9] + d.holes[10] + d.holes[11] + d.holes[12] + d.holes[13] + d.holes[14] + d.holes[15] + d.holes[16] + d.holes[17]
           && d.source is string && d.source in ['qr', 'capture']
           && d.submittedAt is int
