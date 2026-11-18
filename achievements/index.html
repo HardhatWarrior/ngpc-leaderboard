@@ -90,10 +90,9 @@
     <p class="hint" style="margin-bottom:10px">Badges a game awards for what a player has done in it. Pick a game.</p>
     <label class="sortrow" for="sort">Sort games by
       <select id="sort">
+        <option value="recent" selected>Most recent</option>
         <option value="pct">Completion %</option>
-        <option value="recent">Most recent</option>
         <option value="az">A&ndash;Z</option>
-        <option value="fixed">Default order</option>
       </select>
     </label>
     <div class="tabs" id="tabs" role="tablist"></div>
@@ -201,10 +200,11 @@
       try{ const u = new URL(location.href); u.searchParams.set('g', results[cur].p.key); history.replaceState(null,'',u); }catch(e){}
     }
     el('tabs').addEventListener('click', e=>{ const b = e.target.closest('.tab'); if(b) show(+b.dataset.i); });
-    // the selected game stays selected while the order changes; the first load keeps today's default (?g= or first earned)
+    // the selected game stays selected while the order changes; the first load honours ?g=, else the first game with badges earned
     el('sort').addEventListener('change', ()=>{ show(sortResults(el('sort').value)); });
     el('tabs-panel').hidden = results.length < 2;
-    cur = sortResults(el('sort').value);
+    const picked = sortResults(el('sort').value);
+    cur = baseOrder.some(x=>x.p.key === want) ? picked : 0;   // no ?g=: open on the top game of the chosen sort
     show(cur);
   }
   boot();
