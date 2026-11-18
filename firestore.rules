@@ -752,8 +752,9 @@ service cloud.firestore {
       function isTurfMastersScore(d) {
         return d.game == 'TM'
           && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'course', 'level', 'legend', 'golfer', 'holes', 'total', 'source', 'submittedAt', 'uid', 'username', 'approved'])
-          && d.formatVersion is string && (d.formatVersion == '1' || d.formatVersion == '2')
-          && (d.formatVersion == '1' ? !('golfer' in d) : (d.golfer is int && d.golfer >= 0 && d.golfer <= 5))
+          && d.formatVersion is string
+          && ((d.formatVersion == '1' && !d.keys().hasAny(['golfer']))
+              || (d.formatVersion == '2' && d.keys().hasAll(['golfer']) && d.golfer is int && d.golfer >= 0 && d.golfer <= 5))
           && d.initials is string && d.initials.matches('^[A-Z]{3}$')
           && d.course is int && d.course >= 0 && d.course <= 4
           && d.level is int && d.level >= 0 && d.level <= 3
