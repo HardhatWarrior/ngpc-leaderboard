@@ -267,6 +267,13 @@
     </div>
   </section>
 
+  <section class="panel" id="badges-content" hidden>
+    <div class="panel-header">
+      <h2><a href="/admin/badges/" style="color:inherit;text-decoration:none">Badges &rarr;</a></h2>
+    </div>
+    <p class="hint" style="margin:0">Every game's badges and who has earned each: <a href="/admin/badges/">open Badge admin</a>.</p>
+  </section>
+
   <section class="panel" id="games-content" hidden>
     <div class="panel-header collapsed" data-toggle="games-body" role="button" tabindex="0" aria-expanded="false">
       <h2>Games</h2>
@@ -280,7 +287,6 @@
       </label>
       <div id="hide-grid-msg"></div>
       <div id="games-status"></div>
-      <p class="hint"><a href="/admin/badges/">Badge admin</a> &mdash; every game's badges and who has earned each.</p>
       <p class="hint"><a href="/admin/add-game/">+ Add a single-player (non-QR) game</a> &mdash; no approval step; creates its tile on <a href="/games/">/games/</a> and its play page immediately. The Section column below moves any existing game between the main grid and that page.</p>
       <div style="overflow-x:auto">
         <table>
@@ -416,6 +422,7 @@
   const PLAYERS_PAGE_SIZE = 10;
   let playersPage = 0;
   const gamesContentEl = el('games-content');
+  const badgesContentEl = el('badges-content');
   const gamesRowsEl = el('games-rows');
   const gamesStatusEl = el('games-status');
   const gameCountsContentEl = el('game-counts-content');
@@ -738,7 +745,7 @@
   }
 
   async function loadAndRenderGames(db, uidToUsername){
-    gamesContentEl.hidden = false;
+    gamesContentEl.hidden = false; badgesContentEl.hidden = false;
     gamesStatusEl.textContent = 'Loading…';
     const snap = await db.collection('games').get();
     const games = [];
@@ -1337,7 +1344,7 @@
       users.forEach(u=>{ uidToUsername[u.uid] = u.username; });
       games = await loadAndRenderGames(NGPC_AUTH.db, uidToUsername);
     }catch(e){
-      gamesContentEl.hidden = false;
+      gamesContentEl.hidden = false; badgesContentEl.hidden = false;
       gamesStatusEl.innerHTML = '<div class="msg err">Couldn’t load games: '+escapeHtml((e&&e.message)||'unknown error')
         +'. If you just added this feature, make sure the updated firestore.rules has been published,'
         +' and run NGPC-Admin-Scripts/seed-games.js --apply first.</div>';
