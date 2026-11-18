@@ -49,6 +49,18 @@
     <div id="status"></div>
     <a id="dl" href="#">Download patched ROM</a>
   </div>
+  <div class="panel">
+    <b>Updating? Keep your save</b> <span class="mono">(optional)</span>
+    <ol>
+      <li>Before flashing the new version, read the whole cart back to a file with your flasher's software (backup / dump / read cart). Your records, stats and legend clubs live inside that file.</li>
+      <li>Choose that readback here, then choose your clean dump above (or choose it again).</li>
+      <li>The download then carries your save into the new version. Flash it and your stats are still there.</li>
+    </ol>
+    <label class="drop" id="sdrop">Tap to choose your cart readback, or drop it here
+      <input type="file" id="sfile" accept=".ngc,.ngp,.bin,application/octet-stream">
+    </label>
+    <div id="sstatus" style="margin-top:10px;font-size:14px"></div>
+  </div>
   <p class="mono">Prefer your own tools? <a href="/tm/turfmasters_lb.ips" download>Download the .ips</a> (or the <a href="/tm/turfmasters_5c.ips" download>5-course .ips</a>) and apply it with any IPS patcher (Floating IPS, RomPatcher.js).<br><a href="/tm/">&larr; Back to the leaderboard</a></p>
 </main>
 <script>
@@ -102,13 +114,42 @@
     }catch(e){ say('Patch failed: ' + e.message, 'bad'); return; }
     const out = crc32(rom);
     if(out !== V.crc){ say('Patched ROM failed verification (CRC32 ' + hex(out) + '). The patch on the server may be newer than this page; reload and try again.', 'bad'); return; }
+    let name = V.name, carried = '';
+    if(saveBlk){ rom.set(saveBlk, SAVE_OFF); name = name.replace(/\.ngc$/, ' (with save).ngc'); carried = ' Your save from ' + saveName + ' is carried over.'; }
     if(dl.href.startsWith('blob:')) URL.revokeObjectURL(dl.href);
     dl.href = URL.createObjectURL(new Blob([rom], {type:'application/octet-stream'}));
-    dl.download = V.name;
+    dl.download = name;
     dl.dataset.counter = (V === VARIANTS['5c']) ? 'patchApplied5c' : 'patchApplied';
     dl.style.display = 'block';
-    say('Verified and patched (CRC32 ' + hex(out) + ').', 'ok');
+    say('Verified and patched (CRC32 ' + hex(out) + ').' + carried, 'ok');
   }
+
+  // save carry: the game keeps its save in flash block 0x1E0000-0x1EFFFF (64 x 1 KB slots, header "SAURUS GOLF 00C"),
+  // the same place in the 2 MB and 4 MB builds, so a cart readback's block drops straight into the new build.
+  const SAVE_OFF = 0x1E0000, SAVE_LEN = 0x10000, SAVE_HDR = 'SAURUS GOLF 00C';
+  let saveBlk = null, saveName = '';
+  const sst = document.getElementById('sstatus');
+  async function handleSave(file){
+    saveBlk = null; saveName = ''; sst.className = ''; sst.textContent = '';
+    if(!file) return;
+    const b = new Uint8Array(await file.arrayBuffer());
+    if(b.length !== 2097152 && b.length !== 4194304){ sst.className = 'bad'; sst.textContent = file.name + ' is not a full cart readback (2 MB or 4 MB).'; return; }
+    const blk = b.slice(SAVE_OFF, SAVE_OFF + SAVE_LEN);
+    let slots = 0;
+    for(let s = 0; s < SAVE_LEN; s += 0x400){
+      let k = 0; while(k < SAVE_HDR.length && blk[s+k] === SAVE_HDR.charCodeAt(k)) k++;
+      if(k === SAVE_HDR.length) slots++;
+    }
+    if(!slots){ sst.className = 'bad'; sst.textContent = file.name + ' holds no Neo Turf Masters save.'; return; }
+    saveBlk = blk; saveName = file.name;
+    sst.className = 'ok'; sst.textContent = 'Save found in ' + file.name + '. It goes into the next ROM you patch above.';
+    if(lastFile) handle(lastFile);
+  }
+  const sinp = document.getElementById('sfile'), sdrop = document.getElementById('sdrop');
+  sinp.addEventListener('change', ()=>handleSave(sinp.files[0]));
+  ['dragenter','dragover'].forEach(e=>sdrop.addEventListener(e, ev=>{ ev.preventDefault(); sdrop.classList.add('over'); }));
+  ['dragleave','drop'].forEach(e=>sdrop.addEventListener(e, ev=>{ ev.preventDefault(); sdrop.classList.remove('over'); }));
+  sdrop.addEventListener('drop', ev=>handleSave(ev.dataTransfer.files[0]));
 
   const inp = document.getElementById('file'), drop = document.getElementById('drop');
   inp.addEventListener('change', ()=>{ lastFile = inp.files[0]; handle(lastFile); });
