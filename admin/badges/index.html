@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Badge Admin</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a; --gold:#e8c547;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+        padding-inline:20px; padding-block:28px; display:flex; justify-content:center; }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; }
+  .tnum{ font-variant-numeric:tabular-nums; }
+  #shell{ width:100%; max-width:860px; display:flex; flex-direction:column; gap:16px; }
+  header{ text-align:center; display:flex; flex-direction:column; gap:6px; }
+  header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
+  header p{ margin:0; color:var(--dim); font-size:13px; line-height:1.5; }
+  #denied, #status{ text-align:center; color:var(--dim); font-size:13.5px; padding:30px 0; }
+  #denied[hidden], #status[hidden], #main[hidden]{ display:none; }
+  .bar-tools{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  .bar-tools input{ flex:1 1 220px; min-width:0; background:var(--navy); border:1px solid var(--border); color:var(--cream);
+        border-radius:7px; padding:9px 10px; font:inherit; font-size:13px; }
+  .bar-tools input:focus{ outline:none; border-color:var(--accent2); }
+  .bar-tools button{ font:inherit; font-weight:600; font-size:12.5px; border:1px solid var(--border); background:var(--panel2);
+        color:var(--cream); border-radius:8px; padding:9px 13px; cursor:pointer; }
+  .summary{ color:var(--dim); font-size:12.5px; }
+  .game{ background:var(--panel); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  .game > summary{ list-style:none; cursor:pointer; padding:14px 16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+  .game > summary::-webkit-details-marker{ display:none; }
+  .game > summary::before{ content:"\25B8"; color:var(--accent2); font-size:13px; }
+  .game[open] > summary::before{ content:"\25BE"; }
+  .g-name{ font-weight:700; font-size:15px; flex:1 1 200px; }
+  .g-meta{ color:var(--dim); font-size:12.5px; }
+  .g-meta b{ color:var(--cream); }
+  .badges{ border-top:1px solid var(--border); }
+  .b{ border-bottom:1px solid var(--border); }
+  .b:last-child{ border-bottom:none; }
+  .b > summary{ list-style:none; cursor:pointer; padding:10px 16px 10px 34px; display:grid; grid-template-columns:minmax(0,1fr) 130px 70px;
+        gap:12px; align-items:center; }
+  .b > summary::-webkit-details-marker{ display:none; }
+  .b > summary:hover{ background:var(--panel2); }
+  .b-name{ font-weight:600; font-size:13.5px; } .b-name small{ display:block; font-weight:400; color:var(--dim); font-size:11.5px; margin-top:2px; }
+  .b-name .grp{ display:inline; margin:0 6px 0 0; font-weight:400; color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.05em; }
+  .meter{ height:7px; background:var(--navy); border-radius:4px; overflow:hidden; border:1px solid var(--border); }
+  .meter i{ display:block; height:100%; background:var(--gold); }
+  .b-count{ text-align:right; font-size:12.5px; color:var(--dim); } .b-count b{ color:var(--cream); font-size:14px; }
+  .b-count.zero b{ color:var(--dim); }
+  .earners{ padding:4px 16px 12px 34px; display:flex; flex-direction:column; gap:2px; }
+  .earners .none{ color:var(--dim); font-size:12.5px; padding:4px 0; }
+  .e{ display:grid; grid-template-columns:150px minmax(0,1fr); gap:12px; font-size:12.5px; padding:3px 0; }
+  .e a{ color:var(--accent2); text-decoration:none; font-weight:600; overflow-wrap:anywhere; } .e a:hover{ text-decoration:underline; }
+  .e span{ color:var(--dim); overflow-wrap:anywhere; }
+  .e.hl a{ color:var(--gold); }
+  @media (max-width:560px){
+    .b > summary{ grid-template-columns:minmax(0,1fr) 60px; } .b > summary .meter{ display:none; }
+    .e{ grid-template-columns:1fr; gap:0; }
+  }
+  footer{ text-align:center; color:var(--dim); font-size:12px; } footer a{ color:var(--accent2); }
+</style>
+</head>
+<body>
+<div id="shell">
+  <header>
+    <h1 class="px">BADGE ADMIN</h1>
+    <p>Every game's badges, how many players hold each, and who they are. Same rules as the public <a href="/achievements/" style="color:var(--accent2)">Badges</a> page.</p>
+  </header>
+  <div id="denied" hidden></div>
+  <div id="status">Loading every player&rsquo;s scores&hellip;</div>
+  <div id="main" hidden>
+    <div class="bar-tools">
+      <input id="q" type="search" placeholder="Find a player (shows only the badges they hold)" autocomplete="off">
+      <button type="button" id="expand">Expand all</button>
+      <button type="button" id="collapse">Collapse all</button>
+    </div>
+    <div class="summary" id="summary" style="margin:10px 2px 12px"></div>
+    <div id="games" style="display:flex;flex-direction:column;gap:12px"></div>
+  </div>
+  <footer><a href="/admin/">&larr; Admin</a></footer>
+</div>
+
+<script src="/auth.js"></script>
+<script src="/achievements/badges.js?v=1"></script>
+<script>
+(function(){
+  "use strict";
+  const el = (id)=>document.getElementById(id);
+  const A = window.NGPC_AUTH, B = window.NGPC_BADGES;
+  const esc = B ? B.esc : String;
+  let model = [];   // [{key,name,players,rows:[{name,grp,how,earners:[{user,uid,text}]}]}]
+
+  function say(msg){ const s = el('status'); s.textContent = msg; s.hidden = !msg; }
+
+  async function build(user){
+    const db = A.db;
+    const [scoreSnap, userSnap] = await Promise.all([
+      db.collection('scores').where('approved','==',true).get(),
+      db.collection('users').get()
+    ]);
+    const names = {};
+    userSnap.forEach(d=>{ names[d.id] = d.data().username || d.id; });
+    const byUid = {};
+    scoreSnap.forEach(d=>{ const x = d.data(); if(x.uid){ (byUid[x.uid] = byUid[x.uid] || []).push(x); } });
+    const uids = Object.keys(byUid);
+    const games = B.PROVIDERS.map(p=>({ key:p.key, name:p.name, players:0, rows:new Map() }));
+    let done = 0;
+    for(const uid of uids){
+      const ctx = { uid:uid, username:names[uid] || uid, self:false, viewer:user, scores:byUid[uid] };
+      for(let i=0;i<B.PROVIDERS.length;i++){
+        let r = null;
+        try{ r = await B.PROVIDERS[i].load(ctx); }catch(e){ console.warn('badges: '+B.PROVIDERS[i].key, e); }
+        if(!r || !Array.isArray(r.list) || !r.list.length) continue;
+        const g = games[i]; g.players++;
+        r.list.forEach(b=>{
+          const key = (b.grp ? b.grp+'|' : '') + b.name;
+          let row = g.rows.get(key);
+          if(!row){ row = { name:b.name, grp:b.grp || '', how:'', earners:[] }; g.rows.set(key,row); }
+          if(b.on) row.earners.push({ user:ctx.username, uid:uid, text:b.sub || '' });
+          else if(!row.how) row.how = b.sub || '';
+        });
+      }
+      say('Reading players… ' + (++done) + ' of ' + uids.length);
+    }
+    return games.map(g=>({ key:g.key, name:g.name, players:g.players, rows:Array.from(g.rows.values()) }));
+  }
+
+  function render(){
+    const q = el('q').value.trim().toLowerCase();
+    const open = new Set(Array.from(document.querySelectorAll('details.game[open]')).map(d=>d.dataset.key));
+    const openB = new Set(Array.from(document.querySelectorAll('details.b[open]')).map(d=>d.dataset.k));
+    let html = '', totalBadges = 0, totalEarned = 0;
+    model.forEach(g=>{
+      g.rows.forEach(r=>{ totalBadges++; totalEarned += r.earners.length; });
+      const rows = g.rows.map(r=>{
+        const earners = q ? r.earners.filter(e=>e.user.toLowerCase().indexOf(q) >= 0) : r.earners;
+        if(q && !earners.length) return '';
+        const pct = g.players ? Math.round(r.earners.length * 100 / g.players) : 0;
+        const k = g.key+'|'+r.grp+'|'+r.name;
+        return '<details class="b" data-k="'+esc(k)+'"'+((openB.has(k) || q) ? ' open' : '')+'><summary>'+
+          '<span class="b-name">'+(r.grp ? '<span class="grp">'+esc(r.grp)+'</span>' : '')+esc(r.name)+(r.how ? '<small>'+esc(r.how)+'</small>' : '')+'</span>'+
+          '<span class="meter" title="'+pct+'% of '+g.players+' players"><i style="width:'+pct+'%"></i></span>'+
+          '<span class="b-count tnum'+(r.earners.length ? '' : ' zero')+'"><b>'+r.earners.length+'</b> / '+g.players+'</span></summary>'+
+          '<div class="earners">'+(earners.length
+            ? earners.map(e=>'<div class="e'+(q?' hl':'')+'"><a href="/achievements/?u='+encodeURIComponent(e.user.toLowerCase())+'&g='+encodeURIComponent(g.key)+'">'+esc(e.user)+'</a><span>'+esc(e.text)+'</span></div>').join('')
+            : '<div class="none">Nobody yet.</div>')+'</div></details>';
+      }).join('');
+      if(q && !rows) return;
+      const any = g.rows.filter(r=>r.earners.length).length;
+      html += '<details class="game" data-key="'+esc(g.key)+'"'+((open.has(g.key) || q) ? ' open' : '')+'><summary><span class="g-name">'+esc(g.name)+'</span>'+
+        '<span class="g-meta"><b class="tnum">'+g.players+'</b> players &middot; <b class="tnum">'+g.rows.length+'</b> badges &middot; <b class="tnum">'+any+'</b> earned by someone</span></summary>'+
+        '<div class="badges">'+(rows || '<div class="earners"><div class="none">No player has scores for this game yet, so there are no badges to show.</div></div>')+'</div></details>';
+    });
+    el('games').innerHTML = html || '<div class="summary">No player matches &ldquo;'+esc(q)+'&rdquo;.</div>';
+    el('summary').textContent = model.length + ' games · ' + totalBadges + ' badges · ' + totalEarned + ' badges earned in all. Click a game, then a badge, to see who has it.';
+  }
+
+  async function boot(){
+    const denied = el('denied');
+    if(!A || !B){ denied.hidden = false; denied.textContent = 'This page isn’t available right now (a required library failed to load).'; say(''); return; }
+    await A.authReady;
+    const user = A.currentUser;
+    if(!user || !A.isSiteAdmin(user)){ denied.hidden = false; denied.textContent = 'Not authorized. Sign in as the site admin to view this page.'; say(''); return; }
+    try{
+      model = await build(user);
+    }catch(e){ console.warn(e); say('Could not load the badge data: ' + (e && e.message ? e.message : e)); return; }
+    say(''); el('main').hidden = false; render();
+    el('q').addEventListener('input', render);
+    el('expand').addEventListener('click', ()=>document.querySelectorAll('details.game,details.b').forEach(d=>d.open = true));
+    el('collapse').addEventListener('click', ()=>document.querySelectorAll('details.game,details.b').forEach(d=>d.open = false));
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
