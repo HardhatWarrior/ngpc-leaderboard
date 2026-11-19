@@ -1,5 +1,5 @@
 {
-  "rev": 7,
+  "rev": 8,
   "games": [
     {
       "slug": "2k",
@@ -129,11 +129,11 @@
       "slug": "sk",
       "name": "Sokoban",
       "author": "HARDHATWARRIOR",
-      "version": "1.0",
-      "rom_rev": 1,
+      "version": "1.1",
+      "rom_rev": 2,
       "rom_size": 2097152,
-      "rom_sha256": "1bbe9c80ceae5fe29b66be5b74e7c182c82872e60afac3926c61bda952e5aa06",
-      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2Fsk%2Fsokoban_v1.0.ngp?alt=media&token=ede02fe8-771d-43bb-a3b9-b613a9afd056",
+      "rom_sha256": "b2db3a927483eded3c5a35fb2f3d8c50b0ec395a2d85ca6fda249f961073e7ec",
+      "download_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/roms%2Fsk%2Fsokoban_v1.1.ngp?alt=media&token=8e8cb8e3-6981-49ca-9241-bb8933be8346",
       "icon_url": "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fsk%2Ficon.png?alt=media&token=b98339db-7e52-45d0-8fbe-e3d68e094be7",
       "screenshots": [
         "https://firebasestorage.googleapis.com/v0/b/ngpc-leaderboard.firebasestorage.app/o/game-art%2Fsk%2Ftitle.png?alt=media&token=8fa61851-872e-4fcd-86c2-f2ed687bed8c",
