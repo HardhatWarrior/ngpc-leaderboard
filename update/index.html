@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>NGPC Save Updater</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#5c8fd6; --accent-ink:#0a1830;
+    --good:#4fbf8b; --danger:#e5615a;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif; padding:28px 16px; display:flex; justify-content:center; }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; }
+  #shell{ width:100%; max-width:720px; display:flex; flex-direction:column; gap:20px; }
+  header{ background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--border); border-radius:14px; padding:20px; }
+  .eyebrow{ font-size:10px; letter-spacing:.14em; color:var(--accent); text-transform:uppercase; }
+  h1{ margin:10px 0 6px; font-size:clamp(14px,4vw,20px); line-height:1.4; }
+  .sub{ margin:0; color:var(--dim); font-size:13px; line-height:1.5; }
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  .panel h2{ margin:0 0 6px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent); }
+  .hint{ margin:0 0 12px; color:var(--dim); font-size:12.5px; line-height:1.55; }
+  .hint code{ font-family:"IBM Plex Mono",monospace; color:var(--cream); }
+  main{ display:flex; flex-direction:column; gap:20px; }
+  [hidden]{ display:none !important; }
+  label.f{ display:flex; flex-direction:column; gap:6px; font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--dim); margin-top:12px; }
+  input[type=file], select{ font:inherit; font-size:13.5px; text-transform:none; letter-spacing:0; color:var(--cream); background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:9px 10px; width:100%; max-width:100%; }
+  .check{ display:flex; gap:8px; align-items:center; font-size:13px; color:var(--cream); margin-top:12px; }
+  button{ font:inherit; border:none; border-radius:8px; padding:11px 16px; cursor:pointer; font-weight:600; font-size:13.5px; background:var(--accent); color:var(--accent-ink); margin-top:14px; }
+  button:disabled{ opacity:.5; cursor:not-allowed; }
+  .msg{ font-size:12.5px; border-radius:8px; padding:10px 12px; margin-top:12px; line-height:1.5; }
+  .msg.err{ background:rgba(229,97,90,.15); color:var(--danger); border:1px solid rgba(229,97,90,.35); }
+  .msg.ok{ background:rgba(79,191,139,.12); color:var(--good); border:1px solid rgba(79,191,139,.35); }
+  .msg.note{ background:rgba(92,143,214,.12); color:var(--dim); border:1px solid rgba(92,143,214,.3); }
+  .found{ font-family:"IBM Plex Mono",monospace; font-size:12.5px; color:var(--cream); margin-top:8px; overflow-wrap:anywhere; }
+  ol{ margin:0; padding-left:20px; color:var(--dim); font-size:12.5px; line-height:1.6; }
+  footer{ text-align:center; color:var(--dim); font-size:11px; }
+</style>
+</head>
+<body>
+<div id="shell">
+  <header>
+    <span class="eyebrow">ngpc-dev.com tools</span>
+    <h1 class="px">SAVE UPDATER</h1>
+    <p class="sub">Carry your save from an old build of any of our games to a new build of the same game, multipacks included.</p>
+  </header>
+
+  <main id="tool">
+    <section class="panel">
+      <h2>Getting your save off the cart</h2>
+      <ol>
+        <li>Put the flash cart with your old build in your flasher.</li>
+        <li>Read (back up / dump) the whole cart to a file with your flasher's software. The save lives inside the ROM image, so a full 2 MB read is all you need.</li>
+        <li>Pick that file as the old ROM below, and the new build of the same game as the new ROM.</li>
+      </ol>
+    </section>
+
+    <section class="panel">
+      <h2>Update</h2>
+      <p class="hint">Everything runs in this browser. Nothing is uploaded.</p>
+      <label class="f">Old ROM (read back from your cart) <input type="file" id="romOld" accept=".ngp,.ngc,.bin"></label>
+      <div class="found" id="found"></div>
+      <label class="f">New build <input type="file" id="romNew" accept=".ngp,.ngc,.bin"></label>
+      <button type="button" id="go" disabled>Make the updated ROM</button>
+      <div id="msg"></div>
+    </section>
+
+    <section class="panel">
+      <h2>How it works</h2>
+      <p class="hint" style="margin:0">Our games keep their save in the cart's save area (the 16 KB at 0x1F8000-0x1FBFFF).
+        The updater copies that area from your old cart into the new build unchanged, so the new build finds the save
+        exactly as if the cart had been updated in place, and upgrades it if the save format grew. Use builds of the
+        <b>same game</b> (or the same pack): a save carried into a different game is ignored, or wiped by it.
+        GUARDIANS OF THE NOCTURNE has its own updater with more options: <a href="/gn/update/" style="color:var(--accent)">/gn/update/</a>.</p>
+    </section>
+  </main>
+
+  <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com</footer>
+</div>
+
+<script src="save_core.js"></script>
+<script>
+(function () {
+  "use strict";
+  var SC = window.NgpcSaveCore;
+  var $ = function (id) { return document.getElementById(id); };
+  var oldRom = null, newRom = null, info = null;
+  function say(t, kind) { $("msg").innerHTML = ""; if (!t) return; var d = document.createElement("div"); d.className = "msg " + kind; d.textContent = t; $("msg").appendChild(d); }
+  function read(inp) {
+    return new Promise(function (ok, bad) {
+      var f = inp.files && inp.files[0];
+      if (!f) { ok(null); return; }
+      var r = new FileReader();
+      r.onload = function () { ok({ name: f.name, b: new Uint8Array(r.result) }); };
+      r.onerror = function () { bad(new Error("Could not read " + f.name + ".")); };
+      r.readAsArrayBuffer(f);
+    });
+  }
+  function ready() { $("go").disabled = !(oldRom && newRom && info); }
+  function infoText(d) {
+    if (d.kind === "multipack") return "a multipack save journal (" + d.journal + " record" + (d.journal > 1 ? "s" : "") + ")";
+    if (d.kind === "game") return d.records + " save record" + (d.records > 1 ? "s" : "") + (d.tagList.length ? " (game tag " + d.tagList.join(", ") + ")" : "");
+    return "data in the save area, in a format this page does not recognise (it is copied anyway)";
+  }
+  $("romOld").addEventListener("change", function () {
+    oldRom = null; info = null; $("found").textContent = ""; say("");
+    read($("romOld")).then(function (a) {
+      if (!a) { ready(); return; }
+      info = SC.inspect(a.b);
+      if (!info) { say(a.name + " is shorter than 2 MB, so it holds no save. Read the WHOLE cart back with your flasher and try that file.", "err"); ready(); return; }
+      if (info.kind === "none") { say(a.name + ": the save area is empty, so there is no save to carry.", "err"); info = null; ready(); return; }
+      oldRom = a;
+      $("found").textContent = "Found " + infoText(info) + ".";
+      if (info.tags.GN) say("This looks like a GUARDIANS OF THE NOCTURNE save: /gn/update/ handles it with more options (it works here too).", "note");
+      ready();
+    }, function (e) { say(e.message, "err"); ready(); });
+  });
+  $("romNew").addEventListener("change", function () {
+    newRom = null; say("");
+    read($("romNew")).then(function (n) {
+      newRom = n;
+      if (n && n.b.length > SC.ROM_SIZE) { say(n.name + " is larger than 2 MB: not an NGPC ROM.", "err"); newRom = null; }
+      ready();
+    }, function (e) { say(e.message, "err"); ready(); });
+  });
+  $("go").addEventListener("click", function () {
+    if (!oldRom || !newRom || !info) return;
+    var r;
+    try {
+      r = SC.updateRom(oldRom.b, newRom.b);
+    } catch (e) {
+      say(e.message.charAt(0).toUpperCase() + e.message.slice(1) + ".", "err");
+      return;
+    }
+    var base = newRom.name.replace(/\.(ngp|ngc|bin)$/i, ""), name = base + "_with_save.ngp";
+    var url = URL.createObjectURL(new Blob([r.rom], { type: "application/octet-stream" }));
+    var a = document.createElement("a");
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 30000);
+    say("Saved " + name + " with " + infoText(r.info) + "." + (r.padded ? " The build was padded to 2 MB, as flashers need." : "") +
+        (r.skipped32 ? " Note: the new build uses part of the save area for itself, so only the main save block was carried." : "") +
+        " Flash the whole file to your cart.", "ok");
+  });
+})();
+</script>
+</body>
+</html>
