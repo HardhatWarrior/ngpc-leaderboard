@@ -329,7 +329,7 @@
 
   <!-- Signed-in players: straight to their own badges (/achievements/), the games' awards in one place. -->
   <a id="badges-link" href="/achievements/" hidden style="display:flex;align-items:center;justify-content:space-between;gap:10px;background:var(--panel,#181f3a);border:1px solid #37426e;border-radius:12px;padding:12px 16px;text-decoration:none;color:var(--cream,#f4eedd)">
-    <span><b style="color:#e8c547;font-size:13px">&#9733; Your badges</b><span style="display:block;font-size:11.5px;color:var(--dim,#93a0c9);margin-top:2px">What you have earned in each game</span></span>
+    <span><b style="color:#e8c547;font-size:13px">&#9733; Your badges</b><span id="badges-sub" style="display:block;font-size:11.5px;color:var(--dim,#93a0c9);margin-top:2px">What you have earned in each game</span></span>
     <span style="color:var(--accent2,#5c8fd6);font-size:12px;font-weight:600">View &rarr;</span>
   </a>
 
@@ -733,7 +733,36 @@
   if(window.NGPC_AUTH) NGPC_AUTH.onAuthChange(user=>{
     promoUser = user; renderPromo();
     const bl = el('badges-link'); if(bl) bl.hidden = !(user && user.username);
+    if(user && user.username) showRecentBadges(user);
   });
+
+  // The signed-in player's three most recently earned badges, under "Your badges". Dates come from the score each
+  // badge was earned with; Nocturne has no per-badge dates, so it shows one progress item dated by its board entry.
+  let recentFor = null;
+  async function showRecentBadges(user){
+    if(recentFor === user.uid) return;
+    recentFor = user.uid;
+    const sub = el('badges-sub'); if(!sub) return;
+    try{
+      if(!window.NGPC_BADGES){
+        await new Promise((ok, no)=>{ const s = document.createElement('script'); s.src = '/achievements/badges.js?v=5'; s.onload = ok; s.onerror = no; document.head.appendChild(s); });
+      }
+      const B = window.NGPC_BADGES;
+      const snap = await NGPC_AUTH.db.collection('scores').where('uid','==',user.uid).where('approved','==',true).get();
+      const ctx = { uid:user.uid, username:user.username, self:true, viewer:user, scores:snap.docs.map(d=>d.data()) };
+      const items = [];
+      for(const p of B.PROVIDERS){
+        let r = null;
+        try{ r = await p.load(ctx); }catch(e){ continue; }
+        ((r && r.list) || []).forEach(b=>{ if(b.on && b.at) items.push({ name:b.name, game:p.name, at:b.at }); });
+        if(r && r.recent && r.recent.at) items.push({ name:r.recent.name, game:p.name, at:r.recent.at });   // Nocturne: progress, dated by the board entry
+      }
+      if(!items.length) return;
+      items.sort((a,b)=>b.at - a.at);
+      sub.innerHTML = '<span style="color:var(--dim,#93a0c9)">Latest: </span>' + items.slice(0,3).map(i=>
+        '<span style="color:#e8c547;font-weight:600">'+B.esc(i.name)+'</span> <span style="color:var(--dim,#93a0c9)">('+B.esc(i.game)+')</span>').join('<span style="color:var(--dim,#93a0c9)"> &middot; </span>');
+    }catch(e){ /* keep the plain caption */ }
+  }
 
   // Category sort: tiles grouped under a heading per category (fixed order below, then any unknown ones, then
   // Uncategorised), A-Z inside each group. Chips above the grid filter to one category ("All" = every group).

@@ -58,7 +58,8 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
         // Like every other game: no tale shared (no board entry) means no tab.
         if(!res) return null;
         const journey = res.complete ? 'NEW GAME+ '+res.journey+', COMPLETE (FREE PLAY)' : (res.journey ? 'NEW GAME+ '+res.journey : 'the first tale');
-        return { note: res.pct+'%', earned: res.badges > 0, list: res.list, html:
+        return { note: res.pct+'%', earned: res.badges > 0, list: res.list,
+          recent: (entry && entry.submittedAt) ? { name: res.pct+'% COMPLETE', at: entry.submittedAt } : null, html:
           '<h2 class="g-title">'+esc(G.name)+'</h2>'+
           '<div class="g-head"><div class="g-pct px tnum">'+res.pct+'%</div><div class="g-sum"><div class="tnum">'+res.badges+' of '+res.total+' badges'+(res.far && res.far.hid ? ' ('+res.far.hid+' remain in places not reached yet)' : '')+'</div>'+
           '<div class="bar"><i style="width:'+res.pct+'%"></i></div><div style="color:var(--dim)">Furthest journey: '+esc(journey)+'</div></div></div>'+
@@ -98,11 +99,11 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
           }catch(e){ /* titles are decoration: leave them out */ }
         }
         const list = [
-          { grp:'', name:'300 CLUB', sub: perfect.length ? (perfect.length > 1 ? perfect.length+' perfect games: ' : 'Perfect game: ') + perfect.map(d=>fmtDate(d.submittedAt)).join(', ') : 'a verified perfect game (12 strikes)', on: perfect.length > 0, big:true },
-          { grp:'', name:'250 CLUB', sub: c250.length ? times(c250.length, 'game', 'games') + ' of 250+, first ' + fmtDate(c250[0].submittedAt) : 'a verified game of 250 or more', on: c250.length > 0 },
-          { grp:'', name:'200 CLUB', sub: c200.length ? times(c200.length, 'game', 'games') + ' of 200+, first ' + fmtDate(c200[0].submittedAt) : 'a verified game of 200 or more', on: c200.length > 0 },
-          { grp:'', name:'TURKEY', sub: turkeys.length ? times(turkeys.length, 'game', 'games') + ' with three strikes in a row, first ' + fmtDate(turkeys[0].submittedAt) : 'three strikes in a row in a verified game', on: turkeys.length > 0 },
-          { grp:'', name:'CHAMPION', sub: titles.length ? 'Won ' + titles.map(c=>c.ev.name).join(', ') : 'win a Neo Bowling tournament', on: titles.length > 0, big:true },
+          { grp:'', name:'300 CLUB', sub: perfect.length ? (perfect.length > 1 ? perfect.length+' perfect games: ' : 'Perfect game: ') + perfect.map(d=>fmtDate(d.submittedAt)).join(', ') : 'a verified perfect game (12 strikes)', at: (perfect[0] ? perfect[0].submittedAt : 0), on: perfect.length > 0, big:true },
+          { grp:'', name:'250 CLUB', sub: c250.length ? times(c250.length, 'game', 'games') + ' of 250+, first ' + fmtDate(c250[0].submittedAt) : 'a verified game of 250 or more', at: (c250[0] ? c250[0].submittedAt : 0), on: c250.length > 0 },
+          { grp:'', name:'200 CLUB', sub: c200.length ? times(c200.length, 'game', 'games') + ' of 200+, first ' + fmtDate(c200[0].submittedAt) : 'a verified game of 200 or more', at: (c200[0] ? c200[0].submittedAt : 0), on: c200.length > 0 },
+          { grp:'', name:'TURKEY', sub: turkeys.length ? times(turkeys.length, 'game', 'games') + ' with three strikes in a row, first ' + fmtDate(turkeys[0].submittedAt) : 'three strikes in a row in a verified game', at: (turkeys[0] ? turkeys[0].submittedAt : 0), on: turkeys.length > 0 },
+          { grp:'', name:'CHAMPION', sub: titles.length ? 'Won ' + titles.map(c=>c.ev.name).join(', ') : 'win a Neo Bowling tournament', at: titles.length ? Math.max.apply(null, titles.map(c=>c.ev.endsAt || 0)) : 0, on: titles.length > 0, big:true },
         ];
         const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
         return { note: head.pct+'%', earned: got > 0, list: list, html:
@@ -134,6 +135,9 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
         const up = first(under);
         const pro = first(d=>d.total <= par(d) - 10);
         const vh = first(d=>d.level === 3 && under(d));
+        // date of the round that completed a set (all five courses, all six golfers): rounds are oldest first
+        const doneAt = (rs, key, n)=>{ const seen = new Set(); for(const d of rs){ seen.add(key(d)); if(seen.size >= n) return d.submittedAt || 0; } return 0; };
+        const validGolfer = (d)=>Number.isInteger(d.golfer) && d.golfer >= 0 && d.golfer <= 5;
         const played = new Set(rounds.map(d=>d.course)), slam = new Set(rounds.filter(under).map(d=>d.course));
         const cast = new Set(rounds.filter(d=>Number.isInteger(d.golfer) && d.golfer >= 0 && d.golfer <= 5).map(d=>d.golfer));   // TM2 cards only
         // TM3 cards only: the round's fairways hit, greens in regulation and putts
@@ -147,24 +151,24 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
         const scr = r3(d=>under(d) && d.gir < 9);
         const stars = new Set(rounds.filter(d=>under(d) && Number.isInteger(d.golfer) && d.golfer >= 0 && d.golfer <= 5).map(d=>d.golfer));
         const list = [
-          { grp:'', name:'HOLE IN ONE', sub: ace ? 'Aced a hole'+when(ace) : 'ace any hole', on: !!ace, big:true },
-          { grp:'', name:'ALBATROSS', sub: alb ? '3 under on a hole'+when(alb) : '3 under par on a single hole', on: !!alb },
-          { grp:'', name:'EAGLE', sub: eagle ? '2 under on a hole'+when(eagle) : '2 under par on a single hole', on: !!eagle },
-          { grp:'', name:'BIRDIE TRAIN', sub: train ? '3 in a row'+when(train) : 'three birdies (or better) in a row', on: !!train },
-          { grp:'', name:'BOGEY-FREE', sub: clean ? 'No hole over par'+when(clean) : 'a round with no hole over par', on: !!clean },
-          { grp:'', name:'UNDER PAR', sub: up ? 'Finished under par'+when(up) : 'finish a round under par', on: !!up },
-          { grp:'', name:'TOUR PRO', sub: pro ? '10 or more under'+when(pro) : 'a round 10 or more under par', on: !!pro },
-          { grp:'', name:'VERY HARD', sub: vh ? 'Under par on Very Hard'+when(vh) : 'an under-par round on Very Hard', on: !!vh },
-          { grp:'', name:'GLOBETROTTER', sub: played.size === 5 ? 'Played all five courses' : 'play a round on all five courses (' + played.size + ' of 5)', on: played.size === 5 },
-          { grp:'', name:'FULL ROSTER', sub: cast.size === 6 ? 'Played a round with all six golfers' : 'play a round with all six golfers (' + cast.size + ' of 6)', on: cast.size === 6 },
-          { grp:'', name:'FAIRWAY FINDER', sub: fwAll ? 'Hit every fairway'+when(fwAll) : 'hit every fairway in a round', on: !!fwAll },
-          { grp:'', name:'PIN SEEKER', sub: pin ? '15+ greens in regulation'+when(pin) : '15 or more greens in regulation in a round', on: !!pin },
-          { grp:'', name:'FLAWLESS', sub: flaw ? 'Every fairway and all 18 greens'+when(flaw) : 'every fairway and all 18 greens in regulation in a round', on: !!flaw, big:true },
-          { grp:'', name:'HOT PUTTER', sub: hot ? '27 putts or fewer'+when(hot) : 'a round of 27 putts or fewer', on: !!hot },
-          { grp:'', name:'ONE-PUTT ROUND', sub: onep ? '18 putts or fewer'+when(onep) : 'a round of 18 putts or fewer', on: !!onep },
-          { grp:'', name:'SCRAMBLER', sub: scr ? 'Under par with under 9 greens'+when(scr) : 'finish under par while hitting fewer than 9 greens', on: !!scr },
-          { grp:'', name:'ALL-STAR', sub: stars.size === 6 ? 'Under par with all six golfers' : 'an under-par round with each of the six golfers (' + stars.size + ' of 6)', on: stars.size === 6, big:true },
-          { grp:'', name:'GRAND SLAM', sub: slam.size === 5 ? 'Under par on all five courses' : 'under par on all five courses (' + slam.size + ' of 5)', on: slam.size === 5, big:true },
+          { grp:'', name:'HOLE IN ONE', sub: ace ? 'Aced a hole'+when(ace) : 'ace any hole', at: (ace ? ace.submittedAt : 0), on: !!ace, big:true },
+          { grp:'', name:'ALBATROSS', sub: alb ? '3 under on a hole'+when(alb) : '3 under par on a single hole', at: (alb ? alb.submittedAt : 0), on: !!alb },
+          { grp:'', name:'EAGLE', sub: eagle ? '2 under on a hole'+when(eagle) : '2 under par on a single hole', at: (eagle ? eagle.submittedAt : 0), on: !!eagle },
+          { grp:'', name:'BIRDIE TRAIN', sub: train ? '3 in a row'+when(train) : 'three birdies (or better) in a row', at: (train ? train.submittedAt : 0), on: !!train },
+          { grp:'', name:'BOGEY-FREE', sub: clean ? 'No hole over par'+when(clean) : 'a round with no hole over par', at: (clean ? clean.submittedAt : 0), on: !!clean },
+          { grp:'', name:'UNDER PAR', sub: up ? 'Finished under par'+when(up) : 'finish a round under par', at: (up ? up.submittedAt : 0), on: !!up },
+          { grp:'', name:'TOUR PRO', sub: pro ? '10 or more under'+when(pro) : 'a round 10 or more under par', at: (pro ? pro.submittedAt : 0), on: !!pro },
+          { grp:'', name:'VERY HARD', sub: vh ? 'Under par on Very Hard'+when(vh) : 'an under-par round on Very Hard', at: (vh ? vh.submittedAt : 0), on: !!vh },
+          { grp:'', name:'GLOBETROTTER', sub: played.size === 5 ? 'Played all five courses' : 'play a round on all five courses (' + played.size + ' of 5)', at: doneAt(rounds, d=>d.course, 5), on: played.size === 5 },
+          { grp:'', name:'FULL ROSTER', sub: cast.size === 6 ? 'Played a round with all six golfers' : 'play a round with all six golfers (' + cast.size + ' of 6)', at: doneAt(rounds.filter(validGolfer), d=>d.golfer, 6), on: cast.size === 6 },
+          { grp:'', name:'FAIRWAY FINDER', sub: fwAll ? 'Hit every fairway'+when(fwAll) : 'hit every fairway in a round', at: (fwAll ? fwAll.submittedAt : 0), on: !!fwAll },
+          { grp:'', name:'PIN SEEKER', sub: pin ? '15+ greens in regulation'+when(pin) : '15 or more greens in regulation in a round', at: (pin ? pin.submittedAt : 0), on: !!pin },
+          { grp:'', name:'FLAWLESS', sub: flaw ? 'Every fairway and all 18 greens'+when(flaw) : 'every fairway and all 18 greens in regulation in a round', at: (flaw ? flaw.submittedAt : 0), on: !!flaw, big:true },
+          { grp:'', name:'HOT PUTTER', sub: hot ? '27 putts or fewer'+when(hot) : 'a round of 27 putts or fewer', at: (hot ? hot.submittedAt : 0), on: !!hot },
+          { grp:'', name:'ONE-PUTT ROUND', sub: onep ? '18 putts or fewer'+when(onep) : 'a round of 18 putts or fewer', at: (onep ? onep.submittedAt : 0), on: !!onep },
+          { grp:'', name:'SCRAMBLER', sub: scr ? 'Under par with under 9 greens'+when(scr) : 'finish under par while hitting fewer than 9 greens', at: (scr ? scr.submittedAt : 0), on: !!scr },
+          { grp:'', name:'ALL-STAR', sub: stars.size === 6 ? 'Under par with all six golfers' : 'an under-par round with each of the six golfers (' + stars.size + ' of 6)', at: doneAt(rounds.filter(d=>under(d) && validGolfer(d)), d=>d.golfer, 6), on: stars.size === 6, big:true },
+          { grp:'', name:'GRAND SLAM', sub: slam.size === 5 ? 'Under par on all five courses' : 'under par on all five courses (' + slam.size + ' of 5)', at: doneAt(rounds.filter(under), d=>d.course, 5), on: slam.size === 5, big:true },
         ];
         const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
         return { note: head.pct+'%', earned: got > 0, list: list, html:
@@ -182,7 +186,7 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
       if(!mine.length) return null;
       const list = defs.map(b=>{
         const hit = mine.find(b.test);
-        return { grp:b.grp||'', name:b.name, sub: hit ? (b.got ? b.got(hit) : 'Earned ' + fmtDate(hit.submittedAt)) : b.sub, on: !!hit, big: !!b.big };
+        return { grp:b.grp||'', name:b.name, sub: hit ? (b.got ? b.got(hit) : 'Earned ' + fmtDate(hit.submittedAt)) : b.sub, at: hit ? hit.submittedAt : 0, on: !!hit, big: !!b.big };
       });
       const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
       return { note: head.pct+'%', earned: got > 0, list: list, html:
