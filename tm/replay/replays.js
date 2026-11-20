@@ -69,6 +69,7 @@
       uid: user.uid, username: user.username, code: s.code, course: s.course, hole: s.hole, strokes: s.strokes | 0,
       par: s.par | 0, result: String(s.result || ''), sharedAt: Date.now() });
     s.shared = pos; await store(user.uid, slots);
+    videoUrl(s.code).catch(() => {});            // render it now so gallery viewers get it straight away
     return { slots };
   }
   async function unshare(user, index) {

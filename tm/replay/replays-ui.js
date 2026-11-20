@@ -23,6 +23,14 @@
     .tmr-empty{ font-size:13px; color:var(--dim); padding:4px 2px; }
     .tmr-msg{ font-size:12.5px; color:var(--dim); margin-top:8px; }
     .tmr-pick{ margin-top:8px; padding:10px 12px; border:1px solid var(--accent); border-radius:10px; font-size:13px; display:flex; flex-direction:column; gap:6px; }
+    .tmr-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:14px; }
+    .tmr-card{ margin:0; background:var(--panel2); border:1px solid var(--border); border-radius:10px; overflow:hidden; }
+    .tmr-frame{ position:relative; aspect-ratio:160/152; background:#000; }
+    .tmr-frame video{ display:block; width:100%; height:100%; object-fit:contain; image-rendering:pixelated; }
+    .tmr-wait{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:12px; color:var(--dim); pointer-events:none; }
+    .tmr-card figcaption{ padding:8px 10px 10px; }
+    .tmr-card .tmr-t{ font-size:13.5px; }
+    .tmr-card a{ color:var(--accent); }
     .tmr-more{ font-size:12.5px; margin-top:10px; } .tmr-more button{ font:inherit; background:none; border:none; color:var(--accent); cursor:pointer; padding:0; }`;
   document.head.appendChild(css);
 
@@ -106,30 +114,46 @@
     };
   }
 
-  // ---- public gallery: newest first, `show` at a time with a "show more"
+  // ---- public gallery: the real-game videos in a grid, ready to play. The shown cards ask the render service for
+  // their videos one at a time (cached ones answer in a couple of seconds; sharing pre-renders them).
   function mountGallery(box, show) {
     show = show || 6;
-    const list = document.createElement('div'); list.className = 'tmr-list'; box.appendChild(list);
+    const grid = document.createElement('div'); grid.className = 'tmr-grid'; box.appendChild(grid);
+    const more = document.createElement('div'); more.className = 'tmr-more'; box.appendChild(more);
     let items = [], n = show;
+    function card(s) {
+      const c = document.createElement('figure'); c.className = 'tmr-card';
+      const v = document.createElement('video');
+      v.controls = true; v.playsInline = true; v.preload = 'metadata';
+      const wait = document.createElement('div'); wait.className = 'tmr-wait'; wait.textContent = 'Loading video…';
+      const frame = document.createElement('div'); frame.className = 'tmr-frame'; frame.append(v, wait);
+      v.addEventListener('play', () => grid.querySelectorAll('video').forEach(o => { if (o !== v) o.pause(); }));
+      const cap = document.createElement('figcaption');
+      cap.innerHTML = '<div class="tmr-t">' + esc(s.username) + '</div><div class="tmr-d">' + esc(R.title(s)) + ' &middot; ' + scoreHtml(s) +
+        '</div><div class="tmr-d">' + date(s.sharedAt) + ' &middot; <a href="' + R.replayHref(s.code) + '">shot map</a></div>';
+      c.append(frame, cap);
+      c._load = async () => {
+        try { v.src = (await R.videoUrl(s.code)) + '#t=0.5'; wait.remove(); }
+        catch (e) { wait.textContent = 'Video unavailable right now.'; }
+      };
+      return c;
+    }
     function render() {
-      list.innerHTML = '';
-      if (!items.length) { list.innerHTML = '<div class="tmr-empty">Nothing shared yet. Save a hole replay and share it to start the gallery.</div>'; return; }
-      for (const s of items.slice(0, n)) {
-        const { r, acts } = row(s, { gallery: true, text: esc(s.username) + ' &middot; ' + scoreHtml(s) + ' &middot; ' + date(s.sharedAt) });
-        const a = document.createElement('a'); a.href = R.replayHref(s.code); a.innerHTML = '<button>Watch</button>'; acts.appendChild(a);
-        list.appendChild(r);
-      }
+      grid.innerHTML = ''; more.innerHTML = '';
+      if (!items.length) { grid.innerHTML = '<div class="tmr-empty">Nothing shared yet. Save a hole replay and share it to start the gallery.</div>'; return; }
+      const cards = items.slice(0, n).map(card);
+      cards.forEach(c => grid.appendChild(c));
+      (async () => { for (const c of cards) await c._load(); })();
       if (items.length > n) {
-        const m = document.createElement('div'); m.className = 'tmr-more';
         const b = document.createElement('button'); b.textContent = 'Show more (' + (items.length - n) + ')';
-        b.onclick = () => { n += show * 2; render(); }; m.appendChild(b); list.appendChild(m);
+        b.onclick = () => { n += show; render(); }; more.appendChild(b);
       }
     }
     async function reload() {
       try { items = await R.gallery(60); render(); }
-      catch (e) { list.innerHTML = '<div class="tmr-empty">Could not load the gallery (' + esc(e.message) + ').</div>'; }
+      catch (e) { grid.innerHTML = '<div class="tmr-empty">Could not load the gallery (' + esc(e.message) + ').</div>'; }
     }
-    list.innerHTML = '<div class="tmr-empty">Loading&hellip;</div>';
+    grid.innerHTML = '<div class="tmr-empty">Loading&hellip;</div>';
     reload();
     return { reload };
   }
