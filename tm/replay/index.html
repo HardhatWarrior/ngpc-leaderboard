@@ -56,6 +56,15 @@
     <div class="sub" id="subtitle"></div>
   </header>
   <div id="err" class="msg" hidden></div>
+  <section id="ngpc" class="panel" hidden>
+    <div style="display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between">
+      <div><div class="px" style="font-size:11px;color:var(--accent)">ON THE NEO GEO POCKET</div>
+        <div class="sub" style="margin-top:4px">Your shots played back in the real game.</div></div>
+      <button id="watch" class="primary">Watch in the real game</button>
+    </div>
+    <div id="ngpcmsg" class="sub" style="margin-top:10px" hidden></div>
+    <video id="ngpcvid" controls playsinline hidden style="display:block;margin:12px auto 0;width:100%;max-width:480px;image-rendering:pixelated;border-radius:10px;background:#000"></video>
+  </section>
   <main id="main" hidden>
     <div class="panel">
       <div id="viewport"><canvas id="cv"></canvas></div>
@@ -86,18 +95,19 @@
   // 0x4204 course order (hole-data order on the cartridge)
   const COURSE = ['U.S.A.', 'Germany', 'Japan', 'Australia', 'Scotland'];
   const GOLFER = ['Young Hero', 'Power Golfer', 'Shot Maker', 'Putt Master', 'Veteran', 'Technician'];
-  const RESULT = { stopped:'', holed:'Holed', water:'Water hazard', hazard:'Hazard', ob:'Out of bounds' };
+  const RESULT = { stopped:'', holed:'Holed', water:'Water hazard', hazard:'Hazard', ob:'Out of bounds', plugged:'Plugged in the bunker' };
   const SCOL = { 0:'#3f9e46', 1:'#25742b', 2:'#1a5a20', 3:'#8fe07a', 4:'#c9c27a', 5:'#5a5a5a', 6:'#3a5aa8', 7:'#2f6fd0',
                  8:'#e3d29a', 9:'#e3d29a', 10:'#e3d29a', 11:'#e3d29a', 12:'#e3d29a', 13:'#e3d29a', 14:'#e3d29a', 15:'#000' };
   const SHOT_COL = ['#ffffff', '#ffd23f', '#ff8a3d', '#ff5c8a', '#b98cff', '#5cd6ff', '#9dff7a', '#ffffff', '#ffd23f', '#ff8a3d', '#ff5c8a', '#b98cff', '#5cd6ff', '#9dff7a'];
   const S = 2;                                       // canvas px per map px
+  const RENDER = 'https://tm-replay-743782972200.us-central1.run.app/render';
   const $ = (id) => document.getElementById(id);
   const fail = (m) => { $('err').textContent = m; $('err').hidden = false; $('title').textContent = 'Hole replay'; };
   const ord = (n) => n + (['th','st','nd','rd'][(n % 100 - 20) % 10] || ['th','st','nd','rd'][n % 100] || 'th');
 
   const raw = decodeURIComponent((location.hash || '').slice(1)).toUpperCase();
   const code = raw.includes('/') ? raw.split('/').filter(Boolean).pop() : raw;
-  if (!code.startsWith('TH1')) { fail('No hole replay code in this link.'); return; }
+  if (!code.startsWith('TH1') && !code.startsWith('TH2')) { fail('No hole replay code in this link.'); return; }
   let h;
   try { h = TMSim.parseTH1(code); } catch (e) { fail('This replay code could not be read (' + e.message + '). Try scanning it again.'); return; }
   if (h.course > 4 || h.hole > 17) { fail('This replay code names a course or hole that does not exist.'); return; }
@@ -114,6 +124,17 @@
     $('subtitle').innerHTML = 'Par ' + Hj.par + ' &middot; ' + h.shots.length + ' shot' + (h.shots.length === 1 ? '' : 's') +
       ' &middot; ' + (GOLFER[h.golfer] || 'Golfer ' + h.golfer) + (h.legend ? ' &middot; Golf Set of Legend' : '');
     $('main').hidden = false;
+    $('ngpc').hidden = false;
+    $('watch').onclick = () => {
+      const btn = $('watch'), msg = $('ngpcmsg'), vid = $('ngpcvid');
+      btn.disabled = true; msg.hidden = false;
+      msg.textContent = 'Playing your hole in the real game… the first time takes about a minute.';
+      fetch(RENDER + '?code=' + encodeURIComponent(code))
+        .then(r => r.json().then(j => { if (!r.ok || !j.url) throw new Error(j.error || r.status); return j; }))
+        .then(j => { msg.hidden = true; vid.src = j.url; vid.hidden = false; vid.play().catch(() => {}); btn.textContent = 'Watch again'; btn.disabled = false;
+                     btn.onclick = () => { vid.currentTime = 0; vid.play(); }; })
+        .catch(e => { msg.textContent = 'The game replay could not be made right now (' + e.message + '). The map replay below still works.'; btn.disabled = false; });
+    };
 
     // ---- hole picture: every map pixel coloured by its surface (the game's own lookup), trees on top
     const W = Hj.w + 0x70, Hh = Hj.h + 0x98;

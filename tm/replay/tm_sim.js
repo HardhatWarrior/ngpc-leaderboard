@@ -367,6 +367,7 @@ class Shot {
   constructor(hole, ball, pin, objects, legend, snap) {
     this.H = hole; this.b = ball; this.pin = pin; this.legend = !!legend;
     this.trees = legend ? [] : (objects || []).map(([t, x, y]) => [t, mul(shl(x, 16), 0xA000), mul(shl(y, 16), 0xA000)]);
+    if (!legend && !hole.putting) this.trees.unshift([0, pin[0], pin[1]]);      // 0x2100FC: the flagstick (not when putting)
     this.snap = snap === undefined ? !hole.putting : snap;
     this.ticks = 0;
   }
@@ -390,6 +391,10 @@ class Shot {
       const y = toMap(b.y);
       const skim = b.vz < -0x20000 && shl(-b.vz, 2) < b.speed && !(((this.H.dz[0] & 0xFFFF) <= y) && (y <= (this.H.dz[1] & 0xFFFF)));
       if (!skim) { b.done = true; b.result = surf === 7 ? 'water' : 'hazard'; return; }
+    }
+    if (surf >= 11 && surf <= 14 && landing && !b.rolling) {        // 0x20FCA0: bunker landing draws a plug depth
+      b.draws = (b.draws || 0) + 1;
+      if (b.draws === b.plug_at && b.plug) { b.done = true; b.result = 'plugged'; return; }
     }
     if (surf === 3 && landing && !b.rolling && dist(b, this.pin) <= CUP_R) this.holeOut();
   }
@@ -452,10 +457,11 @@ class Shot {
     }
   }
 }
-function simulate(inp, hole, start, pin, objects, limit) {
+function simulate(inp, hole, start, pin, objects, limit, plugAt, plug) {
   const b = launch(inp);
   b.x = start[0]; b.y = start[1]; b.z = 0;
-  b.rolling = hole.putting;
+  b.rolling = inp.lie === 0x0D;                  // the putter rolls from the first tick (0x434B bit 0)
+  b.plug_at = plugAt || 0; b.plug = plug || 0;
   const S = new Shot(hole, b, pin, objects, !!inp.legend);
   const path = [[b.x, b.y, b.z]];
   while (S.tick() && S.ticks < (limit || 4000)) path.push([b.x, b.y, b.z]);
@@ -467,7 +473,8 @@ const A36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 function b36(s) { let v = 0; for (const c of s) { const d = A36.indexOf(c); if (d < 0) throw new Error('bad char'); v = v * 36 + d; } return v; }
 function parseTH1(text) {
   const body = text.includes('/TM/') ? text.split('/TM/')[1] : text;
-  if (!body.startsWith('TH1')) throw new Error('not a TH1 code');
+  const v2 = body.startsWith('TH2');
+  if (!body.startsWith('TH1') && !v2) throw new Error('not a hole replay code');
   const data = body.slice(0, -2), chk = b36(body.slice(-2));
   let sum = 0; for (const c of data) sum += A36.indexOf(c);
   if (sum % 1296 !== chk) throw new Error('checksum');
@@ -475,10 +482,10 @@ function parseTH1(text) {
   const h = { course: take(1), hole: take(1), golfer: take(1), legend: take(1), pinx: take(2), piny: take(2) };
   const n = take(1); h.shots = [];
   for (let i = 0; i < n; i++) {
-    const a = take(6), b = take(5);
+    const a = take(6), b = take(v2 ? 6 : 5);
     const s = { angle: a & 0xFFF, power: fl(a / 2 ** 12) & 0x7F, club: fl(a / 2 ** 19) & 0x3F, impact: fl(a / 2 ** 25) & 0xF,
       shottype: fl(a / 2 ** 29) & 3, wind_dir: b & 0xF, wind_str: (b >> 4) & 0xF, tbl: (b >> 8) & 0xFF, lie: (b >> 16) & 0xF,
-      stroke: (b >> 20) & 0xF, newstart: (b >> 24) & 1 };
+      stroke: (b >> 20) & 0xF, newstart: (b >> 24) & 1, draws: fl(b / 2 ** 25) & 3, plug: fl(b / 2 ** 27) & 3 };
     if (s.newstart) { s.sx = take(6); s.sy = take(6); }
     h.shots.push(s);
   }
@@ -497,8 +504,9 @@ function replayTH1(h, courseJson) {
     const start = [mul(mx, 0xA000), mul(my, 0xA000)];
     const inp = { golfer: h.golfer, legend: h.legend, stat: s.tbl, result: 0, lie: s.lie, power: s.power, club: s.club,
       impact: s.impact, shottype: s.shottype, aimx: sin(s.angle), aimy: cos(s.angle), wind_dir: s.wind_dir, wind_str: s.wind_str };
-    const hole = new Hole(H, s.lie === 0x0D);
-    const r = simulate(inp, hole, start, pin, H.objects);
+    const hole = new Hole(H, false);
+    hole.putting = hole.surface(toMap(start[0]), toMap(start[1]))[0] === 3;     // 0x41DB: the ball is on the green
+    const r = simulate(inp, hole, start, pin, H.objects, 4000, s.draws || 0, s.plug || 0);
     out.push({ shot: s, result: r.ball.result, rest: [r.ball.x, r.ball.y, r.ball.z], path: r.path, start });
     prev = [r.ball.x, r.ball.y];
   }
