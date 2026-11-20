@@ -394,7 +394,10 @@ class Shot {
     }
     if (surf >= 11 && surf <= 14 && landing && !b.rolling) {        // 0x20FCA0: bunker landing draws a plug depth
       b.draws = (b.draws || 0) + 1;
-      if (b.draws === b.plug_at && b.plug) { b.done = true; b.result = 'plugged'; return; }
+      let plug = b.draws === b.plug_at && b.plug;
+      // TH1 codes carry no plug data: the next shot's table byte = plug depth (record+3) + the surface it rests on
+      if (!b.plug_known && b.next_tbl != null) { const dep = b.next_tbl - surf; plug = dep >= 1 && dep <= 3; }
+      if (plug) { b.done = true; b.result = 'plugged'; return; }
     }
     if (surf === 3 && landing && !b.rolling && dist(b, this.pin) <= CUP_R) this.holeOut();
   }
@@ -457,11 +460,11 @@ class Shot {
     }
   }
 }
-function simulate(inp, hole, start, pin, objects, limit, plugAt, plug) {
+function simulate(inp, hole, start, pin, objects, limit, plugAt, plug, nextTbl, plugKnown) {
   const b = launch(inp);
   b.x = start[0]; b.y = start[1]; b.z = 0;
   b.rolling = inp.lie === 0x0D;                  // the putter rolls from the first tick (0x434B bit 0)
-  b.plug_at = plugAt || 0; b.plug = plug || 0;
+  b.plug_at = plugAt || 0; b.plug = plug || 0; b.next_tbl = nextTbl == null ? null : nextTbl; b.plug_known = !!plugKnown;
   const S = new Shot(hole, b, pin, objects, !!inp.legend);
   const path = [[b.x, b.y, b.z]];
   while (S.tick() && S.ticks < (limit || 4000)) path.push([b.x, b.y, b.z]);
@@ -485,7 +488,8 @@ function parseTH1(text) {
     const a = take(6), b = take(v2 ? 6 : 5);
     const s = { angle: a & 0xFFF, power: fl(a / 2 ** 12) & 0x7F, club: fl(a / 2 ** 19) & 0x3F, impact: fl(a / 2 ** 25) & 0xF,
       shottype: fl(a / 2 ** 29) & 3, wind_dir: b & 0xF, wind_str: (b >> 4) & 0xF, tbl: (b >> 8) & 0xFF, lie: (b >> 16) & 0xF,
-      stroke: (b >> 20) & 0xF, newstart: (b >> 24) & 1, draws: fl(b / 2 ** 25) & 3, plug: fl(b / 2 ** 27) & 3 };
+      stroke: (b >> 20) & 0xF, newstart: (b >> 24) & 1 };
+    if (v2) { s.draws = fl(b / 2 ** 25) & 3; s.plug = fl(b / 2 ** 27) & 3; }   // TH1: plugs are inferred
     if (s.newstart) { s.sx = take(6); s.sy = take(6); }
     h.shots.push(s);
   }
@@ -506,7 +510,8 @@ function replayTH1(h, courseJson) {
       impact: s.impact, shottype: s.shottype, aimx: sin(s.angle), aimy: cos(s.angle), wind_dir: s.wind_dir, wind_str: s.wind_str };
     const hole = new Hole(H, false);
     hole.putting = hole.surface(toMap(start[0]), toMap(start[1]))[0] === 3;     // 0x41DB: the ball is on the green
-    const r = simulate(inp, hole, start, pin, H.objects, 4000, s.draws || 0, s.plug || 0);
+    const nx = h.shots[h.shots.indexOf(s) + 1];
+    const r = simulate(inp, hole, start, pin, H.objects, 4000, s.draws || 0, s.plug || 0, nx ? nx.tbl : null, s.draws !== undefined);
     out.push({ shot: s, result: r.ball.result, rest: [r.ball.x, r.ball.y, r.ball.z], path: r.path, start });
     prev = [r.ball.x, r.ball.y];
   }
