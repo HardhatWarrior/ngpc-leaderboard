@@ -1424,6 +1424,41 @@ service cloud.firestore {
       allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
     }
 
+    // tm_replays/{uid} -- a player's saved Neo Turf Masters hole replays (up to 5): TH1/TH2 codes from the cart's
+    // post-hole QR, plus course / hole / strokes / par for the list. Private: only the owner (or an admin) reads it.
+    match /tm_replays/{uid} {
+      function okCode(c) { return c is string && c.size() <= 220 && c.matches('^TH[12][0-9A-Z]{10,200}$'); }
+      function okSlot(s) {
+        return s is map && s.keys().hasOnly(['code', 'course', 'hole', 'strokes', 'par', 'savedAt', 'shared', 'result'])
+          && okCode(s.code) && s.course is int && s.course >= 0 && s.course <= 4 && s.hole is int && s.hole >= 0 && s.hole <= 17;
+      }
+      function okReplays(d) {
+        return d.keys().hasOnly(['uid', 'slots', 'updatedAt']) && d.uid == uid && d.slots is list && d.slots.size() <= 5
+          && (d.slots.size() < 1 || okSlot(d.slots[0])) && (d.slots.size() < 2 || okSlot(d.slots[1]))
+          && (d.slots.size() < 3 || okSlot(d.slots[2])) && (d.slots.size() < 4 || okSlot(d.slots[3]))
+          && (d.slots.size() < 5 || okSlot(d.slots[4])) && d.updatedAt is int;
+      }
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow create, update: if request.auth != null && request.auth.uid == uid && okReplays(request.resource.data);
+      allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
+    }
+
+    // tm_gallery/{uid}_{slot} -- replays a player chose to share publicly. The id is the owner's uid plus their
+    // save-slot number 0-4, so nobody can have more than 5 entries. Public read; owner writes; owner or admin deletes.
+    match /tm_gallery/{gid} {
+      function okShare(d) {
+        return d.keys().hasOnly(['uid', 'username', 'code', 'course', 'hole', 'strokes', 'par', 'result', 'sharedAt'])
+          && d.uid == request.auth.uid && gid.matches('^' + request.auth.uid + '_[0-4]$')
+          && d.username is string && d.username == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username
+          && d.code is string && d.code.size() <= 220 && d.code.matches('^TH[12][0-9A-Z]{10,200}$')
+          && d.course is int && d.course >= 0 && d.course <= 4 && d.hole is int && d.hole >= 0 && d.hole <= 17
+          && d.sharedAt is int;
+      }
+      allow read: if true;
+      allow create, update: if request.auth != null && okShare(request.resource.data);
+      allow delete: if request.auth != null && (resource.data.uid == request.auth.uid || isAdmin());
+    }
+
     // Default-deny for every other collection -- Firestore denies unmatched
     // paths by default anyway, but this makes the intent explicit as the
     // schema grows (Phase 3 comments/, etc).

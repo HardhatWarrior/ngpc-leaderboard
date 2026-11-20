@@ -65,6 +65,15 @@
     <div id="ngpcmsg" class="sub" style="margin-top:10px" hidden></div>
     <video id="ngpcvid" controls playsinline hidden style="display:block;margin:12px auto 0;width:100%;max-width:480px;image-rendering:pixelated;border-radius:10px;background:#000"></video>
   </section>
+  <section id="keep" class="panel" hidden>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      <button id="savebtn" class="primary">Save to my replays</button>
+      <button id="dlbtn">Download video</button>
+      <a href="/tm/replays/" style="margin-left:auto;font-size:13px;color:var(--accent)">My replays &amp; gallery &rarr;</a>
+    </div>
+    <div id="keepmsg" class="sub" style="margin-top:8px" hidden></div>
+    <div id="replace" hidden style="margin-top:10px"></div>
+  </section>
   <main id="main" hidden>
     <div class="panel">
       <div id="viewport"><canvas id="cv"></canvas></div>
@@ -88,7 +97,12 @@
     </div>
   </main>
 </div>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="/auth.js"></script>
 <script src="tm_sim.js"></script>
+<script src="replays.js"></script>
 <script>
 (function(){
   'use strict';
@@ -125,6 +139,45 @@
       ' &middot; ' + (GOLFER[h.golfer] || 'Golfer ' + h.golfer) + (h.legend ? ' &middot; Golf Set of Legend' : '');
     $('main').hidden = false;
     $('ngpc').hidden = false;
+    // ---- keep: save to the account (5 max, choose one to replace when full) / download the real-game video
+    const lastR = rep.shots[rep.shots.length - 1];
+    const slot = { code, course: h.course, hole: h.hole, par: Hj.par, result: lastR && lastR.result === 'holed' ? 'holed' : 'unfinished',
+                   strokes: lastR && lastR.result === 'holed' ? (h.shots[h.shots.length - 1].stroke || h.shots.length) : 0 };
+    $('keep').hidden = false;
+    const kmsg = (t) => { $('keepmsg').hidden = !t; $('keepmsg').textContent = t || ''; };
+    $('dlbtn').onclick = () => { $('dlbtn').disabled = true;
+      TMReplays.download(code, slot, kmsg).catch(e => kmsg('Download failed (' + e.message + ').')).finally(() => { $('dlbtn').disabled = false; }); };
+    const user = () => (window.NGPC_AUTH && NGPC_AUTH.currentUser) || null;
+    async function doSave(replaceIndex) {
+      const u = user();
+      if (!u) { NGPC_AUTH && NGPC_AUTH.openSignInModal('signin'); kmsg('Sign in to save replays to your account.'); return; }
+      $('savebtn').disabled = true;
+      try {
+        const r = await TMReplays.save(u, slot, replaceIndex);
+        if (r.already) { kmsg('Already in your replays.'); $('savebtn').textContent = 'Saved'; }
+        else if (r.full) showReplace(r.slots);
+        else { $('replace').hidden = true; kmsg('Saved to your replays.'); $('savebtn').textContent = 'Saved'; }
+      } catch (e) { kmsg('Could not save (' + e.message + ').'); }
+      $('savebtn').disabled = false;
+    }
+    function showReplace(slots) {
+      const box = $('replace'); box.innerHTML = ''; box.hidden = false;
+      kmsg('You have ' + TMReplays.MAX + ' saved replays. Choose one to replace:');
+      slots.forEach((sl, i) => {
+        const row = document.createElement('div'); row.className = 'shot'; row.style.gridTemplateColumns = '1fr auto';
+        row.innerHTML = '<div><div class="t">' + TMReplays.title(sl) + ' &middot; ' + TMReplays.scoreLabel(sl) + '</div><div class="d">Saved ' +
+          new Date(sl.savedAt).toLocaleDateString() + (sl.shared ? ' &middot; in the gallery' : '') + '</div></div>';
+        const b = document.createElement('button'); b.textContent = 'Replace'; b.onclick = () => doSave(i);
+        row.appendChild(b); box.appendChild(row);
+      });
+      const c = document.createElement('button'); c.textContent = 'Cancel'; c.style.marginTop = '8px';
+      c.onclick = () => { box.hidden = true; kmsg(''); }; box.appendChild(c);
+    }
+    $('savebtn').onclick = () => doSave(null);
+    if (window.NGPC_AUTH) NGPC_AUTH.onAuthChange(async (u) => {
+      if (!u) return;
+      try { const sl = await TMReplays.load(u.uid); if (sl.some(x => x.code === code)) $('savebtn').textContent = 'Saved'; } catch (e) {}
+    });
     $('watch').onclick = () => {
       const btn = $('watch'), msg = $('ngpcmsg'), vid = $('ngpcvid');
       btn.disabled = true; msg.hidden = false;
