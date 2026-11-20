@@ -64,6 +64,8 @@
   details.collapse > summary{ list-style:none; cursor:pointer; display:flex; align-items:center; gap:8px; }
   details.collapse > summary::-webkit-details-marker{ display:none; }
   details.collapse > summary h2{ margin:0; }
+  .panel h3.sub-h{ margin:18px 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  #mystats-stats[hidden] + h3.sub-h{ margin-top:4px; }
   details.collapse > summary::after{ content:''; width:0; height:0; border-left:6px solid var(--accent2); border-top:5px solid transparent; border-bottom:5px solid transparent; transition:transform .15s; }
   details.collapse[open] > summary::after{ transform:rotate(90deg); }
   details.collapse[open] > summary{ margin-bottom:6px; }
@@ -248,17 +250,16 @@
 
     <section class="panel" id="mystats-panel" hidden>
       <details class="collapse">
-      <summary><h2>My career stats</h2></summary>
+      <summary><h2>My career stats &amp; replays</h2></summary>
+      <div id="mystats-stats" hidden>
       <p class="hint">From the cart&rsquo;s STATS QR (5-course patch: STATS &gt; OVERALL RECORDS, press OPTION). Scan it again any time to update.</p>
       <div id="mystats-card"></div>
       <p class="hint" id="mystats-when"></p>
-      </details>
-    </section>
-
-    <section class="panel" id="myreplays-panel" hidden>
-      <h2 id="my-replays">My hole replays</h2>
+      </div>
+      <h3 class="sub-h" id="my-replays">My hole replays</h3>
       <p class="hint">Up to 5 saved holes. Download the real-game video, or share up to 2 to the public gallery below.</p>
       <div id="myreplays-box"></div>
+      </details>
     </section>
 
     <section class="panel" id="tm-tourney-panel" hidden>
@@ -486,7 +487,8 @@
     showStage('stats');
   }
   async function loadMyStats(user){
-    const panel = el('mystats-panel');
+    const panel = el('mystats-stats');
+    el('mystats-panel').hidden = !user;
     const d0 = db || (window.NGPC_AUTH && NGPC_AUTH.db);
     if(!user || !d0){ panel.hidden = true; return; }
     try{
@@ -1062,10 +1064,12 @@
     var tmrMine = window.TMReplaysUI ? TMReplaysUI.mountMine(el('myreplays-box')) : null;
     var tmrGal = window.TMReplaysUI ? TMReplaysUI.mountGallery(el('gallery-box')) : null;
     if(tmrGal) TMReplaysUI.onGalleryChange = tmrGal.reload;
+    window.addEventListener('hashchange', ()=>{ if(location.hash === '#my-replays' && !el('mystats-panel').hidden){ el('mystats-panel').querySelector('details').open = true; el('mystats-panel').scrollIntoView(); } });
     NGPC_AUTH.onAuthChange((user)=>{
       loadMyStats(user);
-      el('myreplays-panel').hidden = !user;
-      if(tmrMine) tmrMine.setUser(user).then(()=>{ if(user && location.hash === '#my-replays') el('myreplays-panel').scrollIntoView(); });
+      if(tmrMine) tmrMine.setUser(user).then(()=>{
+        if(user && location.hash === '#my-replays'){ el('mystats-panel').querySelector('details').open = true; el('mystats-panel').scrollIntoView(); }
+      });
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();
