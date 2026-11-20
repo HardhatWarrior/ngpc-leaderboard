@@ -15,7 +15,23 @@
       || (d > 0 ? '+' + d : String(d));
   }
   function title(slot) { return COURSE[slot.course] + ' · Hole ' + (slot.hole + 1); }
-  function replayHref(code) { return '/tm/replay/#' + code; }
+  // gallery links carry ?g so opening someone else's hole doesn't land in the viewer's own history
+  function replayHref(code, gallery) { return '/tm/replay/' + (gallery ? '?g' : '') + '#' + code; }
+
+  // every hole the player opens from a QR: tm_replays/{uid}/history/{code} (the payload is the doc id, so each
+  // hole is kept once, forever). The video can be made again from it at any time.
+  const histCol = (uid) => db().collection('tm_replays').doc(uid).collection('history');
+  async function record(user, slot) {
+    const ref = histCol(user.uid).doc(slot.code);
+    if ((await ref.get()).exists) return false;
+    await ref.set({ code: slot.code, course: slot.course, hole: slot.hole, strokes: slot.strokes | 0, par: slot.par | 0,
+                    result: String(slot.result || ''), scannedAt: Date.now() });
+    return true;
+  }
+  async function history(uid) {
+    const q = await histCol(uid).orderBy('scannedAt', 'desc').get();
+    return q.docs.map(d => d.data());
+  }
 
   async function load(uid) {
     const doc = await db().collection('tm_replays').doc(uid).get();
@@ -103,5 +119,5 @@
     onStatus && onStatus('');
   }
 
-  window.TMReplays = { MAX, GALLERY_MAX, isShared, COURSE, RENDER, scoreLabel, title, replayHref, load, save, remove, share, unshare, gallery, videoUrl, download };
+  window.TMReplays = { MAX, GALLERY_MAX, isShared, COURSE, RENDER, scoreLabel, title, replayHref, load, save, remove, share, unshare, gallery, videoUrl, download, record, history };
 })();

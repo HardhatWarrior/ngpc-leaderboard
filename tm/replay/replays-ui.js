@@ -31,6 +31,7 @@
     .tmr-card figcaption{ padding:8px 10px 10px; }
     .tmr-card .tmr-t{ font-size:13.5px; }
     .tmr-card a{ color:var(--accent); }
+    .tmr-hist{ margin-top:14px; } .tmr-hist > summary{ cursor:pointer; font-size:13px; color:var(--accent); margin-bottom:8px; }
     .tmr-more{ font-size:12.5px; margin-top:10px; } .tmr-more a{ color:var(--accent); } .tmr-more button{ font:inherit; background:none; border:none; color:var(--accent); cursor:pointer; padding:0; }`;
   document.head.appendChild(css);
 
@@ -49,16 +50,21 @@
 
   // ---- the signed-in player's saves. onCount(n) lets the page hide the panel when there is nothing to show.
   function mountMine(box) {
-    let me = null, busy = false, slots = [];
+    let me = null, busy = false, slots = [], hist = [];
     const list = document.createElement('div'); list.className = 'tmr-list';
     const msg = document.createElement('div'); msg.className = 'tmr-msg';
-    box.append(list, msg);
+    // every hole the player has opened from a QR (tm_replays/{uid}/history), kept for good
+    const hbox = document.createElement('details'); hbox.className = 'tmr-hist'; hbox.hidden = true;
+    const hsum = document.createElement('summary');
+    const hlist = document.createElement('div'); hlist.className = 'tmr-list';
+    hbox.append(hsum, hlist);
+    box.append(list, msg, hbox);
     const say = (t) => { msg.textContent = t || ''; };
 
     function render() {
       list.innerHTML = '';
       if (!slots.length) {
-        list.innerHTML = '<div class="tmr-empty">No saved replays yet. Scan a hole replay QR (scorecard, OPTION), then press &ldquo;Save to my replays&rdquo;.</div>';
+        list.innerHTML = '<div class="tmr-empty">No saved replays yet. Scan a hole replay QR (scorecard, OPTION) while signed in: every hole you open is kept under All my holes, and you can save up to 5 favorites here.</div>';
         return;
       }
       slots.forEach((s, i) => {
@@ -76,6 +82,22 @@
       const n = document.createElement('div'); n.className = 'tmr-empty';
       n.textContent = slots.length + ' of ' + R.MAX + ' saved · ' + slots.filter(R.isShared).length + ' of ' + R.GALLERY_MAX + ' in the gallery';
       list.appendChild(n);
+    }
+    function renderHist() {
+      hbox.hidden = !hist.length;
+      hsum.textContent = 'All my holes (' + hist.length + ')';
+      hlist.innerHTML = '';
+      hist.forEach(h => {
+        const { r, acts } = row(h, { text: scoreHtml(h) + ' &middot; ' + date(h.scannedAt) });
+        const btn = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.onclick = () => run(fn); acts.appendChild(b); };
+        btn('Download video', () => R.download(h.code, h, say));
+        if (!slots.some(s => s.code === h.code)) btn('Save to my replays', async () => {
+          const res = await R.save(me, h, null);
+          if (res.full) { say('Your ' + R.MAX + ' saved replays are full. Delete one above first.'); return 'keep'; }
+          slots = res.slots;
+        });
+        hlist.appendChild(r);
+      });
     }
     async function doShare(i, takeDown) {
       const res = await R.share(me, i, takeDown);
@@ -99,17 +121,25 @@
       let keep;
       try { keep = await fn(); } catch (e) { say('Something went wrong (' + e.message + ').'); }
       busy = false;
-      if (keep !== 'keep') render();
+      if (keep !== 'keep') { render(); renderHist(); }
       box.querySelectorAll('button').forEach(b => b.disabled = false);
       if (window.TMReplaysUI.onGalleryChange && keep !== 'keep') window.TMReplaysUI.onGalleryChange();
     }
     return {
       async setUser(u) {
-        me = u || null; slots = [];
-        if (!me) { list.innerHTML = ''; return; }
+        me = u || null; slots = []; hist = [];
+        if (!me) { list.innerHTML = ''; renderHist(); return; }
         list.innerHTML = '<div class="tmr-empty">Loading&hellip;</div>';
         try { slots = await R.load(me.uid); render(); }
-        catch (e) { list.innerHTML = '<div class="tmr-empty">Could not load your replays (' + esc(e.message) + ').</div>'; }
+        catch (e) { list.innerHTML = '<div class="tmr-empty">Could not load your replays (' + esc(e.message) + ').</div>'; return; }
+        try {
+          hist = await R.history(me.uid);
+          // saves made before the history existed go into it too
+          for (const s of slots) if (!hist.some(h => h.code === s.code) && await R.record(me, s))
+            hist.push(Object.assign({}, s, { scannedAt: s.savedAt }));
+          hist.sort((a, b) => b.scannedAt - a.scannedAt);
+          renderHist();
+        } catch (e) {}
       }
     };
   }
@@ -131,7 +161,7 @@
       v.addEventListener('play', () => grid.querySelectorAll('video').forEach(o => { if (o !== v) o.pause(); }));
       const cap = document.createElement('figcaption');
       cap.innerHTML = '<div class="tmr-t">' + esc(s.username) + '</div><div class="tmr-d">' + esc(R.title(s)) + ' &middot; ' + scoreHtml(s) +
-        '</div><div class="tmr-d">' + date(s.sharedAt) + ' &middot; <a href="' + R.replayHref(s.code) + '">shot map</a></div>';
+        '</div><div class="tmr-d">' + date(s.sharedAt) + ' &middot; <a href="' + R.replayHref(s.code, true) + '">shot map</a></div>';
       c.append(frame, cap);
       c._load = async () => {
         try { v.src = (await R.videoUrl(s.code)) + '#t=0.5'; wait.remove(); }

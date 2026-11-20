@@ -1441,6 +1441,22 @@ service cloud.firestore {
       allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
       allow create, update: if request.auth != null && request.auth.uid == uid && okReplays(request.resource.data);
       allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
+
+      // tm_replays/{uid}/history/{code} -- every hole replay the player opened from a QR, kept for good so the
+      // video can be made again later. The payload is the doc id (one doc per hole). Create only; owner deletes.
+      match /history/{hid} {
+        allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+        allow create: if request.auth != null && request.auth.uid == uid
+          && hid.size() <= 220 && hid.matches('^TH[12][0-9A-Z]{10,200}$')
+          && request.resource.data.keys().hasOnly(['code', 'course', 'hole', 'strokes', 'par', 'result', 'scannedAt'])
+          && request.resource.data.code == hid
+          && request.resource.data.course is int && request.resource.data.course >= 0 && request.resource.data.course <= 4
+          && request.resource.data.hole is int && request.resource.data.hole >= 0 && request.resource.data.hole <= 17
+          && request.resource.data.strokes is int && request.resource.data.par is int
+          && request.resource.data.result is string && request.resource.data.result.size() <= 12
+          && request.resource.data.scannedAt is int;
+        allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      }
     }
 
     // tm_gallery/{uid}_{pos} -- replays a player chose to share publicly. The id is the owner's uid plus a gallery

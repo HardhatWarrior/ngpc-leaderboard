@@ -174,8 +174,10 @@
       c.onclick = () => { box.hidden = true; kmsg(''); }; box.appendChild(c);
     }
     $('savebtn').onclick = () => doSave(null);
+    const fromGallery = new URLSearchParams(location.search).has('g');
     if (window.NGPC_AUTH) NGPC_AUTH.onAuthChange(async (u) => {
-      if (!u) return;
+      if (!u) { if (!fromGallery) kmsg('Sign in to keep this hole in your history.'); return; }
+      if (!fromGallery) { try { if (await TMReplays.record(u, slot)) kmsg('Kept in your hole history.'); else kmsg(''); } catch (e) {} }
       try { const sl = await TMReplays.load(u.uid); if (sl.some(x => x.code === code)) $('savebtn').textContent = 'Saved'; } catch (e) {}
     });
     $('watch').onclick = () => {
