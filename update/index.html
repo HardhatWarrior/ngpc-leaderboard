@@ -56,7 +56,7 @@
       <h2>Getting your save off the cart</h2>
       <ol>
         <li>Put the flash cart with your old build in your flasher.</li>
-        <li>Read (back up / dump) the whole cart to a file with your flasher's software. The save lives inside the ROM image, so a full 2 MB read is all you need.</li>
+        <li>Read (back up / dump) the whole cart to a file with your flasher's software. The save lives inside the ROM image, so a full read is all you need (2 MB, or 4 MB for the 5-course Turf Masters build).</li>
         <li>Pick that file as the old ROM below, and the new build of the same game as the new ROM.</li>
       </ol>
     </section>
@@ -104,6 +104,7 @@
   }
   function ready() { $("go").disabled = !(oldRom && newRom && info); }
   function infoText(d) {
+    if (d.kind === "turfmasters") return "a Neo Turf Masters save (the game's own 64 KB save block)";
     if (d.kind === "multipack") return "a multipack save journal (" + d.journal + " record" + (d.journal > 1 ? "s" : "") + ")";
     if (d.kind === "game") return d.records + " save record" + (d.records > 1 ? "s" : "") + (d.tagList.length ? " (game tag " + d.tagList.join(", ") + ")" : "");
     return "data in the save area, in a format this page does not recognise (it is copied anyway)";
@@ -125,7 +126,7 @@
     newRom = null; say("");
     read($("romNew")).then(function (n) {
       newRom = n;
-      if (n && n.b.length > SC.ROM_SIZE) { say(n.name + " is larger than 2 MB: not an NGPC ROM.", "err"); newRom = null; }
+      if (n && n.b.length > SC.MAX_SIZE) { say(n.name + " is larger than 4 MB: not an NGPC ROM.", "err"); newRom = null; }
       ready();
     }, function (e) { say(e.message, "err"); ready(); });
   });
