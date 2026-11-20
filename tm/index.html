@@ -285,7 +285,7 @@
 
     <section class="panel" id="gallery-panel">
       <h2 id="gallery">Hole replay gallery</h2>
-      <p class="hint">Holes players have shared, played back on the Neo Geo Pocket. Press play on any of them.</p>
+      <p class="hint">The latest holes players have shared, played back on the Neo Geo Pocket. Press play on any of them. <a href="/tm/replays/" style="color:var(--accent)">See them all &rarr;</a></p>
       <div id="gallery-box"></div>
     </section>
   </main>
@@ -1063,7 +1063,7 @@
       : Promise.resolve();
 
     var tmrMine = window.TMReplaysUI ? TMReplaysUI.mountMine(el('myreplays-box')) : null;
-    var tmrGal = window.TMReplaysUI ? TMReplaysUI.mountGallery(el('gallery-box')) : null;
+    var tmrGal = window.TMReplaysUI ? TMReplaysUI.mountGallery(el('gallery-box'), 3, '/tm/replays/') : null;
     if(tmrGal) TMReplaysUI.onGalleryChange = tmrGal.reload;
     window.addEventListener('hashchange', ()=>{ if(location.hash === '#my-replays' && !el('mystats-panel').hidden){ el('mystats-panel').querySelector('details').open = true; el('mystats-panel').scrollIntoView(); } });
     NGPC_AUTH.onAuthChange((user)=>{

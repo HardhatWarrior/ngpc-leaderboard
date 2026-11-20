@@ -31,7 +31,7 @@
     .tmr-card figcaption{ padding:8px 10px 10px; }
     .tmr-card .tmr-t{ font-size:13.5px; }
     .tmr-card a{ color:var(--accent); }
-    .tmr-more{ font-size:12.5px; margin-top:10px; } .tmr-more button{ font:inherit; background:none; border:none; color:var(--accent); cursor:pointer; padding:0; }`;
+    .tmr-more{ font-size:12.5px; margin-top:10px; } .tmr-more a{ color:var(--accent); } .tmr-more button{ font:inherit; background:none; border:none; color:var(--accent); cursor:pointer; padding:0; }`;
   document.head.appendChild(css);
 
   function scoreHtml(s) {
@@ -116,7 +116,8 @@
 
   // ---- public gallery: the real-game videos in a grid, ready to play. The shown cards ask the render service for
   // their videos one at a time (cached ones answer in a couple of seconds; sharing pre-renders them).
-  function mountGallery(box, show) {
+  // moreHref: instead of "Show more", link to the full gallery page when there are more than `show`
+  function mountGallery(box, show, moreHref) {
     show = show || 6;
     const grid = document.createElement('div'); grid.className = 'tmr-grid'; box.appendChild(grid);
     const more = document.createElement('div'); more.className = 'tmr-more'; box.appendChild(more);
@@ -144,7 +145,9 @@
       const cards = items.slice(0, n).map(card);
       cards.forEach(c => grid.appendChild(c));
       (async () => { for (const c of cards) await c._load(); })();
-      if (items.length > n) {
+      if (items.length > n && moreHref) {
+        more.innerHTML = '<a href="' + moreHref + '">See all ' + items.length + ' public replays &rarr;</a>';
+      } else if (items.length > n) {
         const b = document.createElement('button'); b.textContent = 'Show more (' + (items.length - n) + ')';
         b.onclick = () => { n += show; render(); }; more.appendChild(b);
       }
