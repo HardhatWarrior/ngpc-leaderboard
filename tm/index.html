@@ -274,6 +274,14 @@
 
 <script src="/auth.js"></script>
 <script>
+/* TH1 = a hole replay QR (shot recorder on the cart): it has its own page */
+(function(){
+  const seg = (t) => { const p = String(t||'').split('/').filter(Boolean); return p.length ? p[p.length-1] : ''; };
+  const raw = decodeURIComponent(seg(location.hash ? location.hash.slice(1) : location.pathname)).toUpperCase();
+  if (raw.startsWith('TH1')) location.replace('/tm/replay/#' + raw);
+})();
+</script>
+<script>
 (function(){
   "use strict";
   const QR_GAME_CODE = 'TM';
@@ -778,6 +786,7 @@
 
   function handleScanResult(text){
     formMsg.innerHTML = '';
+    if (String(lastPathSegment(text)).toUpperCase().startsWith('TH1')) { location.href = '/tm/replay/#' + lastPathSegment(text).toUpperCase(); return; }
     const result = parsePayload(lastPathSegment(text));
     if(result.error){
       formMsg.innerHTML = '<div class="msg err">'+escapeHtml(result.error)+'</div>';

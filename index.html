@@ -887,7 +887,11 @@
 
   function routeToGame(text){
     const payload = lastPathSegment(text).toUpperCase();
-    const code = resolveGameCode(payload, GAME_ROUTES);
+    // The folder before the payload names the game when the QR is a full URL (NGPC-DEV.COM/TM/TS1...): trust it when
+    // it is a known code -- some payloads don't start with their game's code (Turf Masters career stats = "TS1").
+    const segs = String(text||'').split('/').filter(Boolean);
+    const dir = segs.length >= 2 ? segs[segs.length-2].toUpperCase() : '';
+    const code = (dir && Object.prototype.hasOwnProperty.call(GAME_ROUTES, dir)) ? dir : resolveGameCode(payload, GAME_ROUTES);
     const slug = code ? GAME_ROUTES[code] : null;
     if(!slug){
       formMsg.innerHTML = '<div class="msg err">Unrecognized game code &mdash; that leaderboard might not be set up yet.</div>';
