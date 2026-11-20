@@ -1,11 +1,13 @@
-/* Neo Turf Masters hole replays: every hole a player opens from a QR is kept (tm_replays/{uid}/history/{code}),
- * up to 2 of them shared to the public gallery (tm_gallery/{uid}_{0|1}), and the real-game video for any of them.
+/* Neo Turf Masters hole replays: every hole a player opens from a QR is kept for good (tm_replays/{uid}/history/{code}).
+ * Real-game videos: up to 5 per player (tm_videos/{uid}, managed by the render service; making a 6th overwrites one the
+ * player picks, and its MP4 is deleted). Up to 2 videos can be shared to the public gallery (tm_gallery/{uid}_{0|1}),
+ * where anyone can watch them.
  * Needs firebase compat + /auth.js (window.NGPC_AUTH). Exposes window.TMReplays. */
 (function () {
   'use strict';
   const RENDER = 'https://tm-replay-743782972200.us-central1.run.app/render';
   const COURSE = ['U.S.A.', 'Germany', 'Japan', 'Australia', 'Scotland'];
-  const GALLERY_MAX = 2;
+  const MAX = 5, GALLERY_MAX = 2;
   const db = () => NGPC_AUTH.db;
 
   function scoreLabel(slot) {
@@ -44,10 +46,32 @@
     } catch (e) {}
     return list;
   }
-  async function forget(user, code) {
-    const mine = await myGallery(user.uid);
-    for (const g of mine) if (g.code === code) await db().collection('tm_gallery').doc(g.id).delete().catch(() => {});
-    await histCol(user.uid).doc(code).delete();
+
+  // ---- videos: up to MAX per player (tm_videos/{uid}, kept by the render service, which also deletes overwritten MP4s)
+  const SERVICE = RENDER.replace(/\/render$/, '');
+  async function myVideos(uid) {
+    const doc = await db().collection('tm_videos').doc(uid).get();
+    return doc.exists ? (doc.data().slots || []) : [];
+  }
+  async function call(path, body) {
+    const u = NGPC_AUTH.auth.currentUser;
+    if (!u) throw new Error('sign in first');
+    const r = await fetch(SERVICE + path, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + await u.getIdToken() },
+                                            body: JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (r.status === 409 && j.full) return j;
+    if (!r.ok) throw new Error(j.error || ('error ' + r.status));
+    return j;
+  }
+  // makeVideo: {url} (rendered the first time, about a minute), or {full, slots} when all MAX are used and replace is unset
+  function makeVideo(code, replace) { return call('/render', replace == null ? { code } : { code, replace }); }
+  function deleteVideo(code) { return call('/delete', { code }); }
+  // anyone: the video of a gallery hole
+  async function galleryVideo(code) {
+    const r = await fetch(SERVICE + '/video?code=' + encodeURIComponent(code));
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok || !j.url) throw new Error(j.error || ('error ' + r.status));
+    return j.url;
   }
 
   // ---- gallery: the player's entries are found by uid (ids are {uid}_0 / {uid}_1)
@@ -65,7 +89,6 @@
     await db().collection('tm_gallery').doc(user.uid + '_' + pos).set({
       uid: user.uid, username: user.username, code: h.code, course: h.course, hole: h.hole, strokes: h.strokes | 0,
       par: h.par | 0, result: String(h.result || ''), sharedAt: Date.now() });
-    videoUrl(h.code).catch(() => {});            // render it now so gallery viewers get it straight away
     return { mine: await myGallery(user.uid) };
   }
   async function unshare(user, code) {
@@ -76,16 +99,7 @@
     return q.docs.map(d => Object.assign({ id: d.id }, d.data()));
   }
 
-  // ---- the real-game video: rendered on first request (about a minute), cached after that
-  async function videoUrl(code) {
-    const r = await fetch(RENDER + '?code=' + encodeURIComponent(code));
-    const j = await r.json();
-    if (!r.ok || !j.url) throw new Error(j.error || ('error ' + r.status));
-    return j.url;
-  }
-  async function download(code, slot, onStatus) {
-    onStatus && onStatus('Preparing the video… the first time takes about a minute.');
-    const url = await videoUrl(code);
+  async function saveFile(url, slot, onStatus) {
     onStatus && onStatus('Downloading…');
     const blob = await (await fetch(url)).blob();
     const a = document.createElement('a');
@@ -96,6 +110,6 @@
     onStatus && onStatus('');
   }
 
-  window.TMReplays = { GALLERY_MAX, COURSE, RENDER, scoreLabel, title, replayHref, record, history, forget,
-                       myGallery, share, unshare, gallery, videoUrl, download };
+  window.TMReplays = { MAX, GALLERY_MAX, COURSE, scoreLabel, title, replayHref, record, history,
+                       myVideos, makeVideo, deleteVideo, galleryVideo, saveFile, myGallery, share, unshare, gallery };
 })();

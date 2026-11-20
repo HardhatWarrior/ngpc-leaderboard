@@ -1465,6 +1465,13 @@ service cloud.firestore {
       allow read: if request.auth != null && isAdmin();
     }
 
+    // tm_videos/{uid} -- a player's real-game videos (up to 5: {uid, codes[], slots[{code, key, at}]}). Written only by
+    // the tm-replay render service (Admin SDK), which also deletes overwritten MP4s; the owner and admins read it.
+    match /tm_videos/{uid} {
+      allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
+      allow write: if false;
+    }
+
     // tm_gallery/{uid}_{pos} -- replays a player chose to share publicly. The id is the owner's uid plus a gallery
     // position 0-1, so nobody can have more than 2 entries. Public read; owner writes; owner or admin deletes.
     match /tm_gallery/{gid} {
@@ -1474,7 +1481,9 @@ service cloud.firestore {
           && d.username is string && d.username == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username
           && d.code is string && d.code.size() <= 220 && d.code.matches('^TH[12][0-9A-Z]{10,200}$')
           && d.course is int && d.course >= 0 && d.course <= 4 && d.hole is int && d.hole >= 0 && d.hole <= 17
-          && d.sharedAt is int;
+          && d.sharedAt is int
+          // only a hole the player has a video of (tm_videos is kept by the render service)
+          && get(/databases/$(database)/documents/tm_videos/$(request.auth.uid)).data.codes.hasAny([d.code]);
       }
       allow read: if true;
       allow create, update: if request.auth != null && okShare(request.resource.data);

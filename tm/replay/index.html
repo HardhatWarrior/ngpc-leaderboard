@@ -102,6 +102,7 @@
 <script src="/auth.js"></script>
 <script src="tm_sim.js"></script>
 <script src="replays.js"></script>
+<script src="replays-ui.js"></script>
 <script>
 (function(){
   'use strict';
@@ -113,7 +114,6 @@
                  8:'#e3d29a', 9:'#e3d29a', 10:'#e3d29a', 11:'#e3d29a', 12:'#e3d29a', 13:'#e3d29a', 14:'#e3d29a', 15:'#000' };
   const SHOT_COL = ['#ffffff', '#ffd23f', '#ff8a3d', '#ff5c8a', '#b98cff', '#5cd6ff', '#9dff7a', '#ffffff', '#ffd23f', '#ff8a3d', '#ff5c8a', '#b98cff', '#5cd6ff', '#9dff7a'];
   const S = 2;                                       // canvas px per map px
-  const RENDER = 'https://tm-replay-743782972200.us-central1.run.app/render';
   const $ = (id) => document.getElementById(id);
   const fail = (m) => { $('err').textContent = m; $('err').hidden = false; $('title').textContent = 'Hole replay'; };
   const ord = (n) => n + (['th','st','nd','rd'][(n % 100 - 20) % 10] || ['th','st','nd','rd'][n % 100] || 'th');
@@ -139,14 +139,28 @@
     $('main').hidden = false;
     $('ngpc').hidden = false;
     // ---- keep: a signed-in player's QR holes are kept automatically (tm_replays/{uid}/history); download the video
+    const fromGallery = new URLSearchParams(location.search).has('g');
     const lastR = rep.shots[rep.shots.length - 1];
     const slot = { code, course: h.course, hole: h.hole, par: Hj.par, result: lastR && lastR.result === 'holed' ? 'holed' : 'unfinished',
                    strokes: lastR && lastR.result === 'holed' ? (h.shots[h.shots.length - 1].stroke || h.shots.length) : 0 };
     $('keep').hidden = false;
     const kmsg = (t) => { $('keepmsg').hidden = !t; $('keepmsg').textContent = t || ''; };
-    $('dlbtn').onclick = () => { $('dlbtn').disabled = true;
-      TMReplays.download(code, slot, kmsg).catch(e => kmsg('Download failed (' + e.message + ').')).finally(() => { $('dlbtn').disabled = false; }); };
-    const fromGallery = new URLSearchParams(location.search).has('g');
+    // the hole's real-game video: gallery holes are public; otherwise it takes one of the signed-in player's
+    // 5 video slots (asks which to overwrite when they are all used). Resolves to the URL, or null.
+    async function getVideo(say) {
+      if (fromGallery) return TMReplays.galleryVideo(code);
+      const u = window.NGPC_AUTH && NGPC_AUTH.currentUser;
+      if (!u) { NGPC_AUTH && NGPC_AUTH.openSignInModal('signin'); say('Sign in to make a video. Each account keeps up to ' + TMReplays.MAX + ' videos.'); return null; }
+      let holes = [];
+      try { holes = await TMReplays.history(u.uid); } catch (e) {}
+      return TMReplaysUI.makeVideoFlow(code, $('ngpc'), say, holes);
+    }
+    $('dlbtn').onclick = async () => {
+      $('dlbtn').disabled = true;
+      try { const url = await getVideo(kmsg); if (url) await TMReplays.saveFile(url, slot, kmsg); }
+      catch (e) { kmsg('Download failed (' + e.message + ').'); }
+      $('dlbtn').disabled = false;
+    };
     $('signbtn').onclick = () => NGPC_AUTH.openSignInModal('signin');
     if (window.NGPC_AUTH) NGPC_AUTH.onAuthChange(async (u) => {
       $('signbtn').hidden = !!u || fromGallery;
@@ -155,15 +169,16 @@
       try { kmsg((await TMReplays.record(u, slot)) ? 'Saved to your holes.' : 'Already in your holes.'); }
       catch (e) { kmsg('Could not save this hole (' + e.message + ').'); }
     });
-    $('watch').onclick = () => {
+    $('watch').onclick = async () => {
       const btn = $('watch'), msg = $('ngpcmsg'), vid = $('ngpcvid');
-      btn.disabled = true; msg.hidden = false;
-      msg.textContent = 'Playing your hole in the real game… the first time takes about a minute.';
-      fetch(RENDER + '?code=' + encodeURIComponent(code))
-        .then(r => r.json().then(j => { if (!r.ok || !j.url) throw new Error(j.error || r.status); return j; }))
-        .then(j => { msg.hidden = true; vid.src = j.url; vid.hidden = false; vid.play().catch(() => {}); btn.textContent = 'Watch again'; btn.disabled = false;
-                     btn.onclick = () => { vid.currentTime = 0; vid.play(); }; })
-        .catch(e => { msg.textContent = 'The game replay could not be made right now (' + e.message + '). The map replay below still works.'; btn.disabled = false; });
+      const say = (t) => { msg.hidden = !t; msg.textContent = t || ''; };
+      btn.disabled = true;
+      try {
+        const url = await getVideo(say);
+        if (url) { say(''); vid.src = url; vid.hidden = false; vid.play().catch(() => {}); btn.textContent = 'Watch again';
+                   btn.onclick = () => { vid.currentTime = 0; vid.play(); }; }
+      } catch (e) { say('The game replay could not be made right now (' + e.message + '). The map replay below still works.'); }
+      btn.disabled = false;
     };
 
     // ---- hole picture: every map pixel coloured by its surface (the game's own lookup), trees on top

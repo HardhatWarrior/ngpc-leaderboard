@@ -724,7 +724,6 @@
   /* ---- Turf Masters: every player's hole replays + video storage (tm-holes-panel), loaded when first opened ---- */
   function initTmHoles(db){
     const COURSES = ['U.S.A.', 'Germany', 'Japan', 'Australia', 'Scotland'];
-    const RENDER = 'https://tm-replay-743782972200.us-central1.run.app/render';
     const BUCKET = 'ngpc-leaderboard-tm-replays';
     const label = h=>{
       if(h.result !== 'holed' || !h.strokes) return 'Unfinished';
@@ -749,15 +748,19 @@
     async function load(){
       const tot = el('tm-holes-totals');
       try{
-        const [hq, gq, use] = await Promise.all([db.collectionGroup('history').get(), db.collection('tm_gallery').get(), bucketUsage().catch(()=>null)]);
+        const [hq, gq, vq, use] = await Promise.all([db.collectionGroup('history').get(), db.collection('tm_gallery').get(),
+          db.collection('tm_videos').get(), bucketUsage().catch(()=>null)]);
+        const vids = {};
+        vq.docs.forEach(d=>(d.data().slots || []).forEach(v=>{ vids[v.code] = v.key; }));
         const docs = hq.docs.filter(d=>d.ref.parent.parent && d.ref.parent.parent.parent.id === 'tm_replays');
         const uids = [...new Set(docs.map(d=>d.ref.parent.parent.id))];
         const names = {};
         await Promise.all(uids.map(async u=>{ try{ const p = await db.collection('users').doc(u).get(); names[u] = (p.exists && p.data().username) || u; }catch(e){ names[u] = u; } }));
         const shared = new Set(gq.docs.map(d=>d.data().code));
         rows = docs.map(d=>Object.assign({uid: d.ref.parent.parent.id}, d.data())).sort((a,b)=>b.scannedAt - a.scannedAt);
-        rows.forEach(r=>{ r.user = names[r.uid]; r.shared = shared.has(r.code); });
+        rows.forEach(r=>{ r.user = names[r.uid]; r.shared = shared.has(r.code); r.video = vids[r.code] || null; });
         tot.innerHTML = '<b>' + rows.length + '</b> hole' + (rows.length === 1 ? '' : 's') + ' from <b>' + uids.length + '</b> player' + (uids.length === 1 ? '' : 's')
+          + ' &middot; <b>' + Object.keys(vids).length + '</b> with videos (' + vq.size + ' player' + (vq.size === 1 ? '' : 's') + ')'
           + ' &middot; <b>' + gq.size + '</b> in the gallery'
           + (use ? ' &middot; videos: <b>' + use.n + '</b> files, <b>' + mb(use.b) + '</b> ('
             + Object.keys(use.byVer).sort().map(v=>v + ': ' + use.byVer[v].n + ' / ' + mb(use.byVer[v].b)).join(', ') + ')' : ' &middot; video storage unavailable');
@@ -771,14 +774,9 @@
         d.innerHTML = new Date(r.scannedAt).toLocaleString() + ' &middot; <b>' + escapeHtml(r.user) + '</b> &middot; '
           + escapeHtml(COURSES[r.course] + ' hole ' + (r.hole + 1)) + ' &middot; ' + escapeHtml(label(r)) + (r.strokes ? ' (' + r.strokes + '/' + r.par + ')' : '')
           + (r.shared ? ' &middot; <span style="color:var(--good)">gallery</span>' : '')
-          + ' &middot; <a href="/tm/replay/?g#' + r.code + '" target="_blank" rel="noopener">shot map</a> &middot; ';
-        const v = document.createElement('a'); v.href = '#'; v.textContent = 'video';
-        v.addEventListener('click', async e=>{
-          e.preventDefault(); const w = window.open('', '_blank'); v.textContent = 'video (making\u2026)';
-          try{ const j = await (await fetch(RENDER + '?code=' + r.code)).json(); if(!j.url) throw new Error(j.error || 'no video'); w.location = j.url; v.textContent = 'video'; }
-          catch(err){ if(w) w.close(); v.textContent = 'video (failed)'; }
-        });
-        d.appendChild(v); list.appendChild(d);
+          + ' &middot; <a href="/tm/replay/?g#' + r.code + '" target="_blank" rel="noopener">shot map</a>'
+          + (r.video ? ' &middot; <a href="https://storage.googleapis.com/' + BUCKET + '/' + r.video + '" target="_blank" rel="noopener">video</a>' : '');
+        list.appendChild(d);
       });
       const more = el('tm-holes-more'); more.innerHTML = '';
       if(rows.length > shown){
