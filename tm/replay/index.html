@@ -69,7 +69,7 @@
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
       <button id="savebtn" class="primary">Save to my replays</button>
       <button id="dlbtn">Download video</button>
-      <a href="/tm/replays/" style="margin-left:auto;font-size:13px;color:var(--accent)">My replays &amp; gallery &rarr;</a>
+      <a href="/tm/#my-replays" style="margin-left:auto;font-size:13px;color:var(--accent)">My replays &amp; gallery &rarr;</a>
     </div>
     <div id="keepmsg" class="sub" style="margin-top:8px" hidden></div>
     <div id="replace" hidden style="margin-top:10px"></div>
@@ -166,7 +166,7 @@
       slots.forEach((sl, i) => {
         const row = document.createElement('div'); row.className = 'shot'; row.style.gridTemplateColumns = '1fr auto';
         row.innerHTML = '<div><div class="t">' + TMReplays.title(sl) + ' &middot; ' + TMReplays.scoreLabel(sl) + '</div><div class="d">Saved ' +
-          new Date(sl.savedAt).toLocaleDateString() + (sl.shared ? ' &middot; in the gallery' : '') + '</div></div>';
+          new Date(sl.savedAt).toLocaleDateString() + (TMReplays.isShared(sl) ? ' &middot; in the gallery' : '') + '</div></div>';
         const b = document.createElement('button'); b.textContent = 'Replace'; b.onclick = () => doSave(i);
         row.appendChild(b); box.appendChild(row);
       });

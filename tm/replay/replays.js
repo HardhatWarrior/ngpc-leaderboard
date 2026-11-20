@@ -4,7 +4,7 @@
   'use strict';
   const RENDER = 'https://tm-replay-743782972200.us-central1.run.app/render';
   const COURSE = ['U.S.A.', 'Germany', 'Japan', 'Australia', 'Scotland'];
-  const MAX = 5;
+  const MAX = 5, GALLERY_MAX = 2;
   const db = () => NGPC_AUTH.db;
 
   function scoreLabel(slot) {
@@ -19,12 +19,18 @@
 
   async function load(uid) {
     const doc = await db().collection('tm_replays').doc(uid).get();
-    return doc.exists ? (doc.data().slots || []) : [];
+    const slots = doc.exists ? (doc.data().slots || []) : [];
+    // first version: shared === true with the gallery doc keyed by the slot index -> keep that doc, store its id number
+    slots.forEach((s, i) => { if (s.shared === true) s.shared = i; });
+    return slots;
   }
   async function store(uid, slots) {
     await db().collection('tm_replays').doc(uid).set({ uid, slots, updatedAt: Date.now() });
   }
-  // save: replaceIndex = null to append (fails with 'full' when 5 are saved)
+  // a slot's `shared` is false, or its gallery position (0 or 1): tm_gallery/{uid}_{pos}, so at most GALLERY_MAX per player
+  const isShared = (s) => typeof s.shared === 'number';
+  const galDoc = (uid, pos) => db().collection('tm_gallery').doc(uid + '_' + pos);
+  // save: replaceIndex = null to append (returns {full} when MAX are saved)
   async function save(user, slot, replaceIndex) {
     const slots = await load(user.uid);
     if (slots.some(s => s.code === slot.code)) return { already: true, slots };
@@ -34,7 +40,7 @@
       if (slots.length >= MAX) return { full: true, slots };
       slots.push(clean);
     } else {
-      if (slots[replaceIndex] && slots[replaceIndex].shared) await unshare(user, replaceIndex, slots, false);
+      if (slots[replaceIndex] && isShared(slots[replaceIndex])) await galDoc(user.uid, slots[replaceIndex].shared).delete().catch(() => {});
       slots[replaceIndex] = clean;
     }
     await store(user.uid, slots);
@@ -42,34 +48,33 @@
   }
   async function remove(user, index) {
     const slots = await load(user.uid);
-    if (slots[index] && slots[index].shared) await db().collection('tm_gallery').doc(user.uid + '_' + index).delete().catch(() => {});
-    // shared entries are keyed by slot number: re-key the ones that move down
-    const moved = slots.slice(index + 1).map((s, k) => ({ s, from: index + 1 + k }));
+    if (slots[index] && isShared(slots[index])) await galDoc(user.uid, slots[index].shared).delete().catch(() => {});
     slots.splice(index, 1);
-    for (const { s, from } of moved) if (s.shared) {
-      await db().collection('tm_gallery').doc(user.uid + '_' + from).delete().catch(() => {});
-      await shareDoc(user, from - 1, s);
-    }
     await store(user.uid, slots);
     return slots;
   }
-  function shareDoc(user, index, s) {
-    return db().collection('tm_gallery').doc(user.uid + '_' + index).set({
+  // share: takeDown = index of a shared slot to pull from the gallery when both places are taken (else returns {full})
+  async function share(user, index, takeDown) {
+    const slots = await load(user.uid);
+    const s = slots[index];
+    if (!s || isShared(s)) return { slots };
+    if (takeDown != null && slots[takeDown] && isShared(slots[takeDown])) {
+      await galDoc(user.uid, slots[takeDown].shared).delete().catch(() => {});
+      slots[takeDown].shared = false;
+    }
+    const used = slots.filter(isShared).map(x => x.shared);
+    const pos = [0, 1].find(p => !used.includes(p));
+    if (used.length >= GALLERY_MAX || pos === undefined) return { full: true, slots };
+    await galDoc(user.uid, pos).set({
       uid: user.uid, username: user.username, code: s.code, course: s.course, hole: s.hole, strokes: s.strokes | 0,
       par: s.par | 0, result: String(s.result || ''), sharedAt: Date.now() });
+    s.shared = pos; await store(user.uid, slots);
+    return { slots };
   }
-  async function share(user, index) {
+  async function unshare(user, index) {
     const slots = await load(user.uid);
-    if (!slots[index]) return slots;
-    await shareDoc(user, index, slots[index]);
-    slots[index].shared = true; await store(user.uid, slots);
-    return slots;
-  }
-  async function unshare(user, index, slotsIn, write = true) {
-    const slots = slotsIn || await load(user.uid);
-    await db().collection('tm_gallery').doc(user.uid + '_' + index).delete().catch(() => {});
-    if (slots[index]) slots[index].shared = false;
-    if (write) await store(user.uid, slots);
+    if (slots[index] && isShared(slots[index])) { await galDoc(user.uid, slots[index].shared).delete().catch(() => {}); slots[index].shared = false; }
+    await store(user.uid, slots);
     return slots;
   }
   async function gallery(limit) {
@@ -97,5 +102,5 @@
     onStatus && onStatus('');
   }
 
-  window.TMReplays = { MAX, COURSE, RENDER, scoreLabel, title, replayHref, load, save, remove, share, unshare, gallery, videoUrl, download };
+  window.TMReplays = { MAX, GALLERY_MAX, isShared, COURSE, RENDER, scoreLabel, title, replayHref, load, save, remove, share, unshare, gallery, videoUrl, download };
 })();

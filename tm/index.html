@@ -192,7 +192,7 @@
     <section class="panel">
       <h2>Submit a score</h2>
       <p class="hint">With the leaderboard patch applied, finish an 18-hole 1 PLAYER STROKE PLAY round. After the scorecard, enter your initials, press A for the QR code, and scan it here. Fewest strokes wins; each course has its own board.</p>
-      <p class="hint">Hole replay QRs (scorecard, OPTION) open a replay of that hole. <a href="/tm/replays/" style="color:var(--accent)">My saved replays &amp; public gallery &rarr;</a></p>
+      <p class="hint">Hole replay QRs (scorecard, OPTION) open a replay of that hole. <a href="#my-replays" style="color:var(--accent)">My saved replays</a> &middot; <a href="#gallery" style="color:var(--accent)">Public gallery</a></p>
 
       <div id="scan-signin-required">
         <button type="button" class="btn-primary" id="scan-signin-btn">Sign In</button>
@@ -255,6 +255,12 @@
       </details>
     </section>
 
+    <section class="panel" id="myreplays-panel" hidden>
+      <h2 id="my-replays">My hole replays</h2>
+      <p class="hint">Up to 5 saved holes. Download the real-game video, or share up to 2 to the public gallery below.</p>
+      <div id="myreplays-box"></div>
+    </section>
+
     <section class="panel" id="tm-tourney-panel" hidden>
       <h2>Tournaments</h2>
       <div class="t-note" id="tm-t-note" hidden></div>
@@ -275,6 +281,12 @@
       <div id="board-status"></div>
       <div id="board"></div>
     </section>
+
+    <section class="panel" id="gallery-panel">
+      <h2 id="gallery">Hole replay gallery</h2>
+      <p class="hint">Holes players have shared from their saved replays. Tap one to watch it.</p>
+      <div id="gallery-box"></div>
+    </section>
   </main>
 
   <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com &middot; <a href="mailto:support@ngpc-dev.com" style="color:inherit">support@ngpc-dev.com</a></footer>
@@ -282,6 +294,8 @@
 </div>
 
 <script src="/auth.js"></script>
+<script src="/tm/replay/replays.js"></script>
+<script src="/tm/replay/replays-ui.js"></script>
 <script>
 /* TH1 = a hole replay QR (shot recorder on the cart): it has its own page */
 (function(){
@@ -1045,8 +1059,13 @@
         }).catch(function(){ if(romLinkEl) romLinkEl.hidden = true; gameData = {}; })
       : Promise.resolve();
 
+    var tmrMine = window.TMReplaysUI ? TMReplaysUI.mountMine(el('myreplays-box')) : null;
+    var tmrGal = window.TMReplaysUI ? TMReplaysUI.mountGallery(el('gallery-box')) : null;
+    if(tmrGal) TMReplaysUI.onGalleryChange = tmrGal.reload;
     NGPC_AUTH.onAuthChange((user)=>{
       loadMyStats(user);
+      el('myreplays-panel').hidden = !user;
+      if(tmrMine) tmrMine.setUser(user).then(()=>{ if(user && location.hash === '#my-replays') el('myreplays-panel').scrollIntoView(); });
       el('idle-view').hidden = !user;
       el('scan-signin-required').hidden = !!user;
       if(!user) resetScanUI();
