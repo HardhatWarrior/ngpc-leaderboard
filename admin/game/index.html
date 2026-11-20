@@ -559,6 +559,20 @@
     </div>
   </section>
 
+  <!-- Turf Masters only, admin only: every player's hole replays (collection group tm_replays/{uid}/history),
+       gallery entries, and the rendered videos in gs://ngpc-leaderboard-tm-replays (public JSON listing). -->
+  <section class="panel" id="tm-holes-panel" hidden>
+    <div class="panel-header collapsed" data-toggle="tm-holes-body" role="button" tabindex="0" aria-expanded="false">
+      <h2 style="margin:0">Hole replays <span class="spec-note">(admin only)</span></h2>
+      <span class="chevron">&#9660;</span>
+    </div>
+    <div class="panel-body" id="tm-holes-body" hidden style="margin-top:14px">
+      <div class="current-value" id="tm-holes-totals">Loading&hellip;</div>
+      <div class="tourney-list" id="tm-holes-list"></div>
+      <div id="tm-holes-more"></div>
+    </div>
+  </section>
+
   <!-- Admin-only, and only for games whose leaderboard page has been retrofitted to read
        games/{slug}.payloadSpec at runtime (see tt/index.html's own getPayloadSpec()) instead of a
        hardcoded field layout -- currently just Tetris. Editing a game NOT on that list here would
@@ -707,6 +721,72 @@
     check();
   }
 
+  /* ---- Turf Masters: every player's hole replays + video storage (tm-holes-panel), loaded when first opened ---- */
+  function initTmHoles(db){
+    const COURSES = ['U.S.A.', 'Germany', 'Japan', 'Australia', 'Scotland'];
+    const RENDER = 'https://tm-replay-743782972200.us-central1.run.app/render';
+    const BUCKET = 'ngpc-leaderboard-tm-replays';
+    const label = h=>{
+      if(h.result !== 'holed' || !h.strokes) return 'Unfinished';
+      if(h.strokes === 1) return 'Hole in one';
+      const d = h.strokes - h.par;
+      return ({'-3':'Albatross','-2':'Eagle','-1':'Birdie','0':'Par','1':'Bogey','2':'Double bogey','3':'Triple bogey'})[d] || (d > 0 ? '+' + d : String(d));
+    };
+    const mb = b=>(b / 1048576).toFixed(1) + ' MB';
+    let loaded = false, rows = [], shown = 50;
+    const header = document.querySelector('[data-toggle="tm-holes-body"]');
+    header.addEventListener('click', ()=>{ if(!loaded){ loaded = true; load(); } });
+    async function bucketUsage(){
+      let items = [], token = '';
+      do{
+        const r = await fetch('https://storage.googleapis.com/storage/v1/b/' + BUCKET + '/o?prefix=tm/&fields=nextPageToken,items(name,size)' + (token ? '&pageToken=' + encodeURIComponent(token) : ''));
+        const j = await r.json(); items = items.concat(j.items || []); token = j.nextPageToken || '';
+      }while(token);
+      const byVer = {};
+      items.forEach(o=>{ const v = o.name.split('/')[1]; byVer[v] = byVer[v] || {n:0, b:0}; byVer[v].n++; byVer[v].b += +o.size; });
+      return { n: items.length, b: items.reduce((t,o)=>t + +o.size, 0), byVer };
+    }
+    async function load(){
+      const tot = el('tm-holes-totals');
+      try{
+        const [hq, gq, use] = await Promise.all([db.collectionGroup('history').get(), db.collection('tm_gallery').get(), bucketUsage().catch(()=>null)]);
+        const docs = hq.docs.filter(d=>d.ref.parent.parent && d.ref.parent.parent.parent.id === 'tm_replays');
+        const uids = [...new Set(docs.map(d=>d.ref.parent.parent.id))];
+        const names = {};
+        await Promise.all(uids.map(async u=>{ try{ const p = await db.collection('users').doc(u).get(); names[u] = (p.exists && p.data().username) || u; }catch(e){ names[u] = u; } }));
+        const shared = new Set(gq.docs.map(d=>d.data().code));
+        rows = docs.map(d=>Object.assign({uid: d.ref.parent.parent.id}, d.data())).sort((a,b)=>b.scannedAt - a.scannedAt);
+        rows.forEach(r=>{ r.user = names[r.uid]; r.shared = shared.has(r.code); });
+        tot.innerHTML = '<b>' + rows.length + '</b> hole' + (rows.length === 1 ? '' : 's') + ' from <b>' + uids.length + '</b> player' + (uids.length === 1 ? '' : 's')
+          + ' &middot; <b>' + gq.size + '</b> in the gallery'
+          + (use ? ' &middot; videos: <b>' + use.n + '</b> files, <b>' + mb(use.b) + '</b> ('
+            + Object.keys(use.byVer).sort().map(v=>v + ': ' + use.byVer[v].n + ' / ' + mb(use.byVer[v].b)).join(', ') + ')' : ' &middot; video storage unavailable');
+        draw();
+      }catch(e){ tot.innerHTML = '<div class="msg err">Couldn\u2019t load hole replays: ' + escapeHtml(e.message || 'unknown error') + '</div>'; }
+    }
+    function draw(){
+      const list = el('tm-holes-list'); list.innerHTML = '';
+      rows.slice(0, shown).forEach(r=>{
+        const d = document.createElement('div'); d.className = 'current-value'; d.style.margin = '0';
+        d.innerHTML = new Date(r.scannedAt).toLocaleString() + ' &middot; <b>' + escapeHtml(r.user) + '</b> &middot; '
+          + escapeHtml(COURSES[r.course] + ' hole ' + (r.hole + 1)) + ' &middot; ' + escapeHtml(label(r)) + (r.strokes ? ' (' + r.strokes + '/' + r.par + ')' : '')
+          + (r.shared ? ' &middot; <span style="color:var(--good)">gallery</span>' : '')
+          + ' &middot; <a href="/tm/replay/?g#' + r.code + '" target="_blank" rel="noopener">shot map</a> &middot; ';
+        const v = document.createElement('a'); v.href = '#'; v.textContent = 'video';
+        v.addEventListener('click', async e=>{
+          e.preventDefault(); const w = window.open('', '_blank'); v.textContent = 'video (making\u2026)';
+          try{ const j = await (await fetch(RENDER + '?code=' + r.code)).json(); if(!j.url) throw new Error(j.error || 'no video'); w.location = j.url; v.textContent = 'video'; }
+          catch(err){ if(w) w.close(); v.textContent = 'video (failed)'; }
+        });
+        d.appendChild(v); list.appendChild(d);
+      });
+      const more = el('tm-holes-more'); more.innerHTML = '';
+      if(rows.length > shown){
+        const b = document.createElement('button'); b.type = 'button'; b.className = 'action btn-secondary'; b.textContent = 'Show more (' + (rows.length - shown) + ')';
+        b.addEventListener('click', ()=>{ shown += 100; draw(); }); more.appendChild(b);
+      }
+    }
+  }
   /* ---- Turf Masters: games/tm.tmFeatures switch + games/tm.tmTournaments, edited from tm-features-panel ---- */
   function initTmFeatures(docRef, data){
     const f = data.tmFeatures || {};
@@ -1870,6 +1950,8 @@
       el('tm-features-panel').hidden = false;
       initTmFeatures(docRef, data);
       initTmTournaments(db, docRef, data);
+      el('tm-holes-panel').hidden = false;
+      initTmHoles(db);
     }
 
     let currentStatus = data.devStatus || 'dev';

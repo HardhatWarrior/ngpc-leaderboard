@@ -67,12 +67,11 @@
   </section>
   <section id="keep" class="panel" hidden>
     <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-      <button id="savebtn" class="primary">Save to my replays</button>
+      <button id="signbtn" class="primary" hidden>Sign in to keep this hole</button>
       <button id="dlbtn">Download video</button>
-      <a href="/tm/#my-replays" style="margin-left:auto;font-size:13px;color:var(--accent)">My replays &amp; gallery &rarr;</a>
+      <a href="/tm/#my-replays" style="margin-left:auto;font-size:13px;color:var(--accent)">My holes &amp; gallery &rarr;</a>
     </div>
     <div id="keepmsg" class="sub" style="margin-top:8px" hidden></div>
-    <div id="replace" hidden style="margin-top:10px"></div>
   </section>
   <main id="main" hidden>
     <div class="panel">
@@ -139,7 +138,7 @@
       ' &middot; ' + (GOLFER[h.golfer] || 'Golfer ' + h.golfer) + (h.legend ? ' &middot; Golf Set of Legend' : '');
     $('main').hidden = false;
     $('ngpc').hidden = false;
-    // ---- keep: save to the account (5 max, choose one to replace when full) / download the real-game video
+    // ---- keep: a signed-in player's QR holes are kept automatically (tm_replays/{uid}/history); download the video
     const lastR = rep.shots[rep.shots.length - 1];
     const slot = { code, course: h.course, hole: h.hole, par: Hj.par, result: lastR && lastR.result === 'holed' ? 'holed' : 'unfinished',
                    strokes: lastR && lastR.result === 'holed' ? (h.shots[h.shots.length - 1].stroke || h.shots.length) : 0 };
@@ -147,38 +146,14 @@
     const kmsg = (t) => { $('keepmsg').hidden = !t; $('keepmsg').textContent = t || ''; };
     $('dlbtn').onclick = () => { $('dlbtn').disabled = true;
       TMReplays.download(code, slot, kmsg).catch(e => kmsg('Download failed (' + e.message + ').')).finally(() => { $('dlbtn').disabled = false; }); };
-    const user = () => (window.NGPC_AUTH && NGPC_AUTH.currentUser) || null;
-    async function doSave(replaceIndex) {
-      const u = user();
-      if (!u) { NGPC_AUTH && NGPC_AUTH.openSignInModal('signin'); kmsg('Sign in to save replays to your account.'); return; }
-      $('savebtn').disabled = true;
-      try {
-        const r = await TMReplays.save(u, slot, replaceIndex);
-        if (r.already) { kmsg('Already in your replays.'); $('savebtn').textContent = 'Saved'; }
-        else if (r.full) showReplace(r.slots);
-        else { $('replace').hidden = true; kmsg('Saved to your replays.'); $('savebtn').textContent = 'Saved'; }
-      } catch (e) { kmsg('Could not save (' + e.message + ').'); }
-      $('savebtn').disabled = false;
-    }
-    function showReplace(slots) {
-      const box = $('replace'); box.innerHTML = ''; box.hidden = false;
-      kmsg('You have ' + TMReplays.MAX + ' saved replays. Choose one to replace:');
-      slots.forEach((sl, i) => {
-        const row = document.createElement('div'); row.className = 'shot'; row.style.gridTemplateColumns = '1fr auto';
-        row.innerHTML = '<div><div class="t">' + TMReplays.title(sl) + ' &middot; ' + TMReplays.scoreLabel(sl) + '</div><div class="d">Saved ' +
-          new Date(sl.savedAt).toLocaleDateString() + (TMReplays.isShared(sl) ? ' &middot; in the gallery' : '') + '</div></div>';
-        const b = document.createElement('button'); b.textContent = 'Replace'; b.onclick = () => doSave(i);
-        row.appendChild(b); box.appendChild(row);
-      });
-      const c = document.createElement('button'); c.textContent = 'Cancel'; c.style.marginTop = '8px';
-      c.onclick = () => { box.hidden = true; kmsg(''); }; box.appendChild(c);
-    }
-    $('savebtn').onclick = () => doSave(null);
     const fromGallery = new URLSearchParams(location.search).has('g');
+    $('signbtn').onclick = () => NGPC_AUTH.openSignInModal('signin');
     if (window.NGPC_AUTH) NGPC_AUTH.onAuthChange(async (u) => {
-      if (!u) { if (!fromGallery) kmsg('Sign in to keep this hole in your history.'); return; }
-      if (!fromGallery) { try { if (await TMReplays.record(u, slot)) kmsg('Kept in your hole history.'); else kmsg(''); } catch (e) {} }
-      try { const sl = await TMReplays.load(u.uid); if (sl.some(x => x.code === code)) $('savebtn').textContent = 'Saved'; } catch (e) {}
+      $('signbtn').hidden = !!u || fromGallery;
+      if (fromGallery) return;
+      if (!u) { kmsg('Sign in and this hole is saved to your account automatically.'); return; }
+      try { kmsg((await TMReplays.record(u, slot)) ? 'Saved to your holes.' : 'Already in your holes.'); }
+      catch (e) { kmsg('Could not save this hole (' + e.message + ').'); }
     });
     $('watch').onclick = () => {
       const btn = $('watch'), msg = $('ngpcmsg'), vid = $('ngpcvid');

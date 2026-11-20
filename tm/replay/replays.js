@@ -1,10 +1,11 @@
-/* Neo Turf Masters saved replays (tm_replays/{uid}, up to 5) + public gallery (tm_gallery/{uid}_{slot}) + video download.
+/* Neo Turf Masters hole replays: every hole a player opens from a QR is kept (tm_replays/{uid}/history/{code}),
+ * up to 2 of them shared to the public gallery (tm_gallery/{uid}_{0|1}), and the real-game video for any of them.
  * Needs firebase compat + /auth.js (window.NGPC_AUTH). Exposes window.TMReplays. */
 (function () {
   'use strict';
   const RENDER = 'https://tm-replay-743782972200.us-central1.run.app/render';
   const COURSE = ['U.S.A.', 'Germany', 'Japan', 'Australia', 'Scotland'];
-  const MAX = 5, GALLERY_MAX = 2;
+  const GALLERY_MAX = 2;
   const db = () => NGPC_AUTH.db;
 
   function scoreLabel(slot) {
@@ -18,88 +19,64 @@
   // gallery links carry ?g so opening someone else's hole doesn't land in the viewer's own history
   function replayHref(code, gallery) { return '/tm/replay/' + (gallery ? '?g' : '') + '#' + code; }
 
-  // every hole the player opens from a QR: tm_replays/{uid}/history/{code} (the payload is the doc id, so each
-  // hole is kept once, forever). The video can be made again from it at any time.
+  // ---- the player's holes: the payload is the doc id, so each hole is kept once, for good; the video can be
+  // made again from it at any time
   const histCol = (uid) => db().collection('tm_replays').doc(uid).collection('history');
   async function record(user, slot) {
     const ref = histCol(user.uid).doc(slot.code);
     if ((await ref.get()).exists) return false;
     await ref.set({ code: slot.code, course: slot.course, hole: slot.hole, strokes: slot.strokes | 0, par: slot.par | 0,
-                    result: String(slot.result || ''), scannedAt: Date.now() });
+                    result: String(slot.result || ''), scannedAt: slot.scannedAt || Date.now() });
     return true;
   }
   async function history(uid) {
     const q = await histCol(uid).orderBy('scannedAt', 'desc').get();
-    return q.docs.map(d => d.data());
+    const list = q.docs.map(d => d.data());
+    // the first version kept up to 5 "saved" replays in tm_replays/{uid}.slots: fold any of those in
+    try {
+      const doc = await db().collection('tm_replays').doc(uid).get();
+      const slots = doc.exists ? (doc.data().slots || []) : [];
+      for (const s of slots) if (!list.some(h => h.code === s.code)) {
+        const h = { code: s.code, course: s.course, hole: s.hole, strokes: s.strokes | 0, par: s.par | 0, result: s.result || '', scannedAt: s.savedAt || Date.now() };
+        if (await record({ uid }, h)) list.push(h);
+      }
+      list.sort((a, b) => b.scannedAt - a.scannedAt);
+    } catch (e) {}
+    return list;
+  }
+  async function forget(user, code) {
+    const mine = await myGallery(user.uid);
+    for (const g of mine) if (g.code === code) await db().collection('tm_gallery').doc(g.id).delete().catch(() => {});
+    await histCol(user.uid).doc(code).delete();
   }
 
-  async function load(uid) {
-    const doc = await db().collection('tm_replays').doc(uid).get();
-    const slots = doc.exists ? (doc.data().slots || []) : [];
-    // first version: shared === true with the gallery doc keyed by the slot index -> keep that doc, store its id number
-    slots.forEach((s, i) => { if (s.shared === true) s.shared = i; });
-    return slots;
+  // ---- gallery: the player's entries are found by uid (ids are {uid}_0 / {uid}_1)
+  async function myGallery(uid) {
+    const q = await db().collection('tm_gallery').where('uid', '==', uid).get();
+    return q.docs.map(d => Object.assign({ id: d.id }, d.data()));
   }
-  async function store(uid, slots) {
-    await db().collection('tm_replays').doc(uid).set({ uid, slots, updatedAt: Date.now() });
+  // share: takeDownId = one of the player's gallery doc ids to pull first when both places are taken (else {full})
+  async function share(user, h, takeDownId) {
+    if (takeDownId) await db().collection('tm_gallery').doc(takeDownId).delete();
+    const mine = await myGallery(user.uid);
+    if (mine.some(g => g.code === h.code)) return { mine };
+    const pos = [0, 1].find(p => !mine.some(g => g.id === user.uid + '_' + p));
+    if (mine.length >= GALLERY_MAX || pos === undefined) return { full: true, mine };
+    await db().collection('tm_gallery').doc(user.uid + '_' + pos).set({
+      uid: user.uid, username: user.username, code: h.code, course: h.course, hole: h.hole, strokes: h.strokes | 0,
+      par: h.par | 0, result: String(h.result || ''), sharedAt: Date.now() });
+    videoUrl(h.code).catch(() => {});            // render it now so gallery viewers get it straight away
+    return { mine: await myGallery(user.uid) };
   }
-  // a slot's `shared` is false, or its gallery position (0 or 1): tm_gallery/{uid}_{pos}, so at most GALLERY_MAX per player
-  const isShared = (s) => typeof s.shared === 'number';
-  const galDoc = (uid, pos) => db().collection('tm_gallery').doc(uid + '_' + pos);
-  // save: replaceIndex = null to append (returns {full} when MAX are saved)
-  async function save(user, slot, replaceIndex) {
-    const slots = await load(user.uid);
-    if (slots.some(s => s.code === slot.code)) return { already: true, slots };
-    const clean = { code: slot.code, course: slot.course, hole: slot.hole, strokes: slot.strokes | 0, par: slot.par | 0,
-                    result: String(slot.result || ''), savedAt: Date.now(), shared: false };
-    if (replaceIndex == null) {
-      if (slots.length >= MAX) return { full: true, slots };
-      slots.push(clean);
-    } else {
-      if (slots[replaceIndex] && isShared(slots[replaceIndex])) await galDoc(user.uid, slots[replaceIndex].shared).delete().catch(() => {});
-      slots[replaceIndex] = clean;
-    }
-    await store(user.uid, slots);
-    return { saved: true, slots };
-  }
-  async function remove(user, index) {
-    const slots = await load(user.uid);
-    if (slots[index] && isShared(slots[index])) await galDoc(user.uid, slots[index].shared).delete().catch(() => {});
-    slots.splice(index, 1);
-    await store(user.uid, slots);
-    return slots;
-  }
-  // share: takeDown = index of a shared slot to pull from the gallery when both places are taken (else returns {full})
-  async function share(user, index, takeDown) {
-    const slots = await load(user.uid);
-    const s = slots[index];
-    if (!s || isShared(s)) return { slots };
-    if (takeDown != null && slots[takeDown] && isShared(slots[takeDown])) {
-      await galDoc(user.uid, slots[takeDown].shared).delete().catch(() => {});
-      slots[takeDown].shared = false;
-    }
-    const used = slots.filter(isShared).map(x => x.shared);
-    const pos = [0, 1].find(p => !used.includes(p));
-    if (used.length >= GALLERY_MAX || pos === undefined) return { full: true, slots };
-    await galDoc(user.uid, pos).set({
-      uid: user.uid, username: user.username, code: s.code, course: s.course, hole: s.hole, strokes: s.strokes | 0,
-      par: s.par | 0, result: String(s.result || ''), sharedAt: Date.now() });
-    s.shared = pos; await store(user.uid, slots);
-    videoUrl(s.code).catch(() => {});            // render it now so gallery viewers get it straight away
-    return { slots };
-  }
-  async function unshare(user, index) {
-    const slots = await load(user.uid);
-    if (slots[index] && isShared(slots[index])) { await galDoc(user.uid, slots[index].shared).delete().catch(() => {}); slots[index].shared = false; }
-    await store(user.uid, slots);
-    return slots;
+  async function unshare(user, code) {
+    for (const g of await myGallery(user.uid)) if (g.code === code) await db().collection('tm_gallery').doc(g.id).delete();
   }
   async function gallery(limit) {
     const q = await db().collection('tm_gallery').orderBy('sharedAt', 'desc').limit(limit || 60).get();
     return q.docs.map(d => Object.assign({ id: d.id }, d.data()));
   }
 
-  // the real-game video: rendered on first request (about a minute), cached after that
+  // ---- the real-game video: rendered on first request (about a minute), cached after that
   async function videoUrl(code) {
     const r = await fetch(RENDER + '?code=' + encodeURIComponent(code));
     const j = await r.json();
@@ -119,5 +96,6 @@
     onStatus && onStatus('');
   }
 
-  window.TMReplays = { MAX, GALLERY_MAX, isShared, COURSE, RENDER, scoreLabel, title, replayHref, load, save, remove, share, unshare, gallery, videoUrl, download, record, history };
+  window.TMReplays = { GALLERY_MAX, COURSE, RENDER, scoreLabel, title, replayHref, record, history, forget,
+                       myGallery, share, unshare, gallery, videoUrl, download };
 })();

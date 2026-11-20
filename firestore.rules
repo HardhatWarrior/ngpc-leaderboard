@@ -1459,6 +1459,12 @@ service cloud.firestore {
       }
     }
 
+    // admin-only collection-group read of every player's hole replays (Manage Game > Hole replays):
+    // db.collectionGroup('history') -- the per-player rule above covers the owner's own reads.
+    match /{path=**}/history/{hid} {
+      allow read: if request.auth != null && isAdmin();
+    }
+
     // tm_gallery/{uid}_{pos} -- replays a player chose to share publicly. The id is the owner's uid plus a gallery
     // position 0-1, so nobody can have more than 2 entries. Public read; owner writes; owner or admin deletes.
     match /tm_gallery/{gid} {
