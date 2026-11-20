@@ -40,7 +40,7 @@
       <li>Download the patched ROM and play a 1 PLAYER STROKE PLAY round. The QR appears after hole 18.</li>
     </ol>
     <div class="variant">
-      <div><b>What you get</b>: the leaderboard QR after each 1 PLAYER STROKE PLAY round, two new courses (Australia and Scotland), career stats, tournaments (main menu &gt; TOURNAMENT) and menus that wrap around. 4 MB ROM, needs a 4 MB-capable flash cart.</div>
+      <div><b>What you get</b>: the leaderboard QR after each 1 PLAYER STROKE PLAY round, a hole replay QR on the scorecard after every hole (press OPTION), two new courses (Australia and Scotland, still a work in progress), announcer voice calls, career stats, tournaments (main menu &gt; TOURNAMENT) and menus that wrap around. 4 MB ROM, needs a 4 MB-capable flash cart.</div>
     </div>
     <label class="drop" id="drop">Tap to choose your ROM, or drop it here
       <input type="file" id="file" accept=".ngc,.ngp,.bin,.zip,application/octet-stream">
@@ -67,9 +67,9 @@
   const SRC_SIZE = 2097152, SRC_CRC = 0x317A66D2;
   // one patch: the 5-course build (the 2 MB Standard patch was retired 2026-11-17; its CRCs stay in KNOWN)
   const VARIANTS = {
-    '5c': {ips:'/tm/turfmasters_5c.ips', size:4194304, crc:0x8938AF52, name:'Neo Turf Masters (Leaderboard, 5 courses).ngc'}
+    '5c': {ips:'/tm/turfmasters_5c.ips', size:4194304, crc:0x8FAC0AC3, name:'Neo Turf Masters (Leaderboard, 5 courses).ngc'}
   };
-  const OLD_PATCHED = [0xEF7C6FE1, 0x3619199C, 0x8C6F51C8, 0x6A210779, 0xE79B24CE];
+  const OLD_PATCHED = [0xEF7C6FE1, 0x3619199C, 0x8C6F51C8, 0x6A210779, 0xE79B24CE, 0x8938AF52];
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');
