@@ -496,7 +496,7 @@
   </section>
 
   <!-- Turf Masters only, admin only: games/tm.tmFeatures {tournaments, tournamentsTesters} (On / Testers /
-       Off, as Bowling) and games/tm.tmTournaments [{id, name, startsAt, endsAt, course 0-4, level 0-3,
+       Off, as Bowling) + tournamentRibbon / tournamentBar (main page, index.html renderPromo()) and games/tm.tmTournaments [{id, name, startsAt, endsAt, course 0-4, level 0-3,
        golfers [0-5 ...] ([] = any golfer), entry 'one' | 'best', prize?, closed?}]. tm/index.html
        (TurfMastersLB/tools/gen_tm_tourn.py) builds each board from approved TM scores in the window on that
        course and level, without the Legend clubs, with an allowed golfer. -->
@@ -513,6 +513,17 @@
         <button type="button" class="status-btn" data-value="testers">Testers</button>
         <button type="button" class="status-btn" data-value="on">On</button>
       </div>
+      <div class="field-label" style="margin-top:14px">Main page: tile ribbon (TOURNAMENT LIVE / SOON on the Neo Turf Masters tile)</div>
+      <div class="status-row" id="tm-ribbon-row" style="margin-bottom:0">
+        <button type="button" class="status-btn" data-value="off">Off</button>
+        <button type="button" class="status-btn" data-value="on">On</button>
+      </div>
+      <div class="field-label" style="margin-top:14px">Main page: top bar (event name, countdown, link to the board)</div>
+      <div class="status-row" id="tm-bar-row" style="margin-bottom:0">
+        <button type="button" class="status-btn" data-value="off">Off</button>
+        <button type="button" class="status-btn" data-value="on">On</button>
+      </div>
+      <div class="current-value" style="margin-top:8px">The ribbon and bar show while an event is live or starts within 7 days, to whoever can see Tournaments (Off / Testers / On above). If Bowling also has one, the bar shows the live event, else the sooner one.</div>
       <button type="button" class="action btn-primary" id="tm-features-save" style="margin-top:14px">Save</button>
       <div id="tm-features-msg"></div>
 
@@ -700,16 +711,24 @@
   function initTmFeatures(docRef, data){
     const f = data.tmFeatures || {};
     let level = f.tournaments === true ? 'on' : (f.tournamentsTesters === true ? 'testers' : 'off');
-    const row = el('tm-tourney-row');
-    const paint = ()=>row.querySelectorAll('.status-btn').forEach(b=>b.classList.toggle('active', b.dataset.value === level));
+    let ribbon = f.tournamentRibbon === true ? 'on' : 'off', bar = f.tournamentBar === true ? 'on' : 'off';
+    const row = el('tm-tourney-row'), rRow = el('tm-ribbon-row'), bRow = el('tm-bar-row');
+    const paint = ()=>{
+      row.querySelectorAll('.status-btn').forEach(b=>b.classList.toggle('active', b.dataset.value === level));
+      rRow.querySelectorAll('.status-btn').forEach(b=>b.classList.toggle('active', b.dataset.value === ribbon));
+      bRow.querySelectorAll('.status-btn').forEach(b=>b.classList.toggle('active', b.dataset.value === bar));
+    };
     paint();
     row.querySelectorAll('.status-btn').forEach(b=>b.addEventListener('click', ()=>{ level = b.dataset.value; paint(); }));
+    rRow.querySelectorAll('.status-btn').forEach(b=>b.addEventListener('click', ()=>{ ribbon = b.dataset.value; paint(); }));
+    bRow.querySelectorAll('.status-btn').forEach(b=>b.addEventListener('click', ()=>{ bar = b.dataset.value; paint(); }));
     el('tm-features-save').addEventListener('click', async ()=>{
       const btn = el('tm-features-save'), msg = el('tm-features-msg');
       msg.innerHTML = ''; btn.disabled = true;
       try{
-        await docRef.update({ tmFeatures: { tournaments: level === 'on', tournamentsTesters: level === 'testers' } });
-        msg.innerHTML = '<div class="msg ok">Saved. Reload /tm/ to see it.</div>';
+        await docRef.update({ tmFeatures: { tournaments: level === 'on', tournamentsTesters: level === 'testers',
+          tournamentRibbon: ribbon === 'on', tournamentBar: bar === 'on' } });
+        msg.innerHTML = '<div class="msg ok">Saved. Reload /tm/ or the main page to see it.</div>';
       }catch(e){
         msg.innerHTML = '<div class="msg err">Couldn’t save: '+escapeHtml(e.message||'unknown error')+'</div>';
       }finally{ btn.disabled = false; }

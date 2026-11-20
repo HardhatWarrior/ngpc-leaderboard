@@ -317,8 +317,8 @@
     <p>Scan the QR code your game shows after a completed run, or pick a game below to browse its board.</p>
   </header>
 
-  <!-- Tournament bar: a Bowling event that's live or starts soon, shown when Manage Game >
-       Bowling features > Main page: top bar is On, to whoever can see Tournaments -- see
+  <!-- Tournament bar: a Bowling or Turf Masters event that's live or starts soon, shown when Manage Game >
+       Bowling / Turf Masters features > Main page: top bar is On, to whoever can see Tournaments -- see
        renderPromo(). -->
   <a class="event-bar" id="event-bar" href="/bw/#tournament" hidden>
     <span class="eb-tag" id="eb-tag"></span>
@@ -630,10 +630,10 @@
       // space (a small link under the grid) once at least one such game is actually visible, so
       // an empty section never gets a link to nowhere.
       renderGrid(visibleGames.filter(g=>g.section !== 'solo'));
-      // the game whose tournaments the ribbon / bar can announce (Bowling), while it's listed
-      // and playable
-      promoGame = visibleGames.find(g=>Array.isArray(g.bwTournaments) && g.code && g.section !== 'solo'
-        && g.devStatus !== 'coming-soon' && (g.visibility || 'active') === 'active') || null;
+      // the games whose tournaments the ribbon / bar can announce (Bowling, Turf Masters), while
+      // they're listed and playable
+      promoGames = visibleGames.filter(g=>promoList(g) && g.code && g.section !== 'solo'
+        && g.devStatus !== 'coming-soon' && (g.visibility || 'active') === 'active');
       renderPromo();
       schedulePromo();
       // The #solo-link block is currently commented out in the markup -- a missing element used to
@@ -655,7 +655,12 @@
      access list plus the admin and developer; anything else = Off, the admin and developer only,
      as a preview. Anything unexpected reads as hidden. ---------- */
   const PROMO_SOON_DAYS = 7;
-  let promoGame = null, promoUser = null, promoTimer = null;
+  let promoGames = [], promoUser = null, promoTimer = null;
+  // each game keeps its events and switches under its own prefix: games/bw.bwTournaments + bwFeatures,
+  // games/tm.tmTournaments + tmFeatures (same shapes)
+  const PROMO_KEYS = [['bwTournaments', 'bwFeatures'], ['tmTournaments', 'tmFeatures']];
+  function promoList(g){ const k = PROMO_KEYS.find(k=>Array.isArray(g[k[0]])); return k ? g[k[0]] : null; }
+  function promoFeatures(g){ const k = PROMO_KEYS.find(k=>Array.isArray(g[k[0]])); return (k && g[k[1]]) || {}; }
   function promoLevel(f){
     if(f.tournaments === true) return 'on';
     return (f.tournamentsTesters === true || f.tournaments === 'testers') ? 'testers' : 'off';
@@ -669,7 +674,7 @@
   // the event to announce: the one /bw/'s panel opens on (live, newest start first), else the
   // next one starting within PROMO_SOON_DAYS
   function promoEvent(g, now){
-    const list = g.bwTournaments.filter(e=>e && e.id && e.name && e.startsAt < e.endsAt && e.closed !== true);   /* closed: Manage Game > Close */
+    const list = promoList(g).filter(e=>e && e.id && e.name && e.startsAt < e.endsAt && e.closed !== true);   /* closed: Manage Game > Close */
     const live = list.filter(e=>now >= e.startsAt && now < e.endsAt).sort((a,b)=>b.startsAt - a.startsAt);
     if(live.length) return {ev: live[0], live: true};
     const soon = list.filter(e=>now < e.startsAt && e.startsAt - now <= PROMO_SOON_DAYS * 86400000)
@@ -685,13 +690,25 @@
     return new Date(ms).toLocaleString(undefined,{weekday:'short', month:'short', day:'numeric', hour:'numeric', minute:'2-digit', timeZoneName:'short'});
   }
   function renderPromo(){
-    const g = promoGame, now = Date.now();
-    const f = (g && g.bwFeatures) || {};
-    const lvl = promoLevel(f);
-    const pick = g ? promoEvent(g, now) : null;
-    const show = !!(pick && promoVisible(g, lvl, promoUser));
+    const now = Date.now();
     tileEls.forEach(tile=>tile.querySelectorAll('.event-band').forEach(b=>b.remove()));
-    const tile = (show && f.tournamentRibbon === true) ? tileEls.find(x=>x.dataset.game === g.code) : null;
+    // every game's ribbon on its own tile; the top bar announces one event: a live one (newest start) before
+    // the soonest upcoming one
+    let barPick = null;
+    promoGames.forEach(g=>{
+      const f = promoFeatures(g), lvl = promoLevel(f), pick = promoEvent(g, now);
+      if(!(pick && promoVisible(g, lvl, promoUser))) return;
+      if(f.tournamentRibbon === true) promoRibbon(g, pick, lvl);
+      if(f.tournamentBar === true){
+        const better = !barPick || (pick.live !== barPick.pick.live ? pick.live
+          : pick.live ? pick.ev.startsAt > barPick.pick.ev.startsAt : pick.ev.startsAt < barPick.pick.ev.startsAt);
+        if(better) barPick = {g, pick, lvl};
+      }
+    });
+    promoBar(barPick, now);
+  }
+  function promoRibbon(g, pick, lvl){
+    const tile = tileEls.find(x=>x.dataset.game === g.code);
     if(tile){
       const art = tile.querySelector('.tile-art');
       let bands = art.querySelector('.tile-bands');
@@ -702,10 +719,12 @@
         + (lvl === 'on' ? '' : lvl === 'testers' ? ' \u00b7 TESTERS' : ' \u00b7 PREVIEW');
       bands.insertBefore(band, bands.firstChild);
     }
+  }
+  function promoBar(bp, now){
     const bar = el('event-bar');
-    bar.hidden = !(show && f.tournamentBar === true);
-    if(bar.hidden) return;
-    const ev = pick.ev, tag = el('eb-tag'), note = el('eb-note');
+    bar.hidden = !bp;
+    if(!bp) return;
+    const {g, pick, lvl} = bp, ev = pick.ev, tag = el('eb-tag'), note = el('eb-note');
     bar.href = (g.leaderboardPath || ('/' + g.slug + '/')) + '#tournament';
     tag.textContent = pick.live ? 'LIVE' : 'SOON';
     tag.classList.toggle('live', pick.live);
@@ -720,10 +739,10 @@
   // within PROMO_SOON_DAYS, so LIVE / SOON flip on time
   function schedulePromo(){
     clearTimeout(promoTimer);
-    if(!promoGame) return;
+    if(!promoGames.length) return;
     const now = Date.now();
     let next = now + 30000;
-    promoGame.bwTournaments.forEach(e=>{
+    promoGames.flatMap(g=>promoList(g)).forEach(e=>{
       if(e) [e.startsAt - PROMO_SOON_DAYS * 86400000, e.startsAt, e.endsAt].forEach(at=>{
         if(typeof at === 'number' && at > now && at < next) next = at;
       });

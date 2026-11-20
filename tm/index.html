@@ -682,6 +682,7 @@
       : 'Preview: only you can see this. Players see it once Tournaments is switched on under Manage Game > Turf Masters features.';
     if(!tmT.pick || !list.some(e=>e.id === tmT.pick)) tmT.pick = list[0].id;
     const ev = list.find(e=>e.id === tmT.pick);
+    if(!tmT.scrolled && location.hash === '#tournament'){ tmT.scrolled = true; setTimeout(()=>panel.scrollIntoView({behavior:'smooth', block:'start'}), 50); }
     const tabs = el('tm-t-tabs');
     tabs.hidden = list.length < 2;
     tabs.innerHTML = list.map(e=>'<button type="button" class="mode-btn'+(e.id === ev.id ? ' active' : '')+'" data-tid="'+escapeHtml(e.id)+'">'+escapeHtml(e.name)+'</button>').join('');
