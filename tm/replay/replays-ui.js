@@ -79,7 +79,8 @@
   }
 
   // ---- the signed-in player's videos (up to MAX) and every hole they have opened from a QR
-  function mountMine(box, show) {
+  // moreHref: show only the `show` newest holes, with a link to the full list page
+  function mountMine(box, show, moreHref) {
     show = show || 10;
     let me = null, busy = false, hist = [], vids = [], mine = [], n = show;
     const vhead = document.createElement('div'); vhead.className = 'tmr-sub';
@@ -126,7 +127,10 @@
         }
         hlist.appendChild(r);
       });
-      if (hist.length > n) {
+      if (hist.length > n && moreHref) {
+        const m = document.createElement('div'); m.className = 'tmr-more';
+        m.innerHTML = '<a href="' + moreHref + '">See all ' + hist.length + ' holes &rarr;</a>'; hlist.appendChild(m);
+      } else if (hist.length > n) {
         const b = document.createElement('button'); b.className = 'tmr-link'; b.textContent = 'Show ' + Math.min(show, hist.length - n) + ' more';
         b.onclick = () => { n += show; render(); }; hlist.appendChild(b);
       }

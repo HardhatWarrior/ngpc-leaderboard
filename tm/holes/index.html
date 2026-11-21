@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My Turf Masters Holes</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#5c8fd6; --good:#4fbf8b; --danger:#e5615a;
+  }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif; padding:24px 16px; display:flex; justify-content:center; }
+  #shell{ width:100%; max-width:960px; display:flex; flex-direction:column; gap:18px; }
+  header{ background:linear-gradient(180deg,var(--panel2),var(--panel)); border:1px solid var(--border); border-radius:14px; padding:18px 20px; display:flex; flex-direction:column; gap:8px; }
+  .eyebrow{ font-family:"Press Start 2P",monospace; font-size:10px; line-height:1.7; letter-spacing:.14em; color:var(--accent); text-transform:uppercase; }
+  h1{ margin:0; font-family:"Press Start 2P",monospace; font-size:clamp(16px,4.4vw,24px); line-height:1.3; }
+  .sub{ font-size:13px; color:var(--dim); line-height:1.5; }
+  a{ color:var(--accent); }
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px; }
+  footer{ font-size:12px; color:var(--dim); text-align:center; }
+</style>
+</head>
+<body>
+<div id="shell">
+  <header>
+    <div class="eyebrow">Neo Turf Masters</div>
+    <h1>My holes</h1>
+    <div class="sub">Every hole you have opened from a replay QR, newest first. Make real-game videos of up to 5 (a 6th asks which to overwrite). <a href="/tm/">Back to the leaderboard</a></div>
+  </header>
+  <section class="panel"><div id="mine-box"></div><div id="signin" hidden><p class="sub">Sign in to see your holes.</p><button id="signbtn" style="font:inherit;font-size:13px;background:var(--accent);color:#0a1830;border:none;border-radius:8px;padding:8px 14px;cursor:pointer;font-weight:600">Sign in</button></div></section>
+  <footer>&copy; 2026 Neo Geo Pocket Homebrew - www.ngpc-dev.com</footer>
+</div>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="/auth.js"></script>
+<script src="/tm/replay/replays.js"></script>
+<script src="/tm/replay/replays-ui.js"></script>
+<script>
+  if (window.TMReplaysUI && window.NGPC_AUTH) {
+    const mine = TMReplaysUI.mountMine(document.getElementById('mine-box'), 25);
+    document.getElementById('signbtn').onclick = () => NGPC_AUTH.openSignInModal('signin');
+    NGPC_AUTH.onAuthChange(u => { document.getElementById('signin').hidden = !!u; mine.setUser(u); });
+  }
+</script>
+</body>
+</html>

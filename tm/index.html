@@ -1062,7 +1062,7 @@
         }).catch(function(){ if(romLinkEl) romLinkEl.hidden = true; gameData = {}; })
       : Promise.resolve();
 
-    var tmrMine = window.TMReplaysUI ? TMReplaysUI.mountMine(el('myreplays-box')) : null;
+    var tmrMine = window.TMReplaysUI ? TMReplaysUI.mountMine(el('myreplays-box'), 5, '/tm/holes/') : null;
     var tmrGal = window.TMReplaysUI ? TMReplaysUI.mountGallery(el('gallery-box'), 3, '/tm/replays/') : null;
     if(tmrGal) TMReplaysUI.onGalleryChange = tmrGal.reload;
     window.addEventListener('hashchange', ()=>{ if(location.hash === '#my-replays' && !el('mystats-panel').hidden){ el('mystats-panel').querySelector('details').open = true; el('mystats-panel').scrollIntoView(); } });
