@@ -1251,6 +1251,7 @@ window.NGPC_AUTH = (function(){
     const homeLink = isHome ? '' : '<a class="acct-link" href="/">&larr; All games</a>';
     bar.innerHTML = '<div id="acct-left">'+homeLink+'</div>'
       + '<div id="acct-right"><span id="acct-owner" hidden><a class="acct-link" href="/games/">Single-Player</a><a class="acct-link" href="/play/test/">Test Player</a></span>'
+      + '<a id="acct-patches" class="acct-link" href="/patches/">Patches</a>'
       + '<a id="acct-badges" class="acct-link" href="/achievements/" hidden>Badges</a>'
       + '<canvas id="acct-avatar" width="18" height="18" hidden></canvas>'
       + '<a id="acct-new" href="/admin/" hidden>NEW!</a>'
