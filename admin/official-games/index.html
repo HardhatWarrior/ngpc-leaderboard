@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Official Games</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a; --gold:#e8c547;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+        padding-inline:20px; padding-block:28px; display:flex; justify-content:center; }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; }
+  #shell{ width:100%; max-width:860px; display:flex; flex-direction:column; gap:16px; }
+  header{ text-align:center; display:flex; flex-direction:column; gap:6px; }
+  header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
+  header p{ margin:0; color:var(--dim); font-size:13px; line-height:1.5; }
+  a{ color:var(--accent2); }
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
+  .panel[hidden], #denied[hidden]{ display:none; }
+  .panel h2{ margin:0 0 8px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  #denied{ text-align:center; color:var(--dim); font-size:13.5px; padding:40px 0; }
+  .tools{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  input[type=text], input[type=search], input[type=number], select{ background:var(--navy); border:1px solid var(--border); color:var(--cream);
+        border-radius:7px; padding:8px 10px; font:inherit; font-size:13px; min-width:0; }
+  input:focus, select:focus{ outline:none; border-color:var(--accent2); }
+  .btn{ font:inherit; font-weight:600; font-size:12.5px; border:1px solid var(--border); background:var(--panel2); color:var(--cream); border-radius:8px; padding:8px 12px; cursor:pointer; }
+  .btn.primary{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .btn.danger{ border-color:var(--danger); color:var(--danger); background:transparent; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+  .grid{ display:grid; grid-template-columns:2fr 2fr 1.4fr 80px 100px; gap:8px; align-items:center; }
+  .grid .hd{ color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.06em; }
+  .grid input, .grid select{ width:100%; }
+  .row{ display:grid; gap:8px; padding:10px 0; border-top:1px solid var(--border); }
+  .row .line{ display:grid; grid-template-columns:2fr 2fr 1.4fr 80px 100px; gap:8px; align-items:center; }
+  .row .line2{ display:flex; gap:12px; flex-wrap:wrap; align-items:center; font-size:12.5px; color:var(--dim); }
+  .row .line2 label{ display:flex; gap:4px; align-items:center; }
+  .row.dirty{ background:rgba(232,197,71,.06); }
+  .msg{ font-size:12.5px; border-radius:8px; padding:9px 11px; margin-top:10px; border:1px solid var(--border); }
+  .msg.ok{ border-color:var(--good); color:var(--good); } .msg.err{ border-color:var(--danger); color:var(--danger); }
+  .summary{ color:var(--dim); font-size:12.5px; }
+  @media (max-width:700px){ .grid{ display:none; } .row .line{ grid-template-columns:1fr 1fr; } }
+  footer{ text-align:center; color:var(--dim); font-size:12px; }
+</style>
+</head>
+<body>
+<div id="shell">
+  <header>
+    <h1 class="px">OFFICIAL GAMES</h1>
+    <p>The catalogue of officially released NGP/NGPC games that <a href="/patches/">patches</a> are filed under. Edit a row and press Save.</p>
+  </header>
+  <div id="denied" hidden></div>
+
+  <section class="panel" id="main" hidden>
+    <div class="tools">
+      <input id="q" type="search" placeholder="Search games" style="flex:1 1 220px">
+      <select id="plat" aria-label="Platform"><option value="">All platforms</option><option>NGP</option><option>NGPC</option></select>
+      <button class="btn primary" id="add">+ Add game</button>
+    </div>
+    <div class="summary" id="summary" style="margin:10px 0 6px"></div>
+    <div class="grid"><span class="hd">Title</span><span class="hd">Japanese title</span><span class="hd">Publisher</span><span class="hd">Year</span><span class="hd">Platform</span></div>
+    <div id="rows"></div>
+    <div id="msg"></div>
+  </section>
+  <footer><a href="/admin/">&larr; Admin</a></footer>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  const el = (id)=>document.getElementById(id);
+  const A = window.NGPC_AUTH;
+  const esc = (s)=>String(s == null ? '' : s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const slug = (s)=>String(s).normalize('NFKD').replace(/[^\x00-\x7F]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  let games = [];   // {id, title, jpTitle, publisher, year, platform, regions, isNew?}
+  const msg = (cls, html)=>{ el('msg').innerHTML = html ? '<div class="msg '+cls+'">'+html+'</div>' : ''; };
+
+  function rowHtml(g){
+    return '<div class="row'+(g.isNew ? ' dirty' : '')+'" data-id="'+esc(g.id)+'"><div class="line">'+
+      '<input type="text" data-f="title" value="'+esc(g.title)+'" aria-label="Title">'+
+      '<input type="text" data-f="jpTitle" value="'+esc(g.jpTitle)+'" aria-label="Japanese title">'+
+      '<input type="text" data-f="publisher" value="'+esc(g.publisher)+'" aria-label="Publisher">'+
+      '<input type="number" data-f="year" value="'+esc(g.year || '')+'" min="1996" max="2004" aria-label="Year">'+
+      '<select data-f="platform" aria-label="Platform"><option'+(g.platform==='NGP'?' selected':'')+'>NGP</option><option'+(g.platform==='NGPC'?' selected':'')+'>NGPC</option></select></div>'+
+      '<div class="line2">Released in: '+['JP','US','EU'].map(r=>'<label><input type="checkbox" data-r="'+r+'"'+((g.regions||[]).indexOf(r)>=0?' checked':'')+'> '+r+'</label>').join('')+
+      '<span style="flex:1"></span><button class="btn primary" data-save="1">Save</button><button class="btn danger" data-del="1">Delete</button></div></div>';
+  }
+  function render(){
+    const q = el('q').value.trim().toLowerCase(), pl = el('plat').value;
+    const list = games.filter(g=>(!pl || g.platform === pl) && (!q || (g.title+' '+g.jpTitle+' '+g.publisher).toLowerCase().indexOf(q) >= 0));
+    el('summary').textContent = list.length + ' of ' + games.length + ' games';
+    el('rows').innerHTML = list.map(rowHtml).join('');
+  }
+  el('q').addEventListener('input', render); el('plat').addEventListener('change', render);
+
+  el('add').addEventListener('click', ()=>{
+    const id = 'new-' + Date.now();
+    games.unshift({ id:id, title:'', jpTitle:'', publisher:'', year:'', platform:'NGPC', regions:['JP'], isNew:true });
+    el('q').value = ''; el('plat').value = ''; render();
+    const first = el('rows').querySelector('input[data-f="title"]'); if(first) first.focus();
+  });
+
+  el('rows').addEventListener('click', async (e)=>{
+    const row = e.target.closest('.row'); if(!row) return;
+    const g = games.find(x=>x.id === row.dataset.id); if(!g) return;
+    if(e.target.closest('[data-save]')){
+      const f = (k)=>row.querySelector('[data-f="'+k+'"]').value.trim();
+      const title = f('title'), platform = f('platform'), year = parseInt(f('year'), 10);
+      if(!title){ msg('err','Give the game a title.'); return; }
+      const regions = Array.from(row.querySelectorAll('[data-r]')).filter(c=>c.checked).map(c=>c.dataset.r);
+      const id = g.isNew ? slug(title) + '-' + platform.toLowerCase() : g.id;
+      if(g.isNew && games.some(x=>x.id === id)){ msg('err','A game with that title and platform already exists.'); return; }
+      const data = { title:title, jpTitle:f('jpTitle'), publisher:f('publisher'), year:Number.isFinite(year) ? year : null, regions:regions, platform:platform,
+        sortTitle:title.toLowerCase().replace(/^the /,''), addedAt:g.addedAt || Date.now() };
+      try{
+        await A.db.collection('officialGames').doc(id).set(data);
+        // a renamed game keeps its id, so patches already filed under it stay grouped; refresh their denormalised title
+        if(!g.isNew && g.title !== title){
+          const ps = await A.db.collection('patches').where('gameId','==',id).get();
+          await Promise.all(ps.docs.map(d=>d.ref.update({ gameTitle:title })));
+        }
+        Object.assign(g, data, { id:id, isNew:false }); msg('ok','Saved ' + esc(title) + '.'); render();
+      }catch(x){ msg('err','Save failed: ' + esc(x.message || x)); }
+    }else if(e.target.closest('[data-del]')){
+      if(g.isNew){ games = games.filter(x=>x!==g); render(); return; }
+      try{
+        const used = await A.db.collection('patches').where('gameId','==',g.id).limit(1).get();
+        if(!used.empty){ msg('err','Patches are filed under ' + esc(g.title) + '. Delete those first.'); return; }
+        if(!confirm('Delete ' + g.title + ' from the official list?')) return;
+        await A.db.collection('officialGames').doc(g.id).delete();
+        games = games.filter(x=>x!==g); msg('ok','Deleted.'); render();
+      }catch(x){ msg('err','Delete failed: ' + esc(x.message || x)); }
+    }
+  });
+
+  async function boot(){
+    const denied = el('denied');
+    if(!A){ denied.hidden = false; denied.textContent = 'This page isn’t available right now (a required library failed to load).'; return; }
+    await A.authReady;
+    const user = A.currentUser;
+    if(!user || !A.isSiteAdmin(user)){ denied.hidden = false; denied.textContent = 'Not authorized. Sign in as the site admin to view this page.'; return; }
+    try{
+      const s = await A.db.collection('officialGames').get();
+      games = s.docs.map(d=>Object.assign({ id:d.id, jpTitle:'', publisher:'', regions:[] }, d.data())).sort((a,b)=>String(a.sortTitle||a.title).localeCompare(String(b.sortTitle||b.title)));
+    }catch(e){ denied.hidden = false; denied.textContent = 'Could not load the list: ' + (e.message || e); return; }
+    el('main').hidden = false; render();
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

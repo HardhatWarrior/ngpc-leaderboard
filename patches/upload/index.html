@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Upload a Patch</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a; --gold:#e8c547;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+        padding-inline:20px; padding-block:28px; display:flex; justify-content:center; }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; }
+  #shell{ width:100%; max-width:640px; display:flex; flex-direction:column; gap:16px; }
+  header{ text-align:center; display:flex; flex-direction:column; gap:6px; }
+  header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
+  header p{ margin:0; color:var(--dim); font-size:13px; line-height:1.5; }
+  a{ color:var(--accent2); }
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:18px 20px; }
+  .panel[hidden], #denied[hidden]{ display:none; }
+  .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  .hint{ margin:0 0 14px; color:var(--dim); font-size:12.5px; line-height:1.55; }
+  #denied{ text-align:center; color:var(--dim); font-size:13.5px; padding:40px 0; }
+  label.f{ display:block; font-size:11.5px; color:var(--dim); margin-bottom:14px; }
+  label.f b{ display:block; margin-bottom:4px; color:var(--cream); font-weight:600; font-size:12.5px; }
+  label.f .sub{ display:block; margin-top:4px; font-size:11px; }
+  input[type=text], input[type=file], textarea, select{ display:block; width:100%; margin-top:2px; background:var(--navy); border:1px solid var(--border);
+        color:var(--cream); border-radius:7px; padding:9px 10px; font:inherit; font-size:13px; }
+  textarea{ resize:vertical; min-height:80px; }
+  input:focus, textarea:focus, select:focus{ outline:none; border-color:var(--accent2); }
+  .two{ display:grid; grid-template-columns:1fr 1fr; gap:0 14px; }
+  @media (max-width:560px){ .two{ grid-template-columns:1fr; } }
+  .btn{ font:inherit; font-weight:600; font-size:13px; border:1px solid var(--border); background:var(--panel2); color:var(--cream);
+        border-radius:8px; padding:10px 15px; cursor:pointer; }
+  .btn.primary{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .btn.small{ padding:6px 10px; font-size:12px; }
+  .btn.danger{ border-color:var(--danger); color:var(--danger); background:transparent; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+  .msg{ font-size:12.5px; border-radius:8px; padding:9px 11px; margin-top:10px; line-height:1.5; border:1px solid var(--border); }
+  .msg.ok{ border-color:var(--good); color:var(--good); } .msg.warn{ border-color:var(--gold); color:var(--gold); } .msg.err{ border-color:var(--danger); color:var(--danger); }
+  code{ font-family:"IBM Plex Mono",monospace; font-size:11.5px; }
+  .mine{ display:flex; gap:10px; align-items:center; justify-content:space-between; padding:9px 0; border-top:1px solid var(--border); font-size:13px; flex-wrap:wrap; }
+  .mine:first-of-type{ border-top:none; } .mine small{ color:var(--dim); display:block; }
+  footer{ text-align:center; color:var(--dim); font-size:12px; }
+</style>
+</head>
+<body>
+<div id="shell">
+  <header>
+    <h1 class="px">UPLOAD A PATCH</h1>
+    <p>Add an IPS language or fix patch to the <a href="/patches/">patch library</a>. Only the .ips goes online: never a ROM.</p>
+  </header>
+  <div id="denied" hidden></div>
+
+  <section class="panel" id="form-panel" hidden>
+    <h2>New patch</h2>
+    <p class="hint">Pick the game from the official list so the patch is filed with the others for that game. Can&rsquo;t find it? Ask the site admin to add it.</p>
+
+    <label class="f"><b>Game</b>
+      <input type="text" id="game" list="game-list" placeholder="Start typing a title…" autocomplete="off">
+      <datalist id="game-list"></datalist>
+      <span class="sub" id="game-note"></span>
+    </label>
+
+    <div class="two">
+      <label class="f"><b>Language</b>
+        <select id="lang"></select>
+        <input type="text" id="lang-other" placeholder="Language name" maxlength="40" hidden style="margin-top:8px">
+      </label>
+      <label class="f"><b>Patch version</b>
+        <input type="text" id="version" maxlength="30" placeholder="1.0">
+      </label>
+    </div>
+
+    <label class="f"><b>Author / credit</b>
+      <input type="text" id="author" maxlength="60" placeholder="Translator or team name">
+    </label>
+
+    <label class="f"><b>Description</b>
+      <textarea id="desc" maxlength="1500" placeholder="What the patch changes: full translation, partial, bug fixes…"></textarea>
+    </label>
+    <label class="f"><b>Notes <span style="color:var(--dim);font-weight:400">(optional)</span></b>
+      <textarea id="notes" maxlength="1500" placeholder="Which ROM region/revision it expects, known issues, credits, thanks…"></textarea>
+    </label>
+
+    <label class="f"><b>IPS patch file</b>
+      <input type="file" id="ips" accept=".ips">
+      <span class="sub" id="ips-note">The .ips file itself, up to 8 MB.</span>
+    </label>
+
+    <label class="f"><b>Base ROM (optional, recommended)</b>
+      <input type="file" id="base" accept=".ngp,.ngc,.bin">
+      <span class="sub">The clean ROM the patch was made for. It stays on your computer: the page reads its CRC32 so people can check they have the right dump, and tests that the patch applies.</span>
+    </label>
+    <label class="f"><b>Base ROM CRC32</b>
+      <input type="text" id="crc" maxlength="8" placeholder="filled in from the ROM above, or type it" style="text-transform:uppercase;font-family:'IBM Plex Mono',monospace">
+    </label>
+
+    <button class="btn primary" id="go" type="button">Upload patch</button>
+    <div id="msg"></div>
+  </section>
+
+  <section class="panel" id="mine-panel" hidden>
+    <h2>Your patches</h2>
+    <div id="mine"></div>
+  </section>
+
+  <footer><a href="/patches/">&larr; Patch library</a></footer>
+</div>
+
+<script src="/auth.js"></script>
+<script src="/patches/ips.js?v=1"></script>
+<script>
+(function(){
+  "use strict";
+  const el = (id)=>document.getElementById(id);
+  const A = window.NGPC_AUTH, IPS = window.NgpcIps;
+  const esc = (s)=>String(s == null ? '' : s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const LANGS = ['English','French','German','Spanish','Italian','Portuguese','Dutch','Swedish','Russian','Polish','Chinese (Simplified)','Chinese (Traditional)','Korean','Japanese','Other…'];
+  let games = [], byLabel = {}, user = null, ipsBytes = null;
+
+  const msg = (cls, html)=>{ el('msg').innerHTML = html ? '<div class="msg '+cls+'">'+html+'</div>' : ''; };
+  const readFile = (f)=>new Promise((ok,no)=>{ const r = new FileReader(); r.onload = ()=>ok(new Uint8Array(r.result)); r.onerror = ()=>no(new Error('could not read '+f.name)); r.readAsArrayBuffer(f); });
+  const label = (g)=>g.title + '  [' + [g.platform, g.year].filter(Boolean).join(' · ') + ']';
+  const slug = (s)=>String(s).normalize('NFKD').replace(/[^\x00-\x7F]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+
+  el('lang').innerHTML = LANGS.map(l=>'<option>'+esc(l)+'</option>').join('');
+  el('lang').addEventListener('change', ()=>{ el('lang-other').hidden = el('lang').value !== 'Other…'; });
+  const chosenGame = ()=>byLabel[el('game').value];
+  el('game').addEventListener('input', ()=>{
+    const g = chosenGame();
+    el('game-note').textContent = g ? 'Filed under ' + g.title + (g.jpTitle ? ' (' + g.jpTitle + ')' : '') + '.' : (el('game').value ? 'Pick one of the listed games.' : '');
+  });
+
+  el('ips').addEventListener('change', async ()=>{
+    ipsBytes = null; el('ips-note').textContent = 'The .ips file itself, up to 8 MB.';
+    const f = el('ips').files[0]; if(!f) return;
+    try{
+      const b = await readFile(f), info = IPS.parseIps(b);
+      if(b.length > 8*1024*1024) throw new Error('the file is over 8 MB');
+      ipsBytes = b; el('ips-note').textContent = 'Valid IPS patch: ' + info.records + ' changes, ' + Math.round(b.length/1024) + ' KB.';
+    }catch(e){ el('ips-note').textContent = 'Not usable: ' + e.message + '.'; el('ips').value = ''; }
+  });
+  el('base').addEventListener('change', async ()=>{
+    const f = el('base').files[0]; msg('','');
+    if(!f) return;
+    try{
+      const rom = await readFile(f); el('crc').value = IPS.crc32(rom);
+      if(ipsBytes){
+        const out = IPS.applyIps(rom, ipsBytes);
+        msg('ok','Patch test passed: applied to this ROM gives ' + Math.round(out.length/1024) + ' KB (CRC32 <code>' + IPS.crc32(out) + '</code>).');
+      }else msg('','Base ROM CRC32 filled in. Choose the patch file to test that it applies.');
+    }catch(e){ msg('err','Patch test failed: ' + esc(e.message) + '.'); }
+  });
+
+  async function upload(){
+    msg('','');
+    const g = chosenGame(); if(!g){ msg('err','Pick the game from the list.'); return; }
+    const language = el('lang').value === 'Other…' ? el('lang-other').value.trim() : el('lang').value;
+    const author = el('author').value.trim(), crc = el('crc').value.trim().toUpperCase();
+    if(!language){ msg('err','Enter the language.'); return; }
+    if(!author){ msg('err','Enter an author or credit.'); return; }
+    if(!ipsBytes){ msg('err','Choose a valid .ips patch file.'); return; }
+    if(crc && !/^[0-9A-F]{8}$/.test(crc)){ msg('err','The CRC32 must be 8 hex digits (or leave it empty).'); return; }
+    el('go').disabled = true; msg('','Uploading…');
+    try{
+      const ref = A.db.collection('patches').doc();
+      const version = el('version').value.trim().replace(/^v/i,'');
+      const fileName = (slug(g.title) + '-' + slug(language) + (version ? '-v' + slug(version) : '') + '.ips').slice(0,80);
+      const sref = firebase.storage().ref().child('patches/' + user.uid + '/' + ref.id + '.ips');
+      await sref.put(new Blob([ipsBytes], {type:'application/octet-stream'}));
+      const url = await sref.getDownloadURL();
+      await ref.set({ gameId:g.id, gameTitle:g.title, language:language, version:version, author:author,
+        description:el('desc').value.trim(), notes:el('notes').value.trim(), baseCrc32:crc, fileName:fileName,
+        filePath:'patches/' + user.uid + '/' + ref.id + '.ips', url:url, size:ipsBytes.length,
+        uid:user.uid, username:user.username, submittedAt:Date.now() });
+      msg('ok','Uploaded: it is now in the <a href="/patches/">patch library</a> under ' + esc(g.title) + '.');
+      ['version','desc','notes','crc'].forEach(k=>{ el(k).value = ''; }); el('ips').value = ''; el('base').value = ''; ipsBytes = null;
+      el('ips-note').textContent = 'The .ips file itself, up to 8 MB.';
+      loadMine();
+    }catch(e){ console.warn(e); msg('err','Upload failed: ' + esc(e.message || e)); }
+    el('go').disabled = false;
+  }
+  el('go').addEventListener('click', upload);
+
+  async function loadMine(){
+    try{
+      const s = await A.db.collection('patches').where('uid','==',user.uid).get();
+      const rows = s.docs.map(d=>Object.assign({id:d.id}, d.data())).sort((a,b)=>b.submittedAt - a.submittedAt);
+      el('mine-panel').hidden = !rows.length;
+      el('mine').innerHTML = rows.map(p=>'<div class="mine"><span>'+esc(p.gameTitle)+' &mdash; '+esc(p.language)+(p.version ? ' v'+esc(p.version) : '')+
+        '<small>'+new Date(p.submittedAt).toLocaleDateString()+'</small></span><button class="btn small danger" data-del="'+esc(p.id)+'">Delete</button></div>').join('');
+    }catch(e){ console.warn(e); }
+  }
+  el('mine').addEventListener('click', async (e)=>{
+    const b = e.target.closest('[data-del]'); if(!b) return;
+    if(!confirm('Delete this patch? Its download is removed from the library for everyone.')) return;
+    b.disabled = true;
+    try{
+      const id = b.dataset.del;
+      try{ await firebase.storage().ref().child('patches/' + user.uid + '/' + id + '.ips').delete(); }catch(x){ /* already gone */ }
+      await A.db.collection('patches').doc(id).delete();
+    }catch(x){ console.warn(x); }
+    loadMine();
+  });
+
+  async function boot(){
+    const denied = el('denied');
+    if(!A || !IPS){ denied.hidden = false; denied.textContent = 'This page isn’t available right now (a required library failed to load).'; return; }
+    await A.authReady; user = A.currentUser;
+    if(!user || !user.username){ denied.hidden = false; denied.innerHTML = 'Sign in to upload a patch.'; return; }
+    if(!(user.isDeveloper || A.isSiteAdmin(user))){ denied.hidden = false; denied.innerHTML = 'Patch uploads are open to approved developers. Ask the site admin to enable developer access on your account.'; return; }
+    try{
+      const s = await A.db.collection('officialGames').get();
+      games = s.docs.map(d=>Object.assign({id:d.id}, d.data())).sort((a,b)=>String(a.title).localeCompare(String(b.title)));
+    }catch(e){ denied.hidden = false; denied.textContent = 'Could not load the game list. Try again in a moment.'; return; }
+    games.forEach(g=>{ byLabel[label(g)] = g; });
+    el('game-list').innerHTML = games.map(g=>'<option value="'+esc(label(g))+'"></option>').join('');
+    el('author').value = user.username;
+    el('form-panel').hidden = false; loadMine();
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

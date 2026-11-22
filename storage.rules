@@ -52,6 +52,20 @@ service firebase.storage {
         && request.resource.size < 8 * 1024 * 1024;
     }
 
+    // Language/IPS patches (/patches/upload/): patches/{uid}/{fileName}.ips, public to download. Only an account the
+    // admin marked users/{uid}.isDeveloper can add one, and only into its own uid folder; the owner or the admin
+    // can replace/remove it. 8 MB covers any IPS (the format tops out at 16 MB, a 4 MB cart's patch is far smaller).
+    match /patches/{uid}/{fileName} {
+      allow read: if true;
+      allow create, update: if request.auth != null && request.auth.uid == uid
+        && fileName.matches('.*[.][iI][pP][sS]$')
+        && request.resource.size <= 8 * 1024 * 1024
+        && (request.auth.uid == 'L44BFbmiNkhi2vvLdrPUIxkvmfs2'
+            || firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.get('isDeveloper', false) == true);
+      allow delete: if request.auth != null
+        && (request.auth.uid == uid || request.auth.uid == 'L44BFbmiNkhi2vvLdrPUIxkvmfs2');
+    }
+
     // Default-deny for every other path.
     match /{allPaths=**} {
       allow read, write: if false;
