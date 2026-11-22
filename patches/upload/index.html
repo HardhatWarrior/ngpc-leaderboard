@@ -66,7 +66,7 @@
   <div id="denied" hidden></div>
 
   <section class="panel" id="form-panel" hidden>
-    <h2>New patch</h2>
+    <h2 id="form-title">New patch</h2>
     <p class="hint">Pick the game from the official list so the patch is filed with the others for that game. Can&rsquo;t find it? Ask the site admin to add it.</p>
 
     <label class="f"><b>Game</b>
@@ -110,6 +110,7 @@
     </label>
 
     <button class="btn primary" id="go" type="button">Upload patch</button>
+    <button class="btn" id="cancel-edit" type="button" hidden>Cancel</button>
     <div id="msg"></div>
   </section>
 
@@ -166,6 +167,31 @@
     }catch(e){ msg('err','Patch test failed: ' + esc(e.message) + '.'); }
   });
 
+  let editing = null, mineRows = [];   // editing = the patch doc being updated (null = new upload)
+  const IPS_NOTE = 'The .ips file itself, up to 8 MB.';
+  function resetForm(){
+    editing = null;
+    ['game','version','desc','notes','crc','lang-other'].forEach(k=>{ el(k).value = ''; });
+    el('lang').selectedIndex = 0; el('lang-other').hidden = true; el('game-note').textContent = '';
+    el('author').value = user.username; el('ips').value = ''; el('base').value = ''; ipsBytes = null;
+    el('ips-note').textContent = IPS_NOTE;
+    el('form-title').textContent = 'New patch'; el('go').textContent = 'Upload patch'; el('cancel-edit').hidden = true;
+  }
+  function startEdit(p){
+    resetForm(); editing = p;
+    const g = games.find(x=>x.id === p.gameId); el('game').value = g ? label(g) : '';
+    if(g) el('game').dispatchEvent(new Event('input'));
+    if(LANGS.indexOf(p.language) >= 0 && p.language !== 'Other…') el('lang').value = p.language;
+    else{ el('lang').value = 'Other…'; el('lang-other').hidden = false; el('lang-other').value = p.language; }
+    el('version').value = p.version || ''; el('author').value = p.author || ''; el('desc').value = p.description || '';
+    el('notes').value = p.notes || ''; el('crc').value = p.baseCrc32 || '';
+    el('ips-note').textContent = 'Leave empty to keep the current file (' + Math.round(p.size/1024) + ' KB), or choose a new .ips to replace it.';
+    el('form-title').textContent = 'Update patch'; el('go').textContent = 'Save changes'; el('cancel-edit').hidden = false;
+    msg('','Editing ' + esc(p.gameTitle) + ' — ' + esc(p.language) + '. Saving moves it to the top of the library as freshly updated.');
+    el('form-panel').scrollIntoView({behavior:'smooth', block:'start'});
+  }
+  el('cancel-edit').addEventListener('click', ()=>{ resetForm(); msg('',''); });
+
   async function upload(){
     msg('','');
     const g = chosenGame(); if(!g){ msg('err','Pick the game from the list.'); return; }
@@ -173,25 +199,28 @@
     const author = el('author').value.trim(), crc = el('crc').value.trim().toUpperCase();
     if(!language){ msg('err','Enter the language.'); return; }
     if(!author){ msg('err','Enter an author or credit.'); return; }
-    if(!ipsBytes){ msg('err','Choose a valid .ips patch file.'); return; }
+    if(!ipsBytes && !editing){ msg('err','Choose a valid .ips patch file.'); return; }
     if(crc && !/^[0-9A-F]{8}$/.test(crc)){ msg('err','The CRC32 must be 8 hex digits (or leave it empty).'); return; }
-    el('go').disabled = true; msg('','Uploading…');
+    el('go').disabled = true; msg('', editing ? 'Saving…' : 'Uploading…');
     try{
-      const ref = A.db.collection('patches').doc();
+      const ref = editing ? A.db.collection('patches').doc(editing.id) : A.db.collection('patches').doc();
       const version = el('version').value.trim().replace(/^v/i,'');
       const fileName = (slug(g.title) + '-' + slug(language) + (version ? '-v' + slug(version) : '') + '.ips').slice(0,80);
-      const sref = firebase.storage().ref().child('patches/' + user.uid + '/' + ref.id + '.ips');
-      await sref.put(new Blob([ipsBytes], {type:'application/octet-stream'}));
-      const url = await sref.getDownloadURL();
+      const filePath = 'patches/' + user.uid + '/' + ref.id + '.ips';
+      let url = editing ? editing.url : '', size = editing ? editing.size : 0;
+      if(ipsBytes){
+        const sref = firebase.storage().ref().child(filePath);
+        await sref.put(new Blob([ipsBytes], {type:'application/octet-stream'}));
+        url = await sref.getDownloadURL(); size = ipsBytes.length;
+      }
       await ref.set({ gameId:g.id, gameTitle:g.title, language:language, version:version, author:author,
         description:el('desc').value.trim(), notes:el('notes').value.trim(), baseCrc32:crc, fileName:fileName,
-        filePath:'patches/' + user.uid + '/' + ref.id + '.ips', url:url, size:ipsBytes.length,
+        filePath:filePath, url:url, size:size,
         uid:user.uid, username:user.username, submittedAt:Date.now() });
-      msg('ok','Uploaded: it is now in the <a href="/patches/">patch library</a> under ' + esc(g.title) + '.');
-      ['version','desc','notes','crc'].forEach(k=>{ el(k).value = ''; }); el('ips').value = ''; el('base').value = ''; ipsBytes = null;
-      el('ips-note').textContent = 'The .ips file itself, up to 8 MB.';
+      msg('ok', (editing ? 'Updated: ' : 'Uploaded: ') + 'it is in the <a href="/patches/">patch library</a> under ' + esc(g.title) + '.');
+      const keep = editing; resetForm(); if(keep) msg('ok','Updated: the changes are live in the <a href="/patches/">patch library</a> under ' + esc(g.title) + '.');
       loadMine();
-    }catch(e){ console.warn(e); msg('err','Upload failed: ' + esc(e.message || e)); }
+    }catch(e){ console.warn(e); msg('err',(editing ? 'Update' : 'Upload') + ' failed: ' + esc(e.message || e)); }
     el('go').disabled = false;
   }
   el('go').addEventListener('click', upload);
@@ -200,12 +229,16 @@
     try{
       const s = await A.db.collection('patches').where('uid','==',user.uid).get();
       const rows = s.docs.map(d=>Object.assign({id:d.id}, d.data())).sort((a,b)=>b.submittedAt - a.submittedAt);
+      mineRows = rows;
       el('mine-panel').hidden = !rows.length;
       el('mine').innerHTML = rows.map(p=>'<div class="mine"><span>'+esc(p.gameTitle)+' &mdash; '+esc(p.language)+(p.version ? ' v'+esc(p.version) : '')+
-        '<small>'+new Date(p.submittedAt).toLocaleDateString()+'</small></span><button class="btn small danger" data-del="'+esc(p.id)+'">Delete</button></div>').join('');
+        '<small>'+new Date(p.submittedAt).toLocaleDateString()+'</small></span><span><button class="btn small" data-edit="'+esc(p.id)+'">Update</button> '+
+        '<button class="btn small danger" data-del="'+esc(p.id)+'">Delete</button></span></div>').join('');
     }catch(e){ console.warn(e); }
   }
   el('mine').addEventListener('click', async (e)=>{
+    const eb = e.target.closest('[data-edit]');
+    if(eb){ const p = mineRows.find(x=>x.id === eb.dataset.edit); if(p) startEdit(p); return; }
     const b = e.target.closest('[data-del]'); if(!b) return;
     if(!confirm('Delete this patch? Its download is removed from the library for everyone.')) return;
     b.disabled = true;
