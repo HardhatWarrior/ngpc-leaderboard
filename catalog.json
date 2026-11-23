@@ -1,5 +1,5 @@
 {
-  "rev": 8,
+  "rev": 9,
   "games": [
     {
       "slug": "2k",
@@ -108,7 +108,7 @@
       "slug": "sd",
       "name": "Sudoku",
       "author": "HARDHATWARRIOR",
-      "version": "1.0",
+      "version": "1.1",
       "rom_rev": 1,
       "rom_size": 2097152,
       "rom_sha256": "c1563ed8608fc4f5e35e129a0c2f208ef02ae616d3e83818fbc4b83233dc7568",
@@ -164,7 +164,7 @@
       "description": "Drop. Stack. Clear. Repeat.",
       "save_compatible_since": 1,
       "store_allowed": true,
-      "downloads": 67,
+      "downloads": 68,
       "added": "2026-09-17"
     },
     {
