@@ -48,6 +48,18 @@
     <div id="status"></div>
     <a id="dl" href="#">Download patched ROM</a>
   </div>
+  <div class="panel">
+    <b>Updating? Keep your save</b> <span class="mono">(optional)</span>
+    <ol>
+      <li>Before flashing the new version, read the whole cart back to a file with your flasher's software (backup / dump / read cart). Your save (progress and records) lives inside that file.</li>
+      <li>Choose that readback here, then choose your clean dump above (or choose it again).</li>
+      <li>The download then carries your save into the new version. Flash it and your scores are still there.</li>
+    </ol>
+    <label class="drop" id="sdrop">Tap to choose your cart readback, or drop it here
+      <input type="file" id="sfile" accept=".ngc,.ngp,.bin,application/octet-stream">
+    </label>
+    <div id="sstatus" style="margin-top:10px;font-size:14px"></div>
+  </div>
   <p class="mono">Prefer your own tools? <a href="/sn/sonic_lb.ips" download>Download the .ips</a> and apply it with any IPS patcher (Floating IPS, RomPatcher.js).<br><a href="/sn/">&larr; Back to the leaderboard</a></p>
 </main>
 <script>
@@ -104,6 +116,7 @@
     const out = crc32(rom);
     if(out !== V.crc){ say('Patched ROM failed verification (CRC32 ' + hex(out) + '). The patch on the server may be newer than this page; reload and try again.', 'bad'); return; }
     let name = V.name, carried = '';
+    if(saveBlk){ SAVE_DST.forEach(o=>rom.set(saveBlk, o)); name = name.replace(/\.ngc$/, ' (with save).ngc'); carried = ' Your save from ' + saveName + ' is carried over.'; }
     if(dl.href.startsWith('blob:')) URL.revokeObjectURL(dl.href);
     dl.href = URL.createObjectURL(new Blob([rom], {type:'application/octet-stream'}));
     dl.download = name;
@@ -111,6 +124,29 @@
     dl.style.display = 'block';
     say('Verified and patched (CRC32 ' + hex(out) + ').' + carried, 'ok');
   }
+
+  // save carry: the game keeps two save copies in flash blocks 32/33 (0x1F8000 and 0x1FA000, 8 KB each); both are carried.
+  const SAVE_SRC = [0x1F8000, 0x1FC000], SAVE_DST = [0x1F8000], SAVE_MIN = 0x200000, SAVE_TITLE = 'SONIC POCKET', SAVE_FACTORY = 0x5F131D17;
+  let saveBlk = null, saveName = '';
+  const sst = document.getElementById('sstatus');
+  async function handleSave(file){
+    saveBlk = null; saveName = ''; sst.className = ''; sst.textContent = '';
+    if(!file) return;
+    const b = new Uint8Array(await file.arrayBuffer());
+    const title = String.fromCharCode(...b.slice(0x24, 0x24 + SAVE_TITLE.length));
+    if(b.length < SAVE_MIN || title !== SAVE_TITLE){ sst.className = 'bad'; sst.textContent = file.name + ' is not a full Sonic Pocket Adventure cart readback.'; if(lastFile) handle(lastFile); return; }
+    const blk = b.slice(SAVE_SRC[0], SAVE_SRC[1]);
+    if(blk.every(x => x === 0xFF)){ sst.className = 'bad'; sst.textContent = file.name + ' holds no Sonic Pocket Adventure save.'; if(lastFile) handle(lastFile); return; }
+    if(crc32(blk) === SAVE_FACTORY){ sst.className = 'ok'; sst.textContent = file.name + ' only has the factory save (nothing recorded yet), so there is nothing to carry over.'; if(lastFile) handle(lastFile); return; }
+    saveBlk = blk; saveName = file.name;
+    sst.className = 'ok'; sst.textContent = 'Save found in ' + file.name + '. It goes into the next ROM you patch above.';
+    if(lastFile) handle(lastFile);
+  }
+  const sinp = document.getElementById('sfile'), sdrop = document.getElementById('sdrop');
+  sinp.addEventListener('change', ()=>handleSave(sinp.files[0]));
+  ['dragenter','dragover'].forEach(e=>sdrop.addEventListener(e, ev=>{ ev.preventDefault(); sdrop.classList.add('over'); }));
+  ['dragleave','drop'].forEach(e=>sdrop.addEventListener(e, ev=>{ ev.preventDefault(); sdrop.classList.remove('over'); }));
+  sdrop.addEventListener('drop', ev=>handleSave(ev.dataTransfer.files[0]));
 
   const inp = document.getElementById('file'), drop = document.getElementById('drop');
   inp.addEventListener('change', ()=>{ lastFile = inp.files[0]; handle(lastFile); });

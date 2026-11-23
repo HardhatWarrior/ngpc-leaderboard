@@ -39,6 +39,7 @@
   .play-link:hover{ color:var(--cream); }
   .play-link[hidden]{ display:none; }
   .rom-link{ color:var(--dim); font-size:11px; }
+  .patch-note{ font-size:11px; color:var(--dim); max-width:260px; }
   .rom-link:hover{ color:var(--accent2); }
   /* Only ever shown to the site admin or this game's own assigned developer -- see
      NGPC_AUTH.isGameManager(). Quick jump to this game's admin panel from its own public page. */
@@ -137,7 +138,7 @@
   </div>
   <div id="page-content" hidden>
   <header>
-    <span class="eyebrow">Neo Geo Pocket Color &middot; Retail leaderboard patch</span>
+    <span class="eyebrow">Neo Geo Pocket Color &middot; Retail cartridge + leaderboard patch</span>
     <div class="header-row">
       <div class="art-col">
       <div class="art-strip">
@@ -151,8 +152,9 @@
       <div class="title-block">
         <h1>Sonic the Hedgehog Pocket Adventure</h1>
         <div class="game-version" id="game-version" hidden></div>
-        <div class="created-by">Final score &middot; needs your own cartridge dump + the patch</div>
-        <a href="/sn/patch/" class="rom-link" id="patch-link">&#129513; Get the leaderboard patch (.ips)</a>
+        <div class="created-by">&copy; Sega 1999 &middot; Leaderboard patch by <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
+        <a href="/sn/patch/" class="rom-link" id="patch-link">&#128190; Patch your ROM (in browser)</a>
+        <div class="patch-note">Uses your own Sonic the Hedgehog Pocket Adventure (World) cartridge dump; nothing is uploaded. No ROM is provided.</div>
         <a href="/admin/game/?slug=sn" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
     </div>
