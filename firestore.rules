@@ -335,7 +335,8 @@ service cloud.firestore {
           && isRetailLbBase(d, 999999999);
       }
       function isSonicPocketScore(d) {
-        return d.keys().hasOnly(['game', 'initials', 'score', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+        return d.keys().hasOnly(['game', 'initials', 'score', 'stage', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && (!('stage' in d) || (d.stage is int && d.stage >= 0 && d.stage <= 13))
           && isRetailLbBase(d, 999999999);
       }
       // Pac-Man (PM, retail patch): score 8 BCD digits from the cart, level 1-based (2 base 36).

@@ -237,17 +237,29 @@
     return ALNUM[Math.floor(s/36)] + ALNUM[s%36];
   }
 
+  // Stage index (0x67D2 on the cart, 0-13) -> the game's own title-card names.
+  const SN_STAGES = ['Neo South Island 1','Neo South Island 2','Secret Plant 1','Secret Plant 2','Cosmic Casino 1','Cosmic Casino 2',
+    'Aquatic Relix 1','Aquatic Relix 2','Sky Chase','Aerobase','Gigantic Angel 1','Gigantic Angel 2','Last Utopia','Chaotic Space'];
+  function stageName(i){ return (i != null && SN_STAGES[i]) ? SN_STAGES[i] : ''; }
+
+  // SN1 (17 chars): initials + score. SN2 (19 chars, patch build 2+): + the stage reached (2 digits, 00-13).
   function parseSonicPocketAdventurePayload(text){
-    if(text.length < 17) return {error:"That code is too short — rescan with the whole code in frame."};
-    if(text.length > 17) return {error:"That code is too long to be a score — rescan just the one code."};
-    if(text.slice(2,3) !== '1') return {error:"That code is from a different version of the patch."};
+    const v = text.slice(2,3);
+    if(v !== '1' && v !== '2') return {error:"That code is from a different version of the patch."};
+    const len = v === '2' ? 19 : 17;
+    if(text.length < len) return {error:"That code is too short — rescan with the whole code in frame."};
+    if(text.length > len) return {error:"That code is too long to be a score — rescan just the one code."};
     const initials = text.slice(3,6);
     if(!/^[0-9A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
     if(!/^\d{9}$/.test(text.slice(6,15))) return {error:"That code has an unreadable score."};
-    if(text.slice(15) !== lbCheck(text.slice(0,15))) return {error:"That code didn't scan cleanly (check mismatch) — rescan it."};
+    if(text.slice(len-2) !== lbCheck(text.slice(0,len-2))) return {error:"That code didn't scan cleanly (check mismatch) — rescan it."};
     const score = parseInt(text.slice(6,15),10);
     if(score < 1) return {error:"That code doesn't look like a finished game."};
-    return { game:QR_GAME_CODE, initials, score };
+    if(v === '1') return { game:QR_GAME_CODE, initials, score };
+    if(!/^\d{2}$/.test(text.slice(15,17))) return {error:"That code's stage didn't look right."};
+    const stage = parseInt(text.slice(15,17),10);
+    if(stage > 13) return {error:"That code's stage didn't look right."};
+    return { game:QR_GAME_CODE, initials, score, stage };
   }
 
   function parsePayload(text){
@@ -276,7 +288,8 @@
   function formatDisplayValue(o){ return String(o.score); }
 
   function renderScorecardHTML(data){
-    const rows = '<tr><td>Final score</td><td class="tk-val tnum">'+data.score+'</td></tr>';
+    const rows = '<tr><td>Final score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
+      (data.stage != null ? '<tr><td>Reached</td><td class="tk-val">'+escapeHtml(stageName(data.stage))+'</td></tr>' : '');
     return '<table class="tk-sheet">'+rows+'</table>';
   }
 
@@ -288,7 +301,7 @@
       const data = d.data();
       const rank = i+1;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
-      const meta = [fmtWhen(data.submittedAt), usernameLine].filter(Boolean).join(' · ');
+      const meta = [stageName(data.stage) ? escapeHtml(stageName(data.stage)) : '', fmtWhen(data.submittedAt), usernameLine].filter(Boolean).join(' · ');
       const hasAvatar = data.uid && avatars[data.uid];
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
       const rowHtml = '<div class="row'+(rank===1?' top1':'')+' has-detail" data-detail="d'+i+'">'+

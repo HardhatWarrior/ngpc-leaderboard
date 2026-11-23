@@ -40,7 +40,7 @@
       <li>Download the patched ROM, play. At GAME OVER, enter your initials and the QR appears. Scan it on the leaderboard page.</li>
     </ol>
     <div class="variant">
-      <div><b>What you get</b>: the leaderboard QR with your final score at every game over. Same 2 MB size as the original.</div>
+      <div><b>What you get</b>: the leaderboard QR at every game over: your final score and the stage you reached. Same 2 MB size as the original.</div>
     </div>
     <label class="drop" id="drop">Tap to choose your ROM, or drop it here
       <input type="file" id="file" accept=".ngc,.ngp,.bin,.zip,application/octet-stream">
@@ -55,9 +55,9 @@
   const SRC_SIZE = 2097152, SRC_CRC = 0x356F0849;
   // one patch; OLD_PATCHED = earlier builds of it, recognised as already patched
   const VARIANTS = {
-    lb: {ips:'/sn/sonic_lb.ips', size:2097152, crc:0xEF112D40, name:'Sonic the Hedgehog Pocket Adventure (Leaderboard).ngc'}
+    lb: {ips:'/sn/sonic_lb.ips', size:2097152, crc:0x3630DECF, name:'Sonic the Hedgehog Pocket Adventure (Leaderboard).ngc'}
   };
-  const OLD_PATCHED = [];
+  const OLD_PATCHED = [0xEF112D40];
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');
