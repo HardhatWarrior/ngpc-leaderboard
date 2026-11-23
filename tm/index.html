@@ -66,6 +66,22 @@
   details.collapse > summary h2{ margin:0; }
   .panel h3.sub-h{ margin:18px 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
   #mystats-stats[hidden] + h3.sub-h{ margin-top:4px; }
+  /* badges block (markup comes from /achievements/badges.js) */
+  #mybadges{ --gold:#e8c547; }
+  #mybadges .g-title{ display:none; }
+  #mybadges .g-head{ display:flex; align-items:center; gap:16px; margin:6px 0 10px; }
+  #mybadges .g-pct{ font-size:clamp(20px,7vw,28px); color:var(--gold); flex:none; }
+  #mybadges .g-sum{ flex:1; min-width:0; font-size:12.5px; }
+  #mybadges .bar{ height:10px; border-radius:5px; background:var(--navy); border:1px solid var(--border); overflow:hidden; margin:6px 0 4px; }
+  #mybadges .bar > i{ display:block; height:100%; background:var(--gold); }
+  #mybadges .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; }
+  #mybadges .badge{ background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:8px 9px; min-width:0; opacity:.5; }
+  #mybadges .badge b{ display:block; font-size:11.5px; color:var(--dim); overflow-wrap:anywhere; }
+  #mybadges .badge small{ display:block; font-size:10.5px; color:var(--dim); margin-top:2px; overflow-wrap:anywhere; }
+  #mybadges .badge.on{ opacity:1; border-color:var(--gold); background:rgba(232,197,71,.08); }
+  #mybadges .badge.on b{ color:var(--gold); } #mybadges .badge.on b::before{ content:"\2605  "; }
+  #mybadges .badge.on.big{ background:rgba(232,197,71,.2); }
+  #mybadges .fine{ font-size:11px; color:var(--dim); line-height:1.5; margin:12px 0 0; }
   details.collapse > summary::after{ content:''; width:0; height:0; border-left:6px solid var(--accent2); border-top:5px solid transparent; border-bottom:5px solid transparent; transition:transform .15s; }
   details.collapse[open] > summary::after{ transform:rotate(90deg); }
   details.collapse[open] > summary{ margin-bottom:6px; }
@@ -256,6 +272,10 @@
       <div id="mystats-card"></div>
       <p class="hint" id="mystats-when"></p>
       </div>
+      <div id="mybadges-wrap" hidden>
+        <h3 class="sub-h">My badges <a href="/achievements/?g=tm" style="font-weight:400;text-transform:none;letter-spacing:0;font-size:11.5px;margin-left:6px">All my badges &rarr;</a></h3>
+        <div id="mybadges"></div>
+      </div>
       <h3 class="sub-h" id="my-replays">My hole replays</h3>
       <p class="hint">Every hole you open from a replay QR while signed in is kept here automatically. Make real-game videos of up to 5 of them (making a 6th asks which to overwrite), download them, and share up to 2 to the public gallery below. <a href="/tm/holes/" style="color:var(--accent)">All my holes &rarr;</a></p>
       <div id="myreplays-box"></div>
@@ -295,6 +315,7 @@
 </div>
 
 <script src="/auth.js"></script>
+<script src="/achievements/badges.js?v=5"></script>
 <script src="/tm/replay/replays.js"></script>
 <script src="/tm/replay/replays-ui.js"></script>
 <script>
@@ -486,9 +507,21 @@
     el('btn-stats-save').disabled = false;
     showStage('stats');
   }
+  async function loadMyBadges(user, d0){
+    const wrap = el('mybadges-wrap'); wrap.hidden = true;
+    try{
+      const B = window.NGPC_BADGES, p = B && B.PROVIDERS.find(x=>x.key === 'tm');
+      if(!user || !d0 || !p) return;
+      const snap = await d0.collection('scores').where('uid','==',user.uid).where('approved','==',true).get();
+      const r = await p.load({ uid:user.uid, username:user.username, self:true, viewer:user, scores:snap.docs.map(d=>d.data()) });
+      if(!r) return;
+      el('mybadges').innerHTML = r.html; wrap.hidden = false;
+    }catch(e){ console.warn('badges', e); }
+  }
   async function loadMyStats(user){
     const panel = el('mystats-stats');
     el('mystats-panel').hidden = !user;
+    loadMyBadges(user, db || (window.NGPC_AUTH && NGPC_AUTH.db));
     const d0 = db || (window.NGPC_AUTH && NGPC_AUTH.db);
     if(!user || !d0){ panel.hidden = true; return; }
     try{
