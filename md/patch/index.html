@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Magical Drop Pocket Patcher</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#0d1424; --panel:#16203a; --border:#2a3858; --cream:#f3ead7; --dim:#8d97b0; --ok:#6fcf7f; --bad:#e8776b; --accent:#e8c547; }
+  *{ box-sizing:border-box; }
+  body{ margin:0; background:var(--bg); color:var(--cream); font-family:"IBM Plex Sans",sans-serif; }
+  main{ max-width:560px; margin:0 auto; padding:24px 16px 48px; }
+  h1{ font-family:"Press Start 2P",monospace; font-size:15px; line-height:1.6; color:var(--accent); margin:0 0 6px; }
+  a{ color:var(--accent); }
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:10px; padding:18px; margin-top:16px; }
+  ol{ padding-left:20px; color:var(--dim); font-size:14px; line-height:1.6; }
+  .drop{ display:block; border:2px dashed var(--border); border-radius:10px; padding:28px 12px; text-align:center; cursor:pointer; color:var(--dim); }
+  .drop.over{ border-color:var(--accent); color:var(--cream); }
+  input[type=file]{ display:none; }
+  #status{ margin-top:14px; font-size:14px; min-height:1.4em; }
+  .ok{ color:var(--ok); } .bad{ color:var(--bad); }
+  .mono{ font-family:"IBM Plex Mono",monospace; font-size:12px; color:var(--dim); }
+  .variant{ display:grid; gap:8px; margin:6px 0 14px; font-size:14px; }
+  .variant label{ cursor:pointer; }
+  #dl{ display:none; margin-top:14px; background:var(--accent); color:#1a1a1a; font-weight:600; text-decoration:none; padding:11px 16px; border-radius:8px; text-align:center; }
+</style>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+</head>
+<body>
+<main>
+  <h1>MAGICAL DROP POCKET<br>LEADERBOARD PATCHER</h1>
+  <div class="mono">Your ROM is patched inside this browser. Nothing is uploaded.</div>
+  <div class="panel">
+    <ol>
+      <li>Dump your own <b>Magical Drop Pocket (USA, Europe)</b> cartridge to a <span class="mono">.ngc</span> / <span class="mono">.ngp</span> file.</li>
+      <li>Choose it below. It is checked against the known-good dump.</li>
+      <li>Download the patched ROM, play SELF CHALLENGE. At game over, enter your initials and the QR appears. Scan it on the leaderboard page.</li>
+    </ol>
+    <div class="variant">
+      <div><b>What you get</b>: the leaderboard QR after every SELF CHALLENGE game (score, max chain and level), before the skill-level screen. Same 1 MB size as the original.</div>
+    </div>
+    <label class="drop" id="drop">Tap to choose your ROM, or drop it here
+      <input type="file" id="file" accept=".ngc,.ngp,.bin,.zip,application/octet-stream">
+    </label>
+    <div id="status"></div>
+    <a id="dl" href="#">Download patched ROM</a>
+  </div>
+  <p class="mono">Prefer your own tools? <a href="/md/magicaldrop_lb.ips" download>Download the .ips</a> and apply it with any IPS patcher (Floating IPS, RomPatcher.js).<br><a href="/md/">&larr; Back to the leaderboard</a></p>
+</main>
+<script>
+(function(){
+  const SRC_SIZE = 1048576, SRC_CRC = 0x72184DE7;
+  // one patch; OLD_PATCHED = earlier builds of it, recognised as already patched
+  const VARIANTS = {
+    lb: {ips:'/md/magicaldrop_lb.ips', size:1048576, crc:0xEEAC4F65, name:'Magical Drop Pocket (Leaderboard).ngc'}
+  };
+  const OLD_PATCHED = [0xE24E4E40];
+  const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
+  let lastFile = null;
+  const st = document.getElementById('status'), dl = document.getElementById('dl');
+  const T = new Uint32Array(256);
+  for(let n=0;n<256;n++){ let c=n; for(let k=0;k<8;k++) c = c&1 ? 0xEDB88320^(c>>>1) : c>>>1; T[n]=c>>>0; }
+  function crc32(b){ let c=0xFFFFFFFF; for(let i=0;i<b.length;i++) c = T[(c^b[i])&255]^(c>>>8); return (c^0xFFFFFFFF)>>>0; }
+  const hex = n => n.toString(16).toUpperCase().padStart(8,'0');
+  function say(msg, cls){ st.className = cls||''; st.textContent = msg; }
+
+  function applyIps(rom, ips){
+    const hdr = String.fromCharCode(...ips.slice(0,5));
+    if(hdr !== 'PATCH') throw new Error('bad patch file');
+    let p = 5;
+    for(;;){
+      const off = (ips[p]<<16)|(ips[p+1]<<8)|ips[p+2];
+      if(off === 0x454F46) break;
+      p += 3;
+      let len = (ips[p]<<8)|ips[p+1]; p += 2;
+      if(len){ rom.set(ips.subarray(p, p+len), off); p += len; }
+      else { const rl = (ips[p]<<8)|ips[p+1], v = ips[p+2]; p += 3; rom.fill(v, off, off+rl); }
+    }
+    return rom;
+  }
+
+  async function handle(file){
+    dl.style.display = 'none';
+    if(!file) return;
+    say('Checking ' + file.name + '…');
+    let rom = new Uint8Array(await file.arrayBuffer());
+    const crc = crc32(rom);
+    const V = VARIANTS.lb;
+    if(crc === V.crc){ say('That ROM already has the latest leaderboard patch.', 'ok'); return; }
+    if(OLD_PATCHED.includes(crc)){ say('That ROM has an older leaderboard patch. Choose your clean dump to get the latest version.', 'bad'); return; }
+    if(rom.length !== SRC_SIZE || crc !== SRC_CRC){
+      say('Not a clean Magical Drop Pocket (USA, Europe) dump (size ' + rom.length + ', CRC32 ' + hex(crc) + '; expected ' + SRC_SIZE + ' / ' + hex(SRC_CRC) + '). Unzip it first, and make sure it is unmodified.', 'bad');
+      return;
+    }
+    try{
+      if(V.size > rom.length){ const big = new Uint8Array(V.size).fill(0xFF); big.set(rom); rom = big; }
+      const r = await fetch(V.ips, {cache:'no-cache'});
+      if(!r.ok) throw new Error('could not download the patch (' + r.status + ')');
+      rom = applyIps(rom, new Uint8Array(await r.arrayBuffer()));
+    }catch(e){ say('Patch failed: ' + e.message, 'bad'); return; }
+    const out = crc32(rom);
+    if(out !== V.crc){ say('Patched ROM failed verification (CRC32 ' + hex(out) + '). The patch on the server may be newer than this page; reload and try again.', 'bad'); return; }
+    let name = V.name, carried = '';
+    if(dl.href.startsWith('blob:')) URL.revokeObjectURL(dl.href);
+    dl.href = URL.createObjectURL(new Blob([rom], {type:'application/octet-stream'}));
+    dl.download = name;
+    dl.dataset.counter = 'patchApplied';
+    dl.style.display = 'block';
+    say('Verified and patched (CRC32 ' + hex(out) + ').' + carried, 'ok');
+  }
+
+  const inp = document.getElementById('file'), drop = document.getElementById('drop');
+  inp.addEventListener('change', ()=>{ lastFile = inp.files[0]; handle(lastFile); });
+  ['dragenter','dragover'].forEach(e=>drop.addEventListener(e, ev=>{ ev.preventDefault(); drop.classList.add('over'); }));
+  ['dragleave','drop'].forEach(e=>drop.addEventListener(e, ev=>{ ev.preventDefault(); drop.classList.remove('over'); }));
+  drop.addEventListener('drop', ev=>{ lastFile = ev.dataTransfer.files[0]; handle(lastFile); });
+  // download counts (games/md: patchApplied / ipsDownloads; shown on admin/game)
+  function count(field){ try{ if(window.NGPC_AUTH && NGPC_AUTH.trackGameCounter) NGPC_AUTH.trackGameCounter('md', field); }catch(e){} }
+  dl.addEventListener('click', ()=>{ if(dl.dataset.counter) count(dl.dataset.counter); });
+  document.querySelectorAll('a[href$=".ips"]').forEach(a=>a.addEventListener('click', ()=>count('ipsDownloads')));
+})();
+</script>
+<script src="/auth.js"></script>
+</body>
+</html>
