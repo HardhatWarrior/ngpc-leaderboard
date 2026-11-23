@@ -356,6 +356,22 @@
   .who-stats:focus-visible{ outline:2px solid var(--accent2); outline-offset:2px; }
   /* ---------- achievements (bw/bw-shared.js): the 300 Club and tournament titles ---------- */
   .ach-block{ margin:-4px 0 18px; }
+  /* badges block (markup comes from /achievements/badges.js) */
+  #mybadges .g-title{ display:none; }
+  #mybadges .g-head{ display:flex; align-items:center; gap:16px; margin:8px 0 10px; }
+  #mybadges .g-pct{ font-size:clamp(20px,7vw,28px); color:var(--gold); flex:none; }
+  #mybadges .g-sum{ flex:1; min-width:0; font-size:12.5px; }
+  #mybadges .bar{ height:10px; border-radius:5px; background:var(--navy); border:1px solid var(--border); overflow:hidden; margin:6px 0 4px; }
+  #mybadges .bar > i{ display:block; height:100%; background:var(--gold); }
+  #mybadges .grp{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin:14px 0 6px; }
+  #mybadges .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; }
+  #mybadges .badge{ background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:8px 9px; min-width:0; opacity:.5; }
+  #mybadges .badge b{ display:block; font-size:11.5px; color:var(--dim); overflow-wrap:anywhere; }
+  #mybadges .badge small{ display:block; font-size:10.5px; color:var(--dim); margin-top:2px; overflow-wrap:anywhere; }
+  #mybadges .badge.on{ opacity:1; border-color:var(--gold); background:rgba(242,193,78,.08); }
+  #mybadges .badge.on b{ color:var(--gold); } #mybadges .badge.on b::before{ content:"\2605  "; }
+  #mybadges .badge.on.big{ background:rgba(242,193,78,.2); }
+  #mybadges .fine, #mybadges .empty{ font-size:11px; color:var(--dim); line-height:1.5; margin:12px 0 0; }
   .ach-row{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
   .ach{ display:inline-flex; align-items:center; gap:6px; font-family:"Press Start 2P",monospace; font-size:9px; letter-spacing:.06em;
     line-height:1; padding:7px 10px; border-radius:999px; background:var(--gold); color:var(--gold-ink); }
@@ -630,6 +646,7 @@
           <div class="stat-tile"><div class="stat-label">Scores submitted</div><div class="stat-val tnum" id="st-subs">0</div><div class="stat-sub" id="st-subs-sub"></div></div>
         </div>
         <div class="ach-block" id="st-ach" hidden><div class="stat-label">Achievements</div><div id="st-ach-body"></div></div>
+        <div class="ach-block" id="mybadges-wrap" hidden><div class="stat-label">My badges <a href="/achievements/?g=bw" style="text-transform:none;letter-spacing:0;font-size:11.5px;margin-left:6px;color:var(--accent2)">All my badges &rarr;</a></div><div id="mybadges"></div></div>
         <div id="career-view" hidden>
           <div class="career-cols">
             <div><h3>1 player games</h3><table class="career-table tnum" id="career-1p"></table></div>
@@ -678,6 +695,7 @@
 
 <script src="/auth.js"></script>
 <script src="/bw/bw-shared.js?v=4"></script>
+<script src="/achievements/badges.js?v=5"></script>
 <script>
 (function(){
   "use strict";
@@ -1721,6 +1739,17 @@
     }
   }
 
+  // The shared badge provider (/achievements/badges.js): the same badges as the player's badges page.
+  async function renderMyBadges(user, scores){
+    const wrap = el('mybadges-wrap'); wrap.hidden = true;
+    try{
+      const B = window.NGPC_BADGES, p = B && B.PROVIDERS.find(x=>x.key === 'bw');
+      if(!p) return;
+      const r = await p.load({ uid:user.uid, username:user.username, self:true, viewer:user, scores:scores });
+      if(!r || statsUser !== user) return;
+      el('mybadges').innerHTML = r.html; wrap.hidden = false;
+    }catch(e){ console.warn('badges', e); }
+  }
   async function refreshStats(){
     const user = statsUser;
     if(!db || !user || statsPanelEl.hidden) return;
@@ -1776,6 +1805,7 @@
     el('st-subs-sub').textContent = scores.length ? 'approved scores on this board' : '';
     myAchScores = scores;
     renderMyAch();
+    renderMyBadges(user, scores);
 
     el('career-view').hidden = !career;
     el('career-empty').hidden = !!career;
