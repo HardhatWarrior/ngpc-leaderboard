@@ -317,6 +317,34 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
+      // Retail leaderboard patches (IPS): Puzzle Bobble Mini (PB, Survivor: score + rank), Sonic Pocket Adventure
+      // (SN, final score), Magical Drop Pocket (MD, Self Challenge: score + maxChain + level). The page verifies
+      // the QR's base-36 checksum and version digit; neither is stored.
+      function isRetailLbBase(d, maxScore) {
+        return d.initials is string && d.initials.matches('^[0-9A-Z]{3}$')
+          && d.score is int && d.score >= 1 && d.score <= maxScore
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+      function isPuzzleBobbleScore(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'rank', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.rank is int && d.rank >= 0 && d.rank <= 1295
+          && isRetailLbBase(d, 999999999);
+      }
+      function isSonicPocketScore(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && isRetailLbBase(d, 999999999);
+      }
+      function isMagicalDropScore(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'maxChain', 'level', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.maxChain is int && d.maxChain >= 0 && d.maxChain <= 99
+          && d.level is int && d.level >= 0 && d.level <= 999
+          && isRetailLbBase(d, 999999);
+      }
+
       // Ghost 'N Goblins - A Portal Too Far: game, initials, score (8 digits, 1..99999999), stage reached (1..7),
       // timeBonus (0..score; points earned from stage completion), source, submittedAt, required uid/username.
       // The payload's CRC-16 and version digit are verified by the page and not stored.
@@ -955,6 +983,9 @@ service cloud.firestore {
           || (request.resource.data.game == 'CB' && isClassicBoardGamesScore(request.resource.data))
           || (request.resource.data.game == 'TM' && isTurfMastersScore(request.resource.data))
           || (request.resource.data.game == 'GG' && isGhostNGoblinsScore(request.resource.data))
+          || (request.resource.data.game == 'PB' && isPuzzleBobbleScore(request.resource.data))
+          || (request.resource.data.game == 'SN' && isSonicPocketScore(request.resource.data))
+          || (request.resource.data.game == 'MD' && isMagicalDropScore(request.resource.data))
           || (request.resource.data.game == 'PNG' && isPangNGPCScore(request.resource.data))
           || (request.resource.data.game == 'SPR' && isPocketSprintScore(request.resource.data))
           || ((request.resource.data.game == 'SK' && isSokobanScore(request.resource.data)) && scoreId == 'SK_' + request.auth.uid)
