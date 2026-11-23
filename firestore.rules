@@ -338,6 +338,12 @@ service cloud.firestore {
         return d.keys().hasOnly(['game', 'initials', 'score', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && isRetailLbBase(d, 999999999);
       }
+      // Pac-Man (PM, retail patch): score 8 BCD digits from the cart, level 1-based (2 base 36).
+      function isPacManScore(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'level', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.level is int && d.level >= 1 && d.level <= 1295
+          && isRetailLbBase(d, 99999999);
+      }
       function isMagicalDropScore(d) {
         return d.keys().hasOnly(['game', 'initials', 'score', 'maxChain', 'level', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.maxChain is int && d.maxChain >= 0 && d.maxChain <= 99
@@ -986,6 +992,7 @@ service cloud.firestore {
           || (request.resource.data.game == 'PB' && isPuzzleBobbleScore(request.resource.data))
           || (request.resource.data.game == 'SN' && isSonicPocketScore(request.resource.data))
           || (request.resource.data.game == 'MD' && isMagicalDropScore(request.resource.data))
+          || (request.resource.data.game == 'PM' && isPacManScore(request.resource.data))
           || (request.resource.data.game == 'PNG' && isPangNGPCScore(request.resource.data))
           || (request.resource.data.game == 'SPR' && isPocketSprintScore(request.resource.data))
           || ((request.resource.data.game == 'SK' && isSokobanScore(request.resource.data)) && scoreId == 'SK_' + request.auth.uid)
