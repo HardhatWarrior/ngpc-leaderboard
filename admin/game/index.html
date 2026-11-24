@@ -1951,10 +1951,14 @@
     el('lb-page-link').href = data.leaderboardPath || ('/'+slug+'/');
     el('play-page-link').href = data.section === 'solo' ? '/play/solo/?g='+encodeURIComponent(slug) : '/play/'+(PLAY_FOLDER[slug] || slug)+'/';
     const downloads = data.romDownloads || 0;
-    // Patch-distributed games (Turf Masters): patched ROMs downloaded from the patch page + raw .ips downloads.
-    const hasPatch = slug === 'tm' || ('patchApplied' in data) || ('patchApplied5c' in data) || ('ipsDownloads' in data);
+    // Patch-distributed games (Turf Masters and the retail leaderboard patches): patched ROMs made on the patch page
+    // + raw .ips downloads, instead of a ROM download count (these games have no ROM to download).
+    const PATCH_GAMES = ['tm','md','pb','pm','sn','pl1','pl2','ms1','ms2','cr'];
+    const hasPatch = PATCH_GAMES.indexOf(slug) >= 0 || ('patchApplied' in data) || ('patchApplied5c' in data) || ('ipsDownloads' in data);
     const dlText = hasPatch
-      ? 'Patched ROMs <b>'+((data.patchApplied||0)+(data.patchApplied5c||0))+'</b> (standard <b>'+(data.patchApplied||0)+'</b>, 5-course <b>'+(data.patchApplied5c||0)+'</b>) &middot; .ips downloads <b>'+(data.ipsDownloads||0)+'</b>'
+      ? 'Patched ROMs <b>'+((data.patchApplied||0)+(data.patchApplied5c||0))+'</b>'
+        + (slug === 'tm' || ('patchApplied5c' in data) ? ' (standard <b>'+(data.patchApplied||0)+'</b>, 5-course <b>'+(data.patchApplied5c||0)+'</b>)' : '')
+        + ' &middot; .ips downloads <b>'+(data.ipsDownloads||0)+'</b>'
       : 'Downloaded <b>'+downloads+'</b> time'+(downloads===1?'':'s');
     // Every game with an in-browser player has a count, whichever emulator it uses (the count is the play
     // page's own loads): hand-built games via the PLAY_FOLDER table, single-player games on the shared

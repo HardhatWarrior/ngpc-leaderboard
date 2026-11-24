@@ -114,7 +114,7 @@ async function main() {
       description: g.description || '',
       save_compatible_since: g.saveCompatibleSince || 1,
       store_allowed: true,
-      downloads: g.romDownloads || 0,
+      downloads: (g.romDownloads || 0) + (g.patchApplied || 0) + (g.patchApplied5c || 0),   // patched ROMs count like downloads
       added: isoDate(g.addedAt),
     });
   }
