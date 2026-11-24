@@ -120,7 +120,7 @@
 
   const raw = decodeURIComponent((location.hash || '').slice(1)).toUpperCase();
   const code = raw.includes('/') ? raw.split('/').filter(Boolean).pop() : raw;
-  if (!code.startsWith('TH1') && !code.startsWith('TH2')) { fail('No hole replay code in this link.'); return; }
+  if (!/^TH[123]/.test(code)) { fail('No hole replay code in this link.'); return; }
   let h;
   try { h = TMSim.parseTH1(code); } catch (e) { fail('This replay code could not be read (' + e.message + '). Try scanning it again.'); return; }
   if (h.course > 4 || h.hole > 17) { fail('This replay code names a course or hole that does not exist.'); return; }
@@ -141,8 +141,13 @@
     // ---- keep: a signed-in player's QR holes are kept automatically (tm_replays/{uid}/history); download the video
     const fromGallery = new URLSearchParams(location.search).has('g');
     const lastR = rep.shots[rep.shots.length - 1];
-    const slot = { code, course: h.course, hole: h.hole, par: Hj.par, result: lastR && lastR.result === 'holed' ? 'holed' : 'unfinished',
-                   strokes: lastR && lastR.result === 'holed' ? (h.shots[h.shots.length - 1].stroke || h.shots.length) : 0 };
+    const simHoled = !!(lastR && lastR.result === 'holed');
+    // TH3 carries the cart's own result (holed + strokes from its scorecard): that is the score, whatever the re-sim does
+    const holed = h.cart ? h.cart.holed : simHoled;
+    const slot = { code, course: h.course, hole: h.hole, par: Hj.par, result: holed ? 'holed' : 'unfinished',
+                   strokes: holed ? (h.cart ? h.cart.strokes : (h.shots[h.shots.length - 1].stroke || h.shots.length)) : 0 };
+    if (h.cart) $('subtitle').innerHTML += ' &middot; ' + (h.cart.holed ? 'holed in ' + h.cart.strokes : 'picked up') +
+      (h.cart.holed && !simHoled ? ' on the cart (the re-simulation misses the cup)' : '');
     $('keep').hidden = false;
     const kmsg = (t) => { $('keepmsg').hidden = !t; $('keepmsg').textContent = t || ''; };
     // the hole's real-game video: gallery holes are public; otherwise it takes one of the signed-in player's

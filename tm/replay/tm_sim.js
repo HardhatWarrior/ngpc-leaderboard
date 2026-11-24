@@ -476,13 +476,14 @@ const A36 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 function b36(s) { let v = 0; for (const c of s) { const d = A36.indexOf(c); if (d < 0) throw new Error('bad char'); v = v * 36 + d; } return v; }
 function parseTH1(text) {
   const body = text.includes('/TM/') ? text.split('/TM/')[1] : text;
-  const v2 = body.startsWith('TH2');
+  const v3 = body.startsWith('TH3'), v2 = v3 || body.startsWith('TH2');
   if (!body.startsWith('TH1') && !v2) throw new Error('not a hole replay code');
   const data = body.slice(0, -2), chk = b36(body.slice(-2));
   let sum = 0; for (const c of data) sum += A36.indexOf(c);
   if (sum % 1296 !== chk) throw new Error('checksum');
   let p = 3; const take = (n) => { const v = b36(data.slice(p, p + n)); p += n; return v; };
   const h = { course: take(1), hole: take(1), golfer: take(1), legend: take(1), pinx: take(2), piny: take(2) };
+  if (v3) { const r = take(1); h.cart = { strokes: r & 15, holed: !!(r & 16) }; }   // TH3: the cart's own result
   const n = take(1); h.shots = [];
   for (let i = 0; i < n; i++) {
     const a = take(6), b = take(v2 ? 6 : 5);
@@ -490,7 +491,8 @@ function parseTH1(text) {
       shottype: fl(a / 2 ** 29) & 3, wind_dir: b & 0xF, wind_str: (b >> 4) & 0xF, tbl: (b >> 8) & 0xFF, lie: (b >> 16) & 0xF,
       stroke: (b >> 20) & 0xF, newstart: (b >> 24) & 1 };
     if (v2) { s.draws = fl(b / 2 ** 25) & 3; s.plug = fl(b / 2 ** 27) & 3; }   // TH1: plugs are inferred
-    if (s.newstart) { s.sx = take(6); s.sy = take(6); }
+    if (s.newstart && v3) { const v = take(6); s.sx = (v % 16384) * 1024; s.sy = fl(v / 16384) * 1024; s.approx = true; }  // map px * 64
+    else if (s.newstart) { s.sx = take(6); s.sy = take(6); }
     h.shots.push(s);
   }
   if (p !== data.length) throw new Error('length');
@@ -502,9 +504,11 @@ function replayTH1(h, courseJson) {
   const out = []; let prev = null;
   for (const s of h.shots) {
     let mx, my;
-    if (s.newstart) { mx = s.sx; my = s.sy; }
-    else if (!prev) { mx = shl(H.tee[0], 16); my = shl(H.tee[1], 16); }          // first shot: the hole's tee
-    else { mx = mul(prev[0], 0x19999); my = mul(prev[1], 0x19999); }
+    if (!prev) { mx = shl(H.tee[0], 16); my = shl(H.tee[1], 16); }               // first shot: the hole's tee
+    else { mx = mul(prev[0], 0x19999); my = mul(prev[1], 0x19999); }             // else the previous rest
+    // a recorded start: TH1/TH2 exact; TH3 to 1/64 px -- used only where the chained start drifted from it, so a replay
+    // that matches the cart stays bit-exact
+    if (s.newstart && (!s.approx || fl(mx / 1024) !== s.sx / 1024 || fl(my / 1024) !== s.sy / 1024)) { mx = s.sx; my = s.sy; }
     const start = [mul(mx, 0xA000), mul(my, 0xA000)];
     const inp = { golfer: h.golfer, legend: h.legend, stat: s.tbl, result: 0, lie: s.lie, power: s.power, club: s.club,
       impact: s.impact, shottype: s.shottype, aimx: sin(s.angle), aimy: cos(s.angle), wind_dir: s.wind_dir, wind_str: s.wind_str };

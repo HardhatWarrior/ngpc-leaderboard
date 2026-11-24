@@ -1503,10 +1503,10 @@ service cloud.firestore {
       allow delete: if request.auth != null && (request.auth.uid == uid || isAdmin());
     }
 
-    // tm_replays/{uid} -- a player's saved Neo Turf Masters hole replays (up to 5): TH1/TH2 codes from the cart's
+    // tm_replays/{uid} -- a player's saved Neo Turf Masters hole replays (up to 5): TH1/TH2/TH3 codes from the cart's
     // post-hole QR, plus course / hole / strokes / par for the list. Private: only the owner (or an admin) reads it.
     match /tm_replays/{uid} {
-      function okCode(c) { return c is string && c.size() <= 220 && c.matches('^TH[12][0-9A-Z]{10,200}$'); }
+      function okCode(c) { return c is string && c.size() <= 220 && c.matches('^TH[123][0-9A-Z]{10,200}$'); }
       function okSlot(s) {
         return s is map && s.keys().hasOnly(['code', 'course', 'hole', 'strokes', 'par', 'savedAt', 'shared', 'result'])
           && okCode(s.code) && s.course is int && s.course >= 0 && s.course <= 4 && s.hole is int && s.hole >= 0 && s.hole <= 17;
@@ -1526,7 +1526,7 @@ service cloud.firestore {
       match /history/{hid} {
         allow read: if request.auth != null && (request.auth.uid == uid || isAdmin());
         allow create: if request.auth != null && request.auth.uid == uid
-          && hid.size() <= 220 && hid.matches('^TH[12][0-9A-Z]{10,200}$')
+          && hid.size() <= 220 && hid.matches('^TH[123][0-9A-Z]{10,200}$')
           && request.resource.data.keys().hasOnly(['code', 'course', 'hole', 'strokes', 'par', 'result', 'scannedAt'])
           && request.resource.data.code == hid
           && request.resource.data.course is int && request.resource.data.course >= 0 && request.resource.data.course <= 4
@@ -1558,7 +1558,7 @@ service cloud.firestore {
         return d.keys().hasOnly(['uid', 'username', 'code', 'course', 'hole', 'strokes', 'par', 'result', 'sharedAt'])
           && d.uid == request.auth.uid && gid.matches('^' + request.auth.uid + '_[01]$')
           && d.username is string && d.username == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.username
-          && d.code is string && d.code.size() <= 220 && d.code.matches('^TH[12][0-9A-Z]{10,200}$')
+          && d.code is string && d.code.size() <= 220 && d.code.matches('^TH[123][0-9A-Z]{10,200}$')
           && d.course is int && d.course >= 0 && d.course <= 4 && d.hole is int && d.hole >= 0 && d.hole <= 17
           && d.sharedAt is int
           // only a hole the player has a video of (tm_videos is kept by the render service)

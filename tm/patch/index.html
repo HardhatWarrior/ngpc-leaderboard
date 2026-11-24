@@ -67,9 +67,9 @@
   const SRC_SIZE = 2097152, SRC_CRC = 0x317A66D2;
   // one patch: the 5-course build (the 2 MB Standard patch was retired 2026-11-17; its CRCs stay in KNOWN)
   const VARIANTS = {
-    '5c': {ips:'/tm/turfmasters_5c.ips', size:4194304, crc:0x72A83CCA, name:'Neo Turf Masters (Leaderboard, 5 courses).ngc'}
+    '5c': {ips:'/tm/turfmasters_5c.ips', size:4194304, crc:0xCBFE387B, name:'Neo Turf Masters (Leaderboard, 5 courses).ngc'}
   };
-  const OLD_PATCHED = [0xEF7C6FE1, 0x3619199C, 0x8C6F51C8, 0x6A210779, 0xE79B24CE, 0x8938AF52, 0x8FAC0AC3];
+  const OLD_PATCHED = [0x72A83CCA, 0xEF7C6FE1, 0x3619199C, 0x8C6F51C8, 0x6A210779, 0xE79B24CE, 0x8938AF52, 0x8FAC0AC3];
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');

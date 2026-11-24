@@ -323,7 +323,7 @@
 (function(){
   const seg = (t) => { const p = String(t||'').split('/').filter(Boolean); return p.length ? p[p.length-1] : ''; };
   const raw = decodeURIComponent(seg(location.hash ? location.hash.slice(1) : location.pathname)).toUpperCase();
-  if (raw.startsWith('TH1') || raw.startsWith('TH2')) location.replace('/tm/replay/#' + raw);
+  if (/^TH[123]/.test(raw)) location.replace('/tm/replay/#' + raw);
 })();
 </script>
 <script>
