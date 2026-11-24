@@ -32,6 +32,10 @@
   .title-block h1{ margin:0; font-size:clamp(18px,5vw,28px); line-height:1.2; color:var(--cream); overflow-wrap:break-word; }
   .game-version{ font-size:11px; color:var(--dim); }
   .created-by{ font-size:11px; color:var(--dim); }
+  .stage-row{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 12px; }
+  .stage-lbl{ font-size:11px; letter-spacing:.1em; color:var(--dim); }
+  .stage-tab{ min-width:34px; padding:6px 0; border-radius:8px; border:1px solid var(--line, #444); background:transparent; color:inherit; font:inherit; cursor:pointer; }
+  .stage-tab.on{ background:var(--accent2, #e8c547); color:#111; border-color:transparent; font-weight:600; }
   .created-by a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .created-by a:hover{ color:var(--accent2); }
   .rom-link, .play-link, .admin-link{ display:inline-flex; align-items:center; gap:5px; width:auto; font-weight:600; text-decoration:underline; text-underline-offset:2px; }
@@ -152,7 +156,9 @@
       <div class="title-block">
         <h1>Metal Slug 2nd Mission</h1>
         <div class="game-version" id="game-version" hidden></div>
-        <div class="created-by">Leaderboard patch by <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
+        <div class="created-by">&copy; SNK 2000 &middot; Leaderboard patch by <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
+        <a href="/ms2/patch/" class="rom-link" id="patch-link">&#128190; Patch your ROM (in browser)</a>
+        <div class="patch-note">Uses your own Metal Slug - 2nd Mission (World) cartridge dump; nothing is uploaded. No ROM is provided.</div>
         <a href="/admin/game/?slug=ms2" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
     </div>
@@ -200,6 +206,7 @@
 
     <section class="panel">
       <h2>Leaderboard</h2>
+      <div class="stage-row"><span class="stage-lbl">TIME ATTACK STAGE</span> <span id="stage-tabs"></span></div>
       <div id="board-status"></div>
       <div id="board"></div>
     </section>
@@ -237,17 +244,29 @@
     return ALNUM[Math.floor(s/36)] + ALNUM[s%36];
   }
 
-  // PLACEHOLDER: the Metal Slug 2nd Mission leaderboard patch's payload layout isn't final yet, so no code is accepted.
-  // Replace with the real parser (see pm/index.html) once the patch exists.
-  function parseGamePayload(text){
-    return {error:"Scores for this game aren't open yet."};
+  function parseMetalSlug2Payload(text){
+    if(text.length < 15) return {error:"That code is too short — rescan with the whole code in frame."};
+    if(text.length > 15) return {error:"That code is too long to be a time — rescan just the one code."};
+    if(text.slice(3,4) !== '1') return {error:"That code is from a different version of the patch."};
+    const initials = text.slice(4,7);
+    if(!/^[0-9A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
+    if(!/^\d{6}$/.test(text.slice(7,13))) return {error:"That code has an unreadable value."};
+    if(text.slice(13) !== lbCheck(text.slice(0,13))) return {error:"That code didn't scan cleanly (check mismatch) — rescan it."};
+    const stage = parseInt(text.slice(7,8),10);
+    const sec = parseInt(text.slice(8,10),10), cs = parseInt(text.slice(10,12),10);
+    const character = parseInt(text.slice(12,13),10);
+    const score = sec*100 + cs;           // hundredths of a second: lower is better
+    if(score < 1 || character > 1) return {error:"That code doesn't look like a cleared stage."};
+    return { game:QR_GAME_CODE, initials, score, stage, character };
   }
+  const MS2_CHARS = ['Marco','Fio'];
+  function fmtTime(cs){ return (Math.floor(cs/100))+'.'+String(cs%100).padStart(2,'0'); }
 
   function parsePayload(text){
     text = (text||'').trim().toUpperCase();
     if(text.length < 2) return {error:"That code is too short to be a valid score."};
-    if(text.startsWith(QR_GAME_CODE)) return parseGamePayload(text);
-    const code = text.slice(0,QR_GAME_CODE.length);
+    const code = text.slice(0,3);
+    if(code === QR_GAME_CODE) return parseMetalSlug2Payload(text);
     return {error:'Unknown game code "'+code+'".'};
   }
 
@@ -266,11 +285,12 @@
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
-  function formatDisplayValue(o){ return String(o.score); }
+  function formatDisplayValue(o){ return fmtTime(o.score) + ' (Stage ' + (o.stage+1) + ')'; }
 
   function renderScorecardHTML(data){
-    const rows = '<tr><td>Score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
-      '<tr><td>Level reached</td><td class="tk-val tnum">'+data.level+'</td></tr>';
+    const rows = '<tr><td>Stage</td><td class="tk-val tnum">'+(data.stage+1)+'</td></tr>'+
+      '<tr><td>Time</td><td class="tk-val tnum">'+fmtTime(data.score)+'</td></tr>'+
+      '<tr><td>Character</td><td class="tk-val">'+(MS2_CHARS[data.character]||'?')+'</td></tr>';
     return '<table class="tk-sheet">'+rows+'</table>';
   }
 
@@ -289,7 +309,7 @@
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.score!=null?String(data.score):'-')+'</div>'+
+        '<div class="score-val tnum">'+(data.score!=null?fmtTime(data.score):'-')+'</div>'+
       '</div>';
       const detailHtml = '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data)+'</div>';
       return rowHtml + detailHtml;
@@ -321,12 +341,23 @@
     }
   }
 
+  let allDocs = [], curStage = 0;
+  function drawStage(){
+    const tabs = document.getElementById('stage-tabs');
+    const have = new Set(allDocs.map(d=>d.data().stage));
+    let html = '';
+    for(let i=0;i<8;i++) html += '<button class="stage-tab'+(i===curStage?' on':'')+'" data-stage="'+i+'">'+(i+1)+(have.has(i)?'':'')+'</button>';
+    tabs.innerHTML = html;
+    const docs = allDocs.filter(d=>d.data().stage===curStage).sort((a,b)=>a.data().score-b.data().score || (a.data().submittedAt||0)-(b.data().submittedAt||0)).slice(0,10);
+    renderBoard(docs);
+  }
+  document.addEventListener('click', (e)=>{ const b = e.target.closest('.stage-tab'); if(!b) return; curStage = parseInt(b.dataset.stage,10); drawStage(); });
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('score','desc').limit(10);
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).limit(1000);
     unsubscribeBoard = q.onSnapshot(
-      (snap)=>{ renderBoard(snap.docs); },
+      (snap)=>{ allDocs = snap.docs; drawStage(); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
     );
   }
