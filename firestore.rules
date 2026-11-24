@@ -374,6 +374,14 @@ service cloud.firestore {
           && d.character is int && d.character >= 0 && d.character <= 1
           && isRetailLbBase(d, 9999);
       }
+      // Metal Slug 1st Mission (MS1): total score at a mission tally, missions cleared 0-23, last mission 0-23, level 0-9
+      function isMetalSlug1Score(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'cleared', 'mission', 'level', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.cleared is int && d.cleared >= 0 && d.cleared <= 23
+          && d.mission is int && d.mission >= 0 && d.mission <= 23
+          && d.level is int && d.level >= 0 && d.level <= 9
+          && isRetailLbBase(d, 9999999);
+      }
 
       // Ghost 'N Goblins - A Portal Too Far: game, initials, score (8 digits, 1..99999999), stage reached (1..7),
       // timeBonus (0..score; points earned from stage completion), source, submittedAt, required uid/username.
@@ -1019,6 +1027,7 @@ service cloud.firestore {
           || (request.resource.data.game == 'PL1' && isPuzzleLinkScore(request.resource.data))
           || (request.resource.data.game == 'PL2' && isPuzzleLink2Score(request.resource.data))
           || (request.resource.data.game == 'MS2' && isMetalSlug2Score(request.resource.data))
+          || (request.resource.data.game == 'MS1' && isMetalSlug1Score(request.resource.data))
           || (request.resource.data.game == 'PM' && isPacManScore(request.resource.data))
           || (request.resource.data.game == 'PNG' && isPangNGPCScore(request.resource.data))
           || (request.resource.data.game == 'SPR' && isPocketSprintScore(request.resource.data))
