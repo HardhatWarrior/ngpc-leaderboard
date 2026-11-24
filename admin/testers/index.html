@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Testers &amp; Developers Groups</title>
+<link rel="icon" type="image/png" sizes="32x32" href="/assets/favicon-32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="/assets/favicon-16.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/assets/favicon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<style>
+  :root{
+    --navy:#10162a; --panel:#181f3a; --panel2:#212a4d; --border:#37426e;
+    --cream:#f4eedd; --dim:#93a0c9; --accent:#b23a52; --accent-ink:#fbeef1;
+    --accent2:#5c8fd6; --good:#4fbf8b; --danger:#e5615a; --gold:#e8c547;
+  }
+  *{ box-sizing:border-box; } html,body{ height:auto; }
+  body{ margin:0; background:var(--navy); color:var(--cream); font-family:"IBM Plex Sans",system-ui,sans-serif;
+        padding-inline:20px; padding-block:28px; display:flex; justify-content:center; }
+  .px{ font-family:"Press Start 2P","IBM Plex Mono",monospace; }
+  #shell{ width:100%; max-width:860px; display:flex; flex-direction:column; gap:16px; }
+  header{ text-align:center; display:flex; flex-direction:column; gap:6px; }
+  header h1{ font-size:15px; margin:0; letter-spacing:1px; color:var(--accent2); }
+  header p{ margin:0; color:var(--dim); font-size:13px; line-height:1.5; }
+  a{ color:var(--accent2); }
+  .panel{ background:var(--panel); border:1px solid var(--border); border-radius:14px; padding:16px 18px; }
+  .panel[hidden], #denied[hidden]{ display:none; }
+  .panel h2{ margin:0 0 4px; font-size:12px; letter-spacing:.1em; text-transform:uppercase; color:var(--accent2); }
+  .hint{ margin:0 0 12px; color:var(--dim); font-size:12.5px; line-height:1.55; }
+  #denied{ text-align:center; color:var(--dim); font-size:13.5px; padding:40px 0; }
+  .tools{ display:flex; gap:10px; flex-wrap:wrap; align-items:center; }
+  input[type=text], input[type=search], select{ background:var(--navy); border:1px solid var(--border); color:var(--cream);
+        border-radius:7px; padding:8px 10px; font:inherit; font-size:13px; min-width:0; }
+  input:focus, select:focus{ outline:none; border-color:var(--accent2); }
+  .btn{ font:inherit; font-weight:600; font-size:12.5px; border:1px solid var(--border); background:var(--panel2); color:var(--cream); border-radius:8px; padding:8px 12px; cursor:pointer; }
+  .btn.primary{ background:var(--accent); border-color:var(--accent); color:var(--accent-ink); }
+  .btn.small{ padding:5px 9px; font-size:12px; }
+  .btn:disabled{ opacity:.5; cursor:not-allowed; }
+  .chips{ display:flex; flex-wrap:wrap; gap:8px; margin:12px 0 0; }
+  .chip{ display:inline-flex; align-items:center; gap:6px; background:var(--navy); border:1px solid var(--border); border-radius:999px; padding:4px 6px 4px 11px; font-size:12.5px; }
+  .chip button{ border:none; background:transparent; color:var(--danger); cursor:pointer; font-size:15px; line-height:1; padding:0 4px; }
+  .none{ color:var(--dim); font-size:12.5px; }
+  .grow{ flex:1 1 200px; }
+  .row{ display:grid; grid-template-columns:1fr auto auto 64px 64px; gap:10px; align-items:center; padding:9px 0; border-top:1px solid var(--border); font-size:13px; }
+  .row.changed{ background:rgba(232,197,71,.07); }
+  .row small{ color:var(--dim); }
+  .row .name small{ display:block; }
+  .tag{ font-size:11px; color:var(--dim); border:1px solid var(--border); border-radius:6px; padding:2px 7px; white-space:nowrap; }
+  .tag.live{ color:var(--good); border-color:var(--good); }
+  .tag.soon{ color:var(--gold); border-color:var(--gold); }
+  input[type=checkbox]{ width:18px; height:18px; accent-color:var(--accent2); }
+  .msg{ font-size:12.5px; border-radius:8px; padding:9px 11px; margin-top:10px; line-height:1.5; border:1px solid var(--border); }
+  .msg.ok{ border-color:var(--good); color:var(--good); } .msg.err{ border-color:var(--danger); color:var(--danger); }
+  .summary{ color:var(--dim); font-size:12.5px; }
+  .bar{ position:sticky; bottom:0; display:flex; gap:10px; align-items:center; flex-wrap:wrap; padding:12px 0 2px; background:var(--panel); border-top:1px solid var(--border); margin-top:6px; }
+  .row.head{ color:var(--dim); font-size:11px; text-transform:uppercase; letter-spacing:.06em; border-top:none; padding-bottom:4px; }
+  .row .ck{ display:flex; justify-content:center; }
+  @media (max-width:560px){ .row{ grid-template-columns:1fr 56px 56px; } .row .tag{ display:none; } .row.head span:nth-child(2), .row.head span:nth-child(3){ display:none; } }
+  footer{ text-align:center; color:var(--dim); font-size:12px; }
+</style>
+</head>
+<body>
+<div id="shell">
+  <header>
+    <h1 class="px">ACCESS GROUPS</h1>
+    <p>Two groups for early access: <b>Testers</b> (you pick the members) and <b>Developers</b> (every account with developer access, current and future). Attach either group to as many games as you like. Members see an attached game even while it&rsquo;s Coming Soon, the same as a per-game tester.</p>
+  </header>
+  <div id="denied" hidden></div>
+
+  <section class="panel" id="members-panel" hidden>
+    <h2>Members <span class="summary" id="member-count"></span></h2>
+    <p class="hint">Accounts in the group. They get no edit rights, only access to the games you attach below.</p>
+    <div class="tools">
+      <input id="add-name" class="grow" type="text" list="user-list" placeholder="Type a username to add…" autocomplete="off">
+      <datalist id="user-list"></datalist>
+      <button class="btn primary" id="add-member" type="button">Add to group</button>
+    </div>
+    <div class="chips" id="members"></div>
+    <div id="members-msg"></div>
+  </section>
+
+  <section class="panel" id="devs-panel" hidden>
+    <h2>Developers <span class="summary" id="dev-count"></span></h2>
+    <p class="hint">Automatic: every account with developer access is in this group, and new developers join it the moment you approve them. Change who is a developer from the user list on the <a href="/admin/">Admin</a> page.</p>
+    <div class="chips" id="devs"></div>
+  </section>
+
+  <section class="panel" id="games-panel" hidden>
+    <h2>Games</h2>
+    <p class="hint">Tick which groups can see each game. Changes are saved together with the button at the bottom.</p>
+    <div class="tools">
+      <input id="q" class="grow" type="search" placeholder="Search games">
+      <select id="status" aria-label="Filter by status">
+        <option value="">All statuses</option><option value="coming-soon">Coming soon</option><option value="dev">Dev</option>
+        <option value="beta">Beta</option><option value="final">Final</option>
+      </select>
+      <select id="which" aria-label="Group for the bulk buttons"><option value="t">Testers</option><option value="d">Developers</option></select>
+      <button class="btn small" id="all-shown" type="button">Tick all shown</button>
+      <button class="btn small" id="none-shown" type="button">Untick all shown</button>
+    </div>
+    <div class="summary" id="summary" style="margin:10px 0 2px"></div>
+    <div id="games"></div>
+    <div class="bar"><button class="btn primary" id="save" type="button" disabled>Save changes</button><span class="summary" id="dirty"></span></div>
+    <div id="games-msg"></div>
+  </section>
+
+  <footer><a href="/admin/">&larr; Admin</a></footer>
+</div>
+
+<script src="/auth.js"></script>
+<script>
+(function(){
+  "use strict";
+  const el = (id)=>document.getElementById(id);
+  const A = window.NGPC_AUTH;
+  const esc = (s)=>String(s == null ? '' : s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  let users = [];      // {uid, username, isTester}
+  let games = [];      // {slug, name, code, devStatus, section, t, tWas, d, dWas}
+  const msg = (id, cls, html)=>{ el(id).innerHTML = html ? '<div class="msg '+cls+'">'+html+'</div>' : ''; };
+
+  /* ---------- members ---------- */
+  function renderMembers(){
+    const m = users.filter(u=>u.isTester).sort((a,b)=>a.username.localeCompare(b.username));
+    el('member-count').textContent = '(' + m.length + ')';
+    el('members').innerHTML = m.length
+      ? m.map(u=>'<span class="chip">'+esc(u.username)+'<button type="button" data-rm="'+esc(u.uid)+'" aria-label="Remove '+esc(u.username)+'">&times;</button></span>').join('')
+      : '<span class="none">No members yet.</span>';
+    el('user-list').innerHTML = users.filter(u=>!u.isTester).map(u=>'<option value="'+esc(u.username)+'"></option>').join('');
+  }
+  async function setMember(u, on){
+    msg('members-msg','','');
+    try{
+      await A.db.collection('users').doc(u.uid).update({ isTester: on });
+      u.isTester = on; renderMembers();
+      msg('members-msg','ok', esc(u.username) + (on ? ' added to' : ' removed from') + ' the Testers group.');
+    }catch(e){ msg('members-msg','err','Could not save: ' + esc(e.message || e)); }
+  }
+  el('add-member').addEventListener('click', ()=>{
+    const name = el('add-name').value.trim().toLowerCase(); if(!name) return;
+    const u = users.find(x=>x.username.toLowerCase() === name);
+    if(!u){ msg('members-msg','err','No account named “' + esc(el('add-name').value.trim()) + '”.'); return; }
+    if(u.isTester){ msg('members-msg','err', esc(u.username) + ' is already in the group.'); return; }
+    el('add-name').value = ''; setMember(u, true);
+  });
+  el('add-name').addEventListener('keydown', e=>{ if(e.key === 'Enter'){ e.preventDefault(); el('add-member').click(); } });
+  el('members').addEventListener('click', e=>{
+    const b = e.target.closest('[data-rm]'); if(!b) return;
+    const u = users.find(x=>x.uid === b.dataset.rm); if(u) setMember(u, false);
+  });
+
+  /* ---------- games ---------- */
+  const shown = ()=>{
+    const q = el('q').value.trim().toLowerCase(), st = el('status').value;
+    return games.filter(g=>(!st || g.devStatus === st) && (!q || (g.name + ' ' + g.code + ' ' + g.slug).toLowerCase().indexOf(q) >= 0));
+  };
+  function tagFor(s){ return '<span class="tag' + (s === 'coming-soon' ? ' soon' : (s === 'final' ? ' live' : '')) + '">' + esc(s === 'coming-soon' ? 'coming soon' : (s || 'live')) + '</span>'; }
+  function render(){
+    const list = shown();
+    el('summary').textContent = list.length + ' of ' + games.length + ' games shown · ' + games.filter(g=>g.t).length + ' have Testers, ' + games.filter(g=>g.d).length + ' have Developers';
+    el('games').innerHTML = '<div class="row head"><span>Game</span><span></span><span></span><span class="ck">Testers</span><span class="ck">Devs</span></div>' + list.map(g=>
+      '<div class="row' + (g.t !== g.tWas || g.d !== g.dWas ? ' changed' : '') + '">' +
+      '<span class="name">' + esc(g.name) + '<small>' + esc(g.code) + ' · /' + esc(g.slug) + '/</small></span>' +
+      tagFor(g.devStatus) + '<span class="tag">' + esc(g.section || '') + '</span>' +
+      '<span class="ck"><input type="checkbox" data-slug="' + esc(g.slug) + '" data-g="t" aria-label="Testers can see ' + esc(g.name) + '"' + (g.t ? ' checked' : '') + '></span>' +
+      '<span class="ck"><input type="checkbox" data-slug="' + esc(g.slug) + '" data-g="d" aria-label="Developers can see ' + esc(g.name) + '"' + (g.d ? ' checked' : '') + '></span></div>').join('');
+    const n = games.filter(g=>g.t !== g.tWas || g.d !== g.dWas).length;
+    el('dirty').textContent = n ? n + ' unsaved change' + (n === 1 ? '' : 's') : '';
+    el('save').disabled = !n;
+  }
+  el('games').addEventListener('change', e=>{
+    const c = e.target.closest('input[data-slug]'); if(!c) return;
+    const g = games.find(x=>x.slug === c.dataset.slug); if(g){ g[c.dataset.g] = c.checked; render(); }
+  });
+  ['q','status'].forEach(id=>el(id).addEventListener('input', render));
+  el('all-shown').addEventListener('click', ()=>{ shown().forEach(g=>{ g[el('which').value] = true; }); render(); });
+  el('none-shown').addEventListener('click', ()=>{ shown().forEach(g=>{ g[el('which').value] = false; }); render(); });
+
+  el('save').addEventListener('click', async ()=>{
+    const changed = games.filter(g=>g.t !== g.tWas || g.d !== g.dWas); if(!changed.length) return;
+    el('save').disabled = true; msg('games-msg','','Saving…');
+    try{
+      for(let i = 0; i < changed.length; i += 400){
+        const batch = A.db.batch();
+        changed.slice(i, i + 400).forEach(g=>batch.update(A.db.collection('games').doc(g.slug), { testersGroup: g.t, developersGroup: g.d }));
+        await batch.commit();
+      }
+      changed.forEach(g=>{ g.tWas = g.t; g.dWas = g.d; });
+      msg('games-msg','ok','Saved ' + changed.length + ' game' + (changed.length === 1 ? '' : 's') + '.');
+    }catch(e){ msg('games-msg','err','Could not save: ' + esc(e.message || e)); }
+    render();
+  });
+  window.addEventListener('beforeunload', e=>{ if(games.some(g=>g.t !== g.tWas || g.d !== g.dWas)){ e.preventDefault(); e.returnValue = ''; } });
+
+  async function boot(){
+    const denied = el('denied');
+    if(!A){ denied.hidden = false; denied.textContent = 'This page isn’t available right now (a required library failed to load).'; return; }
+    await A.authReady;
+    const user = A.currentUser;
+    if(!user || !A.isSiteAdmin(user)){ denied.hidden = false; denied.textContent = 'Not authorized. Sign in as the site admin to view this page.'; return; }
+    try{
+      const [us, gs] = await Promise.all([A.db.collection('users').get(), A.db.collection('games').get()]);
+      users = us.docs.map(d=>({ uid:d.id, username:d.data().username || d.id, isTester:d.data().isTester === true, isDeveloper:d.data().isDeveloper === true }));
+      games = gs.docs.map(d=>{ const x = d.data(); return { slug:d.id, name:x.name || d.id, code:x.code || '', devStatus:x.devStatus || '', section:x.section || '', t:x.testersGroup === true, tWas:x.testersGroup === true, d:x.developersGroup === true, dWas:x.developersGroup === true }; })
+        .sort((a,b)=>a.name.localeCompare(b.name));
+    }catch(e){ denied.hidden = false; denied.textContent = 'Could not load: ' + (e.message || e); return; }
+    el('members-panel').hidden = false; el('devs-panel').hidden = false; el('games-panel').hidden = false;
+    const devs = users.filter(u=>u.isDeveloper).sort((a,b)=>a.username.localeCompare(b.username));
+    el('dev-count').textContent = '(' + devs.length + ')';
+    el('devs').innerHTML = devs.length ? devs.map(u=>'<span class="chip" style="padding-right:11px">'+esc(u.username)+'</span>').join('') : '<span class="none">No developers yet.</span>';
+    renderMembers(); render();
+  }
+  boot();
+})();
+</script>
+</body>
+</html>

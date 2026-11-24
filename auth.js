@@ -63,13 +63,18 @@ window.NGPC_AUTH = (function(){
   }
   // True for isGameManager() OR an account this game's own developer/admin has listed under
   // games/{slug}.previewTesters (an array of uids, set from admin/game/'s Preview Access panel) --
+  // (or any member of the Testers group, when the game has the group attached) --
   // lets another developer see and play a still-'coming-soon' game's leaderboard/play page before
   // it goes live, without granting them the ability to actually edit it. Every access-gated
   // leaderboard/play page's isAuthorizedViewer() should use this, not isGameManager, for the
   // coming-soon check.
   function canPreviewGame(user, gameData){
     return isGameManager(user, gameData)
-      || (!!user && !!gameData && Array.isArray(gameData.previewTesters) && gameData.previewTesters.includes(user.uid));
+      || (!!user && !!gameData && Array.isArray(gameData.previewTesters) && gameData.previewTesters.includes(user.uid))
+      // the site-wide Testers group (users/{uid}.isTester, managed at /admin/testers/) on a game that has the group attached
+      || (!!user && user.isTester === true && !!gameData && gameData.testersGroup === true)
+      // the Developers group: every account with developer access (users/{uid}.isDeveloper), on a game that has the group attached
+      || (!!user && user.isDeveloper === true && !!gameData && gameData.developersGroup === true);
   }
 
   // ---- admin email notifications -- writes a doc to mail/{id}, which the Firebase "Trigger
@@ -1039,6 +1044,8 @@ window.NGPC_AUTH = (function(){
       // firestore.rules' gameSubmissions allow create). Defaults false; nobody grants this to
       // themselves.
       isDeveloper: !!data.isDeveloper,
+      // Admin-granted membership of the site-wide Testers group (/admin/testers/): sees games that have the group attached.
+      isTester: !!data.isTester,
       // Admin-granted yes/no, same trust level as the hardcoded ADMIN_UID below -- see
       // isSiteAdmin(). Defaults false; nobody grants this to themselves (see firestore.rules'
       // users/{uid} allow update, which only lets the OWNER'S OWN branch leave this field
