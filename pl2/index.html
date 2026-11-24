@@ -152,7 +152,9 @@
       <div class="title-block">
         <h1>Puzzle Link 2</h1>
         <div class="game-version" id="game-version" hidden></div>
-        <div class="created-by">Leaderboard patch by <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
+        <div class="created-by">&copy; Yumekobo 1999 &middot; Leaderboard patch by <a href="/user/?u=hardhatwarrior">@HARDHATWARRIOR</a></div>
+        <a href="/pl2/patch/" class="rom-link" id="patch-link">&#128190; Patch your ROM (in browser)</a>
+        <div class="patch-note">Uses your own Puzzle Link 2 (USA, Europe) cartridge dump; nothing is uploaded. No ROM is provided.</div>
         <a href="/admin/game/?slug=pl2" class="admin-link" id="admin-link" hidden>&#9881; Manage Game</a>
       </div>
     </div>
@@ -237,17 +239,28 @@
     return ALNUM[Math.floor(s/36)] + ALNUM[s%36];
   }
 
-  // PLACEHOLDER: the Puzzle Link 2 leaderboard patch's payload layout isn't final yet, so no code is accepted.
-  // Replace with the real parser (see pm/index.html) once the patch exists.
-  function parseGamePayload(text){
-    return {error:"Scores for this game aren't open yet."};
+  function parsePuzzleLink2Payload(text){
+    if(text.length < 21) return {error:"That code is too short — rescan with the whole code in frame."};
+    if(text.length > 21) return {error:"That code is too long to be a score — rescan just the one code."};
+    if(text.slice(3,4) !== '1') return {error:"That code is from a different version of the patch."};
+    const initials = text.slice(4,7);
+    if(!/^[0-9A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
+    if(!/^\d{12}$/.test(text.slice(7,19))) return {error:"That code has an unreadable value."};
+    if(text.slice(19) !== lbCheck(text.slice(0,19))) return {error:"That code didn't scan cleanly (check mismatch) — rescan it."};
+    const score = parseInt(text.slice(7,15),10);
+    const targets = parseInt(text.slice(15,16),10);
+    const powerUp = text.slice(16,17) === '1';
+    const level = parseInt(text.slice(17,19),10);
+    if(score < 1) return {error:"That code doesn't look like a finished game."};
+    if(targets < 2 || targets > 4 || !/[01]/.test(text.slice(16,17))) return {error:"That code's settings didn't look right."};
+    return { game:QR_GAME_CODE, initials, score, targets, powerUp, level };
   }
 
   function parsePayload(text){
     text = (text||'').trim().toUpperCase();
     if(text.length < 2) return {error:"That code is too short to be a valid score."};
-    if(text.startsWith(QR_GAME_CODE)) return parseGamePayload(text);
-    const code = text.slice(0,QR_GAME_CODE.length);
+    const code = text.slice(0,3);
+    if(code === QR_GAME_CODE) return parsePuzzleLink2Payload(text);
     return {error:'Unknown game code "'+code+'".'};
   }
 
@@ -270,7 +283,9 @@
 
   function renderScorecardHTML(data){
     const rows = '<tr><td>Score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
-      '<tr><td>Level reached</td><td class="tk-val tnum">'+data.level+'</td></tr>';
+      '<tr><td>Level</td><td class="tk-val tnum">L-'+data.level+'</td></tr>'+
+      '<tr><td>Targets</td><td class="tk-val tnum">'+data.targets+'</td></tr>'+
+      '<tr><td>Power UP</td><td class="tk-val">'+(data.powerUp?'On':'Off')+'</td></tr>';
     return '<table class="tk-sheet">'+rows+'</table>';
   }
 

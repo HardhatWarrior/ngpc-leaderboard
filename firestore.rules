@@ -351,6 +351,22 @@ service cloud.firestore {
           && d.level is int && d.level >= 0 && d.level <= 999
           && isRetailLbBase(d, 999999);
       }
+      // Puzzle Link (PL1, Normal): difficulty 0-2, STAGE? grid start 0-8, level index (stage*5+round) 0-99
+      function isPuzzleLinkScore(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'difficulty', 'startStage', 'level', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.difficulty is int && d.difficulty >= 0 && d.difficulty <= 2
+          && d.startStage is int && d.startStage >= 0 && d.startStage <= 8
+          && d.level is int && d.level >= 0 && d.level <= 99
+          && isRetailLbBase(d, 99999999);
+      }
+      // Puzzle Link 2 (PL2, Endless): targets 2-4, Power UP on/off, Endless level 0-99
+      function isPuzzleLink2Score(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'targets', 'powerUp', 'level', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.targets is int && d.targets >= 2 && d.targets <= 4
+          && d.powerUp is bool
+          && d.level is int && d.level >= 0 && d.level <= 99
+          && isRetailLbBase(d, 99999999);
+      }
 
       // Ghost 'N Goblins - A Portal Too Far: game, initials, score (8 digits, 1..99999999), stage reached (1..7),
       // timeBonus (0..score; points earned from stage completion), source, submittedAt, required uid/username.
@@ -993,6 +1009,8 @@ service cloud.firestore {
           || (request.resource.data.game == 'PB' && isPuzzleBobbleScore(request.resource.data))
           || (request.resource.data.game == 'SN' && isSonicPocketScore(request.resource.data))
           || (request.resource.data.game == 'MD' && isMagicalDropScore(request.resource.data))
+          || (request.resource.data.game == 'PL1' && isPuzzleLinkScore(request.resource.data))
+          || (request.resource.data.game == 'PL2' && isPuzzleLink2Score(request.resource.data))
           || (request.resource.data.game == 'PM' && isPacManScore(request.resource.data))
           || (request.resource.data.game == 'PNG' && isPangNGPCScore(request.resource.data))
           || (request.resource.data.game == 'SPR' && isPocketSprintScore(request.resource.data))
