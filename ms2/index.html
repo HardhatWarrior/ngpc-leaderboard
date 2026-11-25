@@ -253,7 +253,8 @@
 </div>
 
 <script src="/auth.js"></script>
-<script src="/achievements/badges.js?v=6"></script>
+<script src="/achievements/badges.js?v=7"></script>
+<script src="/ms-career.js?v=1"></script>
 <script>
 (function(){
   "use strict";
@@ -352,7 +353,8 @@
   // POWs per mission (1-37), from the game's rescue list (each POW record names its mission); 100 in all
   const MS2_MISSION_POWS = [7,2,0,0,0,4,1,3,0,5,10,9,8,9,6,2,3,2,3,0,1,0,1,1,0,0,5,0,1,8,5,0,0,2,1,0,1];
   // a player's POWs: each mission counted once (its best run), NORMAL or harder only -- same as the career panel
-  function careerPows(uid){ const best = {}; missionDocs.forEach(doc=>{ const d = doc.data(); if(d.uid === uid && d.level >= 2) best[d.mission] = Math.max(best[d.mission]||0, d.pows||0); }); return Object.values(best).reduce((a,b)=>a+b,0); }
+  function careerDoc(uid){ const doc = missionDocs.find(d=>d.data().uid === uid && Array.isArray(d.data().mBest)); return doc ? doc.data() : null; }
+  function careerPows(uid){ const d = careerDoc(uid); return d && Array.isArray(d.mPows) ? d.mPows.reduce((a,b)=>a+b,0) : 0; }
   function renderScorecardHTML(data){
     if(data.game === 'MS2M'){
       return '<table class="tk-sheet">'+
@@ -492,29 +494,22 @@
     const out = el('career'), me = myUid(), uid = careerUid || me;
     const viewingOther = !!(careerUid && careerUid !== me);
     el('career-back').hidden = !viewingOther || !me;
-    const mine = uid ? missionDocs.map(d=>d.data()).filter(d=>d.uid === uid && d.level >= 2) : [];
-    const name = viewingOther ? (mine[0] && mine[0].username ? '@'+mine[0].username.toUpperCase() : 'Player') : '';
+    const c = uid ? careerDoc(uid) : null;
+    const name = viewingOther ? (c && c.username ? '@'+c.username.toUpperCase() : 'Player') : '';
     el('career-title').textContent = viewingOther ? name + '’s Career' : 'My Career';
     if(!uid){ out.innerHTML = '<div class="empty-state">Sign in to see your career stats.</div>'; return; }
-    if(!mine.length){ out.innerHTML = '<div class="empty-state">'+(viewingOther ? 'No mission codes for this player yet.' : 'No mission codes yet. Scan the QR shown after a MISSION COMPLETE.')+'</div>'; return; }
-    const best = {}, plays = {};
-    const powsBest = {}; let powsAll = 0, top = 0;
-    mine.forEach(d=>{
-      if(!best[d.mission] || d.mscore > best[d.mission].mscore || (d.mscore === best[d.mission].mscore && d.level > best[d.mission].level)) best[d.mission] = d;
-      plays[d.mission] = (plays[d.mission]||0) + 1;
-      powsBest[d.mission] = Math.max(powsBest[d.mission]||0, d.pows||0); powsAll = Math.max(powsAll, d.powsAll||0); top = Math.max(top, d.score||0);
-    });
-    const done = Object.keys(best).length;
+    if(!c){ out.innerHTML = '<div class="empty-state">'+(viewingOther ? 'No mission codes for this player yet.' : 'No mission codes yet. Scan the QR shown after a MISSION COMPLETE.')+'</div>'; return; }
+    const done = c.mClears.filter(x=>x > 0).length;
     let rows = '';
     for(let i=0;i<37;i++){
-      const b = best[i];
-      rows += '<tr'+(b?'':' style="opacity:.45"')+'><td>Mission '+(i+1)+'</td><td class="tk-val tnum">'+(b?b.mscore+diffTag(b):'—')+'</td><td class="tk-val tnum">'+(MS2_MISSION_POWS[i] ? (b?b.pows:0)+' / '+MS2_MISSION_POWS[i] : '—')+'</td><td class="tk-val tnum">'+(plays[i]||'')+'</td></tr>';
+      const has = c.mClears[i] > 0;
+      rows += '<tr'+(has?'':' style="opacity:.45"')+'><td>Mission '+(i+1)+'</td><td class="tk-val tnum">'+(has ? c.mBest[i]+diffTag({game:'MS2M', level:c.mLevel[i]}) : '—')+'</td><td class="tk-val tnum">'+(MS2_MISSION_POWS[i] ? (c.mPows[i]||0)+' / '+MS2_MISSION_POWS[i] : '—')+'</td><td class="tk-val tnum">'+(has ? c.mClears[i] : '')+'</td></tr>';
     }
     out.innerHTML = '<table class="tk-sheet">'+
-      '<tr><td>Best total score</td><td class="tk-val tnum" colspan="3">'+top+'</td></tr>'+
+      '<tr><td>Best total score</td><td class="tk-val tnum" colspan="3">'+c.score+diffTag(c)+'</td></tr>'+
       '<tr><td>Missions recorded</td><td class="tk-val tnum" colspan="3">'+done+' / 37</td></tr>'+
-      '<tr><td>POWs saved (best run of each mission)</td><td class="tk-val tnum" colspan="3">'+Object.values(powsBest).reduce((a,b)=>a+b,0)+' / 100</td></tr>'+
-      '<tr><td>POWs on the rescue list (cart)</td><td class="tk-val tnum" colspan="3">'+powsAll+' / 100</td></tr>'+
+      '<tr><td>POWs saved (best run of each mission)</td><td class="tk-val tnum" colspan="3">'+careerPows(uid)+' / 100</td></tr>'+
+      '<tr><td>POWs on the rescue list (cart)</td><td class="tk-val tnum" colspan="3">'+(c.powsAll||0)+' / 100</td></tr>'+
       '</table><table class="tk-sheet" style="margin-top:10px"><tr><td class="row-meta">Mission</td><td class="tk-val row-meta">Best score</td><td class="tk-val row-meta">POWs</td><td class="tk-val row-meta">Clears</td></tr>'+rows+'</table>';
     drawCareerBadges(uid, missionDocs.concat(allDocs).map(d=>d.data()).filter(d=>d.uid === uid));
   }
@@ -745,18 +740,21 @@
       approved: !!authedUser.approved,
     });
     if(sub.game === 'MS2M'){
+      // one career doc per player (MS2M_<uid>): the code is merged in (ms-career.js)
       try{
-        const id = 'MS2M_' + authedUser.uid + '_' + sub.mission + '_' + sub.score;
-        const existing = await db.collection('scores').doc(id).get().catch(()=>null);
-        if(existing && existing.exists){ btn.disabled = false; confirmMsg.innerHTML = '<div class="msg err">That mission code is already recorded.</div>'; return; }
-        const res = await writeScore(id, record);
+        const id = 'MS2M_' + authedUser.uid;
+        const snap = await db.collection('scores').doc(id).get().catch(()=>null);
+        const prev = snap && snap.exists ? snap.data() : null;
+        const m = MS_CAREER.merge(prev, sub, 37, true, { source: SUBMIT_SOURCE, submittedAt: Date.now(), uid: authedUser.uid, username: authedUser.username, approved: !!authedUser.approved });
+        if(m.dup){ btn.disabled = false; confirmMsg.innerHTML = '<div class="msg err">That mission code is already recorded.</div>'; return; }
+        const res = await writeScore(id, m.data);
         btn.disabled = false;
         if(res.ok){
-          el('success-text').textContent = (sub.initials||'') + ' — Mission ' + (sub.mission+1) + ': ' + sub.mscore + ' points, ' + sub.pows + ' POW' + (sub.pows===1?'':'s') + ' (total ' + sub.score + ') recorded.';
+          el('success-text').textContent = (sub.initials||'') + ' — Mission ' + (sub.mission+1) + ': ' + sub.mscore + ' points, ' + sub.pows + ' POW' + (sub.pows===1?'':'s') + ' recorded' + (m.better ? ' — new best total ' + sub.score + '.' : '.');
           if(pending === sub) pending = null;
           showStage('success');
         } else if(res.error && res.error.code === 'permission-denied'){
-          confirmMsg.innerHTML = '<div class="msg err">Not saved: that mission code may already be recorded (permission-denied).</div>';
+          confirmMsg.innerHTML = '<div class="msg err">Not saved: the leaderboard refused this update (permission-denied). If your account is still awaiting approval, try again once it is approved.</div>';
         } else {
           confirmMsg.innerHTML = '<div class="msg err">Write failed: '+escapeHtml(res.error?.message || 'unknown')+'</div>';
         }

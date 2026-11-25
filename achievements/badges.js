@@ -239,65 +239,65 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
     ], 'Counted from approved series on the <a href="/sb/">Shut the Box leaderboard</a>.')
   );
 
-  // Metal Slug 1st Mission: mission codes (MS1M, one doc per mission tally) plus the older total-only codes (MS1).
-  PROVIDERS.push({ key:'ms1', name:'Metal Slug 1st Mission', async load(ctx){
-    const all = ctx.scores.filter(d=>(d.game === 'MS1M' || d.game === 'MS1') && d.level >= 2).sort((a,b)=>(a.submittedAt||0)-(b.submittedAt||0));
-    const ms = all.filter(d=>d.game === 'MS1M');
-    if(!all.length) return null;
-    const first = (arr, f)=>arr.find(f);
-    const reach = (arr, n)=>{ const set = new Set(); for(const d of arr){ if(d.mission < 23) set.add(d.mission); if(set.size >= n) return d; } return null; };
-    const on = (hit, b, got)=>({ grp:b[0], name:b[1], sub: hit ? (got ? got(hit) : 'Earned '+fmtDate(hit.submittedAt)) : b[2], at: hit ? hit.submittedAt : 0, on: !!hit, big: !!b[3] });
-    const tot = (d)=>'Total '+d.score.toLocaleString()+', '+fmtDate(d.submittedAt);
-    const list = [
-      on(ms[0], ['Missions','BOOTS ON THE GROUND','submit a mission code']),
-      on(reach(ms, 10), ['Missions','TOUR OF DUTY','record 10 different missions']),
-      on(first(all, d=>d.cleared >= 12), ['Missions','VETERAN','12 missions cleared'], d=>d.cleared+' missions cleared, '+fmtDate(d.submittedAt)),
-      on(first(all, d=>d.cleared >= 23), ['Missions','MISSION ACCOMPLISHED','all 23 missions cleared', true]),
-      on(first(all, d=>d.score >= 10000), ['Score','10K','a total score of 10,000 or more'], tot),
-      on(first(all, d=>d.score >= 50000), ['Score','50K','a total score of 50,000 or more'], tot),
-      on(first(all, d=>d.score >= 100000), ['Score','100K','a total score of 100,000 or more', true], tot),
-      on(first(ms, d=>d.mscore >= 5000), ['Score','HIGH VALUE TARGET','5,000 or more in a single mission'], d=>d.mscore.toLocaleString()+' in mission '+(d.mission < 23 ? d.mission+1 : '?')+', '+fmtDate(d.submittedAt)),
-    ];
-    const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
-    return { note: head.pct+'%', earned: got > 0, list: list, html:
-      '<h2 class="g-title">Metal Slug 1st Mission</h2>'+head.html+badgeGrid(list)+
-      '<p class="fine">Counted from your approved codes on the <a href="/ms1/">Metal Slug 1st Mission leaderboard</a>.</p>' };
-  } });
-
-  // Metal Slug 2nd Mission: mission codes (MS2M, one doc per MISSION COMPLETE) and Time Attack times (MS2).
-  // Some badges add up across codes (missions recorded, POWs saved, both characters, all 8 stages).
-  PROVIDERS.push({ key:'ms2', name:'Metal Slug 2nd Mission', async load(ctx){
-    const ms = ctx.scores.filter(d=>d.game === 'MS2M' && d.level >= 2).sort((a,b)=>(a.submittedAt||0)-(b.submittedAt||0));
-    const ta = ctx.scores.filter(d=>d.game === 'MS2').sort((a,b)=>(a.submittedAt||0)-(b.submittedAt||0));
-    if(!ms.length && !ta.length) return null;
-    const first = (arr, f)=>arr.find(f);
-    // first code at which a running total / distinct set reaches n
-    const reach = (arr, step, n)=>{ let acc = null; for(const d of arr){ acc = step(acc, d); if(acc.n >= n) return d; } return null; };
-    // POWs per mission count once (the best run of that mission), so replaying a mission doesn't add them again
-    const sumPows = (acc, d)=>{ const best = acc ? acc.best : {}; best[d.mission] = Math.max(best[d.mission]||0, d.pows||0); return { best: best, n: Object.values(best).reduce((a,b)=>a+b,0) }; };
-    const distinct = (key)=>(acc, d)=>{ const set = acc ? acc.set : new Set(); set.add(key(d)); return { set:set, n:set.size }; };
-    const on = (hit, b, got)=>({ grp:b[0], name:b[1], sub: hit ? (got ? got(hit) : 'Earned '+fmtDate(hit.submittedAt)) : b[2], at: hit ? hit.submittedAt : 0, on: !!hit, big: !!b[3] });
-    const list = [
-      on(first(ms, d=>d.pows >= 1), ['Rescue','FIRST RESCUE','free a POW in a recorded mission']),
-      on(first(ms, d=>d.pows >= 5), ['Rescue','SQUAD LEADER','free 5 POWs in one mission'], d=>d.pows+' POWs in mission '+(d.mission+1)+', '+fmtDate(d.submittedAt)),
-      on(reach(ms, sumPows, 100), ['Rescue','LIFELINE','all 100 POWs saved (best run of each mission)', true]),
-      on(ms[0], ['Missions','BOOTS ON THE GROUND','submit a mission code']),
-      on(reach(ms, distinct(d=>d.mission), 10), ['Missions','TOUR OF DUTY','record 10 different missions']),
-      on(first(ms, d=>d.cleared >= 20), ['Missions','VETERAN','20 missions cleared'], d=>d.cleared+' missions cleared, '+fmtDate(d.submittedAt)),
-      on(first(ms, d=>d.cleared >= 37), ['Missions','MISSION ACCOMPLISHED','all 37 missions cleared', true]),
-      on(first(ms, d=>d.score >= 100000), ['Score','100K','a total score of 100,000 or more'], d=>'Total '+d.score.toLocaleString()+', '+fmtDate(d.submittedAt)),
-      on(first(ms, d=>d.score >= 500000), ['Score','500K','a total score of 500,000 or more'], d=>'Total '+d.score.toLocaleString()+', '+fmtDate(d.submittedAt)),
-      on(first(ms, d=>d.score >= 1000000), ['Score','1 MILLION','a total score of 1,000,000 or more', true], d=>'Total '+d.score.toLocaleString()+', '+fmtDate(d.submittedAt)),
-      on(first(ms, d=>d.mscore >= 20000), ['Score','HIGH VALUE TARGET','20,000 or more in a single mission'], d=>d.mscore.toLocaleString()+' in mission '+(d.mission+1)+', '+fmtDate(d.submittedAt)),
-      on(reach(ms, distinct(d=>d.character), 2), ['Characters','DOUBLE DUTY','record missions as both Marco and Fio']),
-      on(ta[0], ['Time Attack','ON THE CLOCK','submit a Time Attack time']),
-      on(reach(ta, distinct(d=>d.stage), 8), ['Time Attack','FULL SWEEP','a Time Attack time on all 8 stages']),
-    ];
-    const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
-    return { note: head.pct+'%', earned: got > 0, list: list, html:
-      '<h2 class="g-title">Metal Slug 2nd Mission</h2>'+head.html+badgeGrid(list)+
-      '<p class="fine">Counted from your approved mission codes and Time Attack times on the <a href="/ms2/">Metal Slug 2nd Mission leaderboard</a>.</p>' };
-  } });
+  // Metal Slug: one career doc per player (MS1M_<uid> / MS2M_<uid>, see /ms-career.js) holding the best run plus
+  // per-mission lists (mBest, mClears, mPows ...). MS1 also counts the older total-only codes (MS1); MS2 Time Attack
+  // times (MS2) stay one doc per stage. Career docs keep no per-badge dates, so earned badges just say "Earned".
+  function careerBadges(key, title, link, defs){
+    return { key:key, name:title, async load(ctx){
+      const st = defs.state(ctx.scores);
+      if(!st) return null;
+      const list = defs.list(st).map(b=>({ grp:b[0], name:b[1], sub: b[4] ? (b[5] || 'Earned') : b[2], at:0, on: !!b[4], big: !!b[3] }));
+      const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
+      return { note: head.pct+'%', earned: got > 0, list: list, html:
+        '<h2 class="g-title">'+esc(title)+'</h2>'+head.html+badgeGrid(list)+
+        '<p class="fine">Counted from your career on the <a href="'+link+'">'+esc(title)+' leaderboard</a>.</p>' };
+    } };
+  }
+  const sum = (a)=>Array.isArray(a) ? a.reduce((x,y)=>x+y,0) : 0;
+  const count = (a, f)=>Array.isArray(a) ? a.filter(f).length : 0;
+  const anyOf = (a, f)=>Array.isArray(a) && a.some(f);
+  PROVIDERS.push(careerBadges('ms1', 'Metal Slug 1st Mission', '/ms1/', {
+    state(scores){
+      const c = scores.find(d=>d.game === 'MS1M' && Array.isArray(d.mBest));
+      const old = scores.filter(d=>d.game === 'MS1' && d.level >= 2);
+      if(!c && !old.length) return null;
+      return { c: c, top: Math.max(c ? c.score : 0, ...old.map(d=>d.score)), cleared: Math.max(c ? (c.clearedMax||0) : 0, ...old.map(d=>d.cleared||0)) };
+    },
+    list(st){ const c = st.c || {}; return [
+      ['Missions','BOOTS ON THE GROUND','submit a mission code', false, !!st.c],
+      ['Missions','TOUR OF DUTY','record 10 different missions', false, count(c.mClears, x=>x>0) >= 10],
+      ['Missions','VETERAN','12 missions cleared', false, st.cleared >= 12, st.cleared+' missions cleared'],
+      ['Missions','MISSION ACCOMPLISHED','all 23 missions cleared', true, st.cleared >= 23],
+      ['Score','10K','a total score of 10,000 or more', false, st.top >= 10000, 'Best total '+st.top.toLocaleString()],
+      ['Score','50K','a total score of 50,000 or more', false, st.top >= 50000, 'Best total '+st.top.toLocaleString()],
+      ['Score','100K','a total score of 100,000 or more', true, st.top >= 100000, 'Best total '+st.top.toLocaleString()],
+      ['Score','HIGH VALUE TARGET','5,000 or more in a single mission', false, anyOf(c.mBest, x=>x >= 5000)],
+    ]; }
+  }));
+  PROVIDERS.push(careerBadges('ms2', 'Metal Slug 2nd Mission', '/ms2/', {
+    state(scores){
+      const c = scores.find(d=>d.game === 'MS2M' && Array.isArray(d.mBest));
+      const ta = scores.filter(d=>d.game === 'MS2');
+      if(!c && !ta.length) return null;
+      return { c: c, ta: ta };
+    },
+    list(st){ const c = st.c || {}, pows = sum(c.mPows), stages = new Set(st.ta.map(d=>d.stage)).size; return [
+      ['Rescue','FIRST RESCUE','free a POW in a recorded mission', false, pows >= 1],
+      ['Rescue','SQUAD LEADER','free 5 POWs in one mission', false, anyOf(c.mPows, x=>x >= 5)],
+      ['Rescue','LIFELINE','all 100 POWs saved (best run of each mission)', true, pows >= 100, pows+' / 100 POWs'],
+      ['Missions','BOOTS ON THE GROUND','submit a mission code', false, !!st.c],
+      ['Missions','TOUR OF DUTY','record 10 different missions', false, count(c.mClears, x=>x>0) >= 10],
+      ['Missions','VETERAN','20 missions cleared', false, (c.clearedMax||0) >= 20, (c.clearedMax||0)+' missions cleared'],
+      ['Missions','MISSION ACCOMPLISHED','all 37 missions cleared', true, (c.clearedMax||0) >= 37],
+      ['Score','100K','a total score of 100,000 or more', false, (c.score||0) >= 100000, 'Best total '+(c.score||0).toLocaleString()],
+      ['Score','500K','a total score of 500,000 or more', false, (c.score||0) >= 500000, 'Best total '+(c.score||0).toLocaleString()],
+      ['Score','1 MILLION','a total score of 1,000,000 or more', true, (c.score||0) >= 1000000, 'Best total '+(c.score||0).toLocaleString()],
+      ['Score','HIGH VALUE TARGET','20,000 or more in a single mission', false, anyOf(c.mBest, x=>x >= 20000)],
+      ['Characters','DOUBLE DUTY','record missions as both Marco and Fio', false, Array.isArray(c.chars) && c.chars.length >= 2],
+      ['Time Attack','ON THE CLOCK','submit a Time Attack time', false, st.ta.length > 0],
+      ['Time Attack','FULL SWEEP','a Time Attack time on all 8 stages', false, stages >= 8, '8 / 8 stages'],
+    ]; }
+  }));
 
 window.NGPC_BADGES = { PROVIDERS: PROVIDERS, esc: esc, fmtDate: fmtDate };
 })();
