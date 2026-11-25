@@ -273,13 +273,14 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
     const first = (arr, f)=>arr.find(f);
     // first code at which a running total / distinct set reaches n
     const reach = (arr, step, n)=>{ let acc = null; for(const d of arr){ acc = step(acc, d); if(acc.n >= n) return d; } return null; };
-    const sumPows = (acc, d)=>({ n: (acc ? acc.n : 0) + (d.pows||0) });
+    // POWs per mission count once (the best run of that mission), so replaying a mission doesn't add them again
+    const sumPows = (acc, d)=>{ const best = acc ? acc.best : {}; best[d.mission] = Math.max(best[d.mission]||0, d.pows||0); return { best: best, n: Object.values(best).reduce((a,b)=>a+b,0) }; };
     const distinct = (key)=>(acc, d)=>{ const set = acc ? acc.set : new Set(); set.add(key(d)); return { set:set, n:set.size }; };
     const on = (hit, b, got)=>({ grp:b[0], name:b[1], sub: hit ? (got ? got(hit) : 'Earned '+fmtDate(hit.submittedAt)) : b[2], at: hit ? hit.submittedAt : 0, on: !!hit, big: !!b[3] });
     const list = [
       on(first(ms, d=>d.pows >= 1), ['Rescue','FIRST RESCUE','free a POW in a recorded mission']),
       on(first(ms, d=>d.pows >= 5), ['Rescue','SQUAD LEADER','free 5 POWs in one mission'], d=>d.pows+' POWs in mission '+(d.mission+1)+', '+fmtDate(d.submittedAt)),
-      on(reach(ms, sumPows, 100), ['Rescue','LIFELINE','100 POWs saved across your recorded missions']),
+      on(reach(ms, sumPows, 100), ['Rescue','LIFELINE','all 100 POWs saved (best run of each mission)', true]),
       on(ms[0], ['Missions','BOOTS ON THE GROUND','submit a mission code']),
       on(reach(ms, distinct(d=>d.mission), 10), ['Missions','TOUR OF DUTY','record 10 different missions']),
       on(first(ms, d=>d.cleared >= 20), ['Missions','VETERAN','20 missions cleared'], d=>d.cleared+' missions cleared, '+fmtDate(d.submittedAt)),
