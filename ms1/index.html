@@ -340,9 +340,9 @@
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('score','desc').limit(10);
+    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('score','desc').limit(100);
     unsubscribeBoard = q.onSnapshot(
-      (snap)=>{ renderBoard(snap.docs); },
+      (snap)=>{ renderBoard(onePerPlayer(snap.docs).slice(0,10)); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
     );
   }
@@ -358,10 +358,37 @@
     }
   }
 
-  async function writeScore(data){
+  async function writeScore(id, data){
     if(!db) return {ok:false, error:new Error('db not initialized')};
-    try{ await db.collection('scores').add(data); return {ok:true}; }
+    try{ await db.collection('scores').doc(id).set(data); return {ok:true}; }
     catch(e){ return {ok:false, error:e}; }
+  }
+
+  // ---- One entry per player, keep-best ----
+  // A player's best lives at scores/MS1_<uid>; a code replaces it only when it ranks strictly better, and the player's
+  // other (older) entries are then removed. firestore.rules enforces keep-best on every update.
+  function myEntryId(uid, p){ return 'MS1_' + uid; }
+  function kbBetter(a, b){ return a.score > b.score; }
+  function kbDescribe(k){ return String(k.score) + ' points'; }
+  // the player's entries on this code's board (null if the read failed: the rules still enforce keep-best)
+  async function fetchMyEntries(uid, p){
+    const out = [];
+    if(!db || !uid) return out;
+    try{
+      const snap = await db.collection('scores').where('uid','==',uid).where('game','==',QR_GAME_CODE).where('approved','==',true).get();
+      snap.forEach(function(doc){ const d = doc.data(); if(true) out.push({id:doc.id, data:d}); });
+    }catch(e){ console.warn('could not read existing entries', e); return null; }
+    return out;
+  }
+  function bestOf(entries){
+    let best = null;
+    (entries||[]).forEach(function(e){ if(!best || kbBetter(e.data, best.data)) best = e; });
+    return best;
+  }
+  // one row per player (their best) -- docs must already be sorted best-first
+  function onePerPlayer(docs){
+    const seen = new Set();
+    return docs.filter(function(doc){ const k = doc.data().uid || doc.id; if(seen.has(k)) return false; seen.add(k); return true; });
   }
 
   function showStage(stage){
@@ -526,7 +553,8 @@
     const btn = el('btn-confirm');
     btn.disabled = true;
     confirmMsg.innerHTML = '<div class="msg ok">Submitting…</div>';
-    const record = Object.assign({}, pending, {
+    const sub = pending;
+    const record = Object.assign({}, sub, {
       source: SUBMIT_SOURCE,
       submittedAt: Date.now(),
       uid: authedUser.uid,
@@ -534,12 +562,25 @@
       approved: !!authedUser.approved,
     });
     try{
-      const res = await writeScore(record);
+      const myId = myEntryId(authedUser.uid, sub);
+      const mine = await fetchMyEntries(authedUser.uid, sub);
+      const best = mine ? bestOf(mine) : null;
+      if(best && !kbBetter(sub, best.data)){
+        btn.disabled = false;
+        confirmMsg.innerHTML = '<div class="msg err">Your entry (' + escapeHtml(kbDescribe(best.data)) + ') is already as good or better than this code (' +
+          escapeHtml(kbDescribe(sub)) + '), so nothing was changed.</div>';
+        return;
+      }
+      const res = await writeScore(myId, record);
       btn.disabled = false;
       if(res.ok){
-        el('success-text').textContent = (pending.initials||'') + ' — ' + formatDisplayValue(pending) + ' submitted to the leaderboard.';
-        pending = null;
+        // keep only the best: drop this player's older entries on this board (auto-id ones from before keep-best)
+        if(mine) for(const e of mine){ if(e.id !== myId){ try{ await db.collection('scores').doc(e.id).delete(); }catch(err){ console.warn('old entry not removed', err); } } }
+        el('success-text').textContent = (sub.initials||'') + ' — ' + formatDisplayValue(sub) + (best ? ' — your entry was updated.' : ' submitted to the leaderboard.');
+        if(pending === sub) pending = null;
         showStage('success');
+      } else if(res.error && res.error.code === 'permission-denied'){
+        confirmMsg.innerHTML = '<div class="msg err">Not saved: the leaderboard refused this entry (permission-denied). Your saved entry may already be better.</div>';
       } else {
         confirmMsg.innerHTML = '<div class="msg err">Write failed: '+escapeHtml(res.error?.message || 'unknown')+'</div>';
       }

@@ -206,9 +206,16 @@
 
     <section class="panel">
       <h2>Leaderboard</h2>
-      <div class="stage-row"><span class="stage-lbl">TIME ATTACK STAGE</span> <span id="stage-tabs"></span></div>
+      <div class="stage-row"><span class="stage-lbl">BOARD</span> <span id="stage-tabs"></span></div>
+      <div id="board-note" class="row-meta" style="margin:-4px 0 10px"></div>
       <div id="board-status"></div>
       <div id="board"></div>
+    </section>
+
+    <section class="panel" id="career-panel">
+      <h2>Career</h2>
+      <div class="stage-row"><span class="stage-lbl">PLAYER</span> <select id="career-player" style="font:inherit;padding:4px 8px;border-radius:8px;background:transparent;color:inherit;border:1px solid var(--line,#444)"></select></div>
+      <div id="career"></div>
     </section>
   </main>
 
@@ -244,7 +251,23 @@
     return ALNUM[Math.floor(s/36)] + ALNUM[s%36];
   }
 
+  // MS22: main game MISSION COMPLETE -- total(7) + mission score(7) + mission(2, 0-36) + POWs this mission(2)
+  // + POWs ever rescued(3) + missions cleared(2) + level(1) + character(1) + check(2)
+  function parseMissionPayload(text){
+    if(text.length !== 34) return {error: text.length < 34 ? "That code is too short — rescan with the whole code in frame." : "That code is too long — rescan just the one code."};
+    const initials = text.slice(4,7);
+    if(!/^[0-9A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
+    if(!/^\d{25}$/.test(text.slice(7,32))) return {error:"That code has an unreadable value."};
+    if(text.slice(32) !== lbCheck(text.slice(0,32))) return {error:"That code didn't scan cleanly (check mismatch) — rescan it."};
+    const n = (a,b)=>parseInt(text.slice(a,b),10);
+    const r = { game:'MS2M', initials, score:n(7,14), mscore:n(14,21), mission:n(21,23), pows:n(23,25), powsAll:n(25,28),
+      cleared:n(28,30), level:n(30,31), character:n(31,32) };
+    if(r.score < 1 || r.mission > 36 || r.pows > 16 || r.powsAll > 128 || r.cleared > 37 || r.character > 1 || r.mscore > r.score)
+      return {error:"That code doesn't look like a completed mission."};
+    return r;
+  }
   function parseMetalSlug2Payload(text){
+    if(text.slice(3,4) === '2') return parseMissionPayload(text);
     if(text.length < 15) return {error:"That code is too short — rescan with the whole code in frame."};
     if(text.length > 15) return {error:"That code is too long to be a time — rescan just the one code."};
     if(text.slice(3,4) !== '1') return {error:"That code is from a different version of the patch."};
@@ -285,9 +308,22 @@
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
-  function formatDisplayValue(o){ return fmtTime(o.score) + ' (Stage ' + (o.stage+1) + ')'; }
+  function formatDisplayValue(o){
+    if(o.game === 'MS2M') return o.score + ' (Mission ' + (o.mission+1) + ')';
+    return fmtTime(o.score) + ' (Stage ' + (o.stage+1) + ')';
+  }
+  function boardValue(d){ return d.game === 'MS2M' ? String(d.score) : fmtTime(d.score); }
 
   function renderScorecardHTML(data){
+    if(data.game === 'MS2M'){
+      return '<table class="tk-sheet">'+
+        '<tr><td>Mission</td><td class="tk-val tnum">'+(data.mission+1)+'</td></tr>'+
+        '<tr><td>Mission score</td><td class="tk-val tnum">'+data.mscore+'</td></tr>'+
+        '<tr><td>POWs rescued</td><td class="tk-val tnum">'+data.pows+'</td></tr>'+
+        '<tr><td>Missions cleared</td><td class="tk-val tnum">'+data.cleared+' / 37</td></tr>'+
+        '<tr><td>Total score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
+        '<tr><td>Character</td><td class="tk-val">'+(MS2_CHARS[data.character]||'?')+'</td></tr></table>';
+    }
     const rows = '<tr><td>Stage</td><td class="tk-val tnum">'+(data.stage+1)+'</td></tr>'+
       '<tr><td>Time</td><td class="tk-val tnum">'+fmtTime(data.score)+'</td></tr>'+
       '<tr><td>Character</td><td class="tk-val">'+(MS2_CHARS[data.character]||'?')+'</td></tr>';
@@ -309,7 +345,7 @@
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.score!=null?fmtTime(data.score):'-')+'</div>'+
+        '<div class="score-val tnum">'+(data.score!=null?boardValue(data):'-')+'</div>'+
       '</div>';
       const detailHtml = '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data)+'</div>';
       return rowHtml + detailHtml;
@@ -341,26 +377,76 @@
     }
   }
 
-  let allDocs = [], curStage = 0;
+  let allDocs = [], missionDocs = [], curStage = -1;
   function drawStage(){
     const tabs = document.getElementById('stage-tabs');
     const have = new Set(allDocs.map(d=>d.data().stage));
-    let html = '';
+    let html = '<button class="stage-tab'+(curStage===-1?' on':'')+'" data-stage="-1" style="padding:6px 10px">MISSIONS</button> <span class="stage-lbl">TIME ATTACK</span> ';
+    el('board-note').textContent = curStage === -1 ? 'Main game total score at a MISSION COMPLETE — each player’s best.' : 'Time Attack stage ' + (curStage+1) + ' — fastest clear per player.';
+    if(curStage === -1){
+      tabs.innerHTML = html + Array.from({length:8},(_,i)=>'<button class="stage-tab" data-stage="'+i+'">'+(i+1)+'</button>').join('');
+      const docs = missionDocs.slice().sort((a,b)=>b.data().score-a.data().score || (a.data().submittedAt||0)-(b.data().submittedAt||0));
+      renderBoard(onePerPlayer(docs).slice(0,10));
+      return;
+    }
     for(let i=0;i<8;i++) html += '<button class="stage-tab'+(i===curStage?' on':'')+'" data-stage="'+i+'">'+(i+1)+(have.has(i)?'':'')+'</button>';
     tabs.innerHTML = html;
-    const docs = allDocs.filter(d=>d.data().stage===curStage).sort((a,b)=>a.data().score-b.data().score || (a.data().submittedAt||0)-(b.data().submittedAt||0)).slice(0,10);
-    renderBoard(docs);
+    const docs = allDocs.filter(d=>d.data().stage===curStage).sort((a,b)=>a.data().score-b.data().score || (a.data().submittedAt||0)-(b.data().submittedAt||0));
+    renderBoard(onePerPlayer(docs).slice(0,10));
   }
   document.addEventListener('click', (e)=>{ const b = e.target.closest('.stage-tab'); if(!b) return; curStage = parseInt(b.dataset.stage,10); drawStage(); });
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
     const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).limit(1000);
-    unsubscribeBoard = q.onSnapshot(
+    const unsubA = q.onSnapshot(
       (snap)=>{ allDocs = snap.docs; drawStage(); },
       (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
     );
+    const qm = db.collection('scores').where('game','==','MS2M').where('approved','==',true).limit(5000);
+    const unsubM = qm.onSnapshot(
+      (snap)=>{ missionDocs = snap.docs; drawStage(); drawCareer(); },
+      (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
+    );
+    unsubscribeBoard = ()=>{ unsubA(); unsubM(); };
   }
+
+  // ---- Career: every mission QR a player submitted -> best score per mission, POWs rescued (sum over missions) ----
+  function careerPlayers(){
+    const by = new Map();
+    missionDocs.forEach(doc=>{ const d = doc.data(); if(d.uid && !by.has(d.uid)) by.set(d.uid, d.username || d.initials || '?'); });
+    return by;
+  }
+  function drawCareer(){
+    const sel = el('career-player'), out = el('career');
+    const players = careerPlayers();
+    if(!players.size){ sel.innerHTML = ''; out.innerHTML = '<div class="empty-state">No mission codes yet. Scan the QR shown after a MISSION COMPLETE.</div>'; return; }
+    const me = window.NGPC_AUTH && NGPC_AUTH.currentUser && NGPC_AUTH.currentUser.uid;
+    const keep = sel.value || (me && players.has(me) ? me : players.keys().next().value);
+    sel.innerHTML = Array.from(players).sort((a,b)=>String(a[1]).localeCompare(String(b[1]))).map(([uid,name])=>
+      '<option value="'+escapeHtml(uid)+'"'+(uid===keep?' selected':'')+'>@'+escapeHtml(String(name).toUpperCase())+'</option>').join('');
+    const mine = missionDocs.map(d=>d.data()).filter(d=>d.uid === sel.value);
+    const best = {}, plays = {};
+    let pows = 0, powsAll = 0, top = 0;
+    mine.forEach(d=>{
+      if(!best[d.mission] || d.mscore > best[d.mission].mscore) best[d.mission] = d;
+      plays[d.mission] = (plays[d.mission]||0) + 1;
+      pows += d.pows||0; powsAll = Math.max(powsAll, d.powsAll||0); top = Math.max(top, d.score||0);
+    });
+    const done = Object.keys(best).length;
+    let rows = '';
+    for(let i=0;i<37;i++){
+      const b = best[i];
+      rows += '<tr'+(b?'':' style="opacity:.45"')+'><td>Mission '+(i+1)+'</td><td class="tk-val tnum">'+(b?b.mscore:'—')+'</td><td class="tk-val tnum">'+(b?b.pows:'')+'</td><td class="tk-val tnum">'+(plays[i]||'')+'</td></tr>';
+    }
+    out.innerHTML = '<table class="tk-sheet">'+
+      '<tr><td>Best total score</td><td class="tk-val tnum" colspan="3">'+top+'</td></tr>'+
+      '<tr><td>Missions recorded</td><td class="tk-val tnum" colspan="3">'+done+' / 37</td></tr>'+
+      '<tr><td>POWs saved (all recorded missions)</td><td class="tk-val tnum" colspan="3">'+pows+'</td></tr>'+
+      '<tr><td>POWs on the rescue list (cart)</td><td class="tk-val tnum" colspan="3">'+powsAll+'</td></tr>'+
+      '</table><table class="tk-sheet" style="margin-top:10px"><tr><td class="row-meta">Mission</td><td class="tk-val row-meta">Best score</td><td class="tk-val row-meta">POWs</td><td class="tk-val row-meta">Clears</td></tr>'+rows+'</table>';
+  }
+  document.addEventListener('change', (e)=>{ if(e.target && e.target.id === 'career-player') drawCareer(); });
 
   function initDb(){
     if(!firebase || !firebase.firestore){ boardStatusEl.innerHTML = '<div class="msg err">Firestore module not available</div>'; return; }
@@ -373,10 +459,37 @@
     }
   }
 
-  async function writeScore(data){
+  async function writeScore(id, data){
     if(!db) return {ok:false, error:new Error('db not initialized')};
-    try{ await db.collection('scores').add(data); return {ok:true}; }
+    try{ await db.collection('scores').doc(id).set(data); return {ok:true}; }
     catch(e){ return {ok:false, error:e}; }
+  }
+
+  // ---- One entry per player per stage, keep-best ----
+  // A player's best lives at scores/MS2_<uid>_<stage>; a code replaces it only when it ranks strictly better, and the player's
+  // other (older) entries are then removed. firestore.rules enforces keep-best on every update.
+  function myEntryId(uid, p){ return 'MS2_' + uid + '_' + p.stage; }
+  function kbBetter(a, b){ return a.score < b.score; }
+  function kbDescribe(k){ return fmtTime(k.score) + ' on Stage ' + (k.stage+1); }
+  // the player's entries on this code's board (null if the read failed: the rules still enforce keep-best)
+  async function fetchMyEntries(uid, p){
+    const out = [];
+    if(!db || !uid) return out;
+    try{
+      const snap = await db.collection('scores').where('uid','==',uid).where('game','==',QR_GAME_CODE).where('approved','==',true).get();
+      snap.forEach(function(doc){ const d = doc.data(); if(d.stage === p.stage) out.push({id:doc.id, data:d}); });
+    }catch(e){ console.warn('could not read existing entries', e); return null; }
+    return out;
+  }
+  function bestOf(entries){
+    let best = null;
+    (entries||[]).forEach(function(e){ if(!best || kbBetter(e.data, best.data)) best = e; });
+    return best;
+  }
+  // one row per player (their best) -- docs must already be sorted best-first
+  function onePerPlayer(docs){
+    const seen = new Set();
+    return docs.filter(function(doc){ const k = doc.data().uid || doc.id; if(seen.has(k)) return false; seen.add(k); return true; });
   }
 
   function showStage(stage){
@@ -541,20 +654,53 @@
     const btn = el('btn-confirm');
     btn.disabled = true;
     confirmMsg.innerHTML = '<div class="msg ok">Submitting…</div>';
-    const record = Object.assign({}, pending, {
+    const sub = pending;
+    const record = Object.assign({}, sub, {
       source: SUBMIT_SOURCE,
       submittedAt: Date.now(),
       uid: authedUser.uid,
       username: authedUser.username,
       approved: !!authedUser.approved,
     });
+    if(sub.game === 'MS2M'){
+      try{
+        const id = 'MS2M_' + authedUser.uid + '_' + sub.mission + '_' + sub.score;
+        const existing = await db.collection('scores').doc(id).get().catch(()=>null);
+        if(existing && existing.exists){ btn.disabled = false; confirmMsg.innerHTML = '<div class="msg err">That mission code is already recorded.</div>'; return; }
+        const res = await writeScore(id, record);
+        btn.disabled = false;
+        if(res.ok){
+          el('success-text').textContent = (sub.initials||'') + ' — Mission ' + (sub.mission+1) + ': ' + sub.mscore + ' points, ' + sub.pows + ' POW' + (sub.pows===1?'':'s') + ' (total ' + sub.score + ') recorded.';
+          if(pending === sub) pending = null;
+          showStage('success');
+        } else if(res.error && res.error.code === 'permission-denied'){
+          confirmMsg.innerHTML = '<div class="msg err">Not saved: that mission code may already be recorded (permission-denied).</div>';
+        } else {
+          confirmMsg.innerHTML = '<div class="msg err">Write failed: '+escapeHtml(res.error?.message || 'unknown')+'</div>';
+        }
+      }catch(e){ btn.disabled = false; confirmMsg.innerHTML = '<div class="msg err">Submit error: '+escapeHtml(e.message)+'</div>'; }
+      return;
+    }
     try{
-      const res = await writeScore(record);
+      const myId = myEntryId(authedUser.uid, sub);
+      const mine = await fetchMyEntries(authedUser.uid, sub);
+      const best = mine ? bestOf(mine) : null;
+      if(best && !kbBetter(sub, best.data)){
+        btn.disabled = false;
+        confirmMsg.innerHTML = '<div class="msg err">Your entry (' + escapeHtml(kbDescribe(best.data)) + ') is already as good or better than this code (' +
+          escapeHtml(kbDescribe(sub)) + '), so nothing was changed.</div>';
+        return;
+      }
+      const res = await writeScore(myId, record);
       btn.disabled = false;
       if(res.ok){
-        el('success-text').textContent = (pending.initials||'') + ' — ' + formatDisplayValue(pending) + ' submitted to the leaderboard.';
-        pending = null;
+        // keep only the best: drop this player's older entries on this board (auto-id ones from before keep-best)
+        if(mine) for(const e of mine){ if(e.id !== myId){ try{ await db.collection('scores').doc(e.id).delete(); }catch(err){ console.warn('old entry not removed', err); } } }
+        el('success-text').textContent = (sub.initials||'') + ' — ' + formatDisplayValue(sub) + (best ? ' — your entry was updated.' : ' submitted to the leaderboard.');
+        if(pending === sub) pending = null;
         showStage('success');
+      } else if(res.error && res.error.code === 'permission-denied'){
+        confirmMsg.innerHTML = '<div class="msg err">Not saved: the leaderboard refused this entry (permission-denied). Your saved entry may already be better.</div>';
       } else {
         confirmMsg.innerHTML = '<div class="msg err">Write failed: '+escapeHtml(res.error?.message || 'unknown')+'</div>';
       }

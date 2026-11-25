@@ -40,7 +40,7 @@
       <li>Download the patched ROM, play SELF CHALLENGE. At game over, enter your initials and the QR appears. Scan it on the leaderboard page.</li>
     </ol>
     <div class="variant">
-      <div><b>What you get</b>: the leaderboard QR at every game over (CONTINUE? and GAME OVER), with your final score. Padded to 2 MB; needs a 2 MB-capable flash cart.</div>
+      <div><b>What you get</b>: the leaderboard QR at every game over (CONTINUE? and GAME OVER), with your run score (every level added up). Padded to 2 MB; needs a 2 MB-capable flash cart.</div>
     </div>
     <label class="drop" id="drop">Tap to choose your ROM, or drop it here
       <input type="file" id="file" accept=".ngc,.ngp,.bin,.zip,application/octet-stream">
@@ -67,9 +67,9 @@
   const SRC_SIZE = 1048576, SRC_CRC = 0x5BFAD822;
   // one patch; OLD_PATCHED = earlier builds of it, recognised as already patched
   const VARIANTS = {
-    lb: {ips:'/cr/crushroller_lb.ips', size:2097152, crc:0xE766818A, name:'Crush Roller (Leaderboard).ngc'}
+    lb: {ips:'/cr/crushroller_lb.ips', size:2097152, crc:0xB700CB68, name:'Crush Roller (Leaderboard).ngc'}
   };
-  const OLD_PATCHED = [];
+  const OLD_PATCHED = [0xE766818A, 0x419ED6F2, 0xA8E08F61];   // _01: save in the 1 MB blocks (SAVE ERROR on 2 MB); _02: per-level score; _03: run total in game-used RAM
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');
@@ -125,8 +125,8 @@
     say('Verified and patched (CRC32 ' + hex(out) + ').' + carried, 'ok');
   }
 
-  // save carry: the game keeps its save (high scores, collection) at 0xF8000 / 0xFA000 (two 8 KB flash blocks); both are carried.
-  const SAVE_SRC = [0xF8000, 0xFC000], SAVE_DST = [0xF8000], SAVE_MIN = 0x100000, SAVE_TITLE = 'CRUSH ROLLER', SAVE_FACTORY = 0xB40FF42E;
+  // save carry: the game keeps its save (high scores, collection) at 0xF8000 / 0xFA000 on the retail cart, 0x1F8000 / 0x1FA000 in this patch (two 8 KB flash blocks); both are carried.
+  const SAVE_SRC = [0xF8000, 0xFC000], SAVE_DST = [0x1F8000], SAVE_MIN = 0x100000, SAVE_TITLE = 'CRUSH ROLLER', SAVE_FACTORY = 0xB40FF42E;
   let saveBlk = null, saveName = '';
   const sst = document.getElementById('sstatus');
   async function handleSave(file){
@@ -135,7 +135,9 @@
     const b = new Uint8Array(await file.arrayBuffer());
     const title = String.fromCharCode(...b.slice(0x24, 0x24 + SAVE_TITLE.length));
     if(b.length < SAVE_MIN || title !== SAVE_TITLE){ sst.className = 'bad'; sst.textContent = file.name + ' is not a full Crush Roller cart readback.'; if(lastFile) handle(lastFile); return; }
-    const blk = b.slice(SAVE_SRC[0], SAVE_SRC[1]);
+    // _02+ keep the save at 0x1F8000 (2 MB block layout); the retail cart and _01 at 0xF8000
+    let blk = b.length >= 0x200000 ? b.slice(0x1F8000, 0x1FC000) : null;
+    if(!blk || blk.every(x => x === 0xFF)) blk = b.slice(SAVE_SRC[0], SAVE_SRC[1]);
     if(blk.every(x => x === 0xFF)){ sst.className = 'bad'; sst.textContent = file.name + ' holds no Crush Roller save.'; if(lastFile) handle(lastFile); return; }
     if(crc32(blk) === SAVE_FACTORY){ sst.className = 'ok'; sst.textContent = file.name + ' only has the factory save (nothing recorded yet), so there is nothing to carry over.'; if(lastFile) handle(lastFile); return; }
     saveBlk = blk; saveName = file.name;

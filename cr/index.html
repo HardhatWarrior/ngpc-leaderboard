@@ -239,16 +239,44 @@
     return ALNUM[Math.floor(s/36)] + ALNUM[s%36];
   }
 
+  // level ids 0-25 -> names (ROM name table) and the routes each level opens (ROM route table)
+  const CR_NAMES = ['1-1','2-1','3-3','3-2','4-1','4-5','5-3','5-4','4-6','5-8','2-2','3-1','4-3','4-4','3-5','2-3','4-2','5-1','3-6','5-7','3-4','5-2','5-5','5-6','4-7','6-1'];
+  const CR_NEXT = [[1,10,15],[14,11,3],[12,13],[16,12],[19,17,21],[22,23,9],[25],[25],[17],[25],[3,2],[8,4,16],[6,7],[7,22],[4],[2,20,18],[21,6],[25],[5],[25],[13,5,24],[25],[25],[25],[23],[1,10,15]];
+  function crLevelName(id){ return id === 35 ? 'Later' : (CR_NAMES[id] || '?'); }
+  function crPathLevels(path){
+    const out = [];
+    for(let i=0;i+5<=(path||'').length;i+=5) out.push({id:ALNUM.indexOf(path[i]), score:parseInt(path.slice(i+1,i+5),36)});
+    return out;
+  }
   function parseCrushRollerPayload(text){
-    if(text.length < 16) return {error:"That code is too short — rescan with the whole code in frame."};
-    if(text.length > 16) return {error:"That code is too long to be a score — rescan just the one code."};
-    if(text.slice(2,3) !== '1') return {error:"That code is from a different version of the patch."};
+    const ver = text.slice(2,3);
+    if(ver !== '1' && ver !== '2') return {error:"That code is from a different version of the patch."};
+    if(ver === '1'){
+      if(text.length < 16) return {error:"That code is too short — rescan with the whole code in frame."};
+      if(text.length > 16) return {error:"That code is too long to be a score — rescan just the one code."};
+    }
     const initials = text.slice(3,6);
     if(!/^[0-9A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
     if(!/^\d{8}$/.test(text.slice(6,14))) return {error:"That code has an unreadable score."};
-    if(text.slice(14) !== lbCheck(text.slice(0,14))) return {error:"That code didn't scan cleanly (check mismatch) — rescan it."};
     const score = parseInt(text.slice(6,14),10);
+    let body = 14, path = null;
+    if(ver === '2'){
+      const n = ALNUM.indexOf(text[14]);
+      if(n < 1 || n > 8) return {error:"That code's level list didn't look right — rescan it."};
+      body = 15 + n*5;
+      if(text.length !== body + 2) return {error:"That code is the wrong length — rescan with the whole code in frame."};
+      path = text.slice(15, body);
+      if(!/^[0-9A-Z]+$/.test(path)) return {error:"That code's level list didn't look right — rescan it."};
+    }
+    if(text.slice(body) !== lbCheck(text.slice(0,body))) return {error:"That code didn't scan cleanly (check mismatch) — rescan it."};
     if(score < 1) return {error:"That code doesn't look like a finished game."};
+    if(path){
+      const lv = crPathLevels(path);
+      let sum = 0, ok = lv[0].id === 0;
+      lv.forEach((l,i)=>{ sum += l.score; if(i && l.id !== 35 && !(CR_NEXT[lv[i-1].id]||[]).includes(l.id)) ok = false; if(l.id > 25 && l.id !== 35) ok = false; });
+      if(!ok || sum !== score) return {error:"That code didn't scan cleanly (level list mismatch) — rescan it."};
+      return { game:QR_GAME_CODE, initials, score, path };
+    }
     return { game:QR_GAME_CODE, initials, score };
   }
 
@@ -278,7 +306,13 @@
   function formatDisplayValue(o){ return String(o.score); }
 
   function renderScorecardHTML(data){
-    const rows = '<tr><td>Final score</td><td class="tk-val tnum">'+data.score+'</td></tr>';
+    let rows = '';
+    if(data.path){
+      const lv = crPathLevels(data.path);
+      rows += lv.map(l=>'<tr><td>Level '+escapeHtml(crLevelName(l.id))+'</td><td class="tk-val tnum">'+l.score+'</td></tr>').join('');
+      rows += '<tr><td>Route</td><td class="tk-val">'+lv.map(l=>escapeHtml(crLevelName(l.id))).join(' → ')+'</td></tr>';
+    }
+    rows += '<tr><td>Final score</td><td class="tk-val tnum">'+data.score+'</td></tr>';
     return '<table class="tk-sheet">'+rows+'</table>';
   }
 

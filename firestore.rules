@@ -377,6 +377,18 @@ service cloud.firestore {
           && d.character is int && d.character >= 0 && d.character <= 1
           && isRetailLbBase(d, 9999);
       }
+      // Metal Slug 2nd Mission main game (MS2M): one doc per MISSION COMPLETE QR (career log), id MS2M_<uid>_<mission>_<total>
+      function isMetalSlug2MissionScore(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'mscore', 'mission', 'pows', 'powsAll', 'cleared', 'level', 'character', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.mscore is int && d.mscore >= 0 && d.mscore <= d.score
+          && d.mission is int && d.mission >= 0 && d.mission <= 36
+          && d.pows is int && d.pows >= 0 && d.pows <= 16
+          && d.powsAll is int && d.powsAll >= 0 && d.powsAll <= 128
+          && d.cleared is int && d.cleared >= 0 && d.cleared <= 37
+          && d.level is int && d.level >= 0 && d.level <= 9
+          && d.character is int && d.character >= 0 && d.character <= 1
+          && isRetailLbBase(d, 9999999);
+      }
       // Metal Slug 1st Mission (MS1): total score at a mission tally, missions cleared 0-23, last mission 0-23, level 0-9
       function isMetalSlug1Score(d) {
         return d.keys().hasOnly(['game', 'initials', 'score', 'cleared', 'mission', 'level', 'source', 'submittedAt', 'uid', 'username', 'approved'])
@@ -385,9 +397,10 @@ service cloud.firestore {
           && d.level is int && d.level >= 0 && d.level <= 9
           && isRetailLbBase(d, 9999999);
       }
-      // Crush Roller (CR): final score at CONTINUE? / GAME OVER
+      // Crush Roller (CR): final score at CONTINUE? / GAME OVER; path (CR2) = levels played, 5 chars each (id + score base 36)
       function isCrushRollerScore(d) {
-        return d.keys().hasOnly(['game', 'initials', 'score', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+        return d.keys().hasOnly(['game', 'initials', 'score', 'path', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && (!('path' in d) || (d.path is string && d.path.matches('^([0-9A-PZ][0-9A-Z]{4}){1,8}$')))
           && isRetailLbBase(d, 99999999);
       }
 
@@ -1034,8 +1047,9 @@ service cloud.firestore {
           || (request.resource.data.game == 'MD' && isMagicalDropScore(request.resource.data))
           || (request.resource.data.game == 'PL1' && isPuzzleLinkScore(request.resource.data))
           || (request.resource.data.game == 'PL2' && isPuzzleLink2Score(request.resource.data))
-          || (request.resource.data.game == 'MS2' && isMetalSlug2Score(request.resource.data))
-          || (request.resource.data.game == 'MS1' && isMetalSlug1Score(request.resource.data))
+          || ((request.resource.data.game == 'MS2' && isMetalSlug2Score(request.resource.data)) && scoreId == 'MS2_' + request.auth.uid + '_' + string(request.resource.data.stage))
+          || ((request.resource.data.game == 'MS1' && isMetalSlug1Score(request.resource.data)) && scoreId == 'MS1_' + request.auth.uid)
+          || ((request.resource.data.game == 'MS2M' && isMetalSlug2MissionScore(request.resource.data)) && scoreId == 'MS2M_' + request.auth.uid + '_' + string(request.resource.data.mission) + '_' + string(request.resource.data.score))
           || (request.resource.data.game == 'CR' && isCrushRollerScore(request.resource.data))
           || (request.resource.data.game == 'PM' && isPacManScore(request.resource.data))
           || (request.resource.data.game == 'PNG' && isPangNGPCScore(request.resource.data))
@@ -1051,7 +1065,10 @@ service cloud.firestore {
         && !(scoreId.matches('^PERSIA_.*') && request.resource.data.game != 'PERSIA')
         && !(scoreId.matches('^BATMAN_.*') && request.resource.data.game != 'BATMAN')
         && !(scoreId.matches('^GN_.*') && request.resource.data.game != 'GN')
-        && !(scoreId.matches('^ACES_.*') && request.resource.data.game != 'ACES');
+        && !(scoreId.matches('^ACES_.*') && request.resource.data.game != 'ACES')
+        && !(scoreId.matches('^MS1_.*') && request.resource.data.game != 'MS1')
+        && !(scoreId.matches('^MS2_.*') && request.resource.data.game != 'MS2')
+        && !(scoreId.matches('^MS2M_.*') && request.resource.data.game != 'MS2M');
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
@@ -1112,7 +1129,24 @@ service cloud.firestore {
           && resource.data.uid == request.auth.uid
           && isAcesScore(request.resource.data)
           && request.resource.data.mode == resource.data.mode
-          && acesRanksBetter(request.resource.data, resource.data));
+          && acesRanksBetter(request.resource.data, resource.data))
+        // Eighth branch: Metal Slug keeps ONE entry per player (MS1_<uid>: higher total wins) and per player per
+        // Time Attack stage (MS2_<uid>_<stage>: lower time wins).
+        || (request.auth != null
+          && scoreId == 'MS1_' + request.auth.uid
+          && resource.data.game == 'MS1'
+          && request.resource.data.game == 'MS1'
+          && resource.data.uid == request.auth.uid
+          && isMetalSlug1Score(request.resource.data)
+          && request.resource.data.score > resource.data.score)
+        || (request.auth != null
+          && scoreId.matches('^MS2_' + request.auth.uid + '_[0-8]$')
+          && resource.data.game == 'MS2'
+          && request.resource.data.game == 'MS2'
+          && resource.data.uid == request.auth.uid
+          && isMetalSlug2Score(request.resource.data)
+          && request.resource.data.stage == resource.data.stage
+          && request.resource.data.score < resource.data.score);
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --
       // anonymous QR submissions have no uid at all, so resource.data.uid == request.auth.uid is
       // false for them (never true against a signed-in caller's uid), and they stay undeletable
