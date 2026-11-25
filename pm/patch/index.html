@@ -55,9 +55,9 @@
   const SRC_SIZE = 524288, SRC_CRC = 0x21E8CC15;
   // one patch; OLD_PATCHED = earlier builds of it, recognised as already patched
   const VARIANTS = {
-    lb: {ips:'/pm/pacman_lb.ips', size:524288, crc:0x8B6A901C, name:'Pac-Man (Leaderboard).ngc'}
+    lb: {ips:'/pm/pacman_lb.ips', size:524288, crc:0xCB200FCA, name:'Pac-Man (Leaderboard).ngc'}
   };
-  const OLD_PATCHED = [];
+  const OLD_PATCHED = [0x8B6A901C];   // _01: score + level only
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');

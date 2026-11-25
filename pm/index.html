@@ -239,7 +239,24 @@
     return ALNUM[Math.floor(s/36)] + ALNUM[s%36];
   }
 
+  // PM2: + dots(4) + power pellets(3) + ghosts 200/400/800/1600 (3 each) + fruit (2 each, 8 kinds) after the level
+  const PM_FRUIT = ['Cherry','Strawberry','Orange','Apple','Melon','Galaxian','Bell','Key'];
+  function parsePacMan2Payload(text){
+    if(text.length !== 53) return {error: text.length < 53 ? "That code is too short — rescan with the whole code in frame." : "That code is too long — rescan just the one code."};
+    const initials = text.slice(3,6);
+    if(!/^[0-9A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
+    if(!/^\d{8}$/.test(text.slice(6,14)) || !/^\d{35}$/.test(text.slice(16,51))) return {error:"That code has an unreadable value."};
+    if(text.slice(51) !== lbCheck(text.slice(0,51))) return {error:"That code didn't scan cleanly (check mismatch) — rescan it."};
+    const score = parseInt(text.slice(6,14),10), level = parseInt(text.slice(14,16),36);
+    if(score < 1 || level < 1) return {error:"That code doesn't look like a finished game."};
+    return { game:QR_GAME_CODE, initials, score, level, stats: text.slice(16,51) };
+  }
+  function pmStats(st){
+    const n = (a,b)=>parseInt(st.slice(a,b),10);
+    return { dots:n(0,4), pellets:n(4,7), ghosts:[n(7,10),n(10,13),n(13,16),n(16,19)], fruit:[0,1,2,3,4,5,6,7].map(i=>n(19+i*2,21+i*2)) };
+  }
   function parsePacManPayload(text){
+    if(text.slice(2,3) === '2') return parsePacMan2Payload(text);
     if(text.length < 18) return {error:"That code is too short — rescan with the whole code in frame."};
     if(text.length > 18) return {error:"That code is too long to be a score — rescan just the one code."};
     if(text.slice(2,3) !== '1') return {error:"That code is from a different version of the patch."};
@@ -280,6 +297,15 @@
   function formatDisplayValue(o){ return String(o.score); }
 
   function renderScorecardHTML(data){
+    if(typeof data.stats === 'string' && data.stats.length === 35){
+      const st = pmStats(data.stats), g = st.ghosts, gt = g[0]+g[1]+g[2]+g[3];
+      const fr = st.fruit.map((v,i)=>v ? PM_FRUIT[i]+' ×'+v : '').filter(Boolean).join(', ') || 'none';
+      return '<table class="tk-sheet"><tr><td>Score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
+        '<tr><td>Level reached</td><td class="tk-val tnum">'+data.level+'</td></tr>'+
+        '<tr><td>Dots / power pellets</td><td class="tk-val tnum">'+st.dots+' / '+st.pellets+'</td></tr>'+
+        '<tr><td>Ghosts eaten</td><td class="tk-val tnum">'+gt+(gt ? ' (200×'+g[0]+' 400×'+g[1]+' 800×'+g[2]+' 1600×'+g[3]+')' : '')+'</td></tr>'+
+        '<tr><td>Fruit</td><td class="tk-val">'+fr+'</td></tr></table>';
+    }
     const rows = '<tr><td>Score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
       '<tr><td>Level reached</td><td class="tk-val tnum">'+data.level+'</td></tr>';
     return '<table class="tk-sheet">'+rows+'</table>';

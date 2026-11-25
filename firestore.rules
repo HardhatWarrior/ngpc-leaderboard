@@ -344,8 +344,9 @@ service cloud.firestore {
       }
       // Pac-Man (PM, retail patch): score 8 BCD digits from the cart, level 1-based (2 base 36).
       function isPacManScore(d) {
-        return d.keys().hasOnly(['game', 'initials', 'score', 'level', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+        return d.keys().hasOnly(['game', 'initials', 'score', 'level', 'stats', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.level is int && d.level >= 1 && d.level <= 1295
+          && (!('stats' in d) || (d.stats is string && d.stats.matches('^[0-9]{35}$')))
           && isRetailLbBase(d, 99999999);
       }
       function isMagicalDropScore(d) {
