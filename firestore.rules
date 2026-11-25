@@ -389,6 +389,30 @@ service cloud.firestore {
           && d.codes is list && d.codes.size() >= 1 && d.codes.size() <= 300
           && isRetailLbBase(d, 99999999);
       }
+      // Magical Drop career: ONE doc per player (MDC_<uid>): best run (score + its max chain / level), best chain, highest
+      // level, games, total score, the last 300 merged codes. Best + codes may only grow.
+      function isMagicalDropCareer(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'maxChain', 'level', 'bestAt', 'plays', 'chainBest', 'levelBest', 'total', 'codes', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.maxChain is int && d.maxChain >= 0 && d.maxChain <= 99
+          && d.level is int && d.level >= 0 && d.level <= 999
+          && d.chainBest is int && d.chainBest >= d.maxChain && d.chainBest <= 99
+          && d.levelBest is int && d.levelBest >= d.level && d.levelBest <= 999
+          && d.total is int && d.total >= d.score
+          && d.bestAt is int && d.plays is int && d.plays >= 1
+          && d.codes is list && d.codes.size() >= 1 && d.codes.size() <= 300
+          && isRetailLbBase(d, 999999);
+      }
+      // Puzzle Bobble career: ONE doc per player (PBC_<uid>): best run (score + its rank), highest rank, games, total
+      // score, the last 300 merged codes. Best + total + codes may only grow.
+      function isPuzzleBobbleCareer(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'rank', 'bestAt', 'plays', 'rankBest', 'total', 'codes', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.rank is int && d.rank >= 0 && d.rank <= 1295
+          && d.rankBest is int && d.rankBest >= d.rank && d.rankBest <= 1295
+          && d.total is int && d.total >= d.score
+          && d.bestAt is int && d.plays is int && d.plays >= 1
+          && d.codes is list && d.codes.size() >= 1 && d.codes.size() <= 300
+          && isRetailLbBase(d, 999999999);
+      }
       // Pac-Man career: ONE doc per player (PMC_<uid>): best score (+ its level), highest level, games, totals of dots,
       // pellets, ghosts [200,400,800,1600], fruit [8 kinds], the last 300 merged codes. Best + codes may only grow.
       function isPacManCareer(d) {
@@ -1125,6 +1149,8 @@ service cloud.firestore {
           || ((request.resource.data.game == 'PL1C' && isPuzzleLink1Career(request.resource.data)) && scoreId == 'PL1C_' + request.auth.uid)
           || ((request.resource.data.game == 'PMC' && isPacManCareer(request.resource.data)) && scoreId == 'PMC_' + request.auth.uid)
           || ((request.resource.data.game == 'CRC' && isCrushRollerCareer(request.resource.data)) && scoreId == 'CRC_' + request.auth.uid)
+          || ((request.resource.data.game == 'MDC' && isMagicalDropCareer(request.resource.data)) && scoreId == 'MDC_' + request.auth.uid)
+          || ((request.resource.data.game == 'PBC' && isPuzzleBobbleCareer(request.resource.data)) && scoreId == 'PBC_' + request.auth.uid)
           || ((request.resource.data.game == 'PL2C' && isPuzzleLink2Career(request.resource.data)) && scoreId == 'PL2C_' + request.auth.uid)
           || ((request.resource.data.game == 'MS2M' && isMetalSlug2MissionScore(request.resource.data)) && scoreId == 'MS2M_' + request.auth.uid)
           || (request.resource.data.game == 'CR' && isCrushRollerScore(request.resource.data))
@@ -1150,7 +1176,9 @@ service cloud.firestore {
         && !(scoreId.matches('^PL1C_.*') && request.resource.data.game != 'PL1C')
         && !(scoreId.matches('^PL2C_.*') && request.resource.data.game != 'PL2C')
         && !(scoreId.matches('^PMC_.*') && request.resource.data.game != 'PMC')
-        && !(scoreId.matches('^CRC_.*') && request.resource.data.game != 'CRC');
+        && !(scoreId.matches('^CRC_.*') && request.resource.data.game != 'CRC')
+        && !(scoreId.matches('^MDC_.*') && request.resource.data.game != 'MDC')
+        && !(scoreId.matches('^PBC_.*') && request.resource.data.game != 'PBC');
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
@@ -1263,6 +1291,26 @@ service cloud.firestore {
           && request.resource.data.game == 'CRC'
           && isCrushRollerCareer(request.resource.data)
           && request.resource.data.score >= resource.data.score
+          && request.resource.data.codes.size() >= resource.data.codes.size())
+        // Thirteenth branch: the Magical Drop career (MDC_<uid>): best, total and the code list may only grow.
+        || (request.auth != null
+          && scoreId == 'MDC_' + request.auth.uid
+          && resource.data.uid == request.auth.uid
+          && resource.data.game == 'MDC'
+          && request.resource.data.game == 'MDC'
+          && isMagicalDropCareer(request.resource.data)
+          && request.resource.data.score >= resource.data.score
+          && request.resource.data.total >= resource.data.total
+          && request.resource.data.codes.size() >= resource.data.codes.size())
+        // Fourteenth branch: the Puzzle Bobble career (PBC_<uid>): best, total and the code list may only grow.
+        || (request.auth != null
+          && scoreId == 'PBC_' + request.auth.uid
+          && resource.data.uid == request.auth.uid
+          && resource.data.game == 'PBC'
+          && request.resource.data.game == 'PBC'
+          && isPuzzleBobbleCareer(request.resource.data)
+          && request.resource.data.score >= resource.data.score
+          && request.resource.data.total >= resource.data.total
           && request.resource.data.codes.size() >= resource.data.codes.size());
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --
       // anonymous QR submissions have no uid at all, so resource.data.uid == request.auth.uid is

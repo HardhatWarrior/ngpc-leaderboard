@@ -67,9 +67,9 @@
   const SRC_SIZE = 1048576, SRC_CRC = 0xE69EAE3E;
   // one patch; OLD_PATCHED = earlier builds of it, recognised as already patched
   const VARIANTS = {
-    lb: {ips:'/pb/puzzlebobble_lb.ips', size:2097152, crc:0xC19FAEBF, name:'Puzzle Bobble Mini (Leaderboard).ngc'}
+    lb: {ips:'/pb/puzzlebobble_lb.ips', size:2097152, crc:0xF1594306, name:'Puzzle Bobble Mini (Leaderboard).ngc'}
   };
-  const OLD_PATCHED = [0x4F9CF6FD, 0x64D53553];
+  const OLD_PATCHED = [0x4F9CF6FD, 0x64D53553, 0xC19FAEBF];
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');

@@ -282,6 +282,57 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
       ['Score','25K','a score of 25,000 or more', true, st.top >= 25000, 'Best '+st.top.toLocaleString()],
     ]; }
   }));
+  // Magical Drop career (MDC_<uid>): best run, best chain, highest level, games, total score; the older MD entries count
+  // for score / chain / level.
+  PROVIDERS.push(careerBadges('md', 'Magical Drop Pocket', '/md/', {
+    state(scores){
+      const c = scores.find(d=>d.game === 'MDC');
+      const old = scores.filter(d=>d.game === 'MD');
+      if(!c && !old.length) return null;
+      const cc = c || {};
+      return { c: cc, top: Math.max(cc.score||0, ...old.map(d=>d.score||0)), chain: Math.max(cc.chainBest||0, ...old.map(d=>d.maxChain||0)),
+        level: Math.max(cc.levelBest||0, ...old.map(d=>d.level||0)), plays: cc.plays||0, total: cc.total||0 };
+    },
+    list(st){ const n = (v)=>v.toLocaleString(); return [
+      ['Score','1K','a score of 1,000 or more', false, st.top >= 1000, 'Best '+n(st.top)],
+      ['Score','5K','a score of 5,000 or more', false, st.top >= 5000, 'Best '+n(st.top)],
+      ['Score','10K','a score of 10,000 or more', false, st.top >= 10000, 'Best '+n(st.top)],
+      ['Score','50K','a score of 50,000 or more', true, st.top >= 50000, 'Best '+n(st.top)],
+      ['Chains','CHAIN 3','a max chain of 3 or more', false, st.chain >= 3, 'Best chain '+st.chain],
+      ['Chains','CHAIN 5','a max chain of 5 or more', false, st.chain >= 5, 'Best chain '+st.chain],
+      ['Chains','CHAIN 10','a max chain of 10 or more', true, st.chain >= 10, 'Best chain '+st.chain],
+      ['Levels','LEVEL 10','reach level 10', false, st.level >= 10, 'Highest level '+st.level],
+      ['Levels','LEVEL 25','reach level 25', false, st.level >= 25, 'Highest level '+st.level],
+      ['Levels','LEVEL 50','reach level 50', true, st.level >= 50, 'Highest level '+st.level],
+      ['Career','REGULAR','record 10 games', false, st.plays >= 10, st.plays+' games'],
+      ['Career','DROP ADDICT','record 50 games', false, st.plays >= 50, st.plays+' games'],
+      ['Career','100K TOTAL','100,000 points over all recorded games', true, st.total >= 100000, n(st.total)+' total'],
+    ]; }
+  }));
+  // Puzzle Bobble career (PBC_<uid>): best run, highest rank, games, total score; the older PB entries count for
+  // score / rank.
+  PROVIDERS.push(careerBadges('pb', 'Puzzle Bobble Mini', '/pb/', {
+    state(scores){
+      const c = scores.find(d=>d.game === 'PBC');
+      const old = scores.filter(d=>d.game === 'PB');
+      if(!c && !old.length) return null;
+      const cc = c || {};
+      return { top: Math.max(cc.score||0, ...old.map(d=>d.score||0)), rank: Math.max(cc.rankBest||0, ...old.map(d=>d.rank||0)),
+        plays: cc.plays||0, total: cc.total||0 };
+    },
+    list(st){ const n = (v)=>v.toLocaleString(); return [
+      ['Score','1K','a Survivor score of 1,000 or more', false, st.top >= 1000, 'Best '+n(st.top)],
+      ['Score','5K','a Survivor score of 5,000 or more', false, st.top >= 5000, 'Best '+n(st.top)],
+      ['Score','10K','a Survivor score of 10,000 or more', false, st.top >= 10000, 'Best '+n(st.top)],
+      ['Score','50K','a Survivor score of 50,000 or more', true, st.top >= 50000, 'Best '+n(st.top)],
+      ['Rank','RANK 25','reach rank 25', false, st.rank >= 25, 'Highest rank '+st.rank],
+      ['Rank','RANK 50','reach rank 50', false, st.rank >= 50, 'Highest rank '+st.rank],
+      ['Rank','RANK 99','reach rank 99', true, st.rank >= 99, 'Highest rank '+st.rank],
+      ['Career','REGULAR','record 10 games', false, st.plays >= 10, st.plays+' games'],
+      ['Career','BUBBLE ADDICT','record 50 games', false, st.plays >= 50, st.plays+' games'],
+      ['Career','100K TOTAL','100,000 points over all recorded games', true, st.total >= 100000, n(st.total)+' total'],
+    ]; }
+  }));
   // Pac-Man career (PMC_<uid>): best score + totals over every recorded game; the older PM entries count for score.
   PROVIDERS.push(careerBadges('pm', 'Pac-Man', '/pm/', {
     state(scores){

@@ -615,7 +615,7 @@
         GAME_LIVE[g.code] = g.devStatus !== 'coming-soon';
       });
       // Metal Slug mission-log docs (MS1M / MS2M) are the same games as MS1 / MS2
-      [['MS1M','MS1'],['MS2M','MS2'],['PL1C','PL1'],['PL2C','PL2'],['PMC','PM'],['CRC','CR']].forEach(([a,b])=>{ if(GAME_NAMES[b]){ GAME_NAMES[a] = GAME_NAMES[b]; GAME_LIVE[a] = GAME_LIVE[b]; } });
+      [['MS1M','MS1'],['MS2M','MS2'],['PL1C','PL1'],['PL2C','PL2'],['PMC','PM'],['CRC','CR'],['MDC','MD'],['PBC','PB']].forEach(([a,b])=>{ if(GAME_NAMES[b]){ GAME_NAMES[a] = GAME_NAMES[b]; GAME_LIVE[a] = GAME_LIVE[b]; } });
       // The ticker (connectTicker(), below) subscribes independently and starts immediately at
       // load -- its first snapshot can easily arrive before this fetch resolves, rendering with
       // GAME_NAMES still empty (falls back to the raw code, e.g. "2K" instead of "2048"). Re-run
