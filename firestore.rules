@@ -378,6 +378,17 @@ service cloud.firestore {
           && d.character is int && d.character >= 0 && d.character <= 1
           && isRetailLbBase(d, 9999);
       }
+      // Pac-Man career: ONE doc per player (PMC_<uid>): best score (+ its level), highest level, games, totals of dots,
+      // pellets, ghosts [200,400,800,1600], fruit [8 kinds], the last 300 merged codes. Best + codes may only grow.
+      function isPacManCareer(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'level', 'levelMax', 'bestAt', 'plays', 'dots', 'pellets', 'ghosts', 'fruit', 'codes', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.level is int && d.level >= 1 && d.level <= 1295 && d.levelMax is int && d.levelMax >= d.level
+          && d.bestAt is int && d.plays is int && d.plays >= 1
+          && d.dots is int && d.dots >= 0 && d.pellets is int && d.pellets >= 0
+          && d.ghosts is list && d.ghosts.size() == 4 && d.fruit is list && d.fruit.size() == 8
+          && d.codes is list && d.codes.size() >= 1 && d.codes.size() <= 300
+          && isRetailLbBase(d, 99999999);
+      }
       // Puzzle Link careers: ONE doc per player (PL1C_<uid> / PL2C_<uid>, /pl-career.js): best(s) + card collection
       // (cardSet, 5 cards a char, 0-9A-V) + the last 300 merged codes. Updates may not lower a best or shrink the codes.
       function isPuzzleLink1Career(d) {
@@ -1101,6 +1112,7 @@ service cloud.firestore {
           || ((request.resource.data.game == 'MS1' && isMetalSlug1Score(request.resource.data)) && scoreId == 'MS1_' + request.auth.uid)
           || ((request.resource.data.game == 'MS1M' && isMetalSlug1MissionScore(request.resource.data)) && scoreId == 'MS1M_' + request.auth.uid)
           || ((request.resource.data.game == 'PL1C' && isPuzzleLink1Career(request.resource.data)) && scoreId == 'PL1C_' + request.auth.uid)
+          || ((request.resource.data.game == 'PMC' && isPacManCareer(request.resource.data)) && scoreId == 'PMC_' + request.auth.uid)
           || ((request.resource.data.game == 'PL2C' && isPuzzleLink2Career(request.resource.data)) && scoreId == 'PL2C_' + request.auth.uid)
           || ((request.resource.data.game == 'MS2M' && isMetalSlug2MissionScore(request.resource.data)) && scoreId == 'MS2M_' + request.auth.uid)
           || (request.resource.data.game == 'CR' && isCrushRollerScore(request.resource.data))
@@ -1124,7 +1136,8 @@ service cloud.firestore {
         && !(scoreId.matches('^MS2M_.*') && request.resource.data.game != 'MS2M')
         && !(scoreId.matches('^MS1M_.*') && request.resource.data.game != 'MS1M')
         && !(scoreId.matches('^PL1C_.*') && request.resource.data.game != 'PL1C')
-        && !(scoreId.matches('^PL2C_.*') && request.resource.data.game != 'PL2C');
+        && !(scoreId.matches('^PL2C_.*') && request.resource.data.game != 'PL2C')
+        && !(scoreId.matches('^PMC_.*') && request.resource.data.game != 'PMC');
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
@@ -1219,7 +1232,16 @@ service cloud.firestore {
           && request.resource.data.game == resource.data.game
           && ((resource.data.game == 'PL1C' && isPuzzleLink1Career(request.resource.data))
             || (resource.data.game == 'PL2C' && isPuzzleLink2Career(request.resource.data)))
-          && plCareerGrows(request.resource.data, resource.data));
+          && plCareerGrows(request.resource.data, resource.data))
+        // Eleventh branch: the Pac-Man career (PMC_<uid>): the best score and the code list may only grow.
+        || (request.auth != null
+          && scoreId == 'PMC_' + request.auth.uid
+          && resource.data.uid == request.auth.uid
+          && resource.data.game == 'PMC'
+          && request.resource.data.game == 'PMC'
+          && isPacManCareer(request.resource.data)
+          && request.resource.data.score >= resource.data.score
+          && request.resource.data.codes.size() >= resource.data.codes.size());
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --
       // anonymous QR submissions have no uid at all, so resource.data.uid == request.auth.uid is
       // false for them (never true against a signed-in caller's uid), and they stay undeletable

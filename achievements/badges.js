@@ -259,6 +259,34 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
   // Puzzle Link careers (PL1C_<uid> / PL2C_<uid>, see /pl-career.js): card collection + bests; PL1 also counts the
   // older one-per-code entries (PL1 / PL2).
   const plOwns = (set, i)=>!!(set && set[Math.floor(i/5)] && ('0123456789ABCDEFGHIJKLMNOPQRSTUV'.indexOf(set[Math.floor(i/5)]) >> (i%5)) & 1);
+  // Pac-Man career (PMC_<uid>): best score + totals over every recorded game; the older PM entries count for score.
+  PROVIDERS.push(careerBadges('pm', 'Pac-Man', '/pm/', {
+    state(scores){
+      const c = scores.find(d=>d.game === 'PMC');
+      const old = scores.filter(d=>d.game === 'PM');
+      if(!c && !old.length) return null;
+      const top = Math.max(c ? c.score : 0, ...old.map(d=>d.score));
+      const lvl = Math.max(c ? (c.levelMax||c.level||0) : 0, ...old.map(d=>d.level||0));
+      return { c: c || { ghosts:[0,0,0,0], fruit:[0,0,0,0,0,0,0,0] }, top: top, lvl: lvl };
+    },
+    list(st){ const c = st.c, g = c.ghosts || [0,0,0,0], f = c.fruit || [0,0,0,0,0,0,0,0], gt = g.reduce((a,b)=>a+b,0);
+      const F = ['CHERRY','STRAWBERRY','ORANGE','APPLE','MELON','GALAXIAN','BELL','KEY'];
+      return [
+      ['Ghosts','FIRST BITE','eat a ghost', false, gt >= 1],
+      ['Ghosts','GHOSTBUSTER','100 ghosts eaten', false, gt >= 100, gt+' ghosts'],
+      ['Ghosts','FULL COMBO','a 1600-point ghost', false, g[3] >= 1],
+      ['Ghosts','COMBO KING','25 ghosts at 1600', true, g[3] >= 25, g[3]+' at 1600'],
+      ...F.map((n,i)=>['Fruit', n, 'eat a '+n.toLowerCase(), i === 7, f[i] >= 1, f[i]+' eaten']),
+      ['Fruit','FRUIT BASKET','eat all 8 kinds of fruit', true, f.every(x=>x >= 1)],
+      ['Score','10K','a score of 10,000 or more', false, st.top >= 10000, 'Best '+st.top.toLocaleString()],
+      ['Score','50K','a score of 50,000 or more', false, st.top >= 50000, 'Best '+st.top.toLocaleString()],
+      ['Score','100K','a score of 100,000 or more', true, st.top >= 100000, 'Best '+st.top.toLocaleString()],
+      ['Levels','LEVEL 5','reach level 5', false, st.lvl >= 5],
+      ['Levels','LEVEL 10','reach level 10', false, st.lvl >= 10],
+      ['Levels','LEVEL 21','reach level 21', true, st.lvl >= 21],
+      ['Dots','DOT MUNCHER','10,000 dots eaten', false, (c.dots||0) >= 10000, (c.dots||0)+' dots'],
+    ]; }
+  }));
   PROVIDERS.push(careerBadges('pl1', 'Puzzle Link', '/pl1/', {
     state(scores){
       const c = scores.find(d=>d.game === 'PL1C');
