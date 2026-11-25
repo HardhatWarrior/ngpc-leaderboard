@@ -239,6 +239,31 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
     ], 'Counted from approved series on the <a href="/sb/">Shut the Box leaderboard</a>.')
   );
 
+  // Metal Slug 1st Mission: mission codes (MS1M, one doc per mission tally) plus the older total-only codes (MS1).
+  PROVIDERS.push({ key:'ms1', name:'Metal Slug 1st Mission', async load(ctx){
+    const all = ctx.scores.filter(d=>(d.game === 'MS1M' || d.game === 'MS1') && d.level >= 2).sort((a,b)=>(a.submittedAt||0)-(b.submittedAt||0));
+    const ms = all.filter(d=>d.game === 'MS1M');
+    if(!all.length) return null;
+    const first = (arr, f)=>arr.find(f);
+    const reach = (arr, n)=>{ const set = new Set(); for(const d of arr){ if(d.mission < 23) set.add(d.mission); if(set.size >= n) return d; } return null; };
+    const on = (hit, b, got)=>({ grp:b[0], name:b[1], sub: hit ? (got ? got(hit) : 'Earned '+fmtDate(hit.submittedAt)) : b[2], at: hit ? hit.submittedAt : 0, on: !!hit, big: !!b[3] });
+    const tot = (d)=>'Total '+d.score.toLocaleString()+', '+fmtDate(d.submittedAt);
+    const list = [
+      on(ms[0], ['Missions','BOOTS ON THE GROUND','submit a mission code']),
+      on(reach(ms, 10), ['Missions','TOUR OF DUTY','record 10 different missions']),
+      on(first(all, d=>d.cleared >= 12), ['Missions','VETERAN','12 missions cleared'], d=>d.cleared+' missions cleared, '+fmtDate(d.submittedAt)),
+      on(first(all, d=>d.cleared >= 23), ['Missions','MISSION ACCOMPLISHED','all 23 missions cleared', true]),
+      on(first(all, d=>d.score >= 10000), ['Score','10K','a total score of 10,000 or more'], tot),
+      on(first(all, d=>d.score >= 50000), ['Score','50K','a total score of 50,000 or more'], tot),
+      on(first(all, d=>d.score >= 100000), ['Score','100K','a total score of 100,000 or more', true], tot),
+      on(first(ms, d=>d.mscore >= 5000), ['Score','HIGH VALUE TARGET','5,000 or more in a single mission'], d=>d.mscore.toLocaleString()+' in mission '+(d.mission < 23 ? d.mission+1 : '?')+', '+fmtDate(d.submittedAt)),
+    ];
+    const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
+    return { note: head.pct+'%', earned: got > 0, list: list, html:
+      '<h2 class="g-title">Metal Slug 1st Mission</h2>'+head.html+badgeGrid(list)+
+      '<p class="fine">Counted from your approved codes on the <a href="/ms1/">Metal Slug 1st Mission leaderboard</a>.</p>' };
+  } });
+
   // Metal Slug 2nd Mission: mission codes (MS2M, one doc per MISSION COMPLETE) and Time Attack times (MS2).
   // Some badges add up across codes (missions recorded, POWs saved, both characters, all 8 stages).
   PROVIDERS.push({ key:'ms2', name:'Metal Slug 2nd Mission', async load(ctx){

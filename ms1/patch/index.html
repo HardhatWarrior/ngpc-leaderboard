@@ -67,9 +67,9 @@
   const SRC_SIZE = 2097152, SRC_CRC = 0x4FF91807;
   // one patch; OLD_PATCHED = earlier builds of it, recognised as already patched
   const VARIANTS = {
-    lb: {ips:'/ms1/metalslug1_lb.ips', size:2097152, crc:0xD51FF527, name:'Metal Slug 1st Mission (Leaderboard).ngc'}
+    lb: {ips:'/ms1/metalslug1_lb.ips', size:2097152, crc:0x23A91F9B, name:'Metal Slug 1st Mission (Leaderboard).ngc'}
   };
-  const OLD_PATCHED = [0xB998F9B9];   // _01: total only
+  const OLD_PATCHED = [0xB998F9B9, 0xD51FF527];   // _01: total only; _03: mission score, plain entry screen
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');

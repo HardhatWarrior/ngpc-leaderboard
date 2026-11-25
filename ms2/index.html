@@ -96,6 +96,22 @@
   .row.top1 .rank{ color:var(--accent); } .row.top1{ background:rgba(92,143,214,.10); }
   .initials{ font-family:"Press Start 2P",monospace; font-size:14px; letter-spacing:.06em; color:var(--cream); display:flex; align-items:center; gap:8px; }
   .row-avatar{ width:48px; height:48px; border-radius:4px; border:1px solid var(--border); image-rendering:pixelated; flex:none; }
+  .career-badges{ margin-top:16px; }
+  .career-badges .g-head{ display:flex; align-items:center; gap:16px; margin:2px 0 10px; }
+  .career-badges .g-pct{ font-family:"Press Start 2P",monospace; font-size:22px; color:var(--gold,#e8c547); flex:none; }
+  .career-badges .g-sum{ flex:1; min-width:0; font-size:12.5px; }
+  .career-badges .bar{ height:10px; border-radius:5px; background:var(--navy); border:1px solid var(--border); overflow:hidden; margin:6px 0 4px; }
+  .career-badges .bar > i{ display:block; height:100%; background:var(--gold,#e8c547); }
+  .career-badges .g-title{ margin:0 0 4px; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent2); }
+  .career-badges .grp{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin:12px 0 6px; }
+  .career-badges .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; }
+  .career-badges .badge{ background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:8px 9px; min-width:0; opacity:.5; }
+  .career-badges .badge b{ display:block; font-size:11.5px; color:var(--dim); overflow-wrap:anywhere; }
+  .career-badges .badge small{ display:block; font-size:10.5px; color:var(--dim); margin-top:2px; overflow-wrap:anywhere; }
+  .career-badges .badge.on{ opacity:1; border-color:var(--gold,#e8c547); background:rgba(232,197,71,.08); }
+  .career-badges .badge.on b{ color:var(--gold,#e8c547); } .career-badges .badge.on b::before{ content:"\2605  "; }
+  .career-badges .badge.on.big{ background:rgba(232,197,71,.2); }
+  .career-badges .fine{ font-size:11px; color:var(--dim); line-height:1.5; margin:10px 0 0; }
   .diff-tag{ display:inline-block; margin-left:6px; padding:1px 5px; border-radius:4px; font-family:"Press Start 2P",monospace; font-size:8px; vertical-align:middle; background:#c0392b; color:#fff; letter-spacing:.04em; }
   .diff-tag.vh{ background:#8e44ad; }
   .score-val{ font-family:"Press Start 2P",monospace; font-size:15px; color:var(--good); }
@@ -237,6 +253,7 @@
 </div>
 
 <script src="/auth.js"></script>
+<script src="/achievements/badges.js?v=6"></script>
 <script>
 (function(){
   "use strict";
@@ -451,6 +468,19 @@
   // ---- Career: every mission QR a player submitted -> best score per mission, POWs rescued (sum over missions).
   // Collapsed by default and shows the signed-in player's own career; another player's opens from their
   // Mission Leaderboard entry ("View ...'s career"), with a button back to your own.
+  // badges for the player shown (same definitions as /achievements/): earned ones lit, the rest still to track
+  let careerBadgeToken = 0;
+  async function drawCareerBadges(uid, scores){
+    const token = ++careerBadgeToken;
+    const P = window.NGPC_BADGES && NGPC_BADGES.PROVIDERS.find(p=>p.key === 'ms2');
+    const box = document.createElement('div'); box.className = 'career-badges';
+    el('career').appendChild(box);
+    if(!P){ return; }
+    let res = null;
+    try{ res = await P.load({ uid: uid, self: uid === myUid(), scores: scores }); }catch(e){ console.warn('badges', e); }
+    if(token !== careerBadgeToken) return;
+    box.innerHTML = res ? res.html.replace(/<h2 class="g-title">[\s\S]*?<\/h2>/, '<h2 class="g-title">Badges</h2>') : '';
+  }
   let careerUid = null;           // null = mine
   function myUid(){ return window.NGPC_AUTH && NGPC_AUTH.currentUser && NGPC_AUTH.currentUser.uid; }
   function drawCareer(){
@@ -481,6 +511,7 @@
       '<tr><td>POWs saved (all recorded missions)</td><td class="tk-val tnum" colspan="3">'+pows+'</td></tr>'+
       '<tr><td>POWs on the rescue list (cart)</td><td class="tk-val tnum" colspan="3">'+powsAll+' / 100</td></tr>'+
       '</table><table class="tk-sheet" style="margin-top:10px"><tr><td class="row-meta">Mission</td><td class="tk-val row-meta">Best score</td><td class="tk-val row-meta">POWs</td><td class="tk-val row-meta">Clears</td></tr>'+rows+'</table>';
+    drawCareerBadges(uid, missionDocs.concat(allDocs).map(d=>d.data()).filter(d=>d.uid === uid));
   }
   document.addEventListener('click', (e)=>{
     const v = e.target.closest('.view-career');

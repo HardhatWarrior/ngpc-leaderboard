@@ -396,7 +396,7 @@ service cloud.firestore {
           && d.mscore is int && d.mscore >= 0 && d.mscore <= d.score
           && d.mission is int && d.mission >= 0 && d.mission <= 23
           && d.cleared is int && d.cleared >= 0 && d.cleared <= 23
-          && d.level is int && d.level >= 0 && d.level <= 9
+          && d.level is int && d.level >= 2 && d.level <= 4
           && isRetailLbBase(d, 9999999);
       }
       // Metal Slug 1st Mission (MS1): total score at a mission tally, missions cleared 0-23, last mission 0-23, level 0-9
@@ -404,7 +404,7 @@ service cloud.firestore {
         return d.keys().hasOnly(['game', 'initials', 'score', 'cleared', 'mission', 'level', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.cleared is int && d.cleared >= 0 && d.cleared <= 23
           && d.mission is int && d.mission >= 0 && d.mission <= 23
-          && d.level is int && d.level >= 0 && d.level <= 9
+          && d.level is int && d.level >= 2 && d.level <= 4
           && isRetailLbBase(d, 9999999);
       }
       // Crush Roller (CR): final score at CONTINUE? / GAME OVER; path (CR2) = levels played, 5 chars each (id + score base 36)

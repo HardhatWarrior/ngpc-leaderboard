@@ -120,6 +120,24 @@
   .success-icon{ text-align:center; font-size:40px; margin-bottom:6px; }
   #success-view p{ text-align:center; color:var(--dim); font-size:13px; }
   footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
+  .career-badges{ margin-top:16px; }
+  .career-badges .g-head{ display:flex; align-items:center; gap:16px; margin:2px 0 10px; }
+  .career-badges .g-pct{ font-family:"Press Start 2P",monospace; font-size:22px; color:var(--gold,#e8c547); flex:none; }
+  .career-badges .g-sum{ flex:1; min-width:0; font-size:12.5px; }
+  .career-badges .bar{ height:10px; border-radius:5px; background:var(--navy); border:1px solid var(--border); overflow:hidden; margin:6px 0 4px; }
+  .career-badges .bar > i{ display:block; height:100%; background:var(--gold,#e8c547); }
+  .career-badges .g-title{ margin:0 0 4px; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent2); }
+  .career-badges .grp{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin:12px 0 6px; }
+  .career-badges .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; }
+  .career-badges .badge{ background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:8px 9px; min-width:0; opacity:.5; }
+  .career-badges .badge b{ display:block; font-size:11.5px; color:var(--dim); overflow-wrap:anywhere; }
+  .career-badges .badge small{ display:block; font-size:10.5px; color:var(--dim); margin-top:2px; overflow-wrap:anywhere; }
+  .career-badges .badge.on{ opacity:1; border-color:var(--gold,#e8c547); background:rgba(232,197,71,.08); }
+  .career-badges .badge.on b{ color:var(--gold,#e8c547); } .career-badges .badge.on b::before{ content:"\2605  "; }
+  .career-badges .badge.on.big{ background:rgba(232,197,71,.2); }
+  .career-badges .fine{ font-size:11px; color:var(--dim); line-height:1.5; margin:10px 0 0; }
+  .diff-tag{ display:inline-block; margin-left:6px; padding:1px 5px; border-radius:4px; font-family:"Press Start 2P",monospace; font-size:8px; vertical-align:middle; background:#c0392b; color:#fff; letter-spacing:.04em; }
+  .diff-tag.vh{ background:#8e44ad; }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
@@ -221,6 +239,7 @@
 </div>
 
 <script src="/auth.js"></script>
+<script src="/achievements/badges.js?v=6"></script>
 <script>
 (function(){
   "use strict";
@@ -257,8 +276,8 @@
     if(text.slice(26) !== lbCheck(text.slice(0,26))) return {error:"That code didn't scan cleanly (check mismatch) — rescan it."};
     const n = (a,b)=>parseInt(text.slice(a,b),10);
     const r = { game:'MS1M', initials, score:n(7,14), mscore:n(14,21), mission:n(21,23), cleared:n(23,25), level:n(25,26) };
-    if(r.score < 1 || r.mission > 23 || r.cleared > 23 || r.mscore > r.score) return {error:"That code doesn't look like a scored mission."};
-    return r;
+    if(r.score < 1 || r.mission > 23 || r.cleared > 23 || r.mscore > r.score || r.level > 4) return {error:"That code doesn't look like a scored mission."};
+    return tooEasy(r.level) || r;
   }
   function parseMetalSlug1Payload(text){
     if(text.slice(3,4) === '2') return parseMissionPayload(text);
@@ -274,10 +293,15 @@
     const mission = parseInt(text.slice(16,18),10);
     const level = parseInt(text.slice(18,19),10);
     if(score < 1) return {error:"That code doesn't look like a scored mission."};
-    if(cleared > 23 || mission > 23) return {error:"That code's mission data didn't look right."};
+    if(cleared > 23 || mission > 23 || level > 4) return {error:"That code's mission data didn't look right."};
+    if(tooEasy(level)) return tooEasy(level);
     return { game:QR_GAME_CODE, initials, score, cleared, mission, level };
   }
-  function ms1Level(v){ return v === 2 ? 'Normal' : 'Level ' + v; }
+  // Difficulty (SET UP LEVEL): only NORMAL or harder counts; HARD / VERY HARD get a tag and win score ties.
+  const MS1_DIFF = ['KIDS','EASY','NORMAL','HARD','VERY HARD'];
+  function ms1Level(v){ return MS1_DIFF[v] || ('Level ' + v); }
+  function diffTag(d){ return d.level >= 3 ? '<span class="diff-tag'+(d.level >= 4 ? ' vh' : '')+'">'+(d.level >= 4 ? 'VERY HARD' : 'HARD')+'</span>' : ''; }
+  function tooEasy(level){ return level < 2 ? {error:"That mission was played on " + ms1Level(level) + ". Only NORMAL or harder counts for the leaderboard (SET UP > LEVEL)."} : null; }
 
   function parsePayload(text){
     text = (text||'').trim().toUpperCase();
@@ -334,7 +358,7 @@
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
       const rowHtml = '<div class="row'+(rank===1?' top1':'')+' has-detail" data-detail="d'+i+'">'+
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
-        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
+        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+diffTag(data)+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
         '<div class="score-val tnum">'+(data.score!=null?String(data.score):'-')+'</div>'+
       '</div>';
@@ -372,9 +396,9 @@
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
     // older MS11 codes (one keep-best entry per player) + MS12 mission codes (MS1M, a log feeding the career panel)
-    let oldDocs = [];
     const drawBoard = ()=>{
-      const docs = oldDocs.concat(missionDocs).sort((a,b)=>b.data().score-a.data().score || (a.data().submittedAt||0)-(b.data().submittedAt||0));
+      // NORMAL or harder only; ties on score go to the harder difficulty, then the earlier code
+      const docs = oldDocs.concat(missionDocs).filter(d=>d.data().level >= 2).sort((a,b)=>b.data().score-a.data().score || (b.data().level||0)-(a.data().level||0) || (a.data().submittedAt||0)-(b.data().submittedAt||0));
       renderBoard(onePerPlayer(docs).slice(0,10));
     };
     const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('score','desc').limit(100);
@@ -386,13 +410,27 @@
 
   // ---- Career: every mission code a player submitted -> best score per mission and clears. Collapsed by default,
   // your own; another player's opens from their Mission Leaderboard entry.
-  let missionDocs = [], careerUid = null;
+  let missionDocs = [], oldDocs = [], careerUid = null;
+  // badges for the player shown (same definitions as /achievements/): earned ones lit, the rest still to track
+  let careerBadgeToken = 0;
+  async function drawCareerBadges(uid, scores){
+    const token = ++careerBadgeToken;
+    const P = window.NGPC_BADGES && NGPC_BADGES.PROVIDERS.find(p=>p.key === 'ms1');
+    const box = document.createElement('div'); box.className = 'career-badges';
+    el('career').appendChild(box);
+    if(!P){ return; }
+    let res = null;
+    try{ res = await P.load({ uid: uid, self: uid === myUid(), scores: scores }); }catch(e){ console.warn('badges', e); }
+    if(token !== careerBadgeToken) return;
+    box.innerHTML = res ? res.html.replace(/<h2 class="g-title">[\s\S]*?<\/h2>/, '<h2 class="g-title">Badges</h2>') : '';
+  }
+
   function myUid(){ return window.NGPC_AUTH && NGPC_AUTH.currentUser && NGPC_AUTH.currentUser.uid; }
   function drawCareer(){
     const out = el('career'), me = myUid(), uid = careerUid || me;
     const viewingOther = !!(careerUid && careerUid !== me);
     el('career-back').hidden = !viewingOther || !me;
-    const mine = uid ? missionDocs.map(d=>d.data()).filter(d=>d.uid === uid) : [];
+    const mine = uid ? missionDocs.map(d=>d.data()).filter(d=>d.uid === uid && d.level >= 2) : [];
     const name = viewingOther ? (mine[0] && mine[0].username ? '@'+mine[0].username.toUpperCase() : 'Player') : '';
     el('career-title').textContent = viewingOther ? name + '’s Career' : 'My Career';
     if(!uid){ out.innerHTML = '<div class="empty-state">Sign in to see your career stats.</div>'; return; }
@@ -400,7 +438,7 @@
     const best = {}, plays = {};
     let top = 0, cleared = 0;
     mine.forEach(d=>{
-      if(!best[d.mission] || d.mscore > best[d.mission].mscore) best[d.mission] = d;
+      if(!best[d.mission] || d.mscore > best[d.mission].mscore || (d.mscore === best[d.mission].mscore && d.level > best[d.mission].level)) best[d.mission] = d;
       plays[d.mission] = (plays[d.mission]||0) + 1;
       top = Math.max(top, d.score||0); cleared = Math.max(cleared, d.cleared||0);
     });
@@ -408,13 +446,14 @@
     let rows = '';
     for(let i=0;i<23;i++){
       const b = best[i];
-      rows += '<tr'+(b?'':' style="opacity:.45"')+'><td>Mission '+(i+1)+'</td><td class="tk-val tnum">'+(b?b.mscore:'—')+'</td><td class="tk-val tnum">'+(plays[i]||'')+'</td></tr>';
+      rows += '<tr'+(b?'':' style="opacity:.45"')+'><td>Mission '+(i+1)+'</td><td class="tk-val tnum">'+(b?b.mscore+diffTag(b):'—')+'</td><td class="tk-val tnum">'+(plays[i]||'')+'</td></tr>';
     }
     out.innerHTML = '<table class="tk-sheet">'+
       '<tr><td>Best total score</td><td class="tk-val tnum" colspan="2">'+top+'</td></tr>'+
       '<tr><td>Missions recorded</td><td class="tk-val tnum" colspan="2">'+done+' / 23</td></tr>'+
       '<tr><td>Most missions cleared in a game</td><td class="tk-val tnum" colspan="2">'+cleared+' / 23</td></tr>'+
       '</table><table class="tk-sheet" style="margin-top:10px"><tr><td class="row-meta">Mission</td><td class="tk-val row-meta">Best score</td><td class="tk-val row-meta">Clears</td></tr>'+rows+'</table>';
+    drawCareerBadges(uid, oldDocs.concat(missionDocs).map(d=>d.data()).filter(d=>d.uid === uid));
   }
   document.addEventListener('click', (e)=>{
     const v = e.target.closest('.view-career');
