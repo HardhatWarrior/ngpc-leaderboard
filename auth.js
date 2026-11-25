@@ -991,6 +991,8 @@ window.NGPC_AUTH = (function(){
     if(data.game === 'FK') return data.rounds!=null ? (data.rounds+' rounds') : '-';
     if(data.game === 'SD') return data.time!=null ? formatSdTime(data.time) : '-';
     if(data.game === 'MS') return data.time!=null ? formatSdTime(data.time) : '-';
+    // Metal Slug 2nd Mission Time Attack: `score` is hundredths of a second (lower is better).
+    if(data.game === 'MS2') return Number.isFinite(data.score) ? (Math.floor(data.score/100)+'.'+String(data.score%100).padStart(2,'0')+' SEC') : '-';
     if(data.game === 'FU') return data.totalScore!=null ? data.totalScore : '-';
     // Sokoban ranks by stars, then moves over par -- ASCII only (the homepage ticker's
     // Press Start 2P font has no star glyph).

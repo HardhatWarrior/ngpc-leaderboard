@@ -35,6 +35,10 @@
   .stage-row{ display:flex; flex-wrap:wrap; align-items:center; gap:6px; margin:0 0 12px; }
   .stage-lbl{ font-size:11px; letter-spacing:.1em; color:var(--dim); }
   .stage-tab{ min-width:34px; padding:6px 0; border-radius:8px; border:1px solid var(--line, #444); background:transparent; color:inherit; font:inherit; cursor:pointer; }
+  .row.ta-stage{ cursor:pointer; grid-template-columns:92px 1fr auto; }
+  .row.ta-stage .rank{ text-align:left; white-space:nowrap; font-size:10px; color:var(--accent2, #e8c547); }
+  .ta-stage.open{ background:rgba(92,143,214,.10); }
+  .ta-top10{ padding:0 0 10px 12px; border-left:2px solid var(--border); margin:0 0 6px 8px; }
   .stage-tab.on{ background:var(--accent2, #e8c547); color:#111; border-color:transparent; font-weight:600; }
   .created-by a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
   .created-by a:hover{ color:var(--accent2); }
@@ -221,8 +225,7 @@
 
     <section class="panel">
       <h2>Time Attack</h2>
-      <div class="stage-row"><span class="stage-lbl">STAGE</span> <span id="stage-tabs"></span></div>
-      <div class="row-meta" style="margin:-4px 0 10px">OFFICE &gt; TIME ATTACK — fastest clear per player.</div>
+      <div class="row-meta" style="margin:-4px 0 10px">OFFICE &gt; TIME ATTACK — fastest clear per stage. Tap a stage for its top 10.</div>
       <div id="ta-board"></div>
     </section>
   </main>
@@ -393,16 +396,33 @@
     const docs = missionDocs.slice().sort((a,b)=>b.data().score-a.data().score || (a.data().submittedAt||0)-(b.data().submittedAt||0));
     renderBoard(onePerPlayer(docs).slice(0,10), el('board'));
   }
+  // Time Attack: one row per stage with its record (time + who) on the right; tap a stage to open its top 10.
+  const taOpen = new Set();
   function drawStage(){
-    const tabs = document.getElementById('stage-tabs');
-    const have = new Set(allDocs.map(d=>d.data().stage));
+    const box = el('ta-board');
     let html = '';
-    for(let i=0;i<8;i++) html += '<button class="stage-tab'+(i===curStage?' on':'')+'" data-stage="'+i+'">'+(i+1)+(have.has(i)?'':'')+'</button>';
-    tabs.innerHTML = html;
-    const docs = allDocs.filter(d=>d.data().stage===curStage).sort((a,b)=>a.data().score-b.data().score || (a.data().submittedAt||0)-(b.data().submittedAt||0));
-    renderBoard(onePerPlayer(docs).slice(0,10), el('ta-board'));
+    const byStage = [];
+    for(let i=0;i<8;i++){
+      const docs = onePerPlayer(allDocs.filter(d=>d.data().stage===i).sort((a,b)=>a.data().score-b.data().score || (a.data().submittedAt||0)-(b.data().submittedAt||0)));
+      byStage.push(docs);
+      const top = docs[0] && docs[0].data();
+      const who = top ? (top.username ? '@'+top.username.toUpperCase() : (top.initials||'???')) : '';
+      html += '<div class="row ta-stage'+(taOpen.has(i)?' open':'')+'" data-stage="'+i+'">'+
+        '<div class="rank">STAGE '+(i+1)+'</div>'+
+        '<div><div class="initials">'+(top ? escapeHtml(top.initials||'???') : '<span class="row-meta">No times yet</span>')+'</div>'+
+          (top ? '<div class="row-meta">'+escapeHtml(who)+(docs.length>1 ? ' · '+docs.length+' players' : '')+'</div>' : '')+'</div>'+
+        '<div class="score-val tnum">'+(top ? fmtTime(top.score) : '—')+'</div></div>'+
+        '<div class="ta-top10" id="ta-board-'+i+'"'+(taOpen.has(i)?'':' hidden')+'></div>';
+    }
+    box.innerHTML = html;
+    taOpen.forEach(i=>renderBoard(byStage[i].slice(0,10), el('ta-board-'+i)));
   }
-  document.addEventListener('click', (e)=>{ const b = e.target.closest('.stage-tab'); if(!b) return; curStage = parseInt(b.dataset.stage,10); drawStage(); });
+  document.addEventListener('click', (e)=>{
+    const r = e.target.closest('.ta-stage'); if(!r) return;
+    const i = parseInt(r.dataset.stage,10);
+    if(taOpen.has(i)) taOpen.delete(i); else taOpen.add(i);
+    drawStage();
+  });
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;

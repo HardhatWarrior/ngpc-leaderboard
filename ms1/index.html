@@ -201,9 +201,18 @@
     </section>
 
     <section class="panel">
-      <h2>Leaderboard</h2>
+      <h2>Mission Leaderboard</h2>
+      <div class="row-meta" style="margin:-4px 0 10px">Total score at a mission’s score tally — each player’s best.</div>
       <div id="board-status"></div>
       <div id="board"></div>
+    </section>
+
+    <section class="panel">
+      <details id="career-panel">
+        <summary style="cursor:pointer;list-style-position:inside"><h2 id="career-title" style="display:inline">My Career</h2></summary>
+        <div id="career-back" hidden style="margin:10px 0 0"><button type="button" class="btn-secondary" id="career-mine" style="width:auto;display:inline;margin:0;padding:4px 10px">Back to my career</button></div>
+        <div id="career" style="margin-top:10px"></div>
+      </details>
     </section>
   </main>
 
@@ -239,7 +248,20 @@
     return ALNUM[Math.floor(s/36)] + ALNUM[s%36];
   }
 
+  // MS12: total(7) + mission score(7) + mission(2, 0-22; 23 = unknown) + missions cleared(2) + level(1) + check(2)
+  function parseMissionPayload(text){
+    if(text.length !== 28) return {error: text.length < 28 ? "That code is too short — rescan with the whole code in frame." : "That code is too long — rescan just the one code."};
+    const initials = text.slice(4,7);
+    if(!/^[0-9A-Z]{3}$/.test(initials)) return {error:"That code's initials didn't look right."};
+    if(!/^\d{19}$/.test(text.slice(7,26))) return {error:"That code has an unreadable value."};
+    if(text.slice(26) !== lbCheck(text.slice(0,26))) return {error:"That code didn't scan cleanly (check mismatch) — rescan it."};
+    const n = (a,b)=>parseInt(text.slice(a,b),10);
+    const r = { game:'MS1M', initials, score:n(7,14), mscore:n(14,21), mission:n(21,23), cleared:n(23,25), level:n(25,26) };
+    if(r.score < 1 || r.mission > 23 || r.cleared > 23 || r.mscore > r.score) return {error:"That code doesn't look like a scored mission."};
+    return r;
+  }
   function parseMetalSlug1Payload(text){
+    if(text.slice(3,4) === '2') return parseMissionPayload(text);
     if(text.length < 21) return {error:"That code is too short — rescan with the whole code in frame."};
     if(text.length > 21) return {error:"That code is too long to be a score — rescan just the one code."};
     if(text.slice(3,4) !== '1') return {error:"That code is from a different version of the patch."};
@@ -280,9 +302,18 @@
 
   function fmtWhen(ts){ if(!ts) return ''; const d = new Date(ts); return d.toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
 
-  function formatDisplayValue(o){ return String(o.score); }
+  function formatDisplayValue(o){ return o.game === 'MS1M' ? o.score + ' (Mission ' + (o.mission < 23 ? o.mission+1 : '?') + ')' : String(o.score); }
 
   function renderScorecardHTML(data){
+    if(data.game === 'MS1M'){
+      return '<table class="tk-sheet">'+
+        '<tr><td>Mission</td><td class="tk-val tnum">'+(data.mission < 23 ? data.mission+1 : '?')+'</td></tr>'+
+        '<tr><td>Mission score</td><td class="tk-val tnum">'+data.mscore+'</td></tr>'+
+        '<tr><td>Total score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
+        '<tr><td>Missions cleared</td><td class="tk-val tnum">'+data.cleared+' / 23</td></tr>'+
+        '<tr><td>Level</td><td class="tk-val">'+ms1Level(data.level)+'</td></tr></table>'+
+        (data.uid ? '<button type="button" class="btn-secondary view-career" data-uid="'+escapeHtml(data.uid)+'" style="width:auto;display:inline;margin:8px 0 0;padding:4px 10px">View '+escapeHtml(data.username ? '@'+data.username.toUpperCase() : 'player')+'’s career</button>' : '');
+    }
     const rows = '<tr><td>Total score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
       '<tr><td>Missions cleared</td><td class="tk-val tnum">'+data.cleared+' / 23</td></tr>'+
       '<tr><td>Last mission</td><td class="tk-val tnum">'+(data.mission < 23 ? data.mission+1 : '?')+'</td></tr>'+
@@ -340,12 +371,62 @@
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
+    // older MS11 codes (one keep-best entry per player) + MS12 mission codes (MS1M, a log feeding the career panel)
+    let oldDocs = [];
+    const drawBoard = ()=>{
+      const docs = oldDocs.concat(missionDocs).sort((a,b)=>b.data().score-a.data().score || (a.data().submittedAt||0)-(b.data().submittedAt||0));
+      renderBoard(onePerPlayer(docs).slice(0,10));
+    };
     const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('score','desc').limit(100);
-    unsubscribeBoard = q.onSnapshot(
-      (snap)=>{ renderBoard(onePerPlayer(snap.docs).slice(0,10)); },
-      (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
-    );
+    const unsubA = q.onSnapshot((snap)=>{ oldDocs = snap.docs; drawBoard(); }, (err)=>{ boardStatusEl.textContent = friendlyDbError(err); });
+    const qm = db.collection('scores').where('game','==','MS1M').where('approved','==',true).limit(5000);
+    const unsubM = qm.onSnapshot((snap)=>{ missionDocs = snap.docs; drawBoard(); drawCareer(); }, (err)=>{ boardStatusEl.textContent = friendlyDbError(err); });
+    unsubscribeBoard = ()=>{ unsubA(); unsubM(); };
   }
+
+  // ---- Career: every mission code a player submitted -> best score per mission and clears. Collapsed by default,
+  // your own; another player's opens from their Mission Leaderboard entry.
+  let missionDocs = [], careerUid = null;
+  function myUid(){ return window.NGPC_AUTH && NGPC_AUTH.currentUser && NGPC_AUTH.currentUser.uid; }
+  function drawCareer(){
+    const out = el('career'), me = myUid(), uid = careerUid || me;
+    const viewingOther = !!(careerUid && careerUid !== me);
+    el('career-back').hidden = !viewingOther || !me;
+    const mine = uid ? missionDocs.map(d=>d.data()).filter(d=>d.uid === uid) : [];
+    const name = viewingOther ? (mine[0] && mine[0].username ? '@'+mine[0].username.toUpperCase() : 'Player') : '';
+    el('career-title').textContent = viewingOther ? name + '’s Career' : 'My Career';
+    if(!uid){ out.innerHTML = '<div class="empty-state">Sign in to see your career stats.</div>'; return; }
+    if(!mine.length){ out.innerHTML = '<div class="empty-state">'+(viewingOther ? 'No mission codes for this player yet.' : 'No mission codes yet. Scan the QR shown after a mission’s score tally.')+'</div>'; return; }
+    const best = {}, plays = {};
+    let top = 0, cleared = 0;
+    mine.forEach(d=>{
+      if(!best[d.mission] || d.mscore > best[d.mission].mscore) best[d.mission] = d;
+      plays[d.mission] = (plays[d.mission]||0) + 1;
+      top = Math.max(top, d.score||0); cleared = Math.max(cleared, d.cleared||0);
+    });
+    const done = Object.keys(best).filter(k=>+k < 23).length;
+    let rows = '';
+    for(let i=0;i<23;i++){
+      const b = best[i];
+      rows += '<tr'+(b?'':' style="opacity:.45"')+'><td>Mission '+(i+1)+'</td><td class="tk-val tnum">'+(b?b.mscore:'—')+'</td><td class="tk-val tnum">'+(plays[i]||'')+'</td></tr>';
+    }
+    out.innerHTML = '<table class="tk-sheet">'+
+      '<tr><td>Best total score</td><td class="tk-val tnum" colspan="2">'+top+'</td></tr>'+
+      '<tr><td>Missions recorded</td><td class="tk-val tnum" colspan="2">'+done+' / 23</td></tr>'+
+      '<tr><td>Most missions cleared in a game</td><td class="tk-val tnum" colspan="2">'+cleared+' / 23</td></tr>'+
+      '</table><table class="tk-sheet" style="margin-top:10px"><tr><td class="row-meta">Mission</td><td class="tk-val row-meta">Best score</td><td class="tk-val row-meta">Clears</td></tr>'+rows+'</table>';
+  }
+  document.addEventListener('click', (e)=>{
+    const v = e.target.closest('.view-career');
+    if(v){
+      e.stopPropagation();
+      careerUid = v.dataset.uid; drawCareer();
+      const panel = el('career-panel'); panel.open = true; panel.scrollIntoView({behavior:'smooth', block:'start'});
+      return;
+    }
+    if(e.target.closest('#career-mine')){ careerUid = null; drawCareer(); }
+  }, true);
+  if(window.NGPC_AUTH) NGPC_AUTH.onAuthChange(()=>drawCareer());
 
   function initDb(){
     if(!firebase || !firebase.firestore){ boardStatusEl.innerHTML = '<div class="msg err">Firestore module not available</div>'; return; }
@@ -561,6 +642,25 @@
       username: authedUser.username,
       approved: !!authedUser.approved,
     });
+    if(sub.game === 'MS1M'){
+      try{
+        const id = 'MS1M_' + authedUser.uid + '_' + sub.mission + '_' + sub.score;
+        const existing = await db.collection('scores').doc(id).get().catch(()=>null);
+        if(existing && existing.exists){ btn.disabled = false; confirmMsg.innerHTML = '<div class="msg err">That mission code is already recorded.</div>'; return; }
+        const res = await writeScore(id, record);
+        btn.disabled = false;
+        if(res.ok){
+          el('success-text').textContent = (sub.initials||'') + ' — Mission ' + (sub.mission < 23 ? sub.mission+1 : '?') + ': ' + sub.mscore + ' points (total ' + sub.score + ') recorded.';
+          if(pending === sub) pending = null;
+          showStage('success');
+        } else if(res.error && res.error.code === 'permission-denied'){
+          confirmMsg.innerHTML = '<div class="msg err">Not saved: that mission code may already be recorded (permission-denied).</div>';
+        } else {
+          confirmMsg.innerHTML = '<div class="msg err">Write failed: '+escapeHtml(res.error?.message || 'unknown')+'</div>';
+        }
+      }catch(e){ btn.disabled = false; confirmMsg.innerHTML = '<div class="msg err">Submit error: '+escapeHtml(e.message)+'</div>'; }
+      return;
+    }
     try{
       const myId = myEntryId(authedUser.uid, sub);
       const mine = await fetchMyEntries(authedUser.uid, sub);

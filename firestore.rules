@@ -389,6 +389,15 @@ service cloud.firestore {
           && d.character is int && d.character >= 0 && d.character <= 1
           && isRetailLbBase(d, 9999999);
       }
+      // Metal Slug 1st Mission mission tally (MS1M): one doc per mission QR (career log), id MS1M_<uid>_<mission>_<total>
+      function isMetalSlug1MissionScore(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'mscore', 'mission', 'cleared', 'level', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.mscore is int && d.mscore >= 0 && d.mscore <= d.score
+          && d.mission is int && d.mission >= 0 && d.mission <= 23
+          && d.cleared is int && d.cleared >= 0 && d.cleared <= 23
+          && d.level is int && d.level >= 0 && d.level <= 9
+          && isRetailLbBase(d, 9999999);
+      }
       // Metal Slug 1st Mission (MS1): total score at a mission tally, missions cleared 0-23, last mission 0-23, level 0-9
       function isMetalSlug1Score(d) {
         return d.keys().hasOnly(['game', 'initials', 'score', 'cleared', 'mission', 'level', 'source', 'submittedAt', 'uid', 'username', 'approved'])
@@ -1049,6 +1058,7 @@ service cloud.firestore {
           || (request.resource.data.game == 'PL2' && isPuzzleLink2Score(request.resource.data))
           || ((request.resource.data.game == 'MS2' && isMetalSlug2Score(request.resource.data)) && scoreId == 'MS2_' + request.auth.uid + '_' + string(request.resource.data.stage))
           || ((request.resource.data.game == 'MS1' && isMetalSlug1Score(request.resource.data)) && scoreId == 'MS1_' + request.auth.uid)
+          || ((request.resource.data.game == 'MS1M' && isMetalSlug1MissionScore(request.resource.data)) && scoreId == 'MS1M_' + request.auth.uid + '_' + string(request.resource.data.mission) + '_' + string(request.resource.data.score))
           || ((request.resource.data.game == 'MS2M' && isMetalSlug2MissionScore(request.resource.data)) && scoreId == 'MS2M_' + request.auth.uid + '_' + string(request.resource.data.mission) + '_' + string(request.resource.data.score))
           || (request.resource.data.game == 'CR' && isCrushRollerScore(request.resource.data))
           || (request.resource.data.game == 'PM' && isPacManScore(request.resource.data))
@@ -1068,7 +1078,8 @@ service cloud.firestore {
         && !(scoreId.matches('^ACES_.*') && request.resource.data.game != 'ACES')
         && !(scoreId.matches('^MS1_.*') && request.resource.data.game != 'MS1')
         && !(scoreId.matches('^MS2_.*') && request.resource.data.game != 'MS2')
-        && !(scoreId.matches('^MS2M_.*') && request.resource.data.game != 'MS2M');
+        && !(scoreId.matches('^MS2M_.*') && request.resource.data.game != 'MS2M')
+        && !(scoreId.matches('^MS1M_.*') && request.resource.data.game != 'MS1M');
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
