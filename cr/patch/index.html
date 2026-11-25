@@ -67,9 +67,9 @@
   const SRC_SIZE = 1048576, SRC_CRC = 0x5BFAD822;
   // one patch; OLD_PATCHED = earlier builds of it, recognised as already patched
   const VARIANTS = {
-    lb: {ips:'/cr/crushroller_lb.ips', size:2097152, crc:0xB700CB68, name:'Crush Roller (Leaderboard).ngc'}
+    lb: {ips:'/cr/crushroller_lb.ips', size:2097152, crc:0x77699974, name:'Crush Roller (Leaderboard).ngc'}
   };
-  const OLD_PATCHED = [0xE766818A, 0x419ED6F2, 0xA8E08F61];   // _01: save in the 1 MB blocks (SAVE ERROR on 2 MB); _02: per-level score; _03: run total in game-used RAM
+  const OLD_PATCHED = [0xE766818A, 0x419ED6F2, 0xA8E08F61, 0xB700CB68];   // _01: save in the 1 MB blocks (SAVE ERROR on 2 MB); _02: per-level score; _03: run total in game-used RAM
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');
