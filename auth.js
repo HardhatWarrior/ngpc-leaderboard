@@ -707,6 +707,18 @@ window.NGPC_AUTH = (function(){
       (Number.isInteger(data.putts) ? '<tr><td>Putts</td><td class="tk-val tnum">'+data.putts+'</td></tr>' : '');
     return '<table class="tk-sheet">'+rows+'</table>';
   }
+  function renderBloodEagleScorecardHTML(data){
+    const row = (k,v)=>'<tr><td>'+k+'</td><td class="tk-val tnum">'+v+'</td></tr>';
+    return '<table class="tk-sheet">'+
+      row(data.victory ? 'The King was slain' : 'The heir fell', (Number(data.days)||0)+' days')+
+      row('Renown', Number(data.renown)||0)+
+      row('Enemies slain', Number(data.kills)||0)+
+      row('Jarls toppled', (Number(data.jarls)||0)+' / 2')+
+      row('Gods favoured', Number(data.gods)||0)+
+      row('Crew lost', Number(data.lost)||0)+
+      row('Blood spilled', (Number(data.blood)||0)+' tiles')+
+    '</table>';
+  }
   function renderShutTheBoxScorecardHTML(data){
     const rounds = Array.isArray(data.rounds) ? data.rounds : [];
     const names = {'1':'Solo series', W:'Match won', L:'Match lost', D:'Match drawn'};
@@ -888,6 +900,7 @@ window.NGPC_AUTH = (function(){
       case 'PERSIA': return persiaSummary(data) !== null;
       case 'RD': return rdIsHero(data);
       case 'SB': return Array.isArray(data.rounds) && data.rounds.length > 0 && data.total !== undefined;
+      case 'BE': return Number.isFinite(data.renown) && Number.isFinite(data.days);
       case 'TM': return Array.isArray(data.holes) && data.holes.length === 18 && data.total !== undefined;
       case 'OV':
         // Same "skip rather than crash" stance overrev/index.html's own board rendering takes on
@@ -911,6 +924,7 @@ window.NGPC_AUTH = (function(){
       case 'PERSIA': return renderPersiaScorecardHTML(data);
       case 'RD': return rdIsHero(data) ? renderRedDragonHeroHTML(data) : '';
       case 'SB': return renderShutTheBoxScorecardHTML(data);
+      case 'BE': return renderBloodEagleScorecardHTML(data);
       case 'TM': return renderTurfMastersScorecardHTML(data);
       case 'OV':
         try{ return renderOverRevScorecardHTML(Object.assign({}, data, OverRevProtocol.decode(data.raw))); }
@@ -948,6 +962,10 @@ window.NGPC_AUTH = (function(){
       // Numbers + fixed words only -- callers put this into innerHTML unescaped.
       const r = {'1':'solo', W:'won', L:'lost', D:'drew'}[data.result] || '';
       return [r, (Number(data.shut)||0)+' shut', sbClock(data.seconds)].filter(Boolean).join(' · ');
+    }
+    if(data.game==='BE'){
+      // Numbers + fixed words only -- callers put this into innerHTML unescaped.
+      return [data.victory ? 'King slain' : 'heir fell', (Number(data.days)||0)+' days', (Number(data.kills)||0)+' kills'].join(' · ');
     }
     if(data.game==='TM'){
       // Fixed names only -- callers put this into innerHTML unescaped.
@@ -1001,6 +1019,8 @@ window.NGPC_AUTH = (function(){
     if(data.game === 'RD') return Number.isFinite(data.experience) ? (data.experience+' XP') : '-';
     // SHUT THE BOX ranks by `total` tiles left open, ascending -- no `score` field.
     if(data.game === 'SB') return Number.isFinite(data.total) ? (data.total+' LEFT') : '-';
+    // BLOOD EAGLE ranks by `renown`, descending -- no `score` field.
+    if(data.game === 'BE') return Number.isFinite(data.renown) ? (data.renown+' RENOWN') : '-';
     // NEO TURF MASTERS ranks by `total` strokes, ascending -- no `score` field.
     if(data.game === 'TM') return Number.isFinite(data.total) ? (data.total+' STROKES') : '-';
     // CLASSIC BOARD GAMES ranks by `moves` (turns in backgammon), ascending -- no `score` field.

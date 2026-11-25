@@ -885,6 +885,29 @@ service cloud.firestore {
           && hasValidIdentity(d);
       }
 
+      // BLOOD EAGLE: the exact record be/index.html's confirm handler writes. renown ranks
+      // (higher is better); victory = the King was slain (QR flag V). The QR's base-36 checksum
+      // is verified client-side then dropped. See BloodEagle/submission-template.json.
+      function isBloodEagleScore(d) {
+        return d.game == 'BE'
+          && d.keys().hasOnly(['game', 'formatVersion', 'initials', 'victory', 'renown', 'days', 'kills', 'lost', 'jarls', 'gods', 'blood', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.formatVersion == '1'
+          && d.initials is string && d.initials.matches('^[A-Z]{3}$')
+          && d.victory is bool
+          && d.renown is int && d.renown >= 0 && d.renown <= 65535
+          && d.days is int && d.days >= 1 && d.days <= 255
+          && d.kills is int && d.kills >= 0 && d.kills <= 255
+          && d.lost is int && d.lost >= 0 && d.lost <= 9
+          && d.jarls is int && d.jarls >= 0 && d.jarls <= 2
+          && d.gods is int && d.gods >= 0 && d.gods <= 6
+          && d.blood is int && d.blood >= 0 && d.blood <= 999
+          && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
+
       // SHUT THE BOX: the exact record sb/index.html's confirm handler writes. rounds = tiles
       // left open per round (0-45, 0 = shut the box), 5 of them for a solo series (result '1')
       // or 3 for a match (W/L/D); total must equal their sum; lower is better. shut (boxes shut)
@@ -1149,6 +1172,7 @@ service cloud.firestore {
       // '_', so every other game's add() is unaffected.
       allow create: if (((request.resource.data.game == 'BATMAN' && isBatmanScore(request.resource.data)) && ((request.resource.data.kind == 'overall' && scoreId == 'BATMAN_' + request.auth.uid) || (request.resource.data.kind == 'stage' && scoreId == 'BATMAN_' + request.auth.uid + '_' + string(request.resource.data.stage)))) || (request.resource.data.game == 'BW' && isBowlingScore(request.resource.data)) || (request.resource.data.game == 'TT' && isTetrisScore(request.resource.data)) || (request.resource.data.game == 'YZ' && isYahtzeeScore(request.resource.data)) || (request.resource.data.game == 'FK' && isFarkleScore(request.resource.data)) || (request.resource.data.game == '2K' && is2048Score(request.resource.data)) || (request.resource.data.game == 'OV' && isOverRevScore(request.resource.data)) || (request.resource.data.game == 'GD' && isGardeniaScore(request.resource.data)) || (request.resource.data.game == 'SD' && isSudokuScore(request.resource.data)) || (request.resource.data.game == 'XN' && isXenon2Score(request.resource.data)) || (request.resource.data.game == 'BK' && isBreakoutScore(request.resource.data)) || (request.resource.data.game == 'MS' && isMinesweeperScore(request.resource.data)) || (request.resource.data.game == 'DDMR' && isDonTDieMrRobotScore(request.resource.data)) || (request.resource.data.game == 'RVNG' && isFruityPalsRevengeScore(request.resource.data)) || (request.resource.data.game == 'HGS' && isHoratioGoesSnowboardingScore(request.resource.data)) || (request.resource.data.game == 'FU' && isFurryScore(request.resource.data)) || (request.resource.data.game == 'CA' && isCarcassonneScore(request.resource.data))
           || (request.resource.data.game == 'SB' && isShutTheBoxScore(request.resource.data))
+          || (request.resource.data.game == 'BE' && isBloodEagleScore(request.resource.data))
           || (request.resource.data.game == 'CB' && isClassicBoardGamesScore(request.resource.data))
           || (request.resource.data.game == 'TM' && isTurfMastersScore(request.resource.data))
           || (request.resource.data.game == 'GG' && isGhostNGoblinsScore(request.resource.data))
