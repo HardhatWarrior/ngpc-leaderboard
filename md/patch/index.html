@@ -67,9 +67,9 @@
   const SRC_SIZE = 1048576, SRC_CRC = 0x72184DE7;
   // one patch; OLD_PATCHED = earlier builds of it, recognised as already patched
   const VARIANTS = {
-    lb: {ips:'/md/magicaldrop_lb.ips', size:1048576, crc:0xEEAC4F65, name:'Magical Drop Pocket (Leaderboard).ngc'}
+    lb: {ips:'/md/magicaldrop_lb.ips', size:1048576, crc:0xD16A3E31, name:'Magical Drop Pocket (Leaderboard).ngc'}
   };
-  const OLD_PATCHED = [0xE24E4E40];
+  const OLD_PATCHED = [0xE24E4E40, 0xEEAC4F65];   // _01, _02 (white entry screen, one big QR)
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');

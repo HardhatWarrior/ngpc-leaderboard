@@ -378,6 +378,17 @@ service cloud.firestore {
           && d.character is int && d.character >= 0 && d.character <= 1
           && isRetailLbBase(d, 9999);
       }
+      // Crush Roller career: ONE doc per player (CRC_<uid>): best run (score + route path) + per-level best / plays (26),
+      // furthest stage, runs that reached 6-1, the last 300 merged codes. Best + codes may only grow.
+      function isCrushRollerCareer(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'path', 'bestAt', 'plays', 'lBest', 'lPlays', 'stageMax', 'reached61', 'codes', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.path is string && d.path.matches('^([0-9A-PZ][0-9A-Z]{4}){1,8}$')
+          && d.bestAt is int && d.plays is int && d.plays >= 1
+          && d.lBest is list && d.lBest.size() == 26 && d.lPlays is list && d.lPlays.size() == 26
+          && d.stageMax is int && d.stageMax >= 1 && d.stageMax <= 6 && d.reached61 is int && d.reached61 >= 0
+          && d.codes is list && d.codes.size() >= 1 && d.codes.size() <= 300
+          && isRetailLbBase(d, 99999999);
+      }
       // Pac-Man career: ONE doc per player (PMC_<uid>): best score (+ its level), highest level, games, totals of dots,
       // pellets, ghosts [200,400,800,1600], fruit [8 kinds], the last 300 merged codes. Best + codes may only grow.
       function isPacManCareer(d) {
@@ -1113,6 +1124,7 @@ service cloud.firestore {
           || ((request.resource.data.game == 'MS1M' && isMetalSlug1MissionScore(request.resource.data)) && scoreId == 'MS1M_' + request.auth.uid)
           || ((request.resource.data.game == 'PL1C' && isPuzzleLink1Career(request.resource.data)) && scoreId == 'PL1C_' + request.auth.uid)
           || ((request.resource.data.game == 'PMC' && isPacManCareer(request.resource.data)) && scoreId == 'PMC_' + request.auth.uid)
+          || ((request.resource.data.game == 'CRC' && isCrushRollerCareer(request.resource.data)) && scoreId == 'CRC_' + request.auth.uid)
           || ((request.resource.data.game == 'PL2C' && isPuzzleLink2Career(request.resource.data)) && scoreId == 'PL2C_' + request.auth.uid)
           || ((request.resource.data.game == 'MS2M' && isMetalSlug2MissionScore(request.resource.data)) && scoreId == 'MS2M_' + request.auth.uid)
           || (request.resource.data.game == 'CR' && isCrushRollerScore(request.resource.data))
@@ -1137,7 +1149,8 @@ service cloud.firestore {
         && !(scoreId.matches('^MS1M_.*') && request.resource.data.game != 'MS1M')
         && !(scoreId.matches('^PL1C_.*') && request.resource.data.game != 'PL1C')
         && !(scoreId.matches('^PL2C_.*') && request.resource.data.game != 'PL2C')
-        && !(scoreId.matches('^PMC_.*') && request.resource.data.game != 'PMC');
+        && !(scoreId.matches('^PMC_.*') && request.resource.data.game != 'PMC')
+        && !(scoreId.matches('^CRC_.*') && request.resource.data.game != 'CRC');
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
@@ -1240,6 +1253,15 @@ service cloud.firestore {
           && resource.data.game == 'PMC'
           && request.resource.data.game == 'PMC'
           && isPacManCareer(request.resource.data)
+          && request.resource.data.score >= resource.data.score
+          && request.resource.data.codes.size() >= resource.data.codes.size())
+        // Twelfth branch: the Crush Roller career (CRC_<uid>): the best score and the code list may only grow.
+        || (request.auth != null
+          && scoreId == 'CRC_' + request.auth.uid
+          && resource.data.uid == request.auth.uid
+          && resource.data.game == 'CRC'
+          && request.resource.data.game == 'CRC'
+          && isCrushRollerCareer(request.resource.data)
           && request.resource.data.score >= resource.data.score
           && request.resource.data.codes.size() >= resource.data.codes.size());
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --

@@ -259,6 +259,29 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
   // Puzzle Link careers (PL1C_<uid> / PL2C_<uid>, see /pl-career.js): card collection + bests; PL1 also counts the
   // older one-per-code entries (PL1 / PL2).
   const plOwns = (set, i)=>!!(set && set[Math.floor(i/5)] && ('0123456789ABCDEFGHIJKLMNOPQRSTUV'.indexOf(set[Math.floor(i/5)]) >> (i%5)) & 1);
+  // Crush Roller career (CRC_<uid>): best run + per-level bests / plays (26 levels), furthest stage, 6-1 runs; older CR
+  // entries count for score.
+  PROVIDERS.push(careerBadges('cr', 'Crush Roller', '/cr/', {
+    state(scores){
+      const c = scores.find(d=>d.game === 'CRC');
+      const old = scores.filter(d=>d.game === 'CR');
+      if(!c && !old.length) return null;
+      return { c: c || {}, top: Math.max(c ? c.score : 0, ...old.map(d=>d.score)) };
+    },
+    list(st){ const c = st.c, lp = c.lPlays || [], lb = c.lBest || [], played = lp.filter(x=>x>0).length, stg = c.stageMax || 0;
+      return [
+      ['Progress','FIRST ROUTE','record a run with its level route', false, !!c.plays],
+      ['Progress','STAGE 3','reach stage 3', false, stg >= 3],
+      ['Progress','STAGE 5','reach stage 5', false, stg >= 5],
+      ['Progress','FINAL STAGE','reach 6-1', true, (c.reached61||0) >= 1],
+      ['Levels','EXPLORER','play 10 different levels', false, played >= 10, played+' / 26 levels'],
+      ['Levels','ALL ROADS','play all 26 levels', true, played >= 26, played+' / 26 levels'],
+      ['Levels','LEVEL ACE','3,000 or more in a single level', false, lb.some(x=>x >= 3000)],
+      ['Score','5K','a score of 5,000 or more', false, st.top >= 5000, 'Best '+st.top.toLocaleString()],
+      ['Score','10K','a score of 10,000 or more', false, st.top >= 10000, 'Best '+st.top.toLocaleString()],
+      ['Score','25K','a score of 25,000 or more', true, st.top >= 25000, 'Best '+st.top.toLocaleString()],
+    ]; }
+  }));
   // Pac-Man career (PMC_<uid>): best score + totals over every recorded game; the older PM entries count for score.
   PROVIDERS.push(careerBadges('pm', 'Pac-Man', '/pm/', {
     state(scores){
