@@ -498,7 +498,7 @@
     const name = viewingOther ? (c && c.username ? '@'+c.username.toUpperCase() : 'Player') : '';
     el('career-title').textContent = viewingOther ? name + '’s Career' : 'My Career';
     if(!uid){ out.innerHTML = '<div class="empty-state">Sign in to see your career stats.</div>'; return; }
-    if(!c){ out.innerHTML = '<div class="empty-state">'+(viewingOther ? 'No mission codes for this player yet.' : 'No mission codes yet. Scan the QR shown after a MISSION COMPLETE.')+'</div>'; return; }
+    if(!c){ out.innerHTML = '<div class="empty-state">'+(viewingOther ? 'No mission codes for this player yet.' : 'No mission codes yet. Scan the QR shown after a MISSION COMPLETE.')+'</div>'; drawCareerBadges(uid, missionDocs.concat(allDocs).map(d=>d.data()).filter(d=>d.uid === uid)); return; }
     const done = c.mClears.filter(x=>x > 0).length;
     let rows = '';
     for(let i=0;i<37;i++){

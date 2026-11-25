@@ -343,7 +343,8 @@
       '<tr><td>Missions cleared</td><td class="tk-val tnum">'+data.cleared+' / 23</td></tr>'+
       '<tr><td>Last mission</td><td class="tk-val tnum">'+(data.mission < 23 ? data.mission+1 : '?')+'</td></tr>'+
       '<tr><td>Level</td><td class="tk-val">'+ms1Level(data.level)+'</td></tr>';
-    return '<table class="tk-sheet">'+rows+'</table>';
+    return '<table class="tk-sheet">'+rows+'</table>'+
+      (data.uid ? '<button type="button" class="btn-secondary view-career" data-uid="'+escapeHtml(data.uid)+'" style="width:auto;display:inline;margin:8px 0 0;padding:4px 10px">View '+escapeHtml(data.username ? '@'+data.username.toUpperCase() : 'player')+'’s career</button>' : '');
   }
 
   async function renderBoard(docs){
@@ -436,7 +437,7 @@
     const name = viewingOther ? (c && c.username ? '@'+c.username.toUpperCase() : 'Player') : '';
     el('career-title').textContent = viewingOther ? name + '’s Career' : 'My Career';
     if(!uid){ out.innerHTML = '<div class="empty-state">Sign in to see your career stats.</div>'; return; }
-    if(!c){ out.innerHTML = '<div class="empty-state">'+(viewingOther ? 'No mission codes for this player yet.' : 'No mission codes yet. Scan the QR shown after a mission’s score tally.')+'</div>'; return; }
+    if(!c){ out.innerHTML = '<div class="empty-state">'+(viewingOther ? 'No mission codes for this player yet.' : 'No mission codes yet. Scan the QR shown after a mission’s score tally.')+'</div>'; drawCareerBadges(uid, oldDocs.concat(missionDocs).map(d=>d.data()).filter(d=>d.uid === uid)); return; }
     const done = c.mClears.filter(x=>x > 0).length;
     let rows = '';
     for(let i=0;i<23;i++){
