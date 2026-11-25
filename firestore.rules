@@ -413,6 +413,20 @@ service cloud.firestore {
           && d.codes is list && d.codes.size() >= 1 && d.codes.size() <= 300
           && isRetailLbBase(d, 999999999);
       }
+      // Sonic career: ONE doc per player (SNC_<uid>, SN3 codes): best run (score + stage), furthest stage, games, total,
+      // the cart's puzzle progress (solved bits, pieces found 0-96 + the 96-slot set). Best + total + codes may only grow.
+      function isSonicPocketCareer(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'stage', 'bestAt', 'plays', 'stageMax', 'total', 'solved', 'pieces', 'pieceSet', 'codes', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.stage is int && d.stage >= 0 && d.stage <= 13
+          && d.stageMax is int && d.stageMax >= d.stage && d.stageMax <= 13
+          && d.solved is int && d.solved >= 0 && d.solved <= 63
+          && d.pieces is int && d.pieces >= 0 && d.pieces <= 96
+          && d.pieceSet is string && d.pieceSet.matches('^[0-9A-V]{20}$')
+          && d.total is int && d.total >= d.score
+          && d.bestAt is int && d.plays is int && d.plays >= 1
+          && d.codes is list && d.codes.size() >= 1 && d.codes.size() <= 300
+          && isRetailLbBase(d, 999999999);
+      }
       // Pac-Man career: ONE doc per player (PMC_<uid>): best score (+ its level), highest level, games, totals of dots,
       // pellets, ghosts [200,400,800,1600], fruit [8 kinds], the last 300 merged codes. Best + codes may only grow.
       function isPacManCareer(d) {
@@ -1151,6 +1165,7 @@ service cloud.firestore {
           || ((request.resource.data.game == 'CRC' && isCrushRollerCareer(request.resource.data)) && scoreId == 'CRC_' + request.auth.uid)
           || ((request.resource.data.game == 'MDC' && isMagicalDropCareer(request.resource.data)) && scoreId == 'MDC_' + request.auth.uid)
           || ((request.resource.data.game == 'PBC' && isPuzzleBobbleCareer(request.resource.data)) && scoreId == 'PBC_' + request.auth.uid)
+          || ((request.resource.data.game == 'SNC' && isSonicPocketCareer(request.resource.data)) && scoreId == 'SNC_' + request.auth.uid)
           || ((request.resource.data.game == 'PL2C' && isPuzzleLink2Career(request.resource.data)) && scoreId == 'PL2C_' + request.auth.uid)
           || ((request.resource.data.game == 'MS2M' && isMetalSlug2MissionScore(request.resource.data)) && scoreId == 'MS2M_' + request.auth.uid)
           || (request.resource.data.game == 'CR' && isCrushRollerScore(request.resource.data))
@@ -1178,7 +1193,8 @@ service cloud.firestore {
         && !(scoreId.matches('^PMC_.*') && request.resource.data.game != 'PMC')
         && !(scoreId.matches('^CRC_.*') && request.resource.data.game != 'CRC')
         && !(scoreId.matches('^MDC_.*') && request.resource.data.game != 'MDC')
-        && !(scoreId.matches('^PBC_.*') && request.resource.data.game != 'PBC');
+        && !(scoreId.matches('^PBC_.*') && request.resource.data.game != 'PBC')
+        && !(scoreId.matches('^SNC_.*') && request.resource.data.game != 'SNC');
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
@@ -1309,6 +1325,16 @@ service cloud.firestore {
           && resource.data.game == 'PBC'
           && request.resource.data.game == 'PBC'
           && isPuzzleBobbleCareer(request.resource.data)
+          && request.resource.data.score >= resource.data.score
+          && request.resource.data.total >= resource.data.total
+          && request.resource.data.codes.size() >= resource.data.codes.size())
+        // Fifteenth branch: the Sonic career (SNC_<uid>): best, total and the code list may only grow.
+        || (request.auth != null
+          && scoreId == 'SNC_' + request.auth.uid
+          && resource.data.uid == request.auth.uid
+          && resource.data.game == 'SNC'
+          && request.resource.data.game == 'SNC'
+          && isSonicPocketCareer(request.resource.data)
           && request.resource.data.score >= resource.data.score
           && request.resource.data.total >= resource.data.total
           && request.resource.data.codes.size() >= resource.data.codes.size());

@@ -333,6 +333,36 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
       ['Career','100K TOTAL','100,000 points over all recorded games', true, st.total >= 100000, n(st.total)+' total'],
     ]; }
   }));
+  // Sonic career (SNC_<uid>): best run, furthest stage, games, total, the cart's puzzle progress; older SN entries
+  // count for score / stage.
+  PROVIDERS.push(careerBadges('sn', 'Sonic Pocket Adventure', '/sn/', {
+    state(scores){
+      const c = scores.find(d=>d.game === 'SNC');
+      const old = scores.filter(d=>d.game === 'SN');
+      if(!c && !old.length) return null;
+      const cc = c || {};
+      let solved = 0, b = cc.solved||0; while(b){ solved += b & 1; b >>= 1; }
+      return { top: Math.max(cc.score||0, ...old.map(d=>d.score||0)), stage: Math.max(cc.stageMax||0, ...old.map(d=>d.stage||0)),
+        plays: cc.plays||0, pieces: cc.pieces||0, solved: solved };
+    },
+    list(st){ const n = (v)=>v.toLocaleString(); return [
+      ['Score','25K','a score of 25,000 or more', false, st.top >= 25000, 'Best '+n(st.top)],
+      ['Score','50K','a score of 50,000 or more', false, st.top >= 50000, 'Best '+n(st.top)],
+      ['Score','100K','a score of 100,000 or more', false, st.top >= 100000, 'Best '+n(st.top)],
+      ['Score','200K','a score of 200,000 or more', true, st.top >= 200000, 'Best '+n(st.top)],
+      ['Zones','SECRET PLANT','reach Secret Plant', false, st.stage >= 2],
+      ['Zones','AQUATIC RELIX','reach Aquatic Relix', false, st.stage >= 6],
+      ['Zones','GIGANTIC ANGEL','reach Gigantic Angel', false, st.stage >= 10],
+      ['Zones','LAST UTOPIA','reach Last Utopia', false, st.stage >= 12],
+      ['Zones','CHAOTIC SPACE','reach Chaotic Space', true, st.stage >= 13],
+      ['Puzzles','FIRST PIECE','find a puzzle piece', false, st.pieces >= 1, st.pieces+' / 96 pieces'],
+      ['Puzzles','HALF THE PIECES','find 48 puzzle pieces', false, st.pieces >= 48, st.pieces+' / 96 pieces'],
+      ['Puzzles','ALL 96 PIECES','find every puzzle piece', true, st.pieces >= 96, st.pieces+' / 96 pieces'],
+      ['Puzzles','SOUND TEST','complete 3 puzzles', false, st.solved >= 3, st.solved+' / 6 puzzles'],
+      ['Puzzles','PUZZLE MASTER','complete all 6 puzzles', true, st.solved >= 6, st.solved+' / 6 puzzles'],
+      ['Career','REGULAR','record 10 games', false, st.plays >= 10, st.plays+' games'],
+    ]; }
+  }));
   // Pac-Man career (PMC_<uid>): best score + totals over every recorded game; the older PM entries count for score.
   PROVIDERS.push(careerBadges('pm', 'Pac-Man', '/pm/', {
     state(scores){

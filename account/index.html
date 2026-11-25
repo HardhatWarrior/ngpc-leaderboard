@@ -471,7 +471,7 @@
   async function loadGameNames(){
     try{
       const snap = await A.db.collection('games').get();
-      snap.forEach(doc=>{ const d = doc.data(); if(d.code) GAME_NAMES[d.code] = d.name || doc.id; }); ['MS1M','MS1','MS2M','MS2','PL1C','PL1','PL2C','PL2','PMC','PM','CRC','CR','MDC','MD','PBC','PB'].forEach((c,i,l)=>{ if(i%2===0 && GAME_NAMES[l[i+1]]) GAME_NAMES[c] = GAME_NAMES[l[i+1]]; });
+      snap.forEach(doc=>{ const d = doc.data(); if(d.code) GAME_NAMES[d.code] = d.name || doc.id; }); ['MS1M','MS1','MS2M','MS2','PL1C','PL1','PL2C','PL2','PMC','PM','CRC','CR','MDC','MD','PBC','PB','SNC','SN'].forEach((c,i,l)=>{ if(i%2===0 && GAME_NAMES[l[i+1]]) GAME_NAMES[c] = GAME_NAMES[l[i+1]]; });
     }catch(e){ /* non-critical -- names just fall back to raw codes */ }
   }
   const SUB_PAGE_SIZE = 10;
