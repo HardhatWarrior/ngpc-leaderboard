@@ -67,9 +67,9 @@
   const SRC_SIZE = 1048576, SRC_CRC = 0xBA9CA21C;
   // one patch; OLD_PATCHED = earlier builds of it, recognised as already patched
   const VARIANTS = {
-    lb: {ips:'/pl2/puzzlelink2_lb.ips', size:2097152, crc:0xAFDD684F, name:'Puzzle Link 2 (Leaderboard).ngc'}
+    lb: {ips:'/pl2/puzzlelink2_lb.ips', size:2097152, crc:0x782B1A9E, name:'Puzzle Link 2 (Leaderboard).ngc'}
   };
-  const OLD_PATCHED = [0xAD22E788];   // _01: save in the 1 MB blocks (SAVE ERROR on 2 MB)
+  const OLD_PATCHED = [0xAD22E788, 0xAFDD684F];   // _01: save in the 1 MB blocks (SAVE ERROR on 2 MB)
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');

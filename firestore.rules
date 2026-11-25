@@ -377,6 +377,34 @@ service cloud.firestore {
           && d.character is int && d.character >= 0 && d.character <= 1
           && isRetailLbBase(d, 9999);
       }
+      // Puzzle Link careers: ONE doc per player (PL1C_<uid> / PL2C_<uid>, /pl-career.js): best(s) + card collection
+      // (cardSet, 5 cards a char, 0-9A-V) + the last 300 merged codes. Updates may not lower a best or shrink the codes.
+      function isPuzzleLink1Career(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'difficulty', 'startStage', 'level', 'bestAt', 'plays', 'cardSet', 'owned', 'codes', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.difficulty is int && d.difficulty >= 1 && d.difficulty <= 2
+          && d.startStage is int && d.startStage >= 0 && d.startStage <= 8
+          && d.level is int && d.level >= 0 && d.level <= 99
+          && d.bestAt is int && d.plays is int && d.plays >= 1
+          && d.cardSet is string && d.cardSet.matches('^[0-9A-V]{19}$')
+          && d.owned is int && d.owned >= 0 && d.owned <= 91
+          && d.codes is list && d.codes.size() >= 1 && d.codes.size() <= 300
+          && isRetailLbBase(d, 99999999);
+      }
+      function isPuzzleLink2Career(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'best', 'bLevel', 'bStage', 'bPower', 'bAt', 'plays', 'cardSet', 'owned', 'codes', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.best is list && d.best.size() == 4 && d.bLevel is list && d.bLevel.size() == 4
+          && d.bStage is list && d.bStage.size() == 4 && d.bPower is list && d.bPower.size() == 4
+          && d.bAt is list && d.bAt.size() == 4 && d.plays is list && d.plays.size() == 4
+          && d.cardSet is string && d.cardSet.matches('^[0-9A-V]{20}$')
+          && d.owned is int && d.owned >= 0 && d.owned <= 100
+          && d.codes is list && d.codes.size() >= 1 && d.codes.size() <= 300
+          && isRetailLbBase(d, 99999999);
+      }
+      function plCareerGrows(n, o) {
+        return n.codes.size() >= o.codes.size()
+          && (n.game == 'PL1C' ? n.score >= o.score
+              : (n.best[0] >= o.best[0] && n.best[1] >= o.best[1] && n.best[2] >= o.best[2] && n.best[3] >= o.best[3]));
+      }
       // Metal Slug career docs: ONE per player (MS2M_<uid> / MS1M_<uid>, like GN_<uid>); each mission code is merged in
       // by the page (/ms-career.js). Best run fields (score = total) + per-mission lists (37 / 23 entries) + the last
       // 300 merged codes. Difficulty NORMAL (2) or harder only. Updates may never lower the best total or shrink the
@@ -1071,6 +1099,8 @@ service cloud.firestore {
           || ((request.resource.data.game == 'MS2' && isMetalSlug2Score(request.resource.data)) && scoreId == 'MS2_' + request.auth.uid + '_' + string(request.resource.data.stage))
           || ((request.resource.data.game == 'MS1' && isMetalSlug1Score(request.resource.data)) && scoreId == 'MS1_' + request.auth.uid)
           || ((request.resource.data.game == 'MS1M' && isMetalSlug1MissionScore(request.resource.data)) && scoreId == 'MS1M_' + request.auth.uid)
+          || ((request.resource.data.game == 'PL1C' && isPuzzleLink1Career(request.resource.data)) && scoreId == 'PL1C_' + request.auth.uid)
+          || ((request.resource.data.game == 'PL2C' && isPuzzleLink2Career(request.resource.data)) && scoreId == 'PL2C_' + request.auth.uid)
           || ((request.resource.data.game == 'MS2M' && isMetalSlug2MissionScore(request.resource.data)) && scoreId == 'MS2M_' + request.auth.uid)
           || (request.resource.data.game == 'CR' && isCrushRollerScore(request.resource.data))
           || (request.resource.data.game == 'PM' && isPacManScore(request.resource.data))
@@ -1091,7 +1121,9 @@ service cloud.firestore {
         && !(scoreId.matches('^MS1_.*') && request.resource.data.game != 'MS1')
         && !(scoreId.matches('^MS2_.*') && request.resource.data.game != 'MS2')
         && !(scoreId.matches('^MS2M_.*') && request.resource.data.game != 'MS2M')
-        && !(scoreId.matches('^MS1M_.*') && request.resource.data.game != 'MS1M');
+        && !(scoreId.matches('^MS1M_.*') && request.resource.data.game != 'MS1M')
+        && !(scoreId.matches('^PL1C_.*') && request.resource.data.game != 'PL1C')
+        && !(scoreId.matches('^PL2C_.*') && request.resource.data.game != 'PL2C');
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
@@ -1178,7 +1210,15 @@ service cloud.firestore {
           && request.resource.data.game == resource.data.game
           && ((resource.data.game == 'MS1M' && isMetalSlug1MissionScore(request.resource.data))
             || (resource.data.game == 'MS2M' && isMetalSlug2MissionScore(request.resource.data)))
-          && msCareerGrows(request.resource.data, resource.data));
+          && msCareerGrows(request.resource.data, resource.data))
+        // Tenth branch: Puzzle Link careers (PL1C_<uid> / PL2C_<uid>): bests and the code list may only grow.
+        || (request.auth != null
+          && (scoreId == 'PL1C_' + request.auth.uid || scoreId == 'PL2C_' + request.auth.uid)
+          && resource.data.uid == request.auth.uid
+          && request.resource.data.game == resource.data.game
+          && ((resource.data.game == 'PL1C' && isPuzzleLink1Career(request.resource.data))
+            || (resource.data.game == 'PL2C' && isPuzzleLink2Career(request.resource.data)))
+          && plCareerGrows(request.resource.data, resource.data));
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --
       // anonymous QR submissions have no uid at all, so resource.data.uid == request.auth.uid is
       // false for them (never true against a signed-in caller's uid), and they stay undeletable

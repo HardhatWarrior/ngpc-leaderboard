@@ -120,6 +120,26 @@
   .success-icon{ text-align:center; font-size:40px; margin-bottom:6px; }
   #success-view p{ text-align:center; color:var(--dim); font-size:13px; }
   footer{ text-align:center; color:var(--dim); font-size:11px; padding-top:4px; }
+  .board-tabs{ display:flex; flex-wrap:wrap; gap:6px; margin:0 0 12px; }
+  .board-tab{ padding:6px 10px; border-radius:8px; border:1px solid var(--border); background:transparent; color:inherit; font:inherit; font-size:11px; cursor:pointer; }
+  .board-tab.on{ background:var(--accent2, #e8c547); color:#111; border-color:transparent; font-weight:600; }
+  .diff-tag{ display:inline-block; margin-left:6px; padding:1px 5px; border-radius:4px; font-family:"Press Start 2P",monospace; font-size:8px; vertical-align:middle; background:#c0392b; color:#fff; letter-spacing:.04em; }
+  .career-badges{ margin-top:16px; }
+  .career-badges .g-head{ display:flex; align-items:center; gap:16px; margin:2px 0 10px; }
+  .career-badges .g-pct{ font-family:"Press Start 2P",monospace; font-size:22px; color:var(--gold,#e8c547); flex:none; }
+  .career-badges .g-sum{ flex:1; min-width:0; font-size:12.5px; }
+  .career-badges .bar{ height:10px; border-radius:5px; background:var(--navy); border:1px solid var(--border); overflow:hidden; margin:6px 0 4px; }
+  .career-badges .bar > i{ display:block; height:100%; background:var(--gold,#e8c547); }
+  .career-badges .g-title{ margin:0 0 4px; font-size:13px; letter-spacing:.08em; text-transform:uppercase; color:var(--accent2); }
+  .career-badges .grp{ font-size:10.5px; letter-spacing:.1em; text-transform:uppercase; color:var(--dim); margin:12px 0 6px; }
+  .career-badges .grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(130px,1fr)); gap:8px; }
+  .career-badges .badge{ background:var(--navy); border:1px solid var(--border); border-radius:8px; padding:8px 9px; min-width:0; opacity:.5; }
+  .career-badges .badge b{ display:block; font-size:11.5px; color:var(--dim); overflow-wrap:anywhere; }
+  .career-badges .badge small{ display:block; font-size:10.5px; color:var(--dim); margin-top:2px; overflow-wrap:anywhere; }
+  .career-badges .badge.on{ opacity:1; border-color:var(--gold,#e8c547); background:rgba(232,197,71,.08); }
+  .career-badges .badge.on b{ color:var(--gold,#e8c547); } .career-badges .badge.on b::before{ content:"\2605  "; }
+  .career-badges .badge.on.big{ background:rgba(232,197,71,.2); }
+  .career-badges .fine{ font-size:11px; color:var(--dim); line-height:1.5; margin:10px 0 0; }
 </style>
 <!-- Cloudflare Web Analytics -->
 <script type='module' src='https://static.cloudflareinsights.com/beacon.min.js' data-cf-beacon='{"token": "33e146de507a4007bb50d3d54f01816b"}'></script>
@@ -202,8 +222,17 @@
 
     <section class="panel">
       <h2>Leaderboard</h2>
+      <div class="board-tabs" id="board-tabs"></div>
       <div id="board-status"></div>
       <div id="board"></div>
+    </section>
+
+    <section class="panel">
+      <details id="career-panel">
+        <summary style="cursor:pointer;list-style-position:inside"><h2 id="career-title" style="display:inline">My Career</h2></summary>
+        <div id="career-back" hidden style="margin:10px 0 0"><button type="button" class="btn-secondary" id="career-mine" style="width:auto;display:inline;margin:0;padding:4px 10px">Back to my career</button></div>
+        <div id="career" style="margin-top:10px"></div>
+      </details>
     </section>
   </main>
 
@@ -212,6 +241,8 @@
 </div>
 
 <script src="/auth.js"></script>
+<script src="/achievements/badges.js?v=8"></script>
+<script src="/pl-career.js?v=1"></script>
 <script>
 (function(){
   "use strict";
@@ -261,7 +292,7 @@
     text = (text||'').trim().toUpperCase();
     if(text.length < 2) return {error:"That code is too short to be a valid score."};
     const code = text.slice(0,3);
-    if(code === QR_GAME_CODE) return parsePuzzleLinkPayload(text);
+    if(code === QR_GAME_CODE) return text.slice(3,4) === '2' ? PL_CAREER.parsePL12(text) : parsePuzzleLinkPayload(text);
     return {error:'Unknown game code "'+code+'".'};
   }
 
@@ -283,6 +314,7 @@
   function formatDisplayValue(o){ return String(o.score); }
 
   function renderScorecardHTML(data){
+    if(data.game === 'PL1C') return careerScorecard(data) + viewCareerBtn(data);
     const rows = '<tr><td>Score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
       '<tr><td>Difficulty</td><td class="tk-val">'+(['Easy','Ave','Hard'][data.difficulty]||'?')+'</td></tr>'+
       '<tr><td>Stage reached</td><td class="tk-val tnum">'+plStage(data.level)+'</td></tr>'+
@@ -292,10 +324,10 @@
 
   async function renderBoard(docs){
     if(!docs.length){ boardEl.innerHTML = '<div class="empty-state">No scores yet — be the first on the board.</div>'; return; }
-    const uids = docs.map(d=>d.data().uid).filter(Boolean);
+    const uids = docs.map(d=>(d.data ? d.data() : d).uid).filter(Boolean);
     const avatars = (window.NGPC_AUTH && uids.length) ? await NGPC_AUTH.fetchAvatars(uids) : {};
     boardEl.innerHTML = docs.map((d,i)=>{
-      const data = d.data();
+      const data = d.data ? d.data() : d;
       const rank = i+1;
       const usernameLine = data.username ? ('<a href="/user/?u='+encodeURIComponent(data.username)+'">@'+escapeHtml(data.username.toUpperCase())+'</a>') : '';
       const meta = [fmtWhen(data.submittedAt), usernameLine].filter(Boolean).join(' · ');
@@ -305,13 +337,13 @@
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
         '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
-        '<div class="score-val tnum">'+(data.score!=null?String(data.score):'-')+'</div>'+
+        '<div class="score-val tnum">'+(data.value!=null?String(data.value):(data.score!=null?String(data.score):'-'))+'</div>'+
       '</div>';
       const detailHtml = '<div class="row-detail" id="d'+i+'" hidden>'+renderScorecardHTML(data)+'</div>';
       return rowHtml + detailHtml;
     }).join('');
     docs.forEach((d,i)=>{
-      const data = d.data();
+      const data = d.data ? d.data() : d;
       if(!data.uid || !avatars[data.uid]) return;
       const canvasEl = boardEl.querySelector('[data-avatar-row="'+i+'"]');
       if(canvasEl && window.NGPC_AUTH) NGPC_AUTH.renderAvatarToCanvas(canvasEl, avatars[data.uid], 48/NGPC_AUTH.AVATAR_SIZE);
@@ -340,13 +372,75 @@
   function subscribeBoard(){
     if(unsubscribeBoard){ unsubscribeBoard(); unsubscribeBoard = null; }
     if(!db) return;
-    const q = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).orderBy('score','desc').limit(10);
-    unsubscribeBoard = q.onSnapshot(
-      (snap)=>{ renderBoard(snap.docs); },
-      (err)=>{ boardStatusEl.textContent = friendlyDbError(err); }
-    );
+    const qa = db.collection('scores').where('game','==',QR_GAME_CODE).where('approved','==',true).limit(1000);
+    const qc = db.collection('scores').where('game','==','PL1C').where('approved','==',true).limit(5000);
+    const ua = qa.onSnapshot((snap)=>{ oldDocs = snap.docs; drawBoards(); drawCareer(); }, (err)=>{ boardStatusEl.textContent = friendlyDbError(err); });
+    const uc = qc.onSnapshot((snap)=>{ careerDocs = snap.docs; drawBoards(); drawCareer(); }, (err)=>{ boardStatusEl.textContent = friendlyDbError(err); });
+    unsubscribeBoard = ()=>{ ua(); uc(); };
   }
 
+
+  // ---- one career doc per player (PL1C_<uid>, /pl-career.js) + the older one-per-code entries (PL1)
+  let careerDocs = [], oldDocs = [], careerUid = null, curBoard = 0;
+  const BOARDS = ['NORMAL'];
+  function myUid(){ return window.NGPC_AUTH && NGPC_AUTH.currentUser && NGPC_AUTH.currentUser.uid; }
+  function careerDoc(uid){ const d = careerDocs.find(x=>x.data().uid === uid); return d ? d.data() : null; }
+  function onePerPlayer(rows){ const seen = new Set(); return rows.filter(r=>{ const k = r.uid || r.id; if(seen.has(k)) return false; seen.add(k); return true; }); }
+  function boardRows(){
+    const rows = [];
+    careerDocs.forEach(d=>{ const x = d.data(), v = boardValue(x, curBoard); if(v > 0) rows.push(Object.assign({ id:d.id, value:v }, x)); });
+    oldDocs.forEach(d=>{ const x = d.data(), v = boardValue(x, curBoard); if(v > 0) rows.push(Object.assign({ id:d.id, value:v }, x)); });
+    rows.sort((a,b)=>b.value-a.value || (rowRank(b)-rowRank(a)) || (a.submittedAt||0)-(b.submittedAt||0));
+    return onePerPlayer(rows).slice(0,10);
+  }
+  function drawBoards(){
+    const tabs = el('board-tabs');
+    if(tabs) tabs.innerHTML = BOARDS.length > 1 ? BOARDS.map((n,i)=>'<button class="board-tab'+(i===curBoard?' on':'')+'" data-board="'+i+'">'+n+'</button>').join('') : '';
+    renderBoard(boardRows());
+  }
+  document.addEventListener('click', (e)=>{ const t = e.target.closest('.board-tab'); if(!t) return; curBoard = +t.dataset.board; drawBoards(); });
+  let careerBadgeToken = 0;
+  async function drawCareer(){
+    const out = el('career'), me = myUid(), uid = careerUid || me;
+    const viewingOther = !!(careerUid && careerUid !== me);
+    el('career-back').hidden = !viewingOther || !me;
+    const c = uid ? careerDoc(uid) : null;
+    el('career-title').textContent = viewingOther ? ((c && c.username ? '@'+c.username.toUpperCase() : 'Player') + '’s Career') : 'My Career';
+    if(!uid){ out.innerHTML = '<div class="empty-state">Sign in to see your career stats.</div>'; return; }
+    const token = ++careerBadgeToken;
+    out.innerHTML = (c ? careerStats(c) : '<div class="empty-state">'+(viewingOther ? 'No codes from the current patch for this player yet.' : 'No codes from the current patch yet. Re-patch, then scan the QR after a game.')+'</div>')+
+      '<div class="career-badges" id="career-badges"></div><h2 class="g-title" style="margin-top:16px;font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--accent2)">Cards '+(c ? c.owned : 0)+' / 91</h2><div id="career-cards"></div>';
+    PL_CAREER.cardGrid('pl1', c ? c.cardSet : '', el('career-cards'));
+    const P = window.NGPC_BADGES && NGPC_BADGES.PROVIDERS.find(p=>p.key === 'pl1');
+    if(!P) return;
+    const scores = careerDocs.concat(oldDocs).map(d=>d.data()).filter(d=>d.uid === uid);
+    let res = null; try{ res = await P.load({ uid: uid, self: uid === me, scores: scores }); }catch(e){}
+    if(token !== careerBadgeToken) return;
+    el('career-badges').innerHTML = res ? res.html.replace(/<h2 class="g-title">[\s\S]*?<\/h2>/, '<h2 class="g-title">Badges</h2>') : '';
+  }
+  document.addEventListener('click', (e)=>{
+    const v = e.target.closest('.view-career');
+    if(v){ e.stopPropagation(); careerUid = v.dataset.uid; drawCareer(); const p = el('career-panel'); p.open = true; p.scrollIntoView({behavior:'smooth', block:'start'}); return; }
+    if(e.target.closest('#career-mine')){ careerUid = null; drawCareer(); }
+  }, true);
+  if(window.NGPC_AUTH) NGPC_AUTH.onAuthChange(()=>drawCareer());
+  function viewCareerBtn(data){ return data.uid ? '<button type="button" class="btn-secondary view-career" data-uid="'+escapeHtml(data.uid)+'" style="width:auto;display:inline;margin:8px 0 0;padding:4px 10px">View '+escapeHtml(data.username ? '@'+data.username.toUpperCase() : 'player')+'’s career</button>' : ''; }
+
+  function boardValue(x, b){ return (x.game === 'PL1C' || x.game === 'PL1') && x.difficulty >= 1 ? x.score : 0; }
+  function rowRank(x){ return x.difficulty || 0; }
+  function careerStats(c){
+    return '<table class="tk-sheet">'+
+      '<tr><td>Best score</td><td class="tk-val tnum">'+c.score+(c.difficulty >= 2 ? '<span class="diff-tag">HARD</span>' : '')+'</td></tr>'+
+      '<tr><td>Stage reached (best game)</td><td class="tk-val tnum">'+plStage(c.level)+'</td></tr>'+
+      '<tr><td>Games recorded</td><td class="tk-val tnum">'+c.plays+'</td></tr>'+
+      '<tr><td>Cards collected</td><td class="tk-val tnum">'+c.owned+' / 91</td></tr></table>';
+  }
+  function careerScorecard(d){
+    return '<table class="tk-sheet"><tr><td>Score</td><td class="tk-val tnum">'+d.score+'</td></tr>'+
+      '<tr><td>Difficulty</td><td class="tk-val">'+(['Easy','Ave','Hard'][d.difficulty]||'?')+'</td></tr>'+
+      '<tr><td>Stage reached</td><td class="tk-val tnum">'+plStage(d.level)+'</td></tr>'+
+      '<tr><td>Cards</td><td class="tk-val tnum">'+(d.owned||0)+' / 91</td></tr></table>';
+  }
   function initDb(){
     if(!firebase || !firebase.firestore){ boardStatusEl.innerHTML = '<div class="msg err">Firestore module not available</div>'; return; }
     try{
@@ -358,9 +452,9 @@
     }
   }
 
-  async function writeScore(data){
+  async function writeScore(data, id){
     if(!db) return {ok:false, error:new Error('db not initialized')};
-    try{ await db.collection('scores').add(data); return {ok:true}; }
+    try{ if(id) await db.collection('scores').doc(id).set(data); else await db.collection('scores').add(data); return {ok:true}; }
     catch(e){ return {ok:false, error:e}; }
   }
 
@@ -526,6 +620,28 @@
     const btn = el('btn-confirm');
     btn.disabled = true;
     confirmMsg.innerHTML = '<div class="msg ok">Submitting…</div>';
+    if(pending.game === 'PL1C'){
+      const sub = pending;
+      try{
+        const id = 'PL1C_' + authedUser.uid;
+        const snap = await db.collection('scores').doc(id).get().catch(()=>null);
+        const prev = snap && snap.exists ? snap.data() : null;
+        const m = PL_CAREER.merge(prev, sub, { source: SUBMIT_SOURCE, submittedAt: Date.now(), uid: authedUser.uid, username: authedUser.username, approved: !!authedUser.approved });
+        if(m.dup){ btn.disabled = false; confirmMsg.innerHTML = '<div class="msg err">That code is already recorded.</div>'; return; }
+        const res = await writeScore(m.data, id);
+        btn.disabled = false;
+        if(res.ok){
+          el('success-text').textContent = (sub.initials||'') + ' — ' + sub.score + ' recorded' + (m.better ? ' — new best!' : '.') + ' Cards: ' + m.data.owned + ' / 91.';
+          if(pending === sub) pending = null;
+          showStage('success');
+        } else if(res.error && res.error.code === 'permission-denied'){
+          confirmMsg.innerHTML = '<div class="msg err">Not saved: the leaderboard refused this update (permission-denied). If your account is still awaiting approval, try again once it is approved.</div>';
+        } else {
+          confirmMsg.innerHTML = '<div class="msg err">Write failed: '+escapeHtml(res.error?.message || 'unknown')+'</div>';
+        }
+      }catch(e){ btn.disabled = false; confirmMsg.innerHTML = '<div class="msg err">Submit error: '+escapeHtml(e.message)+'</div>'; }
+      return;
+    }
     const record = Object.assign({}, pending, {
       source: SUBMIT_SOURCE,
       submittedAt: Date.now(),

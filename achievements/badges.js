@@ -256,6 +256,56 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
   const sum = (a)=>Array.isArray(a) ? a.reduce((x,y)=>x+y,0) : 0;
   const count = (a, f)=>Array.isArray(a) ? a.filter(f).length : 0;
   const anyOf = (a, f)=>Array.isArray(a) && a.some(f);
+  // Puzzle Link careers (PL1C_<uid> / PL2C_<uid>, see /pl-career.js): card collection + bests; PL1 also counts the
+  // older one-per-code entries (PL1 / PL2).
+  const plOwns = (set, i)=>!!(set && set[Math.floor(i/5)] && ('0123456789ABCDEFGHIJKLMNOPQRSTUV'.indexOf(set[Math.floor(i/5)]) >> (i%5)) & 1);
+  PROVIDERS.push(careerBadges('pl1', 'Puzzle Link', '/pl1/', {
+    state(scores){
+      const c = scores.find(d=>d.game === 'PL1C');
+      const old = scores.filter(d=>d.game === 'PL1' && d.difficulty >= 1);
+      if(!c && !old.length) return null;
+      const top = Math.max(c ? c.score : 0, ...old.map(d=>d.score));
+      const hard = (c && c.difficulty >= 2) || old.some(d=>d.difficulty >= 2);
+      return { c: c || {}, top: top, hard: hard };
+    },
+    list(st){ const c = st.c, n = c.owned || 0; return [
+      ['Cards','FIRST CARD','collect a character card', false, n >= 1],
+      ['Cards','COLLECTOR','25 cards', false, n >= 25, n+' / 91 cards'],
+      ['Cards','HALF DECK','46 cards', false, n >= 46, n+' / 91 cards'],
+      ['Cards','FULL SET','all 91 cards', true, n >= 91],
+      ['Score','5K','a score of 5,000 or more', false, st.top >= 5000, 'Best '+st.top.toLocaleString()],
+      ['Score','10K','a score of 10,000 or more', false, st.top >= 10000, 'Best '+st.top.toLocaleString()],
+      ['Score','20K','a score of 20,000 or more', true, st.top >= 20000, 'Best '+st.top.toLocaleString()],
+      ['Play','HARD WORK','a recorded game on HARD', false, st.hard],
+      ['Play','REGULAR','10 games recorded', false, (c.plays||0) >= 10],
+    ]; }
+  }));
+  PROVIDERS.push(careerBadges('pl2', 'Puzzle Link 2', '/pl2/', {
+    state(scores){
+      const c = scores.find(d=>d.game === 'PL2C');
+      const old = scores.filter(d=>d.game === 'PL2');
+      if(!c && !old.length) return null;
+      const best = c && Array.isArray(c.best) ? c.best.slice() : [0,0,0,0];
+      old.forEach(d=>{ const b = d.targets - 1; if(b >= 1 && b <= 3) best[b] = Math.max(best[b], d.score); });
+      return { c: c || {}, best: best };
+    },
+    list(st){ const c = st.c, n = c.owned || 0, set = c.cardSet || '';
+      const stageSet = (s)=>{ for(let i=s*20;i<s*20+20;i++) if(!plOwns(set, i)) return false; return true; };
+      return [
+      ['Cards','FIRST CARD','collect a character card', false, n >= 1],
+      ['Cards','COLLECTOR','25 cards', false, n >= 25, n+' / 100 cards'],
+      ['Cards','HALF DECK','50 cards', false, n >= 50, n+' / 100 cards'],
+      ['Cards','FULL SET','all 100 cards', true, n >= 100],
+      ['Sets','10 SET','all 20 cards of stage 10', false, stageSet(0)],
+      ['Sets','J SET','all 20 cards of stage J', false, stageSet(1)],
+      ['Sets','Q SET','all 20 cards of stage Q', false, stageSet(2)],
+      ['Sets','K SET','all 20 cards of stage K', false, stageSet(3)],
+      ['Sets','A SET','all 20 cards of stage A', false, stageSet(4)],
+      ['Score','CARD SHARK','20,000 or more in Card Game', false, st.best[0] >= 20000, 'Best '+st.best[0].toLocaleString()],
+      ['Score','ENDLESS 50K','50,000 or more on any Endless board', false, Math.max(st.best[1], st.best[2], st.best[3]) >= 50000],
+      ['Score','ALL ROUNDER','a score on all four boards', true, st.best.every(x=>x > 0)],
+    ]; }
+  }));
   PROVIDERS.push(careerBadges('ms1', 'Metal Slug 1st Mission', '/ms1/', {
     state(scores){
       const c = scores.find(d=>d.game === 'MS1M' && Array.isArray(d.mBest));

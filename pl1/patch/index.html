@@ -67,9 +67,9 @@
   const SRC_SIZE = 524288, SRC_CRC = 0xFE95938C;
   // one patch; OLD_PATCHED = earlier builds of it, recognised as already patched
   const VARIANTS = {
-    lb: {ips:'/pl1/puzzlelink_lb.ips', size:2097152, crc:0xCE386C91, name:'Puzzle Link (Leaderboard).ngc'}
+    lb: {ips:'/pl1/puzzlelink_lb.ips', size:2097152, crc:0x6E451CB4, name:'Puzzle Link (Leaderboard).ngc'}
   };
-  const OLD_PATCHED = [];
+  const OLD_PATCHED = [0xCE386C91];   // _01: score only
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');
