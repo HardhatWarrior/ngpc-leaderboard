@@ -67,9 +67,9 @@
   const SRC_SIZE = 4194304, SRC_CRC = 0xAC549144;
   // one patch; OLD_PATCHED = earlier builds of it, recognised as already patched
   const VARIANTS = {
-    lb: {ips:'/ms2/metalslug2_lb.ips', size:4194304, crc:0x9272753C, name:'Metal Slug 2nd Mission (Leaderboard).ngc'}
+    lb: {ips:'/ms2/metalslug2_lb.ips', size:4194304, crc:0x2BFE54DB, name:'Metal Slug 2nd Mission (Leaderboard).ngc'}
   };
-  const OLD_PATCHED = [0xECA3BCFA];   // _01: Time Attack only
+  const OLD_PATCHED = [0xECA3BCFA, 0x9272753C];   // _01: Time Attack only; _02: mission QR without the difficulty
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');

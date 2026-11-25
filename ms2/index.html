@@ -96,6 +96,8 @@
   .row.top1 .rank{ color:var(--accent); } .row.top1{ background:rgba(92,143,214,.10); }
   .initials{ font-family:"Press Start 2P",monospace; font-size:14px; letter-spacing:.06em; color:var(--cream); display:flex; align-items:center; gap:8px; }
   .row-avatar{ width:48px; height:48px; border-radius:4px; border:1px solid var(--border); image-rendering:pixelated; flex:none; }
+  .diff-tag{ display:inline-block; margin-left:6px; padding:1px 5px; border-radius:4px; font-family:"Press Start 2P",monospace; font-size:8px; vertical-align:middle; background:#c0392b; color:#fff; letter-spacing:.04em; }
+  .diff-tag.vh{ background:#8e44ad; }
   .score-val{ font-family:"Press Start 2P",monospace; font-size:15px; color:var(--good); }
   .row-meta{ font-size:10.5px; color:var(--dim); grid-column:2; margin-top:2px; }
   .row-meta a{ color:var(--dim); text-decoration:underline; text-underline-offset:2px; }
@@ -262,7 +264,10 @@
     return ALNUM[Math.floor(s/36)] + ALNUM[s%36];
   }
 
-  // MS22: main game MISSION COMPLETE -- total(7) + mission score(7) + mission(2, 0-36) + POWs this mission(2)
+  // Difficulty (SET UP): only NORMAL or harder counts; HARD / VERY HARD get a tag and win score ties.
+  const MS2_DIFF = ['KIDS','EASY','NORMAL','HARD','VERY HARD'];
+  function diffTag(d){ return d.game === 'MS2M' && d.level >= 3 ? '<span class="diff-tag'+(d.level >= 4 ? ' vh' : '')+'">'+(d.level >= 4 ? 'VERY HARD' : 'HARD')+'</span>' : ''; }
+  // MS23: main game MISSION COMPLETE -- total(7) + mission score(7) + mission(2, 0-36) + POWs this mission(2)
   // + POWs ever rescued(3) + missions cleared(2) + level(1) + character(1) + check(2)
   function parseMissionPayload(text){
     if(text.length !== 34) return {error: text.length < 34 ? "That code is too short — rescan with the whole code in frame." : "That code is too long — rescan just the one code."};
@@ -273,12 +278,14 @@
     const n = (a,b)=>parseInt(text.slice(a,b),10);
     const r = { game:'MS2M', initials, score:n(7,14), mscore:n(14,21), mission:n(21,23), pows:n(23,25), powsAll:n(25,28),
       cleared:n(28,30), level:n(30,31), character:n(31,32) };
-    if(r.score < 1 || r.mission > 36 || r.pows > 16 || r.powsAll > 128 || r.cleared > 37 || r.character > 1 || r.mscore > r.score)
+    if(r.score < 1 || r.mission > 36 || r.pows > 16 || r.powsAll > 128 || r.cleared > 37 || r.character > 1 || r.mscore > r.score || r.level > 4)
       return {error:"That code doesn't look like a completed mission."};
+    if(r.level < 2) return {error:"That mission was played on " + MS2_DIFF[r.level] + ". Only NORMAL or harder counts for the leaderboard (SET UP > LEVEL)."};
     return r;
   }
   function parseMetalSlug2Payload(text){
-    if(text.slice(3,4) === '2') return parseMissionPayload(text);
+    if(text.slice(3,4) === '3') return parseMissionPayload(text);
+    if(text.slice(3,4) === '2') return {error:"That code is from an older version of the patch that didn't record the difficulty. Re-patch your ROM from this page (your save carries over)."};
     if(text.length < 15) return {error:"That code is too short — rescan with the whole code in frame."};
     if(text.length > 15) return {error:"That code is too long to be a time — rescan just the one code."};
     if(text.slice(3,4) !== '1') return {error:"That code is from a different version of the patch."};
@@ -329,6 +336,7 @@
     if(data.game === 'MS2M'){
       return '<table class="tk-sheet">'+
         '<tr><td>Mission</td><td class="tk-val tnum">'+(data.mission+1)+'</td></tr>'+
+        '<tr><td>Difficulty</td><td class="tk-val">'+(MS2_DIFF[data.level]||'?')+'</td></tr>'+
         '<tr><td>Mission score</td><td class="tk-val tnum">'+data.mscore+'</td></tr>'+
         '<tr><td>POWs rescued</td><td class="tk-val tnum">'+data.pows+'</td></tr>'+
         '<tr><td>Missions cleared</td><td class="tk-val tnum">'+data.cleared+' / 37</td></tr>'+
@@ -356,7 +364,7 @@
       const avatarHtml = hasAvatar ? '<canvas class="row-avatar" data-avatar-row="'+i+'"></canvas>' : '';
       const rowHtml = '<div class="row'+(rank===1?' top1':'')+' has-detail" data-detail="'+pre+'d'+i+'">'+
         '<div class="rank">'+(rank===1?'🏆':('#'+rank))+'</div>'+
-        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+'</div>'+
+        '<div><div class="initials">'+avatarHtml+escapeHtml(data.initials||'???')+diffTag(data)+'</div>'+
           '<div class="row-meta">'+meta+'</div></div>'+
         '<div class="score-val tnum">'+(data.score!=null?boardValue(data):'-')+'</div>'+
       '</div>';
@@ -393,7 +401,8 @@
 
   let allDocs = [], missionDocs = [], curStage = 0;
   function drawMissions(){
-    const docs = missionDocs.slice().sort((a,b)=>b.data().score-a.data().score || (a.data().submittedAt||0)-(b.data().submittedAt||0));
+    // ties on score go to the harder difficulty, then the earlier code
+    const docs = missionDocs.filter(d=>d.data().level >= 2).sort((a,b)=>b.data().score-a.data().score || (b.data().level||0)-(a.data().level||0) || (a.data().submittedAt||0)-(b.data().submittedAt||0));
     renderBoard(onePerPlayer(docs).slice(0,10), el('board'));
   }
   // Time Attack: one row per stage with its record (time + who) on the right; tap a stage to open its top 10.
@@ -448,7 +457,7 @@
     const out = el('career'), me = myUid(), uid = careerUid || me;
     const viewingOther = !!(careerUid && careerUid !== me);
     el('career-back').hidden = !viewingOther || !me;
-    const mine = uid ? missionDocs.map(d=>d.data()).filter(d=>d.uid === uid) : [];
+    const mine = uid ? missionDocs.map(d=>d.data()).filter(d=>d.uid === uid && d.level >= 2) : [];
     const name = viewingOther ? (mine[0] && mine[0].username ? '@'+mine[0].username.toUpperCase() : 'Player') : '';
     el('career-title').textContent = viewingOther ? name + '’s Career' : 'My Career';
     if(!uid){ out.innerHTML = '<div class="empty-state">Sign in to see your career stats.</div>'; return; }
@@ -456,7 +465,7 @@
     const best = {}, plays = {};
     let pows = 0, powsAll = 0, top = 0;
     mine.forEach(d=>{
-      if(!best[d.mission] || d.mscore > best[d.mission].mscore) best[d.mission] = d;
+      if(!best[d.mission] || d.mscore > best[d.mission].mscore || (d.mscore === best[d.mission].mscore && d.level > best[d.mission].level)) best[d.mission] = d;
       plays[d.mission] = (plays[d.mission]||0) + 1;
       pows += d.pows||0; powsAll = Math.max(powsAll, d.powsAll||0); top = Math.max(top, d.score||0);
     });
@@ -464,13 +473,13 @@
     let rows = '';
     for(let i=0;i<37;i++){
       const b = best[i];
-      rows += '<tr'+(b?'':' style="opacity:.45"')+'><td>Mission '+(i+1)+'</td><td class="tk-val tnum">'+(b?b.mscore:'—')+'</td><td class="tk-val tnum">'+(b?b.pows:'')+'</td><td class="tk-val tnum">'+(plays[i]||'')+'</td></tr>';
+      rows += '<tr'+(b?'':' style="opacity:.45"')+'><td>Mission '+(i+1)+'</td><td class="tk-val tnum">'+(b?b.mscore+diffTag(b):'—')+'</td><td class="tk-val tnum">'+(b?b.pows:'')+'</td><td class="tk-val tnum">'+(plays[i]||'')+'</td></tr>';
     }
     out.innerHTML = '<table class="tk-sheet">'+
       '<tr><td>Best total score</td><td class="tk-val tnum" colspan="3">'+top+'</td></tr>'+
       '<tr><td>Missions recorded</td><td class="tk-val tnum" colspan="3">'+done+' / 37</td></tr>'+
       '<tr><td>POWs saved (all recorded missions)</td><td class="tk-val tnum" colspan="3">'+pows+'</td></tr>'+
-      '<tr><td>POWs on the rescue list (cart)</td><td class="tk-val tnum" colspan="3">'+powsAll+'</td></tr>'+
+      '<tr><td>POWs on the rescue list (cart)</td><td class="tk-val tnum" colspan="3">'+powsAll+' / 100</td></tr>'+
       '</table><table class="tk-sheet" style="margin-top:10px"><tr><td class="row-meta">Mission</td><td class="tk-val row-meta">Best score</td><td class="tk-val row-meta">POWs</td><td class="tk-val row-meta">Clears</td></tr>'+rows+'</table>';
   }
   document.addEventListener('click', (e)=>{

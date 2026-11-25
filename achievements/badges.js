@@ -239,5 +239,39 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
     ], 'Counted from approved series on the <a href="/sb/">Shut the Box leaderboard</a>.')
   );
 
+  // Metal Slug 2nd Mission: mission codes (MS2M, one doc per MISSION COMPLETE) and Time Attack times (MS2).
+  // Some badges add up across codes (missions recorded, POWs saved, both characters, all 8 stages).
+  PROVIDERS.push({ key:'ms2', name:'Metal Slug 2nd Mission', async load(ctx){
+    const ms = ctx.scores.filter(d=>d.game === 'MS2M' && d.level >= 2).sort((a,b)=>(a.submittedAt||0)-(b.submittedAt||0));
+    const ta = ctx.scores.filter(d=>d.game === 'MS2').sort((a,b)=>(a.submittedAt||0)-(b.submittedAt||0));
+    if(!ms.length && !ta.length) return null;
+    const first = (arr, f)=>arr.find(f);
+    // first code at which a running total / distinct set reaches n
+    const reach = (arr, step, n)=>{ let acc = null; for(const d of arr){ acc = step(acc, d); if(acc.n >= n) return d; } return null; };
+    const sumPows = (acc, d)=>({ n: (acc ? acc.n : 0) + (d.pows||0) });
+    const distinct = (key)=>(acc, d)=>{ const set = acc ? acc.set : new Set(); set.add(key(d)); return { set:set, n:set.size }; };
+    const on = (hit, b, got)=>({ grp:b[0], name:b[1], sub: hit ? (got ? got(hit) : 'Earned '+fmtDate(hit.submittedAt)) : b[2], at: hit ? hit.submittedAt : 0, on: !!hit, big: !!b[3] });
+    const list = [
+      on(first(ms, d=>d.pows >= 1), ['Rescue','FIRST RESCUE','free a POW in a recorded mission']),
+      on(first(ms, d=>d.pows >= 5), ['Rescue','SQUAD LEADER','free 5 POWs in one mission'], d=>d.pows+' POWs in mission '+(d.mission+1)+', '+fmtDate(d.submittedAt)),
+      on(reach(ms, sumPows, 100), ['Rescue','LIFELINE','100 POWs saved across your recorded missions']),
+      on(ms[0], ['Missions','BOOTS ON THE GROUND','submit a mission code']),
+      on(reach(ms, distinct(d=>d.mission), 10), ['Missions','TOUR OF DUTY','record 10 different missions']),
+      on(first(ms, d=>d.cleared >= 20), ['Missions','VETERAN','20 missions cleared'], d=>d.cleared+' missions cleared, '+fmtDate(d.submittedAt)),
+      on(first(ms, d=>d.cleared >= 37), ['Missions','MISSION ACCOMPLISHED','all 37 missions cleared', true]),
+      on(first(ms, d=>d.score >= 100000), ['Score','100K','a total score of 100,000 or more'], d=>'Total '+d.score.toLocaleString()+', '+fmtDate(d.submittedAt)),
+      on(first(ms, d=>d.score >= 500000), ['Score','500K','a total score of 500,000 or more'], d=>'Total '+d.score.toLocaleString()+', '+fmtDate(d.submittedAt)),
+      on(first(ms, d=>d.score >= 1000000), ['Score','1 MILLION','a total score of 1,000,000 or more', true], d=>'Total '+d.score.toLocaleString()+', '+fmtDate(d.submittedAt)),
+      on(first(ms, d=>d.mscore >= 20000), ['Score','HIGH VALUE TARGET','20,000 or more in a single mission'], d=>d.mscore.toLocaleString()+' in mission '+(d.mission+1)+', '+fmtDate(d.submittedAt)),
+      on(reach(ms, distinct(d=>d.character), 2), ['Characters','DOUBLE DUTY','record missions as both Marco and Fio']),
+      on(ta[0], ['Time Attack','ON THE CLOCK','submit a Time Attack time']),
+      on(reach(ta, distinct(d=>d.stage), 8), ['Time Attack','FULL SWEEP','a Time Attack time on all 8 stages']),
+    ];
+    const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
+    return { note: head.pct+'%', earned: got > 0, list: list, html:
+      '<h2 class="g-title">Metal Slug 2nd Mission</h2>'+head.html+badgeGrid(list)+
+      '<p class="fine">Counted from your approved mission codes and Time Attack times on the <a href="/ms2/">Metal Slug 2nd Mission leaderboard</a>.</p>' };
+  } });
+
 window.NGPC_BADGES = { PROVIDERS: PROVIDERS, esc: esc, fmtDate: fmtDate };
 })();

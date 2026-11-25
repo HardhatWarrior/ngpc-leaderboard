@@ -377,7 +377,8 @@ service cloud.firestore {
           && d.character is int && d.character >= 0 && d.character <= 1
           && isRetailLbBase(d, 9999);
       }
-      // Metal Slug 2nd Mission main game (MS2M): one doc per MISSION COMPLETE QR (career log), id MS2M_<uid>_<mission>_<total>
+      // Metal Slug 2nd Mission main game (MS2M): one doc per MISSION COMPLETE QR (career log), id MS2M_<uid>_<mission>_<total>;
+      // level = difficulty, NORMAL (2) or harder only
       function isMetalSlug2MissionScore(d) {
         return d.keys().hasOnly(['game', 'initials', 'score', 'mscore', 'mission', 'pows', 'powsAll', 'cleared', 'level', 'character', 'source', 'submittedAt', 'uid', 'username', 'approved'])
           && d.mscore is int && d.mscore >= 0 && d.mscore <= d.score
@@ -385,7 +386,7 @@ service cloud.firestore {
           && d.pows is int && d.pows >= 0 && d.pows <= 16
           && d.powsAll is int && d.powsAll >= 0 && d.powsAll <= 128
           && d.cleared is int && d.cleared >= 0 && d.cleared <= 37
-          && d.level is int && d.level >= 0 && d.level <= 9
+          && d.level is int && d.level >= 2 && d.level <= 4
           && d.character is int && d.character >= 0 && d.character <= 1
           && isRetailLbBase(d, 9999999);
       }
