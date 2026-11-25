@@ -349,13 +349,18 @@
   }
   function boardValue(d){ return d.game === 'MS2M' ? String(d.score) : fmtTime(d.score); }
 
+  // POWs per mission (1-37), from the game's rescue list (each POW record names its mission); 100 in all
+  const MS2_MISSION_POWS = [7,2,0,0,0,4,1,3,0,5,10,9,8,9,6,2,3,2,3,0,1,0,1,1,0,0,5,0,1,8,5,0,0,2,1,0,1];
+  // a player's POWs: each mission counted once (its best run), NORMAL or harder only -- same as the career panel
+  function careerPows(uid){ const best = {}; missionDocs.forEach(doc=>{ const d = doc.data(); if(d.uid === uid && d.level >= 2) best[d.mission] = Math.max(best[d.mission]||0, d.pows||0); }); return Object.values(best).reduce((a,b)=>a+b,0); }
   function renderScorecardHTML(data){
     if(data.game === 'MS2M'){
       return '<table class="tk-sheet">'+
         '<tr><td>Mission</td><td class="tk-val tnum">'+(data.mission+1)+'</td></tr>'+
         '<tr><td>Difficulty</td><td class="tk-val">'+(MS2_DIFF[data.level]||'?')+'</td></tr>'+
         '<tr><td>Mission score</td><td class="tk-val tnum">'+data.mscore+'</td></tr>'+
-        '<tr><td>POWs rescued</td><td class="tk-val tnum">'+data.pows+'</td></tr>'+
+        (data.uid ? '<tr><td>POWs rescued (total)</td><td class="tk-val tnum">'+careerPows(data.uid)+' / 100</td></tr>' : '')+
+        '<tr><td>POWs rescued (this mission)</td><td class="tk-val tnum">'+data.pows+'</td></tr>'+
         '<tr><td>Missions cleared</td><td class="tk-val tnum">'+data.cleared+' / 37</td></tr>'+
         '<tr><td>Total score</td><td class="tk-val tnum">'+data.score+'</td></tr>'+
         '<tr><td>Character</td><td class="tk-val">'+(MS2_CHARS[data.character]||'?')+'</td></tr></table>'+
@@ -503,7 +508,7 @@
     let rows = '';
     for(let i=0;i<37;i++){
       const b = best[i];
-      rows += '<tr'+(b?'':' style="opacity:.45"')+'><td>Mission '+(i+1)+'</td><td class="tk-val tnum">'+(b?b.mscore+diffTag(b):'—')+'</td><td class="tk-val tnum">'+(b?b.pows:'')+'</td><td class="tk-val tnum">'+(plays[i]||'')+'</td></tr>';
+      rows += '<tr'+(b?'':' style="opacity:.45"')+'><td>Mission '+(i+1)+'</td><td class="tk-val tnum">'+(b?b.mscore+diffTag(b):'—')+'</td><td class="tk-val tnum">'+(MS2_MISSION_POWS[i] ? (b?b.pows:0)+' / '+MS2_MISSION_POWS[i] : '—')+'</td><td class="tk-val tnum">'+(plays[i]||'')+'</td></tr>';
     }
     out.innerHTML = '<table class="tk-sheet">'+
       '<tr><td>Best total score</td><td class="tk-val tnum" colspan="3">'+top+'</td></tr>'+
