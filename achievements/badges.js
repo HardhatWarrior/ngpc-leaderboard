@@ -363,6 +363,27 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
       ['Career','REGULAR','record 10 games', false, st.plays >= 10, st.plays+' games'],
     ]; }
   }));
+  // Delta Warp career (DWC_<uid>): the whole save per scan: ORIGINAL stages cleared + the best time on each of the 100.
+  PROVIDERS.push(careerBadges('dw', 'Delta Warp', '/dw/', {
+    state(scores){
+      const c = scores.find(d=>d.game === 'DWC');
+      if(!c) return null;
+      const t = Array.isArray(c.times) ? c.times : [];
+      const worlds = [0,1,2,3,4,5,6,7,8,9].map(w=>t.slice(w*10, w*10+10).filter(x=>x != null).length === 10);
+      const timed = t.filter(x=>x != null);
+      return { cleared: c.score||0, worlds: worlds, all: timed.length === 100, total: timed.reduce((a,b)=>a+b,0),
+        fastest: timed.length ? Math.min(...timed) : null };
+    },
+    list(st){ const w = (i)=>['Worlds','WORLD '+(i+1),'a best time on every stage of world '+(i+1), i === 9, st.worlds[i]];
+      return [
+      ['Progress','FIRST WARP','clear an ORIGINAL stage', false, st.cleared >= 1, st.cleared+' / 100 cleared'],
+      ['Progress','HALFWAY','clear 50 ORIGINAL stages', false, st.cleared >= 50, st.cleared+' / 100 cleared'],
+      ['Progress','ALL 100','clear every ORIGINAL stage', true, st.cleared >= 100, st.cleared+' / 100 cleared'],
+      w(0), w(1), w(2), w(3), w(4), w(5), w(6), w(7), w(8), w(9),
+      ['Speed','QUICK WARP','any stage in under 5 seconds', false, st.fastest != null && st.fastest < 500],
+      ['Speed','SPEED RUNNER','best times on all 100 stages totalling under 60 minutes', true, st.all && st.total < 360000],
+    ]; }
+  }));
   // Pac-Man career (PMC_<uid>): best score + totals over every recorded game; the older PM entries count for score.
   PROVIDERS.push(careerBadges('pm', 'Pac-Man', '/pm/', {
     state(scores){
