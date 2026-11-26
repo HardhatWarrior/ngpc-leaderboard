@@ -437,6 +437,25 @@ service cloud.firestore {
           && d.codes is list && d.codes.size() >= 1 && d.codes.size() <= 300
           && isRetailLbBase(d, 100);
       }
+      // Cool Boarders Pocket career: ONE doc per player (COC_<uid>, CO1 codes = the whole save): records broken (score,
+      // 0-81: a SURVIVAL-only save is allowed), the best time per course (81 entries, 1/30 s or null), their total,
+      // SURVIVAL best distance + time, the save header string, scans, the last 300 code keys.
+      function isCoolBoardersCareer(d) {
+        return d.keys().hasOnly(['game', 'initials', 'score', 'times', 'total', 'survDist', 'survTime', 'hdr', 'bestAt', 'plays', 'codes', 'source', 'submittedAt', 'uid', 'username', 'approved'])
+          && d.initials is string && d.initials.matches('^[0-9A-Z]{3}$')
+          && d.score is int && d.score >= 0 && d.score <= 81
+          && d.times is list && d.times.size() == 81
+          && d.total is int && d.total >= 0 && d.total <= 4000000
+          && d.survDist is int && d.survDist >= 0 && d.survTime is int && d.survTime >= 0
+          && d.hdr is string && d.hdr.matches('^[0-9A-Z]{48}$')
+          && d.bestAt is int && d.plays is int && d.plays >= 1
+          && d.codes is list && d.codes.size() >= 1 && d.codes.size() <= 300
+          && d.source is string && d.source in ['qr', 'capture']
+          && d.submittedAt is int
+          && d.submittedAt <= request.time.toMillis() + 300000
+          && d.submittedAt >= request.time.toMillis() - 300000
+          && hasValidIdentity(d);
+      }
       // Pac-Man career: ONE doc per player (PMC_<uid>): best score (+ its level), highest level, games, totals of dots,
       // pellets, ghosts [200,400,800,1600], fruit [8 kinds], the last 300 merged codes. Best + codes may only grow.
       function isPacManCareer(d) {
@@ -1201,6 +1220,7 @@ service cloud.firestore {
           || ((request.resource.data.game == 'PBC' && isPuzzleBobbleCareer(request.resource.data)) && scoreId == 'PBC_' + request.auth.uid)
           || ((request.resource.data.game == 'SNC' && isSonicPocketCareer(request.resource.data)) && scoreId == 'SNC_' + request.auth.uid)
           || ((request.resource.data.game == 'DWC' && isDeltaWarpCareer(request.resource.data)) && scoreId == 'DWC_' + request.auth.uid)
+          || ((request.resource.data.game == 'COC' && isCoolBoardersCareer(request.resource.data)) && scoreId == 'COC_' + request.auth.uid)
           || ((request.resource.data.game == 'PL2C' && isPuzzleLink2Career(request.resource.data)) && scoreId == 'PL2C_' + request.auth.uid)
           || ((request.resource.data.game == 'MS2M' && isMetalSlug2MissionScore(request.resource.data)) && scoreId == 'MS2M_' + request.auth.uid)
           || (request.resource.data.game == 'CR' && isCrushRollerScore(request.resource.data))
@@ -1230,7 +1250,8 @@ service cloud.firestore {
         && !(scoreId.matches('^MDC_.*') && request.resource.data.game != 'MDC')
         && !(scoreId.matches('^PBC_.*') && request.resource.data.game != 'PBC')
         && !(scoreId.matches('^SNC_.*') && request.resource.data.game != 'SNC')
-        && !(scoreId.matches('^DWC_.*') && request.resource.data.game != 'DWC');
+        && !(scoreId.matches('^DWC_.*') && request.resource.data.game != 'DWC')
+        && !(scoreId.matches('^COC_.*') && request.resource.data.game != 'COC');
 
       // Only the admin, and only the `approved` field -- fans out an account approve/revoke
       // (admin/index.html) to every score that account already submitted, so a toggle's effect on
@@ -1383,6 +1404,19 @@ service cloud.firestore {
           && request.resource.data.game == 'DWC'
           && isDeltaWarpCareer(request.resource.data)
           && request.resource.data.score >= resource.data.score
+          && request.resource.data.plays > resource.data.plays
+          && request.resource.data.codes.size() >= resource.data.codes.size())
+        // Seventeenth branch: the Cool Boarders career (COC_<uid>): records broken, SURVIVAL bests, scans and the code
+        // list may only grow.
+        || (request.auth != null
+          && scoreId == 'COC_' + request.auth.uid
+          && resource.data.uid == request.auth.uid
+          && resource.data.game == 'COC'
+          && request.resource.data.game == 'COC'
+          && isCoolBoardersCareer(request.resource.data)
+          && request.resource.data.score >= resource.data.score
+          && request.resource.data.survDist >= resource.data.survDist
+          && request.resource.data.survTime >= resource.data.survTime
           && request.resource.data.plays > resource.data.plays
           && request.resource.data.codes.size() >= resource.data.codes.size());
       // A signed-in user can delete their own score (account page's "Your Submissions" list) --

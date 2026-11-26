@@ -67,9 +67,9 @@
   const SRC_SIZE = 524288, SRC_CRC = 0xADD4FDFF, FULL = 1048576;
   // one patch; OLD_PATCHED = earlier builds of it, recognised as already patched
   const VARIANTS = {
-    lb: {ips:'/dw/deltawarp_lb.ips', size:1048576, crc:0xD9A3D006, name:'Delta Warp (Leaderboard).ngc'}
+    lb: {ips:'/dw/deltawarp_lb.ips', size:1048576, crc:0x32B28597, name:'Delta Warp (Leaderboard).ngc'}
   };
-  const OLD_PATCHED = [];
+  const OLD_PATCHED = [0xD9A3D006];
   const KNOWN = Object.values(VARIANTS).map(v=>v.crc).concat(OLD_PATCHED);
   let lastFile = null;
   const st = document.getElementById('status'), dl = document.getElementById('dl');

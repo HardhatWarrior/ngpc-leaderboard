@@ -384,6 +384,28 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
       ['Speed','SPEED RUNNER','best times on all 100 stages totalling under 60 minutes', true, st.all && st.total < 360000],
     ]; }
   }));
+  // Cool Boarders Pocket career (COC_<uid>): the whole save per scan: course records broken (81) + SURVIVAL bests.
+  PROVIDERS.push(careerBadges('co', 'Cool Boarders Pocket', '/co/', {
+    state(scores){
+      const c = scores.find(d=>d.game === 'COC');
+      if(!c) return null;
+      const t = Array.isArray(c.times) ? c.times : [];
+      const stage = [0,1,2,3].map(s=>t.slice(s*20, s*20+20).filter(x=>x != null).length === 20);
+      return { broken: c.score||0, stage: stage, ex: t[80] != null, dist: c.survDist||0, time: c.survTime||0 };
+    },
+    list(st){ const s = (i, n)=>['Freeride','STAGE '+n,'break all 20 FREERIDE '+n+' records', false, st.stage[i], ''];
+      return [
+      ['Freeride','FIRST RECORD','break a FREERIDE course record', false, st.broken >= 1, st.broken+' / 81 broken'],
+      ['Freeride','20 RECORDS','break 20 course records', false, st.broken >= 20, st.broken+' / 81 broken'],
+      s(0,'A'), s(1,'B'), s(2,'C'), s(3,'D'),
+      ['Freeride','EX','break the EX course record', false, st.ex],
+      ['Freeride','ALL 81','break every course record', true, st.broken >= 81, st.broken+' / 81 broken'],
+      ['Survival','1,000 M','ride 1,000 m in SURVIVAL', false, st.dist >= 1000, st.dist.toLocaleString()+' m'],
+      ['Survival','5,000 M','ride 5,000 m in SURVIVAL', false, st.dist >= 5000, st.dist.toLocaleString()+' m'],
+      ['Survival','20,000 M','ride 20,000 m in SURVIVAL', true, st.dist >= 20000, st.dist.toLocaleString()+' m'],
+      ['Survival','10 MINUTES','last 10 minutes in SURVIVAL', false, st.time >= 18000],
+    ]; }
+  }));
   // Pac-Man career (PMC_<uid>): best score + totals over every recorded game; the older PM entries count for score.
   PROVIDERS.push(careerBadges('pm', 'Pac-Man', '/pm/', {
     state(scores){
