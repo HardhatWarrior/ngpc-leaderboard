@@ -246,7 +246,7 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
     return { key:key, name:title, async load(ctx){
       const st = defs.state(ctx.scores);
       if(!st) return null;
-      const list = defs.list(st).map(b=>({ grp:b[0], name:b[1], sub: b[4] ? (b[5] || 'Earned') : b[2], at:0, on: !!b[4], big: !!b[3] }));
+      const list = defs.list(st).map(b=>({ grp:b[0], name:b[1], sub: b[4] ? (b[5] || 'Earned') : (b[5] ? b[2]+' · '+b[5] : b[2]), at:0, on: !!b[4], big: !!b[3] }));
       const got = list.filter(b=>b.on).length, head = pctHead(got, list.length);
       return { note: head.pct+'%', earned: got > 0, list: list, html:
         '<h2 class="g-title">'+esc(title)+'</h2>'+head.html+badgeGrid(list)+
@@ -420,9 +420,9 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
       const F = ['CHERRY','STRAWBERRY','ORANGE','APPLE','MELON','GALAXIAN','BELL','KEY'];
       return [
       ['Ghosts','FIRST BITE','eat a ghost', false, gt >= 1],
-      ['Ghosts','GHOSTBUSTER','100 ghosts eaten', false, gt >= 100, gt+' ghosts'],
+      ['Ghosts','GHOSTBUSTER','100 ghosts eaten', false, gt >= 100, gt+' / 100 ghosts'],
       ['Ghosts','FULL COMBO','a 1600-point ghost', false, g[3] >= 1],
-      ['Ghosts','COMBO KING','25 ghosts at 1600', true, g[3] >= 25, g[3]+' at 1600'],
+      ['Ghosts','COMBO KING','25 ghosts at 1600', true, g[3] >= 25, g[3]+' / 25 at 1600'],
       ...F.map((n,i)=>['Fruit', n, 'eat a '+n.toLowerCase(), i === 7, f[i] >= 1, f[i]+' eaten']),
       ['Fruit','FRUIT BASKET','eat all 8 kinds of fruit', true, f.every(x=>x >= 1)],
       ['Score','10K','a score of 10,000 or more', false, st.top >= 10000, 'Best '+st.top.toLocaleString()],
@@ -431,7 +431,7 @@ const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'
       ['Levels','LEVEL 5','reach level 5', false, st.lvl >= 5],
       ['Levels','LEVEL 10','reach level 10', false, st.lvl >= 10],
       ['Levels','LEVEL 21','reach level 21', true, st.lvl >= 21],
-      ['Dots','DOT MUNCHER','10,000 dots eaten', false, (c.dots||0) >= 10000, (c.dots||0)+' dots'],
+      ['Dots','DOT MUNCHER','10,000 dots eaten', false, (c.dots||0) >= 10000, (c.dots||0).toLocaleString()+' / 10,000 dots'],
     ]; }
   }));
   PROVIDERS.push(careerBadges('pl1', 'Puzzle Link', '/pl1/', {
