@@ -845,7 +845,7 @@
 
   function handleScanResult(text){
     formMsg.innerHTML = '';
-    if (/^TH[12]/.test(String(lastPathSegment(text)).toUpperCase())) { location.href = '/tm/replay/#' + lastPathSegment(text).toUpperCase(); return; }
+    if (/^TH[123]/.test(String(lastPathSegment(text)).toUpperCase())) { location.href = '/tm/replay/#' + lastPathSegment(text).toUpperCase(); return; }
     const result = parsePayload(lastPathSegment(text));
     if(result.error){
       formMsg.innerHTML = '<div class="msg err">'+escapeHtml(result.error)+'</div>';
